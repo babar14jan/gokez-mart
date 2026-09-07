@@ -10,6 +10,7 @@
     "db:migrate": "tsx src/database/migrate.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "@sentry/node": "^10.73.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.7.5",
