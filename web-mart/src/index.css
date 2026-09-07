@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Prevent auto-zoom on input focus on iOS/Android */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+body { background-color: #fafaf9; color: #111827; }
+.dark body { background-color: #0f172a; color: #f1f5f9; }
+
+#root { overflow-x: clip; width: 100%; }
+
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

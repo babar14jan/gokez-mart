@@ -1,0 +1,15 @@
+{
+  "name": "gokez-mart",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "mart-backend",
+    "web-mart",
+    "web-mart-admin"
+  ],
+  "scripts": {
+    "dev:api":        "npm run dev --workspace=mart-backend",
+    "dev:web":        "npm run dev --workspace=web-mart",
+    "dev:admin":      "npm run dev --workspace=web-mart-admin"
+  }
+}
