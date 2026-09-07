@@ -115,7 +115,14 @@ ALTER TABLE mart_admins ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES mart_s
 UPDATE mart_admins SET store_id = '00000000-0000-0000-0000-000000000001'
 WHERE role IN ('sales_manager', 'staff') AND store_id IS NULL;
 
--- ── 7. Indexes ────────────────────────────────────────────────────────────────
+-- ── 7. Drop legacy columns from mart_products (now in mart_store_products) ───
+ALTER TABLE mart_products DROP COLUMN IF EXISTS price;
+ALTER TABLE mart_products DROP COLUMN IF EXISTS unit;
+ALTER TABLE mart_products DROP COLUMN IF EXISTS discount_percent;
+ALTER TABLE mart_products DROP COLUMN IF EXISTS is_available;
+ALTER TABLE mart_products DROP COLUMN IF EXISTS sort_order;
+
+-- ── 8. Indexes ────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_mart_store_products_store ON mart_store_products(store_id);
 CREATE INDEX IF NOT EXISTS idx_mart_store_products_product ON mart_store_products(product_id);
 CREATE INDEX IF NOT EXISTS idx_mart_orders_store ON mart_orders(store_id);
