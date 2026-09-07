@@ -19,7 +19,8 @@ export class CategoryService {
               c.is_active as "isActive",
               COUNT(p.id)::int as "productCount"
        FROM mart_categories c
-       LEFT JOIN mart_products p ON p.category_id = c.id AND p.is_available = true
+       LEFT JOIN mart_products p ON p.category_id = c.id
+       LEFT JOIN mart_store_products sp ON sp.product_id = p.id AND sp.is_available = true
        ${where}
        GROUP BY c.id
        ORDER BY c.sort_order ASC, c.name ASC`
