@@ -5,7 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && cp -r src/database/migrations dist/database/migrations",
     "start": "node dist/index.js",
     "db:migrate": "tsx src/database/migrate.ts"
   },
