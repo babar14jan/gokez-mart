@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Save, Upload, MapPin, Plus, Trash2, Pencil, X } from 'lucide-react';
 import { settingsApi, productsApi, zonesApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface Setting { key: string; value: string; label: string; }
 
@@ -44,6 +45,7 @@ export default function SettingsPage() {
   const [zones, setZones] = useState<any[]>([]);
   const [zoneForm, setZoneForm] = useState(EMPTY_ZONE);
   const [addingZone, setAddingZone] = useState(false);
+  const [confirmDeleteZoneId, setConfirmDeleteZoneId] = useState<string | null>(null);
   const [editingZone, setEditingZone] = useState<any | null>(null);
   const [savingZone, setSavingZone] = useState(false);
 
@@ -209,7 +211,7 @@ export default function SettingsPage() {
                     className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button onClick={async () => { if (!window.confirm('Delete zone ' + zone.name + '?')) return; await zonesApi.delete(zone.id); await loadZones(); }}
+                  <button onClick={() => setConfirmDeleteZoneId(zone.id)}
                     className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -230,6 +232,16 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {confirmDeleteZoneId && (
+        <ConfirmDialog
+          title="Delete Zone"
+          message="Are you sure you want to delete this delivery zone?"
+          confirmLabel="Delete"
+          onConfirm={async () => { await zonesApi.delete(confirmDeleteZoneId); setConfirmDeleteZoneId(null); await loadZones(); }}
+          onCancel={() => setConfirmDeleteZoneId(null)}
+        />
+      )}
     </div>
   );
 }

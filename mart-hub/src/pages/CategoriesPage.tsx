@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Tag, Upload } from 'lucide-react';
 import { categoriesApi, productsApi } from '../services/api';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface Category { id: string; name: string; slug: string; icon: string; sortOrder: number; isActive: boolean; productCount: number; }
 
@@ -21,6 +22,8 @@ export default function CategoriesPage() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [form, setForm] = useState({ name: '', slug: '', icon: '', sortOrder: '0' });
   const [iconPreview, setIconPreview] = useState<string | null>(null);
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const load = async () => { const r = await categoriesApi.getAll(); setCategories(r.data.data || []); setLoading(false); };
   useEffect(() => { load(); }, []);
@@ -63,8 +66,9 @@ export default function CategoriesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this category?')) return;
-    await categoriesApi.delete(id); await load();
+    await categoriesApi.delete(id);
+    setConfirmDeleteId(null);
+    await load();
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>;
@@ -93,13 +97,23 @@ export default function CategoriesPage() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => setConfirmDeleteId(c.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {confirmDeleteId && (
+        <ConfirmDialog
+          title="Delete Category"
+          message="Are you sure? This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => handleDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">

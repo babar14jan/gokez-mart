@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { productsApi, categoriesApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 function CategoryIcon({ icon, name }: { icon: string; name: string }) {
   const isUrl = icon?.startsWith('/') || icon?.startsWith('http');
@@ -54,6 +55,7 @@ export default function ProductsPage() {
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderList, setReorderList] = useState<Product[]>([]);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const dragItem = useRef<number | null>(null);
   const dragOver = useRef<number | null>(null);
 
@@ -222,8 +224,8 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this product?')) return;
     await productsApi.delete(id);
+    setConfirmDeleteId(null);
     await load();
   };
 
@@ -297,7 +299,7 @@ export default function ProductsPage() {
           <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
             <Pencil className="w-4 h-4" />
           </button>
-          <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+          <button onClick={() => setConfirmDeleteId(p.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
@@ -449,6 +451,16 @@ export default function ProductsPage() {
       </div>
 
       {/* Modal */}
+      {confirmDeleteId && (
+        <ConfirmDialog
+          title="Delete Product"
+          message="Are you sure? This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => handleDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
+
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">

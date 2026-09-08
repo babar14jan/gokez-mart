@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ConfirmDialog from '../components/ConfirmDialog';
 import {
   KeyRound, Settings, LayoutDashboard, Tag, Users,
   BarChart3, Shield, LogOut, ChevronRight, Moon, Sun,
@@ -53,6 +54,7 @@ export default function MorePage() {
     setError(''); setEditing(false);
   };
 
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const roleLinks: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
@@ -170,13 +172,22 @@ export default function MorePage() {
 
       {/* Sign out */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-        <button onClick={handleLogout}
+        <button onClick={() => setConfirmLogout(true)}
           className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
           <LogOut className="w-4 h-4 flex-shrink-0" />
           <span className="text-sm font-semibold">Sign out</span>
         </button>
       </div>
 
+      {confirmLogout && (
+        <ConfirmDialog
+          title="Sign out"
+          message="Are you sure you want to sign out?"
+          confirmLabel="Sign out"
+          onConfirm={handleLogout}
+          onCancel={() => setConfirmLogout(false)}
+        />
+      )}
     </div>
   );
 }
