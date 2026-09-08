@@ -84,6 +84,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const bottomTabs = BOTTOM_NAV[userRole] || BOTTOM_NAV.staff;
 
+  const PAGE_TITLES: Record<string, string> = {
+    '/': 'Dashboard', '/orders': 'Orders', '/products': 'Products',
+    '/categories': 'Categories', '/customers': 'Customers',
+    '/analytics': 'Analytics', '/settings': 'Settings',
+    '/profile': 'My Profile', '/change-password': 'Change Password',
+    '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
+  };
+
 
 
   const SidebarLinks = ({ onNav }: { onNav?: () => void }) => (
@@ -114,15 +122,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Desktop sidebar ── */}
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
         {/* Logo */}
-        <div className={`flex items-center border-b border-gray-200 dark:border-slate-700 flex-shrink-0 ${collapsed ? 'justify-center px-2 py-4' : 'justify-center py-4'}`}>
-          {collapsed ? (
-            <img src="/mart_hub_brand_logo.png" alt="Gokez Mart" className="h-8 w-auto object-contain" />
-          ) : (
-            <div className="flex flex-col items-center gap-0.5">
-              <img src="/mart_hub_brand_logo.png" alt="Gokez Mart" className="h-8 w-auto object-contain" />
-              <span className="text-[10px] font-bold text-gray-500 tracking-widest uppercase">Gokez Hub</span>
-            </div>
-          )}
+        <div className={`flex items-center justify-center border-b border-gray-200 dark:border-slate-700 flex-shrink-0 ${collapsed ? 'px-2 py-5' : 'py-5'}`}>
+          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-12 w-auto object-contain" />
         </div>
 
         <SidebarLinks />
@@ -156,15 +157,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Sticky header */}
         <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
           <div className="flex items-center justify-between h-14 px-4 sm:px-6 gap-4">
-            {/* Back arrow for sub-pages on mobile */}
-            {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile'].includes(pathname) ? (
-              <button onClick={() => navigate(-1)}
-                className="lg:hidden p-2 -ml-1 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-                <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-              </button>
-            ) : (
-              <img src="/mart_hub_brand_logo.png" alt="Gokez Mart" className="h-8 object-contain" />
-            )}
+            {/* Mobile header left */}
+            <div className="lg:hidden">
+              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile'].includes(pathname) ? (
+                <button onClick={() => navigate(-1)}
+                  className="p-2 -ml-1 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                  <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
+                </button>
+              ) : pathname === '/' ? (
+                <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-8 object-contain" />
+              ) : (
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+              )}
+            </div>
+
+            {/* Desktop header — page title only */}
+            <span className="hidden lg:block text-sm font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
 
             <div className="flex-1" />
 
