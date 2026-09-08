@@ -41,6 +41,8 @@ export default function App() {
   const isDark = useThemeStore(s => s.isDark);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#f9fafb');
   }, [isDark]);
 
   return (

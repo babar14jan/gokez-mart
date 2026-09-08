@@ -41,11 +41,25 @@ export default function InstallPrompt() {
       const handler = (e: Event) => {
         e.preventDefault();
         setDeferredPrompt(e);
-        // Show after 30s — don't interrupt immediately
-        setTimeout(() => setShow(true), 30000);
+        // Wait for SW to be active before showing prompt
+        const showPrompt = () => setTimeout(() => setShow(true), 30000);
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(showPrompt).catch(showPrompt);
+        } else {
+          showPrompt();
+        }
+      };
+      // Mark as installed when OS confirms install
+      const installedHandler = () => {
+        localStorage.setItem(INSTALLED_KEY, '1');
+        setShow(false);
       };
       window.addEventListener('beforeinstallprompt', handler);
-      return () => window.removeEventListener('beforeinstallprompt', handler);
+      window.addEventListener('appinstalled', installedHandler);
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handler);
+        window.removeEventListener('appinstalled', installedHandler);
+      };
     }
 
     if (p === 'ios') {

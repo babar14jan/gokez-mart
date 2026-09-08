@@ -11,7 +11,7 @@ interface CheckoutPageProps {
   zoneName?: string;
   storeId?: string;
   onBack: () => void;
-  onSuccess: (orderNumber: string) => void;
+  onSuccess: (orderNumber: string, preference: string) => void;
 }
 
 const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
@@ -79,7 +79,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onSu
       });
       if (form.address.trim()) addAddress({ label: 'Home', address: form.address.trim(), isDefault: true });
       clearCart();
-      onSuccess(res.data.data.orderNumber);
+      onSuccess(res.data.data.orderNumber, deliveryPreference);
     } catch {
       setError('Failed to place order. Please try again.');
     } finally { setLoading(false); }

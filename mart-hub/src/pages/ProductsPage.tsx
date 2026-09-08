@@ -172,6 +172,8 @@ export default function ProductsPage() {
 
   // ── Product CRUD ──────────────────────────────────────────────────────────
 
+  const UNITS = ['kg', 'g', 'pcs', 'dozen', 'litre', 'ml', 'bunch', 'packet'];
+
   const openCreate = () => {
     setEditing(null);
     const defaultCat = activeTab !== 'all' && activeTab !== UNCATEGORISED_ID ? activeTab : (categories[0]?.id || '');
@@ -495,7 +497,26 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1.5">Unit</label>
-                  <input type="text" value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} className={inp} placeholder="1 kg" />
+                  <div className="flex gap-1.5">
+                    <input
+                      type="number"
+                      value={form.unit.match(/^(\d*\.?\d*)/)?.[1] || ''}
+                      onChange={e => {
+                        const qty = e.target.value;
+                        const type = form.unit.replace(/^\d*\.?\d*\s*/, '') || 'kg';
+                        setForm(f => ({ ...f, unit: `${qty} ${type}`.trim() }));
+                      }}
+                      className={`${inp} w-16`} placeholder="1" min="0" step="0.5" />
+                    <select
+                      value={form.unit.replace(/^\d*\.?\d*\s*/, '') || 'kg'}
+                      onChange={e => {
+                        const qty = form.unit.match(/^(\d*\.?\d*)/)?.[1] || '1';
+                        setForm(f => ({ ...f, unit: `${qty} ${e.target.value}`.trim() }));
+                      }}
+                      className={inp}>
+                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 

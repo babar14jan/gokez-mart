@@ -269,7 +269,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
               {(order.items || []).map((item: any, i: number) => (
                 <div key={i} className="flex items-center justify-between">
                   <span className="text-xs text-gray-600 dark:text-slate-400">
-                    {item.productName} <span className="text-gray-400">× {item.quantity}</span>
+                    {item.productName} <span className="text-gray-400">{item.unit}{item.quantity > 1 ? ` × ${item.quantity}` : ''}</span>
                   </span>
                   <span className="text-xs font-semibold text-gray-900 dark:text-white">₹{item.total}</span>
                 </div>

@@ -102,6 +102,53 @@ npm run build --workspace=mart-backend
 | sales_manager | Dashboard, orders, products, customers |
 | delivery_staff | Orders only |
 
+## PWA Cache Management
+
+Each app (`mart-user` and `mart-hub`) has two version files that work together to keep users on the latest version:
+
+| File | Updated by | Purpose |
+|------|------------|---------|
+| `public/version.json` | Auto — Vite on every build | Triggers silent page reload when new code is deployed |
+| `public/cache-version.json` | You manually | Forces full SW cache clear on all devices |
+
+### How it works
+
+**`version.json`** — Every time you deploy, Vite generates a unique timestamp in this file. The app polls it every 2 minutes and on every foreground resume (critical for iOS PWA). When the version changes, the app silently reloads — users always get the latest prices, products and UI without doing anything.
+
+**`cache-version.json`** — Controls the SW cache name (e.g. `gokez-mart-v1`). When you bump it to `v2`, the SW on next activation deletes all old caches and starts fresh. This is your emergency fix when the normal reload isn't enough.
+
+### Why you need both
+
+- `version.json` handles **routine deploys** — new code, price changes, product updates
+- `cache-version.json` handles **broken cache situations** — when old broken files are stuck in the SW cache and won't go away
+
+### When to bump `cache-version.json`
+
+Only bump this when `version.json` auto-reload is not enough:
+
+| Scenario | Action |
+|----------|--------|
+| Bad deploy cached broken JS/CSS | Bump cache version |
+| Android PWA showing stale/broken UI after update | Bump cache version |
+| SW updated but old cache still served on some devices | Bump cache version |
+| App crashing on specific Android phones after deploy | Bump cache version |
+| Routine code/price/product updates | ❌ Not needed — `version.json` handles this |
+
+### How to bump
+
+1. Edit `mart-user/public/cache-version.json` and/or `mart-hub/public/cache-version.json`:
+```json
+{ "v": "2" }
+```
+2. Commit and deploy via feature branch as usual
+3. On next app open, all users get a completely fresh cache automatically
+
+### Benefits
+- ✅ No manual app reinstall needed by users
+- ✅ Works on both Android and iOS PWA
+- ✅ Zero downtime — cache clears silently in background
+- ✅ Free — served from Cloudflare CDN, no server cost
+
 ## Git Workflow
 
 Always work in feature branches:

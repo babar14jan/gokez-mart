@@ -1,12 +1,49 @@
-// Install — take control immediately
-self.addEventListener('install', () => self.skipWaiting());
+// Cache version — controlled by /cache-version.json
+// Bump the version in that file to force clear all caches on next deploy
+let CACHE_NAME = 'gokez-mart-v1';
 
-// Activate — clear all old caches + take control
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    fetch('/cache-version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.json())
+      .then(({ v }) => { CACHE_NAME = `gokez-mart-v${v}`; })
+      .catch(() => {})
+      .then(() =>
+        caches.open(CACHE_NAME).then(c =>
+          c.addAll(['/index.html']).catch(() => {})
+        )
+      )
+      .then(() => self.skipWaiting())
+  );
+});
+
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
-    .then(() => self.clients.claim())
+    fetch('/cache-version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.json())
+      .then(({ v }) => { CACHE_NAME = `gokez-mart-v${v}`; })
+      .catch(() => {})
+      .then(() =>
+        caches.keys()
+          .then(keys => Promise.all(
+            keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+          ))
+      )
+      .then(() => self.clients.claim())
+      .catch(() => self.clients.claim())
   );
+});
+
+// Fetch — network first, fallback to cache for navigation only
+self.addEventListener('fetch', (e) => {
+  if (e.request.url.includes('/api/')) return;
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        caches.match('/index.html').then(r => r || fetch(e.request))
+      )
+    );
+  }
 });
 
 // Push notification received

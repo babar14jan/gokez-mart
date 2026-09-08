@@ -51,13 +51,13 @@ export default function App() {
   });
   const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [checkoutActive, setCheckoutActive] = useState(false);
-  const [successData, setSuccessData] = useState<{ num: string } | null>(null);
+  const [successData, setSuccessData] = useState<{ num: string; preference: string } | null>(null);
 
   const { hasAskedPhone } = useCustomerStore();
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
-  const { isLoggedIn, name } = useCustomerAuthStore();
+  const { isLoggedIn } = useCustomerAuthStore();
 
   const [showOutsideWarning, setShowOutsideWarning] = useState(false);
   const [showOutsideBlock, setShowOutsideBlock] = useState(false);
@@ -77,6 +77,8 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#fafaf9');
   }, [isDark]);
 
   useEffect(() => {
@@ -183,7 +185,9 @@ export default function App() {
             Order <span className="font-bold text-gray-900 dark:text-white">{successData.num}</span>
           </p>
           <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
-            Your order is confirmed. We&apos;ll deliver within <span className="font-semibold text-gray-900 dark:text-white">{settings.estimated_delivery || '30-45 mins'}</span>.
+            Your order is confirmed. We&apos;ll deliver within <span className="font-semibold text-gray-900 dark:text-white">
+              {successData.preference === 'within_15' ? '10-15 mins' : successData.preference === 'within_30' ? '30 mins' : '1 hour'}
+            </span>.
           </p>
           <button onClick={() => { setSuccessData(null); setView('orders'); }}
             className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm mb-3">
@@ -208,7 +212,11 @@ export default function App() {
     <div className="min-h-screen bg-[#fafaf9] dark:bg-slate-900 font-sans">
 
       {showPhoneModal && !isLoggedIn && <PhoneModal onClose={() => setShowPhoneModal(false)} />}
-      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} onSuccess={() => { setShowLoginModal(false); if (!name) setShowNamePrompt(true); else setView('home'); }} />}
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} onSuccess={() => {
+        setShowLoginModal(false);
+        const currentName = useCustomerAuthStore.getState().name;
+        if (!currentName) setShowNamePrompt(true); else setView('home');
+      }} />}
       {showNamePrompt && <NamePrompt onDone={() => { setShowNamePrompt(false); setView('home'); }} />}
 
       {/* Outside zone — soft warning */}
@@ -301,7 +309,7 @@ export default function App() {
             zoneName={selectedZone?.name}
             storeId={selectedZone?.storeId}
             onBack={() => { setCheckoutActive(false); setShowCartDrawer(true); }}
-            onSuccess={(num: string) => { setCheckoutActive(false); setSuccessData({ num }); }}
+            onSuccess={(num: string, preference: string) => { setCheckoutActive(false); setSuccessData({ num, preference }); }}
           />
         </div>
       ) : view === 'categories' ? (
