@@ -43,7 +43,7 @@ export default function LoginPage() {
 
         {/* Logo + title */}
         <div className="flex flex-col items-center mb-8">
-          <img src="/mart_web_logo.png?v=2" alt="Gokez Mart" className="h-12 w-auto object-contain mb-2" />
+          <img src="/mart_hub_brand_logo.png" alt="Gokez Mart" className="h-12 w-auto object-contain mb-2" />
           <p className="text-sm font-bold text-gray-500 dark:text-slate-400 uppercase tracking-widest">Admin Portal</p>
         </div>
 
