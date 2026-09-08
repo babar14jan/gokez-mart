@@ -41,10 +41,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
 
-        {/* Logo + title */}
+        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Mart" className="h-12 w-auto object-contain mb-2" />
-          <p className="text-sm font-bold text-gray-500 dark:text-slate-400 uppercase tracking-widest">Admin Portal</p>
+          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-16 sm:h-20 w-auto object-contain" />
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
