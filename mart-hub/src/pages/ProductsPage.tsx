@@ -303,28 +303,17 @@ export default function ProductsPage() {
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
-        {/* Mobile: compact select */}
+        {/* Availability select — single version for all sizes */}
         {(() => {
           const cur = p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock');
-          const color = cur === 'available' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' : cur === 'out_of_stock' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-600';
+          const color = cur === 'available' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+            : cur === 'out_of_stock' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800'
+            : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-600';
           return (
             <select value={cur} onChange={e => setAvailability(p, e.target.value as any)} onClick={e => e.stopPropagation()}
-              className={`text-xs border rounded-lg px-2 py-1 focus:outline-none cursor-pointer font-semibold sm:hidden w-[100px] ${color}`}>
-              <option value="available">Available</option>
-              <option value="out_of_stock">Out of Stock</option>
-              <option value="hidden">Hidden</option>
-            </select>
-          );
-        })()}
-        {/* Desktop: full select with color coding */}
-        {(() => {
-          const cur = p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock');
-          const color = cur === 'available' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' : cur === 'out_of_stock' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-600';
-          return (
-            <select value={cur} onChange={e => setAvailability(p, e.target.value as any)} onClick={e => e.stopPropagation()}
-              className={`hidden sm:block text-xs border rounded-lg px-2 py-1 focus:outline-none cursor-pointer font-semibold ${color}`}>
-              <option value="available">✅ Available</option>
-              <option value="out_of_stock">⚠️ Out of Stock</option>
+              className={`text-xs border rounded-lg px-1.5 py-1 focus:outline-none cursor-pointer font-semibold max-w-[90px] sm:max-w-none ${color}`}>
+              <option value="available">✅ On</option>
+              <option value="out_of_stock">⚠️ Out</option>
               <option value="hidden">🙈 Hidden</option>
             </select>
           );

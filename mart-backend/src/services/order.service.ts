@@ -181,14 +181,17 @@ export class OrderService {
               o.delivery_sequence as "deliverySequence",
               o.batch_id as "batchId",
               json_agg(json_build_object(
+                'productId', oi.product_id,
                 'productName', oi.product_name,
                 'unit', oi.unit,
                 'price', oi.price::float,
                 'quantity', oi.quantity,
-                'total', oi.total::float
+                'total', oi.total::float,
+                'photoUrl', p.photo_url
               )) as items
        FROM mart_orders o
        LEFT JOIN mart_order_items oi ON oi.order_id = o.id
+       LEFT JOIN mart_products p ON p.id = oi.product_id
        ${where}
        GROUP BY o.id
        ORDER BY o.created_at DESC

@@ -8,7 +8,6 @@ import { getUserLocation, findMatchingZone } from './services/geofence';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
 import ProductCard from './components/ProductCard';
-import CartDrawer from './components/CartDrawer';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import PhoneModal from './components/PhoneModal';
@@ -26,6 +25,7 @@ import InstallPrompt from './components/InstallPrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useCartStore } from './store/cartStore';
 import CategoryIcon from './components/CategoryIcon';
+import HomeCarousel from './components/HomeCarousel';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
 
@@ -49,11 +49,15 @@ export default function App() {
     if (path === '/account') return 'account';
     return 'home';
   });
-  const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [checkoutActive, setCheckoutActive] = useState(false);
   const [successData, setSuccessData] = useState<{ num: string; preference: string } | null>(null);
 
   const { hasAskedPhone } = useCustomerStore();
+
+  // Deduplicate addresses on app load (fixes existing duplicates)
+  useEffect(() => {
+    useCustomerStore.getState().deduplicateAddresses();
+  }, []);
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
@@ -279,27 +283,8 @@ export default function App() {
       }}
         activeView={(checkoutActive ? 'categories' : view) as 'home' | 'categories' | 'orders' | 'account'}
         onNavChange={handleNavChange}
-        onCartOpen={() => setShowCartDrawer(true)}
       />
 
-      {/* Cart drawer — triggered from Cart tab */}
-      <CartDrawer
-        open={showCartDrawer}
-        onClose={() => setShowCartDrawer(false)}
-        settings={settings}
-        onCheckout={async () => {
-          setShowCartDrawer(false);
-          if (!selectedZone) {
-            const loc = await getUserLocation();
-            if (loc) {
-              const match = findMatchingZone(loc.lat, loc.lng, zones);
-              if (match) { setSelectedZone(match.zone); setCheckoutActive(true); return; }
-            }
-            setShowOutsideBlock(true); setView('home'); return;
-          }
-          setCheckoutActive(true);
-        }}
-      />
 
       {/* Pages */}
       {checkoutActive ? (
@@ -308,7 +293,8 @@ export default function App() {
             settings={settings}
             zoneName={selectedZone?.name}
             storeId={selectedZone?.storeId}
-            onBack={() => { setCheckoutActive(false); setShowCartDrawer(true); }}
+            onBack={() => setCheckoutActive(false)}
+            onHome={() => { setCheckoutActive(false); setView('home'); }}
             onSuccess={(num: string, preference: string) => { setCheckoutActive(false); setSuccessData({ num, preference }); }}
           />
         </div>
@@ -350,12 +336,12 @@ export default function App() {
 
           {/* Search */}
           <div className="relative mt-4 mb-4">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
             <input
               type="text" value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search vegetables, paneer..."
-              className="w-full pl-11 pr-10 py-3 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:bg-white dark:focus:bg-slate-700 focus:shadow-md transition-all"
+              className="w-full pl-11 pr-10 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10 shadow-sm transition-all"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -363,6 +349,9 @@ export default function App() {
               </button>
             )}
           </div>
+
+          {/* Carousel */}
+          <HomeCarousel />
 
           {/* Category pills */}
           {!loading && categories.length > 0 && (
@@ -415,7 +404,7 @@ export default function App() {
       )}
 
       {/* Floating cart bar — mobile only */}
-      <FloatingCart onOpen={() => setShowCartDrawer(true)} />
+      <FloatingCart onOpen={async () => { if (!selectedZone) { const loc = await getUserLocation(); if (loc) { const match = findMatchingZone(loc.lat, loc.lng, zones); if (match) { setSelectedZone(match.zone); setCheckoutActive(true); return; } } setShowOutsideBlock(true); return; } setCheckoutActive(true); }} hidden={checkoutActive} />
 
       {/* Install prompt — Android native / iOS guide */}
       <InstallPrompt />

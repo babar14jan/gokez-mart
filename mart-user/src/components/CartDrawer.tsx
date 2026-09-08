@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { X, Plus, Minus, ShoppingCart, Trash2, ChevronDown, MapPin, ChevronRight } from 'lucide-react';
+import { X, Plus, Minus, ShoppingCart, Trash2, ChevronDown, MapPin, ChevronRight, PenLine } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -13,11 +13,13 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer({ open, onClose, settings, onCheckout }: CartDrawerProps) {
-  const { items, updateQty, subtotal, clearCart } = useCartStore();
+  const { items, updateQty, subtotal } = useCartStore();
   const { address: authAddress, isLoggedIn } = useCustomerAuthStore();
-  const { addresses, getDefaultAddress } = useCustomerStore();
+  const { addresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [showAddressList, setShowAddressList] = useState(false);
+  const [addingNew, setAddingNew] = useState(false);
+  const [newAddress, setNewAddress] = useState('');
 
   const deliveryCharge = parseFloat(settings.delivery_charge || '15');
   const freeAbove = parseFloat(settings.free_delivery_above || '150');
@@ -31,7 +33,7 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
   // Resolve delivery address
   const defaultAddr = getDefaultAddress();
   const deliveryAddress = isLoggedIn ? authAddress : defaultAddr?.address;
-  const hasMultipleAddresses = addresses.length > 1;
+  const hasMultipleAddresses = addresses.length >= 1;
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
@@ -62,11 +64,6 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
           )}
         </div>
         <div className="flex items-center gap-2">
-          {items.length > 0 && (
-            <button onClick={clearCart} className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">
-              Clear
-            </button>
-          )}
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
             <X className="w-4 h-4 text-gray-500 sm:block hidden" />
             <ChevronDown className="w-4 h-4 text-gray-500 sm:hidden" />
@@ -133,20 +130,20 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
                     <p className="text-xs text-red-500 font-medium">No address saved — add one at checkout</p>
                   )}
                 </div>
-                {hasMultipleAddresses && (
+                {hasMultipleAddresses || !deliveryAddress ? (
                   <button onClick={() => setShowAddressList(s => !s)}
                     className="flex items-center gap-0.5 text-xs text-emerald-600 font-semibold flex-shrink-0">
-                    Change <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAddressList ? 'rotate-90' : ''}`} />
+                    {deliveryAddress ? 'Change' : 'Add'} <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAddressList ? 'rotate-90' : ''}`} />
                   </button>
-                )}
+                ) : null}
               </div>
 
               {/* Address list */}
-              {showAddressList && addresses.length > 0 && (
+              {showAddressList && (
                 <div className="border-t border-gray-200 dark:border-slate-600 divide-y divide-gray-100 dark:divide-slate-600">
                   {addresses.map(addr => (
                     <button key={addr.id}
-                      onClick={() => { /* address selection handled at checkout */ setShowAddressList(false); }}
+                      onClick={() => { setDefaultAddress(addr.id); setShowAddressList(false); }}
                       className="w-full flex items-start gap-2 px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-slate-700 text-left transition-colors">
                       <div className={`w-3.5 h-3.5 rounded-full border-2 mt-0.5 flex-shrink-0 ${addr.isDefault ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`} />
                       <div>
@@ -155,6 +152,41 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
                       </div>
                     </button>
                   ))}
+                  {/* Add new address */}
+                  {!addingNew ? (
+                    <button onClick={() => setAddingNew(true)}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
+                      <PenLine className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold">Add new address</span>
+                    </button>
+                  ) : (
+                    <div className="px-3 py-2.5 space-y-2">
+                      <textarea
+                        value={newAddress}
+                        onChange={e => setNewAddress(e.target.value)}
+                        placeholder="Enter new delivery address..."
+                        rows={2}
+                        className="w-full text-xs px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 resize-none"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => { setAddingNew(false); setNewAddress(''); }}
+                          className="flex-1 py-1.5 text-xs font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 rounded-xl">
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!newAddress.trim()) return;
+                            addAddress({ label: 'Home', address: newAddress.trim(), isDefault: true });
+                            setAddingNew(false); setNewAddress(''); setShowAddressList(false);
+                          }}
+                          disabled={!newAddress.trim()}
+                          className="flex-1 py-1.5 text-xs font-semibold text-white bg-emerald-500 rounded-xl disabled:opacity-50">
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

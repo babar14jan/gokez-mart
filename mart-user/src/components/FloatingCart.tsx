@@ -3,12 +3,13 @@ import { useCartStore } from '../store/cartStore';
 
 interface FloatingCartProps {
   onOpen: () => void;
+  hidden?: boolean;
 }
 
-export default function FloatingCart({ onOpen }: FloatingCartProps) {
+export default function FloatingCart({ onOpen, hidden }: FloatingCartProps) {
   const totalItems = useCartStore(s => s.totalItems());
 
-  if (totalItems === 0) return null;
+  if (totalItems === 0 || hidden) return null;
 
   return (
     <div className="sm:hidden fixed bottom-[5.5rem] left-1/2 -translate-x-1/2 z-40">

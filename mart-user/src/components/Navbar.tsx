@@ -11,7 +11,6 @@ interface NavbarProps {
   onZoneChange: (zone: MartZone) => void;
   activeView: View;
   onNavChange: (v: View) => void;
-  onCartOpen: () => void;
 }
 
 const navItems = [
@@ -21,7 +20,7 @@ const navItems = [
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-export default function Navbar({ zones, selectedZone, onZoneChange, activeView, onNavChange, onCartOpen }: NavbarProps) {
+export default function Navbar({ zones, selectedZone, onZoneChange, activeView, onNavChange }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
   const totalItems = useCartStore(s => s.totalItems());
 
@@ -46,7 +45,7 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
             );
           })}
           {/* Cart button — desktop */}
-          <button onClick={onCartOpen}
+          <button onClick={() => onNavChange('categories' as any)}
             className="relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800">
             <ShoppingCart className="w-4 h-4" />
             Cart

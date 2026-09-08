@@ -53,8 +53,9 @@ export default function DashboardPage() {
     const total     = filtered.length;
     const pending   = filtered.filter(o => o.status === 'pending').length;
     const delivered = filtered.filter(o => o.status === 'delivered').length;
+    const cancelled = filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length;
     const revenue   = filtered.filter(o => o.status === 'delivered').reduce((s: number, o: any) => s + (o.total || 0), 0);
-    return { total, pending, delivered, revenue };
+    return { total, pending, delivered, cancelled, revenue };
   }, [filtered]);
 
   const rangeLabel = RANGES.find(r => r.id === range)?.label || '';
@@ -81,34 +82,31 @@ export default function DashboardPage() {
             {r.label}
           </button>
         ))}
-        <span className="text-xs text-gray-400 dark:text-slate-500 ml-1">
-          {filtered.length} order{filtered.length !== 1 ? 's' : ''}
-        </span>
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">
         {[
-          { label: 'Total Orders',  value: kpis.total,                    sub: rangeLabel,               icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
-          { label: 'Pending',       value: kpis.pending,                  sub: 'awaiting confirmation',  icon: Clock,         gradient: 'from-amber-500 to-amber-600',     href: '/orders' },
-          { label: 'Delivered',     value: kpis.delivered,                sub: 'successfully delivered', icon: CheckCircle,   gradient: 'from-violet-500 to-violet-600',   href: '/orders' },
-          { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: 'delivered orders',       icon: TrendingUp,    gradient: 'from-blue-500 to-blue-600',       href: null },
+          { label: 'Total Orders',  value: kpis.total,                    sub: `${kpis.cancelled} cancelled`,    icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
+          { label: 'Pending',       value: kpis.pending,                  sub: 'awaiting confirmation',           icon: Clock,         gradient: 'from-amber-500 to-amber-600',     href: '/orders' },
+          { label: 'Delivered',     value: kpis.delivered,                sub: 'successfully delivered',          icon: CheckCircle,   gradient: 'from-violet-500 to-violet-600',   href: '/orders' },
+          { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: 'from delivered orders',           icon: TrendingUp,    gradient: 'from-blue-500 to-blue-600',       href: null },
         ].map(k => {
           const inner = (
-            <div className={`kpi-card group ${!k.href ? 'cursor-default hover:border-gray-200 dark:hover:border-slate-700' : ''}`}>
-              <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${k.gradient} flex items-center justify-center flex-shrink-0`}>
+            <div className={`kpi-card group h-full ${!k.href ? 'cursor-default hover:border-gray-200 dark:hover:border-slate-700' : ''}`}>
+              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${k.gradient} flex items-center justify-center flex-shrink-0`}>
                 <k.icon className="w-4 h-4 text-white" />
               </div>
-              <div className="min-w-0">
-                <p className="text-lg font-bold text-gray-900 dark:text-white leading-none">{k.value}</p>
-                <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 truncate">{k.label}</p>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 truncate">{k.sub}</p>
+              <div>
+                <p className="text-xl font-bold text-gray-900 dark:text-white leading-none">{k.value}</p>
+                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1">{k.label}</p>
+                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{k.sub}</p>
               </div>
             </div>
           );
           return k.href
-            ? <Link key={k.label} to={k.href}>{inner}</Link>
-            : <div key={k.label}>{inner}</div>;
+            ? <Link key={k.label} to={k.href} className="h-full">{inner}</Link>
+            : <div key={k.label} className="h-full">{inner}</div>;
         })}
       </div>
 
