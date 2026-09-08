@@ -17,13 +17,14 @@ import ChangePasswordPage from './pages/ChangePasswordPage';
 import StoresPage from './pages/StoresPage';
 import UsersPage from './pages/UsersPage';
 import CompliancePage from './pages/CompliancePage';
+import MorePage from './pages/MorePage';
 
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/categories', '/customers', '/analytics', '/settings', '/stores', '/users', '/compliance', '/profile', '/change-password'],
-  store_manager:   ['/', '/orders', '/products', '/customers', '/analytics', '/settings', '/profile', '/change-password'],
-  sales_manager:   ['/', '/orders', '/products', '/customers', '/profile', '/change-password'],
-  delivery_staff:  ['/', '/orders', '/profile', '/change-password'],
-  staff:           ['/', '/orders', '/profile', '/change-password'],
+  super_admin:     ['/', '/orders', '/products', '/categories', '/customers', '/analytics', '/settings', '/stores', '/users', '/compliance', '/profile', '/change-password', '/more'],
+  store_manager:   ['/', '/orders', '/products', '/customers', '/analytics', '/settings', '/profile', '/change-password', '/more'],
+  sales_manager:   ['/', '/orders', '/products', '/customers', '/profile', '/change-password', '/more'],
+  delivery_staff:  ['/', '/orders', '/profile', '/change-password', '/more'],
+  staff:           ['/', '/orders', '/profile', '/change-password', '/more'],
 };
 
 function ProtectedRoute({ children, path }: { children: React.ReactNode; path: string }) {
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/compliance"      element={<ProtectedRoute path="/compliance"><CompliancePage /></ProtectedRoute>} />
         <Route path="/profile"         element={<ProtectedRoute path="/profile"><ProfilePage /></ProtectedRoute>} />
         <Route path="/change-password" element={<ProtectedRoute path="/change-password"><ChangePasswordPage /></ProtectedRoute>} />
+        <Route path="/more"             element={<ProtectedRoute path="/more"><MorePage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

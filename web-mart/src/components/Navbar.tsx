@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { MapPin, ChevronDown, Check, Home, ShoppingCart, ClipboardList, User } from 'lucide-react';
+import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import type { MartZone } from '../services/api';
 
-type View = 'home' | 'cart' | 'orders' | 'account';
+type View = 'home' | 'categories' | 'orders' | 'account';
 
 interface NavbarProps {
   zones: MartZone[];
@@ -11,16 +11,17 @@ interface NavbarProps {
   onZoneChange: (zone: MartZone) => void;
   activeView: View;
   onNavChange: (v: View) => void;
+  onCartOpen: () => void;
 }
 
 const navItems = [
-  { id: 'home',    label: 'Home',    Icon: Home },
-  { id: 'cart',    label: 'Cart',    Icon: ShoppingCart },
-  { id: 'orders',  label: 'Orders',  Icon: ClipboardList },
-  { id: 'account', label: 'Account', Icon: User },
+  { id: 'home',       label: 'Home',       Icon: Home },
+  { id: 'categories', label: 'Categories', Icon: LayoutGrid },
+  { id: 'orders',     label: 'Orders',     Icon: ClipboardList },
+  { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-export default function Navbar({ zones, selectedZone, onZoneChange, activeView, onNavChange }: NavbarProps) {
+export default function Navbar({ zones, selectedZone, onZoneChange, activeView, onNavChange, onCartOpen }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
   const totalItems = useCartStore(s => s.totalItems());
 
@@ -35,21 +36,26 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
         <nav className="hidden sm:flex items-center gap-1">
           {navItems.map(({ id, label, Icon }) => {
             const isActive = activeView === id;
-            const showBadge = id === 'cart' && totalItems > 0;
             return (
               <button key={id} onClick={() => onNavChange(id)}
                 className={`relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors
                   ${isActive ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                 <Icon className="w-4 h-4" />
                 {label}
-                {showBadge && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
-                    {totalItems > 9 ? '9+' : totalItems}
-                  </span>
-                )}
               </button>
             );
           })}
+          {/* Cart button — desktop */}
+          <button onClick={onCartOpen}
+            className="relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800">
+            <ShoppingCart className="w-4 h-4" />
+            Cart
+            {totalItems > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                {totalItems > 9 ? '9+' : totalItems}
+              </span>
+            )}
+          </button>
         </nav>
 
         {/* Zone selector */}

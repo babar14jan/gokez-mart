@@ -9,6 +9,8 @@ import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
 import ProductCard from './components/ProductCard';
 import CartDrawer from './components/CartDrawer';
+import FloatingCart from './components/FloatingCart';
+import CategoriesView from './components/CategoriesView';
 import PhoneModal from './components/PhoneModal';
 import LoginModal from './components/LoginModal';
 import OrderHistoryPage from './pages/OrderHistoryPage';
@@ -22,8 +24,10 @@ import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import InstallPrompt from './components/InstallPrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
+import { useCartStore } from './store/cartStore';
+import CategoryIcon from './components/CategoryIcon';
 
-type View = 'home' | 'cart' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
+type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
 
 const DEFAULT_SETTINGS: PublicSettings = {
   store_name: 'Gokez Mart', store_address: 'Shapoorji, Kolkata',
@@ -45,6 +49,7 @@ export default function App() {
     if (path === '/account') return 'account';
     return 'home';
   });
+  const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [checkoutActive, setCheckoutActive] = useState(false);
   const [successData, setSuccessData] = useState<{ num: string } | null>(null);
 
@@ -68,6 +73,7 @@ export default function App() {
 
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
+  const cartItems = useCartStore(s => s.totalItems());
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -263,18 +269,19 @@ export default function App() {
           setSettings(srRes.data.data || DEFAULT_SETTINGS);
         } finally { setLoading(false); }
       }}
-        activeView={(checkoutActive ? 'cart' : view) as 'home' | 'cart' | 'orders' | 'account'}
+        activeView={(checkoutActive ? 'categories' : view) as 'home' | 'categories' | 'orders' | 'account'}
         onNavChange={handleNavChange}
+        onCartOpen={() => setShowCartDrawer(true)}
       />
 
       {/* Cart drawer — triggered from Cart tab */}
       <CartDrawer
-        open={view === 'cart' && !checkoutActive}
-        onClose={() => setView('home')}
+        open={showCartDrawer}
+        onClose={() => setShowCartDrawer(false)}
         settings={settings}
         onCheckout={async () => {
+          setShowCartDrawer(false);
           if (!selectedZone) {
-            // Always ask location at checkout regardless of app preference
             const loc = await getUserLocation();
             if (loc) {
               const match = findMatchingZone(loc.lat, loc.lng, zones);
@@ -293,9 +300,13 @@ export default function App() {
             settings={settings}
             zoneName={selectedZone?.name}
             storeId={selectedZone?.storeId}
-            onBack={() => { setCheckoutActive(false); setView('cart'); }}
+            onBack={() => { setCheckoutActive(false); setShowCartDrawer(true); }}
             onSuccess={(num: string) => { setCheckoutActive(false); setSuccessData({ num }); }}
           />
+        </div>
+      ) : view === 'categories' ? (
+        <div className="pb-20">
+          <CategoriesView categories={categories} products={products} />
         </div>
       ) : view === 'grievance' ? (
         <div className="pb-20"><GrievancePage /></div>
@@ -316,12 +327,12 @@ export default function App() {
             supportName={settings.support_name}
             supportPhone={settings.support_phone}
             whatsappNumber={settings.whatsapp_number}
-            onNavigate={(v) => setView(v as 'home' | 'cart' | 'orders' | 'account' | 'privacy' | 'terms')}
+            onNavigate={(v) => setView(v as 'home' | 'orders' | 'account' | 'privacy' | 'terms')}
           />
         </div>
       ) : (
         /* Home */
-        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-28">
+        <main className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 ${cartItems > 0 ? 'pb-44' : 'pb-28'}`}>
 
           {settings.store_open === 'false' && (
             <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium px-4 py-3 rounded-2xl text-center">
@@ -331,15 +342,15 @@ export default function App() {
 
           {/* Search */}
           <div className="relative mt-4 mb-4">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text" value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search vegetables, paneer, mushrooms..."
-              className="w-full pl-10 pr-10 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-sm transition-all"
+              placeholder="Search vegetables, paneer..."
+              className="w-full pl-11 pr-10 py-3 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:bg-white dark:focus:bg-slate-700 focus:shadow-md transition-all"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2">
+              <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2">
                 <X className="w-4 h-4 text-gray-400" />
               </button>
             )}
@@ -359,13 +370,8 @@ export default function App() {
                   className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                     activeCategoryId === cat.id ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
                   }`}>
-                  <span>{cat.icon}</span>
+                  <CategoryIcon icon={cat.icon} name={cat.name} className="w-4 h-4 object-contain" />
                   {cat.name}
-                  {cat.productCount > 0 && (
-                    <span className={`text-[10px] font-bold ${activeCategoryId === cat.id ? 'text-emerald-100' : 'text-gray-400'}`}>
-                      {cat.productCount}
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
@@ -373,7 +379,7 @@ export default function App() {
 
           {/* Products grid */}
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
                   <div className="aspect-square bg-gray-100" />
@@ -391,7 +397,7 @@ export default function App() {
               <p className="text-sm text-gray-400">Try a different category or search term</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {filteredProducts.map(product => (
                 <ProductCard key={product.id} product={product} />
               ))}
@@ -400,12 +406,15 @@ export default function App() {
         </main>
       )}
 
+      {/* Floating cart bar — mobile only */}
+      <FloatingCart onOpen={() => setShowCartDrawer(true)} />
+
       {/* Install prompt — Android native / iOS guide */}
       <InstallPrompt />
 
       {/* Bottom nav — mobile only */}
       <div className="sm:hidden">
-        <BottomNav active={(checkoutActive ? 'cart' : view) as 'home' | 'cart' | 'orders' | 'account'} onChange={handleNavChange} />
+        <BottomNav active={(checkoutActive ? 'categories' : view) as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} />
       </div>
     </div>
   );
