@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { ShoppingBag, RefreshCw, X, Phone, ChevronDown, MapPin } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, Phone, MapPin, ChevronRight } from 'lucide-react';
 import { authApi } from '../services/api';
 
 const STEPS = ['pending', 'confirmed', 'preparing', 'out_for_delivery', 'delivered'];
@@ -18,13 +18,113 @@ function hasActiveOrder(orders: any[]) {
   return orders.some(o => !CLOSED.includes(o.status));
 }
 
+// ── Order Detail Bottom Sheet ─────────────────────────────────────────────────
+function OrderDetailSheet({ order, onClose }: { order: any; onClose: () => void }) {
+  const isDelivered = order.status === 'delivered';
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 w-full max-w-lg rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-gray-200 dark:bg-slate-600 rounded-full" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-slate-700">
+          <div>
+            <p className="text-sm font-bold text-gray-900 dark:text-white">{order.orderNumber}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+              isDelivered ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
+            }`}>{STATUS_LABELS[order.status]}</span>
+            <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-5">
+          {/* Items */}
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Items Ordered</p>
+            <div className="space-y-3">
+              {(order.items || []).map((item: any, i: number) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-sm flex-shrink-0">
+                      🛒
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{item.productName}</p>
+                      <p className="text-xs text-gray-400">{item.unit} × {item.quantity}</p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold text-gray-900 dark:text-white">₹{item.total}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bill */}
+          <div className="bg-gray-50 dark:bg-slate-700/50 rounded-2xl p-4 space-y-2">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Bill Details</p>
+            <div className="flex justify-between text-sm text-gray-600 dark:text-slate-400">
+              <span>Item total</span>
+              <span>₹{order.subtotal}</span>
+            </div>
+            <div className="flex justify-between text-sm text-gray-600 dark:text-slate-400">
+              <span>Delivery charge</span>
+              <span>{order.deliveryCharge === 0 ? <span className="text-emerald-600 font-semibold">FREE</span> : `₹${order.deliveryCharge}`}</span>
+            </div>
+            <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-slate-600">
+              <span>Total Paid</span>
+              <span>₹{order.total}</span>
+            </div>
+          </div>
+
+          {/* Delivery address */}
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center flex-shrink-0">
+              <MapPin className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">Delivered to</p>
+              <p className="text-sm text-gray-700 dark:text-slate-300">{order.guestAddress}</p>
+            </div>
+          </div>
+
+          {/* Payment method */}
+          <div className="flex items-center justify-between py-3 border-t border-gray-100 dark:border-slate-700">
+            <p className="text-sm text-gray-500 dark:text-slate-400">Payment</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white uppercase">{order.paymentMethod}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 interface Props { onBack?: () => void; }
 
 export default function OrderHistoryPage({ onBack: _onBack }: Props) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -72,7 +172,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
       <p className="text-sm text-gray-400 mb-6">Your order history will appear here.</p>
       <button
         onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-2xl transition-all shadow-sm">
+        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-2xl transition-all">
         Start Shopping
       </button>
     </div>
@@ -121,15 +221,13 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
             {/* Progress tracker */}
             <div className="px-4 pt-5 pb-4">
               <div className="relative flex justify-between items-start">
-                {/* Track line */}
                 <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 dark:bg-slate-700" />
                 <div className="absolute top-4 left-4 h-0.5 bg-emerald-500 transition-all duration-700"
-                  style={{ width: curStep >= 0 ? `calc(${(curStep / (STEPS.length - 1)) * 100}% - 0px)` : '0%' }} />
-
+                  style={{ width: curStep >= 0 ? `calc(${(curStep / (STEPS.length - 1)) * 100}%)` : '0%' }} />
                 {STEPS.map((step, i) => (
                   <div key={step} className="flex flex-col items-center gap-1.5 z-10" style={{ width: '20%' }}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 bg-white dark:bg-slate-800 transition-all ${
-                      i < curStep ? 'border-emerald-500 bg-emerald-50' :
+                      i < curStep ? 'border-emerald-500' :
                       i === curStep ? 'border-emerald-500 shadow-md shadow-emerald-200 scale-110' :
                       'border-gray-200 dark:border-slate-600'
                     }`}>
@@ -166,7 +264,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
               </div>
             )}
 
-            {/* Order items */}
+            {/* Items */}
             <div className="px-4 pb-1 space-y-1.5">
               {(order.items || []).map((item: any, i: number) => (
                 <div key={i} className="flex items-center justify-between">
@@ -178,7 +276,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
               ))}
             </div>
 
-            {/* Divider + total + address */}
+            {/* Total + address */}
             <div className="mx-4 mt-3 pt-3 border-t border-gray-100 dark:border-slate-700 space-y-1.5 pb-4">
               <div className="flex justify-between text-xs text-gray-400">
                 <span>Delivery charge</span><span>₹{order.deliveryCharge}</span>
@@ -203,7 +301,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
                       {cancelling === order.id ? '...' : 'Yes'}
                     </button>
                     <button onClick={() => setConfirmCancel(null)}
-                      className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 text-xs font-semibold rounded-xl">
+                      className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 text-xs font-semibold rounded-xl">
                       No
                     </button>
                   </div>
@@ -222,64 +320,48 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
       {/* ── Past orders ── */}
       {pastOrders.length > 0 && (
         <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Past Orders</p>
-          <div className="space-y-2">
+          {activeOrders.length > 0 && (
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-3 mt-2">Past Orders</p>
+          )}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
             {pastOrders.map(order => {
               const isDelivered = order.status === 'delivered';
+              const itemSummary = (order.items || []).slice(0, 2).map((i: any) => i.productName).join(', ')
+                + ((order.items || []).length > 2 ? ` +${order.items.length - 2} more` : '');
+
               return (
-                <div key={order.id}
-                  className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-
-                  {/* Header row */}
-                  <button className="w-full flex items-center gap-3 px-4 py-3"
-                    onClick={() => setExpanded(expanded === order.id ? null : order.id)}>
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      isDelivered ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'
-                    }`}>
-                      <span className="text-lg">{isDelivered ? '✅' : '❌'}</span>
+                <button key={order.id}
+                  onClick={() => setSelectedOrder(order)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    isDelivered ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'
+                  }`}>
+                    <span className="text-xl">{isDelivered ? '✅' : '❌'}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">{order.orderNumber}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isDelivered ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
+                      }`}>{STATUS_LABELS[order.status]}</span>
                     </div>
-                    <div className="flex-1 text-left min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">{order.orderNumber}</p>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isDelivered ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
-                        }`}>{STATUS_LABELS[order.status]}</span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        {' · '}₹{order.total}
-                        {' · '}{(order.items || []).length} item{(order.items || []).length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <ChevronDown className={`w-4 h-4 text-gray-300 flex-shrink-0 transition-transform ${expanded === order.id ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {/* Expanded items */}
-                  {expanded === order.id && (
-                    <div className="px-4 pb-4 border-t border-gray-50 dark:border-slate-700 pt-3 space-y-1.5">
-                      {(order.items || []).map((item: any, i: number) => (
-                        <div key={i} className="flex justify-between text-xs text-gray-600 dark:text-slate-400">
-                          <span>{item.productName} × {item.quantity}</span>
-                          <span className="font-semibold text-gray-900 dark:text-white">₹{item.total}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between text-xs text-gray-400 pt-1.5 border-t border-gray-100 dark:border-slate-700">
-                        <span>Delivery</span><span>₹{order.deliveryCharge}</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white">
-                        <span>Total</span><span>₹{order.total}</span>
-                      </div>
-                      <div className="flex items-start gap-1.5 pt-1">
-                        <MapPin className="w-3 h-3 text-gray-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-[11px] text-gray-400">{order.guestAddress}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    <p className="text-xs text-gray-400 truncate">{itemSummary}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {' · '}₹{order.total}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                </button>
               );
             })}
           </div>
         </div>
+      )}
+
+      {/* Bottom sheet */}
+      {selectedOrder && (
+        <OrderDetailSheet order={selectedOrder} onClose={() => setSelectedOrder(null)} />
       )}
     </div>
   );
