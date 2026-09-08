@@ -120,7 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ) : (
             <div className="flex flex-col items-center gap-0.5">
               <img src="/mart_web_logo.png?v=2" alt="Gokez Mart" className="h-8 w-auto object-contain" />
-              <span className="text-[10px] font-bold text-gray-500 tracking-widest uppercase">Admin Portal</span>
+              <span className="text-[10px] font-bold text-gray-500 tracking-widest uppercase">Gokez Hub</span>
             </div>
           )}
         </div>

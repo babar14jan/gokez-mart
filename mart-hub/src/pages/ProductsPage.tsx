@@ -1,11 +1,18 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Plus, Pencil, Trash2,
-  Loader2, X, Upload, Package, ChevronUp, ChevronDown,
-  ArrowUpDown, Percent, EyeOff, AlertCircle, CheckCircle,
+  Loader2, X, Upload, Package,
+  Percent, EyeOff, AlertCircle, CheckCircle,
+  GripVertical, Check,
 } from 'lucide-react';
 import { productsApi, categoriesApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
+
+function CategoryIcon({ icon, name }: { icon: string; name: string }) {
+  const isUrl = icon?.startsWith('/') || icon?.startsWith('http');
+  if (isUrl) return <img src={icon} alt={name} className="w-5 h-5 object-contain inline-block" />;
+  return <span>{icon}</span>;
+}
 
 interface Product {
   id: string; name: string; categoryId: string | null; categoryName: string;
@@ -43,6 +50,13 @@ export default function ProductsPage() {
   // Sort mode per tab — stored as { tabId: 'manual' | 'discount' }
   const [sortModes, setSortModes] = useState<Record<string, SortMode>>({});
 
+  // Reorder mode
+  const [reorderMode, setReorderMode] = useState(false);
+  const [reorderList, setReorderList] = useState<Product[]>([]);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const dragItem = useRef<number | null>(null);
+  const dragOver = useRef<number | null>(null);
+
   const load = async () => {
     const [p, c] = await Promise.all([productsApi.getAll(getActiveStoreId()), categoriesApi.getAll()]);
     setProducts(p.data.data || []);
@@ -55,12 +69,12 @@ export default function ProductsPage() {
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
   const tabs = useMemo(() => {
-    const cats = categories.map(c => ({ id: c.id, label: `${c.icon || ''} ${c.name}`.trim(), sortOrder: c.sortOrder }));
+    const cats = categories.map(c => ({ id: c.id, label: c.name, icon: c.icon || '📦', sortOrder: c.sortOrder }));
     const hasUncategorised = products.some(p => !p.categoryId);
     return [
-      { id: 'all', label: 'All', sortOrder: -1 },
+      { id: 'all', label: 'All', icon: '', sortOrder: -1 },
       ...cats,
-      ...(hasUncategorised ? [{ id: UNCATEGORISED_ID, label: '📦 Others', sortOrder: 9999 }] : []),
+      ...(hasUncategorised ? [{ id: UNCATEGORISED_ID, label: 'Others', icon: '📦', sortOrder: 9999 }] : []),
     ];
   }, [categories, products]);
 
@@ -110,70 +124,42 @@ export default function ProductsPage() {
     return groups;
   }, [products, categories, activeTab, sortModes]);
 
-  // ── Sort order actions ────────────────────────────────────────────────────
+  // ── Reorder mode ─────────────────────────────────────────────────────────
 
-  const moveProduct = async (product: Product, direction: 'up' | 'down') => {
-    const scope = activeTab === 'all' || activeTab === UNCATEGORISED_ID
-      ? products.filter(p => p.categoryId === product.categoryId)
-      : products.filter(p => p.categoryId === activeTab);
-
-    const sorted = [...scope].sort((a, b) => a.sortOrder - b.sortOrder);
-
-    // If all sortOrders are equal, assign sequential values first
-    const allSame = sorted.every(p => p.sortOrder === sorted[0].sortOrder);
-    if (allSame) {
-      await Promise.all(sorted.map((p, i) => productsApi.update(p.id, { sortOrder: i })));
-      await load();
-      return;
-    }
-
-    const idx = sorted.findIndex(p => p.id === product.id);
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sorted.length) return;
-
-    const a = sorted[idx];
-    const b = sorted[swapIdx];
-    // Ensure distinct sort values before swapping
-    if (a.sortOrder === b.sortOrder) {
-      await Promise.all(sorted.map((p, i) => productsApi.update(p.id, { sortOrder: i })));
-      await load();
-      return;
-    }
-    await Promise.all([
-      productsApi.update(a.id, { sortOrder: b.sortOrder }),
-      productsApi.update(b.id, { sortOrder: a.sortOrder }),
-    ]);
-    await load();
+  const enterReorderMode = () => {
+    // Build flat ordered list for current tab scope
+    const list = activeTab === 'all'
+      ? [...tabProducts].sort((a, b) => a.sortOrder - b.sortOrder)
+      : [...tabProducts].sort((a, b) => a.sortOrder - b.sortOrder);
+    setReorderList(list);
+    setReorderMode(true);
   };
 
-  const moveCategory = async (cat: Category, direction: 'up' | 'down') => {
-    const sorted = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
+  const handleDragStart = (index: number) => { dragItem.current = index; };
+  const handleDragEnter = (index: number) => { dragOver.current = index; };
 
-    // If all sortOrders are equal, assign sequential values first
-    const allSame = sorted.every(c => c.sortOrder === sorted[0].sortOrder);
-    if (allSame) {
-      await Promise.all(sorted.map((c, i) => categoriesApi.update(c.id, { sortOrder: i })));
-      await load();
-      return;
-    }
-
-    const idx = sorted.findIndex(c => c.id === cat.id);
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sorted.length) return;
-
-    const a = sorted[idx];
-    const b = sorted[swapIdx];
-    if (a.sortOrder === b.sortOrder) {
-      await Promise.all(sorted.map((c, i) => categoriesApi.update(c.id, { sortOrder: i })));
-      await load();
-      return;
-    }
-    await Promise.all([
-      categoriesApi.update(a.id, { sortOrder: b.sortOrder }),
-      categoriesApi.update(b.id, { sortOrder: a.sortOrder }),
-    ]);
-    await load();
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOver.current === null) return;
+    const updated = [...reorderList];
+    const [moved] = updated.splice(dragItem.current, 1);
+    updated.splice(dragOver.current, 0, moved);
+    dragItem.current = null;
+    dragOver.current = null;
+    setReorderList(updated);
   };
+
+  const saveReorder = async () => {
+    setSavingOrder(true);
+    try {
+      await Promise.all(reorderList.map((p, i) => productsApi.update(p.id, { sortOrder: i })));
+      await load();
+      setReorderMode(false);
+    } finally { setSavingOrder(false); }
+  };
+
+  const cancelReorder = () => { setReorderMode(false); setReorderList([]); };
+
+  // ── Category sort (still arrow-based, less frequent) ─────────────────────
 
   const toggleSortMode = () => {
     setSortModes(prev => ({
@@ -258,20 +244,20 @@ export default function ProductsPage() {
     return <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full"><CheckCircle className="w-2.5 h-2.5" />Available</span>;
   };
 
-  const ProductRow = ({ p, showMoveArrows, isFirst, isLast }: { p: Product; showMoveArrows: boolean; isFirst: boolean; isLast: boolean }) => (
-    <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-      {/* Sort arrows — mobile + desktop */}
-      {showMoveArrows && currentSortMode === 'manual' && (
-        <div className="flex flex-col gap-1 flex-shrink-0">
-          <button onClick={() => moveProduct(p, 'up')} disabled={isFirst}
-            className="p-1 rounded-lg bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
-            <ChevronUp className="w-4 h-4" />
-          </button>
-          <button onClick={() => moveProduct(p, 'down')} disabled={isLast}
-            className="p-1 rounded-lg bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 hover:bg-emerald-100 hover:text-emerald-700 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
-            <ChevronDown className="w-4 h-4" />
-          </button>
-        </div>
+  const ProductRow = ({ p, index }: { p: Product; index: number }) => (
+    <div
+      className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 transition-colors ${
+        reorderMode ? 'cursor-grab active:cursor-grabbing bg-white dark:bg-slate-800' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'
+      }`}
+      draggable={reorderMode}
+      onDragStart={() => handleDragStart(index)}
+      onDragEnter={() => handleDragEnter(index)}
+      onDragEnd={handleDragEnd}
+      onDragOver={e => e.preventDefault()}
+    >
+      {/* Drag handle — only in reorder mode */}
+      {reorderMode && (
+        <GripVertical className="w-5 h-5 text-gray-300 flex-shrink-0" />
       )}
 
       {/* Photo */}
@@ -347,7 +333,46 @@ export default function ProductsPage() {
     <div className="space-y-4">
 
       {/* Header */}
-      <div className="flex justify-end mb-2">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          {/* Reorder — disabled on All tab */}
+          {!reorderMode ? (
+            <button
+              onClick={enterReorderMode}
+              disabled={activeTab === 'all'}
+              title={activeTab === 'all' ? 'Select a category tab to reorder' : ''}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+              <GripVertical className="w-3.5 h-3.5" /> Reorder
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-slate-400 hidden sm:block">Drag to reorder</span>
+              <button onClick={cancelReorder}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold border border-gray-200 text-gray-500 bg-white dark:bg-slate-800 hover:bg-gray-50 transition-all">
+                <X className="w-3.5 h-3.5" /> Cancel
+              </button>
+              <button onClick={saveReorder} disabled={savingOrder}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all">
+                {savingOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Save Order
+              </button>
+            </div>
+          )}
+
+          {/* Discount sort toggle */}
+          {!reorderMode && (
+            <button onClick={toggleSortMode}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                currentSortMode === 'discount'
+                  ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600'
+                  : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-emerald-300'
+              }`}>
+              <Percent className="w-3.5 h-3.5" />
+              {currentSortMode === 'discount' ? 'By Discount ✓' : 'By Discount'}
+            </button>
+          )}
+        </div>
+
         <button onClick={openCreate} className="btn-primary">
           <Plus className="w-4 h-4" /> Add Product
         </button>
@@ -359,56 +384,16 @@ export default function ProductsPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               activeTab === tab.id
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
             }`}
           >
+            <CategoryIcon icon={tab.icon} name={tab.label} />
             {tab.label}
           </button>
         ))}
-      </div>
-
-      {/* Sort mode toggle + category order (only on non-all tabs with a real category) */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {/* Category order arrows — only when on a specific category tab */}
-          {activeTab !== 'all' && activeTab !== UNCATEGORISED_ID && (() => {
-            const sorted = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
-            const cat = categories.find(c => c.id === activeTab);
-            const idx = sorted.findIndex(c => c.id === activeTab);
-            if (!cat) return null;
-            return (
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-2 py-1">
-                <span className="text-xs text-gray-500 dark:text-slate-400 mr-1">Category order:</span>
-                <button onClick={() => moveCategory(cat, 'up')} disabled={idx === 0}
-                  className="p-1 rounded text-gray-400 hover:text-emerald-600 disabled:opacity-30 transition-colors">
-                  <ChevronUp className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => moveCategory(cat, 'down')} disabled={idx === sorted.length - 1}
-                  className="p-1 rounded text-gray-400 hover:text-emerald-600 disabled:opacity-30 transition-colors">
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* Sort mode toggle */}
-        <button
-          onClick={toggleSortMode}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-            currentSortMode === 'discount'
-              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600'
-              : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-emerald-300'
-          }`}
-        >
-          {currentSortMode === 'discount'
-            ? <><Percent className="w-3.5 h-3.5" /> Sorted by Discount</>
-            : <><ArrowUpDown className="w-3.5 h-3.5" /> Manual Order</>
-          }
-        </button>
       </div>
 
       {/* Product list */}
@@ -418,6 +403,13 @@ export default function ProductsPage() {
             <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No products yet. Add your first product.</p>
           </div>
+        ) : reorderMode ? (
+          // Reorder mode — flat draggable list
+          <div className="divide-y divide-gray-50 dark:divide-slate-700">
+            {reorderList.map((p, i) => (
+              <ProductRow key={p.id} p={p} index={i} />
+            ))}
+          </div>
         ) : activeTab === 'all' && groupedProducts ? (
           // Grouped view for ALL tab
           <div>
@@ -425,14 +417,14 @@ export default function ProductsPage() {
               <div key={group.category?.id || UNCATEGORISED_ID}>
                 {/* Category header */}
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 sticky top-0">
-                  <span className="text-base">{group.icon}</span>
+                  <CategoryIcon icon={group.icon} name={group.label} />
                   <span className="text-xs font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider">{group.label}</span>
                   <span className="text-[10px] text-gray-400 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 px-1.5 py-0.5 rounded-full ml-1">
                     {group.products.length}
                   </span>
                 </div>
                 {group.products.map((p, i) => (
-                  <ProductRow key={p.id} p={p} showMoveArrows={true} isFirst={i === 0} isLast={i === group.products.length - 1} />
+                  <ProductRow key={p.id} p={p} index={i} />
                 ))}
               </div>
             ))}
@@ -447,7 +439,7 @@ export default function ProductsPage() {
               </div>
             ) : (
               tabProducts.map((p, i) => (
-                <ProductRow key={p.id} p={p} showMoveArrows={true} isFirst={i === 0} isLast={i === tabProducts.length - 1} />
+                <ProductRow key={p.id} p={p} index={i} />
               ))
             )}
           </div>

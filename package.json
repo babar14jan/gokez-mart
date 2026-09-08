@@ -4,12 +4,12 @@
   "private": true,
   "workspaces": [
     "mart-backend",
-    "web-mart",
-    "web-mart-admin"
+    "mart-user",
+    "mart-hub"
   ],
   "scripts": {
     "dev:api":        "npm run dev --workspace=mart-backend",
-    "dev:web":        "npm run dev --workspace=web-mart",
-    "dev:admin":      "npm run dev --workspace=web-mart-admin"
+    "dev:web":        "npm run dev --workspace=mart-user",
+    "dev:admin":      "npm run dev --workspace=mart-hub"
   }
 }

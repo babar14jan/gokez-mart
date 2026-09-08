@@ -1,7 +1,7 @@
 {
-  "name": "MartAdmin",
-  "short_name": "MartAdmin",
-  "description": "Gokez Mart Admin Portal",
+  "name": "Gokez Hub",
+  "short_name": "Gokez Hub",
+  "description": "Gokez Hub — Operations & Management",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#065f46",
