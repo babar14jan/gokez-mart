@@ -1,5 +1,5 @@
-const CACHE_NAME = 'gokez-mart-v1';
-const APP_SHELL = ['/', '/index.html'];
+const CACHE_NAME = 'gokez-mart-v2';
+ const APP_SHELL = ['/', '/index.html'];
 
 // Install — cache app shell
 self.addEventListener('install', (e) => {
@@ -9,29 +9,39 @@ self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
-// Activate — clean old caches
+// Activate — clean old caches + immediately take control
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch — network first, fallback to cache for navigation
+// Fetch — network first for navigation and static assets, always network for API
 self.addEventListener('fetch', (e) => {
+  if (e.request.url.includes('/api/')) return;
+
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match('/index.html'))
+      fetch(e.request, { cache: 'no-store' }).catch(() => caches.match('/index.html'))
     );
     return;
   }
-  // API calls — always network
-  if (e.request.url.includes('/api/')) return;
+
+  // Static assets — network first, fallback to cache
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request).then(res => {
+      const clone = res.clone();
+      caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+      return res;
+    }).catch(() => caches.match(e.request))
   );
+});
+
+// Message — allow clients to trigger SW activation immediately
+self.addEventListener('message', (e) => {
+  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 // Push notification received

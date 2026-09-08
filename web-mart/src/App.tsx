@@ -21,6 +21,7 @@ import DeleteAccountPage from './pages/DeleteAccountPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import InstallPrompt from './components/InstallPrompt';
+import UpdateBanner from './components/UpdateBanner';
 
 type View = 'home' | 'cart' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
 
@@ -243,7 +244,24 @@ export default function App() {
       <Navbar
         zones={zones}
         selectedZone={selectedZone}
-        onZoneChange={(zone) => { setSelectedZone(zone); setShowOutsideWarning(false); setShowOutsideBlock(false); }}
+        onZoneChange={async (zone) => {
+        setSelectedZone(zone);
+        setShowOutsideWarning(false);
+        setShowOutsideBlock(false);
+        setLoading(true);
+        setActiveCategoryId('all');
+        setSearch('');
+        try {
+          const [catRes, prodRes, srRes] = await Promise.all([
+            storeApi.getCategories(),
+            storeApi.getProducts(undefined, zone.storeId),
+            storeApi.getSettings(zone.storeId),
+          ]);
+          setCategories(catRes.data.data || []);
+          setProducts(prodRes.data.data || []);
+          setSettings(srRes.data.data || DEFAULT_SETTINGS);
+        } finally { setLoading(false); }
+      }}
         activeView={(checkoutActive ? 'cart' : view) as 'home' | 'cart' | 'orders' | 'account'}
         onNavChange={handleNavChange}
       />
@@ -383,6 +401,7 @@ export default function App() {
 
       {/* Install prompt — Android native / iOS guide */}
       <InstallPrompt />
+      <UpdateBanner />
 
       {/* Bottom nav — mobile only */}
       <div className="sm:hidden">

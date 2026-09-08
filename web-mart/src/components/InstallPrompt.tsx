@@ -16,9 +16,11 @@ function detectPlatform(): Platform {
 }
 
 const DISMISSED_KEY = 'mart_install_dismissed';
-const DISMISSED_DAYS = 7;
+const INSTALLED_KEY = 'mart_install_done';
+const DISMISSED_DAYS = 30;
 
 function wasDismissedRecently(): boolean {
+  if (localStorage.getItem(INSTALLED_KEY)) return true;
   const ts = localStorage.getItem(DISMISSED_KEY);
   if (!ts) return false;
   return Date.now() - parseInt(ts) < DISMISSED_DAYS * 86400000;
@@ -62,7 +64,10 @@ export default function InstallPrompt() {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') dismiss();
+    if (outcome === 'accepted') {
+      localStorage.setItem(INSTALLED_KEY, '1');
+      dismiss();
+    }
     setDeferredPrompt(null);
   };
 
@@ -172,7 +177,7 @@ export default function InstallPrompt() {
             <p className="text-xs text-slate-400 mt-0.5">Get order notifications on your iPhone</p>
           </div>
           <div className="flex flex-col gap-1.5 flex-shrink-0">
-            <button onClick={() => setShowIOSGuide(true)}
+            <button onClick={() => { localStorage.setItem(INSTALLED_KEY, '1'); setShowIOSGuide(true); }}
               className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors">
               How to
             </button>
