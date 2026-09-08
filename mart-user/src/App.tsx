@@ -30,9 +30,9 @@ import HomeCarousel from './components/HomeCarousel';
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
 
 const DEFAULT_SETTINGS: PublicSettings = {
-  store_name: 'Gokez Mart', store_address: 'Shapoorji, Kolkata',
+  store_name: 'Gokez Mart', store_address: 'Kolkata',
   delivery_charge: '15', free_delivery_above: '150', min_order_amount: '50',
-  delivery_area: 'Shapoorji, Kolkata', store_open: 'true',
+  delivery_area: 'Kolkata', store_open: 'true',
   estimated_delivery: '30-45 mins', cod_enabled: 'true',
   upi_enabled: 'true', phonepay_enabled: 'false',
   phonepay_qr_url: '', upi_phone: '', upi_id: '', whatsapp_number: '918777376280',
@@ -230,7 +230,7 @@ export default function App() {
             <div className="text-4xl mb-3">📍</div>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">We&apos;re not in your area yet</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">
-              Gokez Mart currently delivers within <strong>5km of Shapoorji, Kolkata</strong>.
+              Gokez Mart currently delivers within <strong>5km of Kolkata</strong>.
             </p>
             <p className="text-sm text-emerald-600 font-semibold mb-5">🚀 We&apos;re expanding soon — you&apos;ll be next!</p>
             <button onClick={() => setShowOutsideWarning(false)}
@@ -249,7 +249,7 @@ export default function App() {
             <div className="text-4xl mb-3">🛵</div>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">Delivery not available yet</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-2">
-              We deliver within <strong>5km of Shapoorji, Kolkata</strong>. Your location is outside our current delivery zone.
+              We deliver within <strong>5km of Kolkata</strong>. Your location is outside our current delivery zone.
             </p>
             <p className="text-sm text-emerald-600 font-semibold mb-5">We&apos;re coming to your area soon! 🌱</p>
             <button onClick={() => setShowOutsideBlock(false)}

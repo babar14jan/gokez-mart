@@ -43,7 +43,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">4. Location Data</h2>
-            <p>We request location permission to automatically detect which delivery zone you are in (e.g. Shapoorji or Gobra). We do <strong className="text-gray-700 dark:text-slate-300">not</strong> store your GPS coordinates. Location is used only at the moment of zone detection and during checkout. You can disable location access at any time from your Account → Settings.</p>
+            <p>We request location permission to automatically detect which delivery zone you are in (e.g. your area). We do <strong className="text-gray-700 dark:text-slate-300">not</strong> store your GPS coordinates. Location is used only at the moment of zone detection and during checkout. You can disable location access at any time from your Account → Settings.</p>
           </section>
 
           <section>

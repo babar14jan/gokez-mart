@@ -88,7 +88,7 @@ function AddressCard({
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-400 mb-1">Street / Area</label>
-            <input type="text" value={form.street} onChange={f('street')} className={inp} placeholder="e.g. Shapoorji, Kolkata" />
+            <input type="text" value={form.street} onChange={f('street')} className={inp} placeholder="e.g. Kolkata" />
           </div>
           <div>
             <label className="block text-[10px] font-medium text-gray-400 mb-1">Pincode</label>

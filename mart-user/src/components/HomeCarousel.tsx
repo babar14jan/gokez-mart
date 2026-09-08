@@ -33,6 +33,7 @@ const CARDS = [
 export default function HomeCarousel() {
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartX = useRef<number | null>(null);
 
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -42,12 +43,29 @@ export default function HomeCarousel() {
   useEffect(() => { startTimer(); return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
 
   const handleDotClick = (i: number) => { setActive(i); startTimer(); };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 40) {
+      setActive(a => diff > 0 ? (a + 1) % CARDS.length : (a - 1 + CARDS.length) % CARDS.length);
+      startTimer();
+    }
+    touchStartX.current = null;
+  };
+
   const card = CARDS[active];
 
   return (
     <div className="mt-4 mb-4">
       {/* Fixed height card */}
-      <div className={`relative bg-gradient-to-br ${card.gradient} rounded-2xl overflow-hidden shadow-lg h-28 sm:h-32`}>
+      <div className={`relative bg-gradient-to-br ${card.gradient} rounded-2xl overflow-hidden shadow-lg h-28 sm:h-32`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}>
         <div className="absolute inset-0 p-4 sm:p-5 flex flex-col justify-center">
 
           {/* Decorative circles */}

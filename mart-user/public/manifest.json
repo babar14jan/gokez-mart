@@ -1,7 +1,7 @@
 {
-  "name": "GokezMart",
-  "short_name": "GokezMart",
-  "description": "Fresh groceries delivered fast — Shapoorji, Kolkata",
+  "name": "Gokez Mart",
+  "short_name": "Gokez Mart",
+  "description": "Gokez Mart — Fresh groceries delivered in 10-15 mins across Kolkata",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#26b74e",
