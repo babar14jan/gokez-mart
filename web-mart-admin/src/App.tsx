@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { useAppUpdate } from './hooks/useAppUpdate';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -35,6 +36,7 @@ function ProtectedRoute({ children, path }: { children: React.ReactNode; path: s
 }
 
 export default function App() {
+  useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);

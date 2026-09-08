@@ -21,7 +21,7 @@ import DeleteAccountPage from './pages/DeleteAccountPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import InstallPrompt from './components/InstallPrompt';
-import UpdateBanner from './components/UpdateBanner';
+import { useAppUpdate } from './hooks/useAppUpdate';
 
 type View = 'home' | 'cart' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
 
@@ -66,6 +66,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
+  useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
 
   useEffect(() => {
@@ -401,7 +402,6 @@ export default function App() {
 
       {/* Install prompt — Android native / iOS guide */}
       <InstallPrompt />
-      <UpdateBanner />
 
       {/* Bottom nav — mobile only */}
       <div className="sm:hidden">
