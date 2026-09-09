@@ -13,7 +13,7 @@ import { api } from '../services/api';
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
 const ROLE_LABELS: Record<string, string> = {
-  super_admin: 'Super Admin', store_owner: 'Store Owner',
+  super_admin: 'Super Admin', store_owner: 'Store Owner', store_manager: 'Store Manager',
   sales_manager: 'Sales Manager', delivery_staff: 'Delivery Staff', staff: 'Staff',
 };
 
@@ -76,9 +76,16 @@ export default function MorePage() {
       { label: 'Product Catalog', href: '/catalog',   icon: Package },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
+    store_manager: [
+      { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
+      { label: 'Customers',       href: '/customers', icon: Users },
+      { label: 'Product Catalog', href: '/catalog',   icon: Package },
+    ],
     sales_manager: [
       { label: 'Product Catalog', href: '/catalog', icon: Package },
-    ], delivery_staff: [], staff: [],
+    ],
+    delivery_staff: [],
+    staff: [],
   };
 
   const extraLinks = roleLinks[role || 'staff'] || [];
