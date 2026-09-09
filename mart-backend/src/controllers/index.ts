@@ -757,6 +757,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
       'Authorization': `Bearer ${config.supabase.serviceRoleKey}`,
       'Content-Type': req.file.mimetype,
       'x-upsert': 'false',
+      'cache-control': 'max-age=31536000',
     },
     body: req.file.buffer,
   });

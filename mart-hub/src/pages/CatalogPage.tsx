@@ -3,6 +3,7 @@ import { Package, Plus, Search, Check, Loader2, X } from 'lucide-react';
 import { categoriesApi, api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { getActiveStoreId } from '../utils/store';
+import CategoryIcon from '../components/CategoryIcon';
 
 interface CatalogProduct {
   id: string;
@@ -106,7 +107,7 @@ export default function CatalogPage() {
         {categories.map(cat => (
           <button key={cat.id} onClick={() => setActiveCat(cat.id)}
             className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeCat === cat.id ? 'bg-emerald-500 text-white' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700'}`}>
-            <span>{cat.icon}</span>{cat.name}
+            <CategoryIcon icon={cat.icon} name={cat.name} className="w-4 h-4 object-contain" />{cat.name}
           </button>
         ))}
       </div>
@@ -141,8 +142,9 @@ export default function CatalogPage() {
                     </div>
                   )}
                   {product.categoryName && (
-                    <span className="absolute bottom-1.5 left-1.5 text-[9px] font-bold bg-black/50 text-white px-1.5 py-0.5 rounded-md">
-                      {product.categoryIcon} {product.categoryName}
+                    <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[9px] font-bold bg-black/50 text-white px-1.5 py-0.5 rounded-md">
+                      <CategoryIcon icon={product.categoryIcon || ''} name={product.categoryName} className="w-3 h-3 object-contain" />
+                      {product.categoryName}
                     </span>
                   )}
                 </div>

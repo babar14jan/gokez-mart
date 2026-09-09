@@ -266,7 +266,8 @@ export default function ProductsPage() {
 
       {/* Photo */}
       {p.photoUrl ? (
-        <img src={p.photoUrl} alt={p.name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border-2 border-emerald-200" />
+        <img src={p.photoUrl} alt={p.name} loading="lazy" decoding="async"
+          className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border-2 border-emerald-200 bg-gray-100 dark:bg-slate-700" />
       ) : (
         <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
           <Package className="w-5 h-5 text-gray-300" />
@@ -487,7 +488,7 @@ export default function ProductsPage() {
                 <label className="block text-xs font-medium text-gray-700 mb-1.5">Category</label>
                 <select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))} className={inp}>
                   <option value="">Uncategorised</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
 
