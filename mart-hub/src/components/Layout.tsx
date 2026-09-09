@@ -90,6 +90,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/analytics': 'Analytics', '/settings': 'Settings',
     '/profile': 'My Profile', '/change-password': 'Change Password',
     '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
+    '/store-applications': 'Store Applications',
   };
 
 
@@ -159,7 +160,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-14 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile'].includes(pathname) ? (
+              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications'].includes(pathname) ? (
                 <button onClick={() => navigate(-1)}
                   className="p-2 -ml-1 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
                   <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />

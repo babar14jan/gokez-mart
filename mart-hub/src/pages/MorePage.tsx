@@ -4,7 +4,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import {
   KeyRound, Settings, LayoutDashboard, Tag, Users,
   BarChart3, Shield, LogOut, ChevronRight, Moon, Sun,
-  Pencil, X, Loader2, Save, Mail, Phone,
+  Pencil, X, Loader2, Save, Mail, Phone, Store,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
@@ -59,13 +59,14 @@ export default function MorePage() {
 
   const roleLinks: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
     super_admin: [
-      { label: 'Analytics',  href: '/analytics',  icon: BarChart3 },
-      { label: 'Customers',  href: '/customers',  icon: Users },
-      { label: 'Categories', href: '/categories', icon: Tag },
-      { label: 'Stores',     href: '/stores',     icon: LayoutDashboard },
-      { label: 'Users',      href: '/users',      icon: Users },
-      { label: 'Compliance', href: '/compliance', icon: Shield },
-      { label: 'Settings',   href: '/settings',   icon: Settings },
+      { label: 'Analytics',         href: '/analytics',          icon: BarChart3 },
+      { label: 'Customers',         href: '/customers',          icon: Users },
+      { label: 'Categories',        href: '/categories',         icon: Tag },
+      { label: 'Store Applications',href: '/store-applications', icon: Store },
+      { label: 'Stores',            href: '/stores',             icon: LayoutDashboard },
+      { label: 'Users',             href: '/users',              icon: Users },
+      { label: 'Compliance',        href: '/compliance',         icon: Shield },
+      { label: 'Settings',          href: '/settings',           icon: Settings },
     ],
     store_manager: [
       { label: 'Analytics',  href: '/analytics',  icon: BarChart3 },
