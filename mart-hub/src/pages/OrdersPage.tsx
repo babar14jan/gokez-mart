@@ -18,6 +18,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed:        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   preparing:        'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
   out_for_delivery: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  picked_up:        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   delivered:        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   cancelled:        'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
   failed_delivery:  'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
@@ -26,7 +27,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing',
-  out_for_delivery: 'Out for Delivery', delivered: 'Delivered',
+  out_for_delivery: 'Out for Delivery', picked_up: 'Picked Up', delivered: 'Delivered',
   cancelled: 'Cancelled', failed_delivery: 'Delivery Failed', terminated: 'Terminated',
 };
 
@@ -37,7 +38,8 @@ const NEXT_ACTION: Record<string, { label: string; status: string; color: string
   pending:          { label: '✓ Confirm Order',      status: 'confirmed',        color: 'bg-blue-500 hover:bg-blue-600 text-white' },
   confirmed:        { label: '🍳 Start Preparing',   status: 'preparing',        color: 'bg-indigo-500 hover:bg-indigo-600 text-white' },
   preparing:        { label: '🛵 Out for Delivery',  status: 'out_for_delivery', color: 'bg-violet-500 hover:bg-violet-600 text-white' },
-  out_for_delivery: { label: '✅ Mark Delivered',    status: 'delivered',        color: 'bg-emerald-500 hover:bg-emerald-600 text-white' },
+  out_for_delivery: { label: '📦 Picked Up',         status: 'picked_up',        color: 'bg-amber-500 hover:bg-amber-600 text-white' },
+  picked_up:        { label: '✅ Mark Delivered',    status: 'delivered',        color: 'bg-emerald-500 hover:bg-emerald-600 text-white' },
   delivered:        null,
   cancelled:        null,
   failed_delivery:  null,

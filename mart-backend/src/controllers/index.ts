@@ -321,7 +321,8 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
   const STATUS_MESSAGES: Record<string, string> = {
     confirmed:        '✅ Order confirmed! We\'re getting it ready.',
     preparing:        '🍳 Your order is being prepared.',
-    out_for_delivery: '🛵 Rider is on the way! Should reach you within 10-15 mins.',
+    out_for_delivery: '🛵 Rider is heading to the store to pick up your order.',
+    picked_up:        '🛵 Rider is on the way! Should reach you within 10-15 mins.',
     delivered:        '🎉 Order delivered! Enjoy your groceries.',
     cancelled:        '❌ Your order has been cancelled.',
     failed_delivery:  failureReason && FAILURE_MESSAGES[failureReason]
