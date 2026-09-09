@@ -186,7 +186,7 @@ export default function App() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Order Placed! 🎉</h2>
           <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">
-            Order <span className="font-bold text-gray-900 dark:text-white">{successData.num}</span>
+            Order <span className="font-bold text-gray-900 dark:text-white">Order #{successData.num}</span>
           </p>
           <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
             Your order is confirmed. We&apos;ll deliver within <span className="font-semibold text-gray-900 dark:text-white">

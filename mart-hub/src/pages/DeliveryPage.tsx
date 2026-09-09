@@ -96,7 +96,7 @@ export default function DeliveryPage() {
                     {order.status === 'out_for_delivery' ? 'Go to Store — Pick Up' : 'On the Way to Customer'}
                   </span>
                 </div>
-                <span className="text-white/80 text-xs">{order.orderNumber}</span>
+                <span className="text-white/80 text-xs">Order #{order.orderNumber}</span>
               </div>
 
               <div className="p-4 space-y-3">

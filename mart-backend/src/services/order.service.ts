@@ -31,9 +31,9 @@ export class OrderService {
     const yy = String(now.getFullYear()).slice(2);
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I confusion
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const rand = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    return `MART-${yy}${mm}${dd}-${rand}`;
+    return `MRT${yy}${mm}${dd}${rand}`;
   }
 
   static async create(data: CreateOrderDto) {

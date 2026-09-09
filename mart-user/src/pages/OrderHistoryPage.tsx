@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { ShoppingBag, RefreshCw, X, Phone, MapPin, RotateCcw } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, Phone, MapPin, RotateCcw, Receipt } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import { printReceipt } from '../utils/printReceipt';
 
 const STEPS = ['pending', 'confirmed', 'preparing', 'out_for_delivery', 'delivered'];
 const STEP_LABELS = ['Placed', 'Confirmed', 'Preparing', 'On the Way', 'Delivered'];
@@ -65,7 +66,7 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
 
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-slate-700">
           <div>
-            <p className="text-sm font-bold text-gray-900 dark:text-white">{order.orderNumber}</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
             <p className="text-xs text-gray-400 mt-0.5">Placed {formatDateTime(order.createdAt)}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -129,19 +130,24 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
             </div>
           </div>
 
-          {/* Payment */}
-          <div className="flex items-center justify-between py-3 border-t border-gray-100 dark:border-slate-700">
-            <p className="text-sm text-gray-500 dark:text-slate-400">Payment</p>
-            <p className="text-sm font-semibold text-gray-900 dark:text-white uppercase">{order.paymentMethod}</p>
+          {/* Payment + Receipt + Fulfilled — compact single section */}
+          <div className="border-t border-gray-100 dark:border-slate-700 pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 dark:text-slate-400">Payment</p>
+              <p className="text-xs font-semibold text-gray-900 dark:text-white uppercase">{order.paymentMethod}</p>
+            </div>
+            {order.fulfilledBy && (
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500 dark:text-slate-400">Fulfilled by</p>
+                <p className="text-xs font-semibold text-gray-900 dark:text-white">{order.fulfilledBy}</p>
+              </div>
+            )}
+            <button onClick={() => printReceipt(order)}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 mt-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+              <Receipt className="w-3.5 h-3.5" /> Download Receipt
+            </button>
           </div>
 
-          {/* Fulfilled by */}
-          {order.fulfilledBy && (
-            <div className="flex items-center justify-between py-3 border-t border-gray-100 dark:border-slate-700">
-              <p className="text-sm text-gray-500 dark:text-slate-400">🏪 Fulfilled by</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">{order.fulfilledBy}</p>
-            </div>
-          )}
 
           {/* Order Again — all closed orders */}
           <button onClick={() => { onOrderAgain(order); onClose(); }}
@@ -268,7 +274,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
                 )}
               </div>
               <div className="text-right">
-                <span className="text-emerald-100 text-xs font-semibold">{order.orderNumber}</span>
+                <span className="text-emerald-100 text-xs font-semibold">Order #{order.orderNumber}</span>
                 {order.fulfilledBy && (
                   <p className="text-emerald-200 text-[10px] mt-0.5">🏪 {order.fulfilledBy}</p>
                 )}

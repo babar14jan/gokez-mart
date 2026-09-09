@@ -146,7 +146,7 @@ export default function DashboardPage() {
                   <div className="sm:hidden flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">{order.orderNumber}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
                         <span className={`badge ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>{order.status.replace(/_/g, ' ')}</span>
                       </div>
                       <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{order.guestName} · {order.guestPhone} · {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}</p>
@@ -154,7 +154,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-bold text-gray-900 dark:text-white">₹{order.total}</p>
                   </div>
                   <div className="hidden sm:block col-span-2">
-                    <p className="text-xs font-bold text-gray-900 dark:text-white">{order.orderNumber}</p>
+                    <p className="text-xs font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
                     <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">
                       {new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
