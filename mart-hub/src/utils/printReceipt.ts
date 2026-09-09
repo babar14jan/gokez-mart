@@ -42,7 +42,7 @@ th:nth-child(2),th:nth-child(3){text-align:center;}
   <button onclick="window.close()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;">Close</button>
 </div>
 <div class="center">
-  <div class="brand">GOKEZ MART</div>
+  <img src="https://mart.gokez.com/mart_web_logo.png" alt="Gokez Mart" style="height:48px;object-fit:contain;" />
   <div class="tagline">Powered by Gokez Technologies Pvt. Ltd.</div>
 
 </div>
