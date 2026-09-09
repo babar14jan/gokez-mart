@@ -12,14 +12,14 @@ import { storesApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 
 const NAV_ALL = [
-  { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
-  { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
-  { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_manager', 'sales_manager'] },
-  { label: 'Product Catalog',    href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_manager', 'sales_manager'] },
+  { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_owner', 'sales_manager', 'delivery_staff', 'staff'] },
+  { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_owner', 'sales_manager', 'delivery_staff', 'staff'] },
+  { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_owner', 'sales_manager'] },
+  { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'sales_manager'] },
+  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
-  { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_manager', 'sales_manager'] },
-  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_manager'] },
-  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_manager'] },
+  { label: 'Product Catalog',    href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'sales_manager'] },
+  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner'] },
   { label: 'Stores',             href: '/stores',              icon: LayoutDashboard, roles: ['super_admin'] },
   { label: 'Store Applications', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
   { label: 'Users',              href: '/users',               icon: Users,           roles: ['super_admin'] },
@@ -33,7 +33,7 @@ const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.Elem
     { label: 'Orders',   href: '/orders',  icon: ClipboardList },
     { label: 'Products', href: '/products',icon: Package },
   ],
-  store_manager:  [
+  store_owner:  [
     { label: 'Home',     href: '/',        icon: LayoutDashboard },
     { label: 'Orders',   href: '/orders',  icon: ClipboardList },
     { label: 'Products', href: '/products',icon: Package },

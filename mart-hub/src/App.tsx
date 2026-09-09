@@ -24,7 +24,7 @@ import CatalogPage from './pages/CatalogPage';
 
 const ROLE_ROUTES: Record<string, string[]> = {
   super_admin:     ['/', '/orders', '/products', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/users', '/compliance', '/profile', '/change-password', '/more'],
-  store_manager:   ['/', '/orders', '/products', '/customers', '/analytics', '/settings', '/catalog', '/profile', '/change-password', '/more'],
+  store_owner:   ['/', '/orders', '/products', '/customers', '/analytics', '/settings', '/catalog', '/profile', '/change-password', '/more'],
   sales_manager:   ['/', '/orders', '/products', '/customers', '/catalog', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/profile', '/change-password', '/more'],
   staff:           ['/', '/orders', '/profile', '/change-password', '/more'],

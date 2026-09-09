@@ -356,12 +356,12 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
 });
 
 
-// ── Admin terminate order (super_admin + store_manager) ──────────────────────
+// ── Admin terminate order (super_admin + store_owner) ──────────────────────
 export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { reason, customReason } = req.body;
   if (!reason) { res.status(400).json({ success: false, error: 'Termination reason required' }); return; }
   const finalReason = reason === 'other' ? (customReason?.trim() || 'Other') : reason;
-  if (!['super_admin', 'store_manager'].includes(req.admin!.role)) {
+  if (!['super_admin', 'store_owner'].includes(req.admin!.role)) {
     res.status(403).json({ success: false, error: 'Not authorised to terminate orders' }); return;
   }
   const existing = await query<{ status: string; customer_id: string | null; store_id: string | null; order_number: string }>(
@@ -582,7 +582,7 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
   if (password.length < 6) {
     res.status(400).json({ success: false, error: 'Password must be at least 6 characters' }); return;
   }
-  const valid = ['super_admin', 'store_manager', 'delivery_staff'];
+  const valid = ['super_admin', 'store_owner', 'delivery_staff'];
   if (!valid.includes(role)) {
     res.status(400).json({ success: false, error: `Role must be one of: ${valid.join(', ')}` }); return;
   }

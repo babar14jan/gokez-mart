@@ -3,7 +3,7 @@
 
 -- Update Gobra store details
 UPDATE mart_stores SET
-  owner_name = 'Store Manager',
+  owner_name = 'Store Owner',
   support_phone = '',
   is_live = true,
   revenue_model = 'commission',

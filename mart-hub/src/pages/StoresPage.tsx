@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, X, Loader2, Store, Clock, Phone, Upload, TrendingUp, CheckCircle } from 'lucide-react';
-import { storesApi, productsApi } from '../services/api';
+import { Plus, Pencil, X, Loader2, Store, Clock, Phone, Upload, TrendingUp, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
+import { storesApi, productsApi, usersApi } from '../services/api';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -16,7 +16,7 @@ interface MartStore {
   monthlyFee: number; estimatedDelivery?: string;
 }
 
-type Tab = 'details' | 'hours' | 'revenue';
+type Tab = 'details' | 'hours' | 'revenue' | 'manager';
 
 export default function StoresPage() {
   const [stores, setStores] = useState<MartStore[]>([]);
@@ -33,12 +33,68 @@ export default function StoresPage() {
     openingHours: DEFAULT_HOURS as any,
   });
 
-  const load = () => storesApi.getAll().then(r => { setStores(r.data.data || []); setLoading(false); });
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [credModal, setCredModal] = useState<{ store: MartStore; manager: any } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPwd, setResettingPwd] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const load = () => Promise.all([storesApi.getAll(), usersApi.getAll()]).then(([sr, ur]) => {
+    setStores(sr.data.data || []);
+    setAllUsers(ur.data.data || []);
+    setLoading(false);
+  });
   useEffect(() => { load(); }, []);
+
+  const getStoreManager = (storeId: string) =>
+    allUsers.find((u: any) => u.storeId === storeId && u.role === 'store_owner');
+
+  const handleResetPassword = async (userId: string) => {
+    if (!newPassword || newPassword.length < 6) { alert('Min 6 characters'); return; }
+    setResettingPwd(true);
+    try {
+      await usersApi.update(userId, { password: newPassword });
+      alert('Password updated successfully');
+      setNewPassword('');
+    } catch { alert('Failed to reset password'); }
+    finally { setResettingPwd(false); }
+  };
+
+  const copyCredentials = (manager: any, password?: string) => {
+    const text = `Gokez Hub Login\nURL: https://hub.gokez.com\nUsername: ${manager.username}${password ? `\nPassword: ${password}` : ''}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Manager state
+  const [managerSearch, setManagerSearch] = useState('');
+  const [managerResults, setManagerResults] = useState<any[]>([]);
+  const [selectedManager, setSelectedManager] = useState<any | null>(null);
+  const [newManager, setNewManager] = useState({ username: '', password: '', name: '', phone: '' });
+  const [managerMode, setManagerMode] = useState<'search' | 'create'>('search');
+  const [searchingManager, setSearchingManager] = useState(false);
+  const [createdStoreId, setCreatedStoreId] = useState<string | null>(null);
+
+  const searchManagers = async (q: string) => {
+    if (!q.trim()) { setManagerResults([]); return; }
+    setSearchingManager(true);
+    try {
+      const r = await usersApi.getAll();
+      const all = r.data.data || [];
+      setManagerResults(all.filter((u: any) =>
+        u.username.toLowerCase().includes(q.toLowerCase()) ||
+        (u.name || '').toLowerCase().includes(q.toLowerCase())
+      ));
+    } catch {} finally { setSearchingManager(false); }
+  };
 
   const openCreate = () => {
     setEditing(null);
     setForm({ name: '', address: '', ownerName: '', supportPhone: '', estimatedDelivery: '10-15 mins', logoUrl: '', revenueModel: 'commission', commissionPercent: '10', monthlyFee: '0', openingHours: DEFAULT_HOURS });
+    setManagerSearch(''); setManagerResults([]); setSelectedManager(null);
+    setNewManager({ username: '', password: '', name: '', phone: '' });
+    setManagerMode('search'); setCreatedStoreId(null);
     setTab('details'); setShowModal(true);
   };
 
@@ -79,7 +135,13 @@ export default function StoresPage() {
         estimatedDelivery: form.estimatedDelivery.trim(),
       };
       if (editing) await storesApi.update(editing.id, data);
-      else await storesApi.create(data);
+      else {
+        const res = await storesApi.create(data);
+        setCreatedStoreId(res.data.data.id);
+        setTab('manager');
+        setSaving(false);
+        return;
+      }
       setShowModal(false); await load();
     } catch { alert('Failed to save store'); } finally { setSaving(false); }
   };
@@ -132,6 +194,14 @@ export default function StoresPage() {
                   {s.ownerName && <p className="text-xs text-gray-400">👤 {s.ownerName}</p>}
                   {s.supportPhone && <p className="text-xs text-gray-400">📞 {s.supportPhone}</p>}
                   {s.address && <p className="text-xs text-gray-400">📍 {s.address}</p>}
+                  {(() => {
+                    const mgr = getStoreManager(s.id);
+                    return mgr ? (
+                      <p className="text-xs text-indigo-500 dark:text-indigo-400 font-medium">👤 @{mgr.username}</p>
+                    ) : (
+                      <p className="text-xs text-amber-500">⚠️ No manager assigned</p>
+                    );
+                  })()}
                 </div>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {s.revenueModel === 'commission' ? `${s.commissionPercent}% commission` :
@@ -149,6 +219,12 @@ export default function StoresPage() {
                 <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
                   <Pencil className="w-4 h-4" />
                 </button>
+                {getStoreManager(s.id) && (
+                  <button onClick={() => { setCredModal({ store: s, manager: getStoreManager(s.id) }); setNewPassword(''); }}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors" title="Manage credentials">
+                    <KeyRound className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -156,6 +232,70 @@ export default function StoresPage() {
       </div>
 
       {/* Modal */}
+      {/* Credentials Modal */}
+      {credModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
+              <div>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white">Store Owner Credentials</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{credModal.store.name}</p>
+              </div>
+              <button onClick={() => setCredModal(null)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Current credentials */}
+              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Login Details</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">URL</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">hub.gokez.com</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Username</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{credModal.manager.username}</p>
+                  </div>
+                  <button onClick={() => copyCredentials(credModal.manager)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg hover:bg-emerald-100 transition-colors">
+                    <Copy className="w-3.5 h-3.5" />{copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Reset password */}
+              <div>
+                <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-2">Set New Password</p>
+                <div className="flex gap-2">
+                  <input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                    placeholder="New password (min 6 chars)" />
+                  <button onClick={() => handleResetPassword(credModal.manager.id)} disabled={resettingPwd || !newPassword}
+                    className="px-3 py-2 text-xs font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-1">
+                    {resettingPwd ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                    Set
+                  </button>
+                </div>
+                {newPassword.length >= 6 && (
+                  <button onClick={() => copyCredentials(credModal.manager, newPassword)}
+                    className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl hover:bg-emerald-100 transition-colors">
+                    <Copy className="w-3.5 h-3.5" />{copied ? 'Copied!' : 'Copy credentials with new password'}
+                  </button>
+                )}
+              </div>
+
+              <p className="text-[10px] text-gray-400 text-center">
+                Share these credentials securely with the store owner. They should change their password after first login.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -166,7 +306,7 @@ export default function StoresPage() {
 
             {/* Tabs */}
             <div className="flex border-b border-gray-100 dark:border-slate-700">
-              {([['details', 'Details', Store], ['hours', 'Hours', Clock], ['revenue', 'Revenue', TrendingUp]] as const).map(([id, label, Icon]) => (
+              {([['details', 'Details', Store], ['hours', 'Hours', Clock], ['revenue', 'Revenue', TrendingUp], ['manager', 'Manager', User]] as const).map(([id, label, Icon]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-colors ${tab === id ? 'text-emerald-600 border-b-2 border-emerald-500' : 'text-gray-400 hover:text-gray-600'}`}>
                   <Icon className="w-3.5 h-3.5" />{label}
@@ -265,14 +405,117 @@ export default function StoresPage() {
                   </div>
                 </div>
               )}
-            </div>
+              {/* Manager tab */}
+              {tab === 'manager' && (
+                <div className="space-y-4">
+                  {createdStoreId && (
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3">
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+                        ✅ Store created! Now assign a store owner.
+                      </p>
+                    </div>
+                  )}
 
-            <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3 sticky bottom-0 bg-white dark:bg-slate-800">
+                  {/* Mode toggle */}
+                  <div className="flex gap-2">
+                    <button onClick={() => setManagerMode('search')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-xl border-2 transition-all ${
+                        managerMode === 'search' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-100 dark:border-slate-700 text-gray-500'
+                      }`}>
+                      <Search className="w-3.5 h-3.5" /> Find Existing
+                    </button>
+                    <button onClick={() => setManagerMode('create')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-xl border-2 transition-all ${
+                        managerMode === 'create' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-100 dark:border-slate-700 text-gray-500'
+                      }`}>
+                      <UserPlus className="w-3.5 h-3.5" /> Create New
+                    </button>
+                  </div>
+
+                  {/* Search existing */}
+                  {managerMode === 'search' && (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input type="text" value={managerSearch}
+                          onChange={e => { setManagerSearch(e.target.value); searchManagers(e.target.value); }}
+                          className={`${inp} pl-9`} placeholder="Search by username or name..." autoFocus />
+                      </div>
+                      {searchingManager && <p className="text-xs text-gray-400 text-center">Searching...</p>}
+                      {managerResults.length > 0 && (
+                        <div className="border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
+                          {managerResults.map((u: any) => (
+                            <button key={u.id} onClick={() => setSelectedManager(u)}
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${
+                                selectedManager?.id === u.id ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''
+                              }`}>
+                              <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                                <span className="text-xs font-bold text-emerald-600">{(u.name || u.username)[0].toUpperCase()}</span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-gray-900 dark:text-white">{u.name || u.username}</p>
+                                <p className="text-[10px] text-gray-400">@{u.username} · {u.role?.replace('_', ' ')}</p>
+                              </div>
+                              {selectedManager?.id === u.id && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {selectedManager && (
+                        <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                          <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                            <strong>{selectedManager.name || selectedManager.username}</strong> will be assigned as store owner
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Create new manager */}
+                  {managerMode === 'create' && (
+                    <div className="space-y-3">
+                      <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Full Name</label>
+                        <input type="text" value={newManager.name} onChange={e => setNewManager(m => ({ ...m, name: e.target.value }))} className={inp} placeholder="Manager's full name" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Username *</label>
+                        <input type="text" value={newManager.username} onChange={e => setNewManager(m => ({ ...m, username: e.target.value }))} className={inp} placeholder="e.g. gobra_manager" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Phone</label>
+                        <input type="tel" value={newManager.phone} onChange={e => setNewManager(m => ({ ...m, phone: e.target.value }))} className={inp} placeholder="+91 XXXXX XXXXX" /></div>
+                      <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Password *</label>
+                        <input type="password" value={newManager.password} onChange={e => setNewManager(m => ({ ...m, password: e.target.value }))} className={inp} placeholder="Min 6 characters" /></div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.name.trim()}
-                className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
-                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Store'}
-              </button>
+              {tab === 'manager' ? (
+                <button
+                  disabled={saving || (managerMode === 'search' && !selectedManager) || (managerMode === 'create' && (!newManager.username || !newManager.password))}
+                  onClick={async () => {
+                    const storeId = createdStoreId || editing?.id;
+                    if (!storeId) return;
+                    setSaving(true);
+                    try {
+                      if (managerMode === 'search' && selectedManager) {
+                        await usersApi.update(selectedManager.id, { role: 'store_owner', storeId });
+                      } else if (managerMode === 'create' && newManager.username && newManager.password) {
+                        await usersApi.create({ username: newManager.username, password: newManager.password, name: newManager.name, phone: newManager.phone, role: 'store_owner', storeId });
+                      }
+                      setShowModal(false); await load();
+                    } catch (e: any) {
+                      alert(e?.response?.data?.error || 'Failed to assign manager');
+                    } finally { setSaving(false); }
+                  }}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : '✅ Assign & Finish'}
+                </button>
+              ) : (
+                <button onClick={handleSave} disabled={saving || !form.name.trim()}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : tab === 'details' ? 'Save & Continue →' : 'Save Store'}
+                </button>
+              )}
             </div>
           </div>
         </div>

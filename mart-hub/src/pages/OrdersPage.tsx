@@ -115,9 +115,9 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
 
   const { role } = useAuthStore();
-  const canTerminate = ['super_admin', 'store_manager'].includes(role || '');
-  const canManage = ['super_admin', 'store_manager', 'sales_manager'].includes(role || '');
-  const canDispatch = ['super_admin', 'store_manager', 'sales_manager'].includes(role || '');
+  const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
+  const canManage = ['super_admin', 'store_owner', 'sales_manager'].includes(role || '');
+  const canDispatch = ['super_admin', 'store_owner', 'sales_manager'].includes(role || '');
 
   useEffect(() => { load(); }, []);
 
@@ -301,7 +301,7 @@ export default function OrdersPage() {
                 {/* Action bar */}
                 {order.status !== 'delivered' && order.status !== 'cancelled' && (
                   <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
-                    {/* Batch select — store manager + sales manager */}
+                    {/* Batch select — store owner + sales manager */}
                     {canDispatch && (order.status === 'confirmed' || order.status === 'preparing') && (
                       <button
                         onClick={e => { e.stopPropagation(); setBatchSelected(prev => prev.includes(order.id) ? prev.filter(id => id !== order.id) : [...prev, order.id]); }}
@@ -338,7 +338,7 @@ export default function OrdersPage() {
                       <span className="hidden sm:inline">Navigate</span>
                     </button>
 
-                    {/* Cancel — store manager only */}
+                    {/* Cancel — store owner only */}
                     {canManage && (order.status === 'pending' || order.status === 'confirmed') && (
                       <button
                         onClick={e => updateStatus(order.id, 'cancelled', e)}
@@ -369,7 +369,7 @@ export default function OrdersPage() {
                         </select>
                       </div>
                     )}
-                    {/* Terminate — super_admin, store_manager, sales_manager only */}
+                    {/* Terminate — super_admin, store_owner, sales_manager only */}
                     {canTerminate && order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'failed_delivery' && order.status !== 'terminated' && (
                       <select defaultValue="" onChange={e => { const r = e.target.value; if (!r) return; e.target.value = ''; handleTerminate(order.id, r); }} onClick={e => e.stopPropagation()}
                         disabled={terminating === order.id}
