@@ -4,23 +4,26 @@ import {
   LayoutDashboard, Package, Tag, ClipboardList,
   Users, Settings, Shield, QrCode,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
-  Menu as MenuIcon,
+  Menu as MenuIcon, MoreHorizontal,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 
 const NAV_ALL = [
-  { label: 'Dashboard',  href: '/',            icon: LayoutDashboard, roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
-  { label: 'Orders',     href: '/orders',      icon: ClipboardList,   roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
-  { label: 'Products',   href: '/products',    icon: Package,         roles: ['super_admin', 'store_manager', 'sales_manager'] },
-  { label: 'Categories', href: '/categories',  icon: Tag,             roles: ['super_admin'] },
-  { label: 'Customers',  href: '/customers',   icon: Users,           roles: ['super_admin', 'store_manager', 'sales_manager'] },
-  { label: 'Analytics',  href: '/analytics',   icon: BarChart3,       roles: ['super_admin', 'store_manager'] },
-  { label: 'Settings',   href: '/settings',    icon: Settings,        roles: ['super_admin', 'store_manager'] },
-  { label: 'Stores',     href: '/stores',      icon: LayoutDashboard, roles: ['super_admin'] },
-  { label: 'Users',      href: '/users',       icon: Users,           roles: ['super_admin'] },
-  { label: 'Compliance', href: '/compliance',  icon: Shield,          roles: ['super_admin'] },
+  { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
+  { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
+  { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_manager', 'sales_manager'] },
+  { label: 'Product Catalog',    href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_manager', 'sales_manager'] },
+  { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
+  { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_manager', 'sales_manager'] },
+  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_manager'] },
+  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_manager'] },
+  { label: 'Stores',             href: '/stores',              icon: LayoutDashboard, roles: ['super_admin'] },
+  { label: 'Store Applications', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
+  { label: 'Users',              href: '/users',               icon: Users,           roles: ['super_admin'] },
+  { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'] },
+  { label: 'More',               href: '/more',                icon: MoreHorizontal,  roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
 ];
 
 // Bottom nav tabs per role — max 3 primary + More
@@ -49,7 +52,7 @@ const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.Elem
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  const { username, storeId, role } = useAuthStore();
+  const { username, name, storeId, role } = useAuthStore();
   const userRole = role || 'super_admin';
   const NAV = NAV_ALL.filter(item => item.roles.includes(userRole));
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
@@ -196,6 +199,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <QrCode className="w-5 h-5 text-gray-500 dark:text-slate-400" />
               </button>
             )}
+
+            {/* Desktop user pill — hidden on mobile */}
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                {(name || username || 'A').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-semibold text-gray-900 dark:text-white leading-none">{name || username}</p>
+                <p className="text-[10px] text-gray-400 capitalize leading-none mt-0.5">{role?.replace('_', ' ')}</p>
+              </div>
+            </div>
           </div>
         </header>
 
