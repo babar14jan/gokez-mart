@@ -322,9 +322,9 @@ export default function OrdersPage() {
                     )}
                     {/* Primary next action */}
                     {nextAction && (
-                      // picked_up only for delivery_staff, other actions for managers
+                      // picked_up only for delivery_staff/staff/super_admin, other actions for managers
                       nextAction.status === 'picked_up'
-                        ? role === 'delivery_staff' || role === 'staff'
+                        ? role === 'delivery_staff' || role === 'staff' || role === 'super_admin'
                         : canManage || nextAction.status === 'delivered' || nextAction.status === 'out_for_delivery'
                     ) && (
                       <button
@@ -365,7 +365,6 @@ export default function OrdersPage() {
                         <span className="hidden sm:inline">Cancel</span>
                       </button>
                     )}
-                    {/* Failed Delivery — only for out_for_delivery */}
                     {order.status === 'out_for_delivery' && (
                       <div className="relative group">
                         <select
