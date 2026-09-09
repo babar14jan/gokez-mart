@@ -135,6 +135,14 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
             <p className="text-sm font-semibold text-gray-900 dark:text-white uppercase">{order.paymentMethod}</p>
           </div>
 
+          {/* Fulfilled by */}
+          {order.fulfilledBy && (
+            <div className="flex items-center justify-between py-3 border-t border-gray-100 dark:border-slate-700">
+              <p className="text-sm text-gray-500 dark:text-slate-400">🏪 Fulfilled by</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">{order.fulfilledBy}</p>
+            </div>
+          )}
+
           {/* Order Again — all closed orders */}
           <button onClick={() => { onOrderAgain(order); onClose(); }}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">
@@ -259,7 +267,12 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
                   </p>
                 )}
               </div>
-              <span className="text-emerald-100 text-xs font-semibold">{order.orderNumber}</span>
+              <div className="text-right">
+                <span className="text-emerald-100 text-xs font-semibold">{order.orderNumber}</span>
+                {order.fulfilledBy && (
+                  <p className="text-emerald-200 text-[10px] mt-0.5">🏪 {order.fulfilledBy}</p>
+                )}
+              </div>
             </div>
 
             {/* Progress tracker */}

@@ -15,6 +15,7 @@ export interface CreateOrderDto {
   guestPhone: string;
   guestAddress: string;
   storeId: string;
+  storeName?: string;
   zoneName?: string;
   deliveryPreference?: 'within_15' | 'within_30' | 'within_60';
   deliveryNote?: string;
@@ -73,13 +74,14 @@ export class OrderService {
         `INSERT INTO mart_orders
            (id, order_number, store_id, customer_id, guest_name, guest_phone, guest_address,
             subtotal, delivery_charge, total, payment_method, notes,
-            delivery_preference, delivery_note)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+            delivery_preference, delivery_note, fulfilled_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [orderId, orderNumber, data.storeId, customerId, data.guestName, data.guestPhone,
          data.guestAddress, subtotal, actualDelivery, total,
          data.paymentMethod, data.notes || null,
          data.deliveryPreference || 'within_15',
-         data.deliveryNote || 'Hand over at door']
+         data.deliveryNote || 'Ring the bell',
+         data.storeName || null]
       );
 
       // Create order items
@@ -101,6 +103,7 @@ export class OrderService {
       return {
         orderId,
         orderNumber,
+        storeName: data.storeName || 'Gokez Mart',
         subtotal,
         deliveryCharge: actualDelivery,
         total,
@@ -180,6 +183,7 @@ export class OrderService {
               o.delivery_note as "deliveryNote",
               o.delivery_sequence as "deliverySequence",
               o.batch_id as "batchId",
+              o.fulfilled_by as "fulfilledBy",
               json_agg(json_build_object(
                 'productId', oi.product_id,
                 'productName', oi.product_name,

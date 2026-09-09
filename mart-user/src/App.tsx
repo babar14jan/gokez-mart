@@ -50,7 +50,7 @@ export default function App() {
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
-  const [successData, setSuccessData] = useState<{ num: string; preference: string } | null>(null);
+  const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string } | null>(null);
 
   const { hasAskedPhone } = useCustomerStore();
 
@@ -192,6 +192,9 @@ export default function App() {
             Your order is confirmed. We&apos;ll deliver within <span className="font-semibold text-gray-900 dark:text-white">
               {successData.preference === 'within_15' ? '10-15 mins' : successData.preference === 'within_30' ? '30 mins' : '1 hour'}
             </span>.
+            {successData.storeName && (
+              <span className="block text-xs text-gray-400 mt-1">🏪 Fulfilled by {successData.storeName}</span>
+            )}
           </p>
           <button onClick={() => { setSuccessData(null); setView('orders'); }}
             className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm mb-3">
@@ -295,7 +298,7 @@ export default function App() {
             storeId={selectedZone?.storeId}
             onBack={() => setCheckoutActive(false)}
             onHome={() => { setCheckoutActive(false); setView('home'); }}
-            onSuccess={(num: string, preference: string) => { setCheckoutActive(false); setSuccessData({ num, preference }); }}
+            onSuccess={(num: string, preference: string, storeName?: string) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName }); }}
           />
         </div>
       ) : view === 'categories' ? (

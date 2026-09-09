@@ -62,9 +62,13 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
   }
+  // Fetch store name for fulfilled_by
+  const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
+  const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
   const result = await OrderService.create({
     guestName, guestPhone, guestAddress, items, paymentMethod, notes,
     storeId: storeId || SHAPOORJI_ID,
+    storeName,
     zoneName, deliveryPreference, deliveryNote,
   });
   // Notify store admins of new order (non-blocking)
