@@ -121,3 +121,17 @@ export const complianceApi = {
   respondGrievance: (id: string, response: string, status: string) =>
     api.put(`/admin/compliance/grievances/${id}`, { response, status }),
 };
+
+// ── Team Management ───────────────────────────────────────────────────────────
+export const teamApi = {
+  getStoreTeam: (storeId: string) => api.get(`/admin/stores/${storeId}/team`),
+  addMember: (storeId: string, data: { adminId?: string; role: string; username?: string; password?: string; name?: string; phone?: string; email?: string }) =>
+    api.post(`/admin/stores/${storeId}/team`, data),
+  updateMember: (storeId: string, userId: string, data: { role?: string; isActive?: boolean }) =>
+    api.put(`/admin/stores/${storeId}/team/${userId}`, data),
+  removeMember: (storeId: string, userId: string) =>
+    api.delete(`/admin/stores/${storeId}/team/${userId}`),
+  lookupByPhone: (phone: string) => api.get('/admin/users/lookup', { params: { phone } }),
+  getUserStores: (userId: string) => api.get(`/admin/users/${userId}/stores`),
+  deactivateStore: (storeId: string) => api.put(`/admin/stores/${storeId}/deactivate`),
+};

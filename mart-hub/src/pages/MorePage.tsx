@@ -70,6 +70,7 @@ export default function MorePage() {
       { label: 'Settings',           href: '/settings',           icon: Settings },
     ],
     store_owner: [
+      { label: 'My Team',         href: '/team',      icon: Users },
       { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
       { label: 'Customers',       href: '/customers', icon: Users },
       { label: 'Product Catalog', href: '/catalog',   icon: Package },

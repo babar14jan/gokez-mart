@@ -21,10 +21,12 @@ import MorePage from './pages/MorePage';
 import ApplyPage from './pages/ApplyPage';
 import StoreApplicationsPage from './pages/StoreApplicationsPage';
 import CatalogPage from './pages/CatalogPage';
+import TeamPage from './pages/TeamPage';
 
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/users', '/compliance', '/profile', '/change-password', '/more'],
-  store_owner:   ['/', '/orders', '/products', '/customers', '/analytics', '/settings', '/catalog', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/profile', '/change-password', '/more'],
+  store_owner:     ['/', '/orders', '/products', '/customers', '/analytics', '/settings', '/catalog', '/team', '/profile', '/change-password', '/more'],
+  store_manager:   ['/', '/orders', '/products', '/customers', '/analytics', '/settings', '/catalog', '/profile', '/change-password', '/more'],
   sales_manager:   ['/', '/orders', '/products', '/customers', '/catalog', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/profile', '/change-password', '/more'],
   staff:           ['/', '/orders', '/profile', '/change-password', '/more'],
@@ -68,6 +70,7 @@ export default function App() {
         <Route path="/apply"            element={<ApplyPage />} />
         <Route path="/store-applications" element={<ProtectedRoute path="/store-applications"><StoreApplicationsPage /></ProtectedRoute>} />
         <Route path="/catalog"            element={<ProtectedRoute path="/catalog"><CatalogPage /></ProtectedRoute>} />
+        <Route path="/team"              element={<ProtectedRoute path="/team"><TeamPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

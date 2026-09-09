@@ -18,7 +18,8 @@ const NAV_ALL = [
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'sales_manager'] },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
-  { label: 'Product Catalog',    href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'sales_manager'] },
+  { label: 'Product Catalog',    href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
   { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner'] },
   { label: 'Stores',             href: '/stores',              icon: LayoutDashboard, roles: ['super_admin'] },
   { label: 'Store Applications', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
@@ -107,6 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Applications',
     '/catalog': 'Product Catalog',
+    '/team': 'My Team',
   };
 
 
@@ -176,7 +178,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-14 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog'].includes(pathname) ? (
+              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team'].includes(pathname) ? (
                 <button onClick={() => navigate(-1)}
                   className="p-2 -ml-1 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
                   <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
