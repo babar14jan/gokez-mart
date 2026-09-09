@@ -195,14 +195,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </select>
             )}
 
-            {/* QR only */}
-            {qrUrl && (
-              <button onClick={() => setShowQr(true)}
-                className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-                <QrCode className="w-5 h-5 text-gray-500 dark:text-slate-400" />
-              </button>
-            )}
-
             {/* Desktop user dropdown — hidden on mobile */}
             <div className="hidden lg:block relative">
               <button onClick={() => setUserMenuOpen(o => !o)}
