@@ -97,6 +97,11 @@ export const storesApi = {
     api.put(`/admin/stores/${id}`, data),
 };
 
+export const storeApplicationsApi = {
+  getAll: () => api.get('/admin/store-applications'),
+  update: (id: string, status: 'approved' | 'rejected') => api.put(`/admin/store-applications/${id}`, { status }),
+};
+
 // ── Users ────────────────────────────────────────────────────────────────────
 export const usersApi = {
   getAll: () => api.get('/admin/users'),

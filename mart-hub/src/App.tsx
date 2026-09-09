@@ -18,6 +18,7 @@ import StoresPage from './pages/StoresPage';
 import UsersPage from './pages/UsersPage';
 import CompliancePage from './pages/CompliancePage';
 import MorePage from './pages/MorePage';
+import ApplyPage from './pages/ApplyPage';
 
 const ROLE_ROUTES: Record<string, string[]> = {
   super_admin:     ['/', '/orders', '/products', '/categories', '/customers', '/analytics', '/settings', '/stores', '/users', '/compliance', '/profile', '/change-password', '/more'],
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/profile"         element={<ProtectedRoute path="/profile"><ProfilePage /></ProtectedRoute>} />
         <Route path="/change-password" element={<ProtectedRoute path="/change-password"><ChangePasswordPage /></ProtectedRoute>} />
         <Route path="/more"             element={<ProtectedRoute path="/more"><MorePage /></ProtectedRoute>} />
+        <Route path="/apply"            element={<ApplyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
