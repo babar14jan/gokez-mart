@@ -58,6 +58,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
+  const [qrLoaded, setQrLoaded] = useState(false);
+
+  // Preload QR image as soon as URL is available
+  useEffect(() => {
+    if (!qrUrl) return;
+    const img = new Image();
+    img.onload = () => setQrLoaded(true);
+    img.src = qrUrl;
+  }, [qrUrl]);
   const [activeStoreId, setActiveStoreId] = useState<string>(
     localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-0000-000000000001'
   );
@@ -292,7 +301,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             onClick={e => e.stopPropagation()}>
             <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">Payment QR Code</p>
             <p className="text-xs text-gray-400 dark:text-slate-500 mb-4">Show this to the customer to collect payment</p>
-            <img src={qrUrl} alt="Payment QR" className="w-full max-w-[220px] mx-auto rounded-2xl border border-gray-100 dark:border-slate-700" />
+            {qrLoaded ? (
+              <img src={qrUrl} alt="Payment QR" className="w-full max-w-[220px] mx-auto rounded-2xl border border-gray-100 dark:border-slate-700" />
+            ) : (
+              <div className="w-[220px] h-[220px] mx-auto rounded-2xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
             <button onClick={() => setShowQr(false)}
               className="mt-5 w-full py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 text-sm font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
               Close

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ClipboardList, TrendingUp, Clock, CheckCircle, XCircle, Calendar } from 'lucide-react';
 import { ordersApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
@@ -59,6 +59,7 @@ export default function DashboardPage() {
   }, [filtered]);
 
   const rangeLabel = RANGES.find(r => r.id === range)?.label || '';
+  const navigate = useNavigate();
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -93,7 +94,8 @@ export default function DashboardPage() {
           { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: 'from delivered orders',           icon: TrendingUp,    gradient: 'from-blue-500 to-blue-600',       href: null },
         ].map(k => {
           const inner = (
-            <div className={`kpi-card group h-full ${!k.href ? 'cursor-default hover:border-gray-200 dark:hover:border-slate-700' : ''}`}>
+            <div onClick={() => k.href && navigate(k.href)}
+              className={`kpi-card group h-full ${!k.href ? 'cursor-default hover:border-gray-200 dark:hover:border-slate-700' : 'cursor-pointer'}`}>
               <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${k.gradient} flex items-center justify-center flex-shrink-0`}>
                 <k.icon className="w-4 h-4 text-white" />
               </div>
@@ -105,7 +107,7 @@ export default function DashboardPage() {
             </div>
           );
           return k.href
-            ? <Link key={k.label} to={k.href} className="h-full">{inner}</Link>
+            ? <Link key={k.label} to={k.href} className="h-full block">{inner}</Link>
             : <div key={k.label} className="h-full">{inner}</div>;
         })}
       </div>
