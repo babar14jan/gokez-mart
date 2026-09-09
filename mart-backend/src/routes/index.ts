@@ -33,9 +33,15 @@ router.put('/admin/profile',           authenticate, ctrl.adminUpdateProfile);
 router.put('/admin/change-password',   authenticate, ctrl.adminChangePassword);
 
 // ── Admin stores (super_admin only) ──────────────────────────────────────────
-router.get('/admin/stores',        authenticate, requireSuperAdmin, ctrl.adminGetStores);
-router.post('/admin/stores',       authenticate, requireSuperAdmin, ctrl.adminCreateStore);
-router.put('/admin/stores/:id',    authenticate, requireSuperAdmin, ctrl.adminUpdateStore);
+router.get('/admin/stores',                    authenticate, requireSuperAdmin, ctrl.adminGetStores);
+router.post('/admin/stores',                   authenticate, requireSuperAdmin, ctrl.adminCreateStore);
+router.put('/admin/stores/:id',                authenticate, requireSuperAdmin, ctrl.adminUpdateStore);
+router.put('/admin/stores/:id/settings',       authenticate, ctrl.adminUpdateStoreSettings);
+
+// ── Store applications (public apply + super_admin manage) ───────────────────
+router.post('/store-applications',             ctrl.submitStoreApplication);
+router.get('/admin/store-applications',        authenticate, requireSuperAdmin, ctrl.adminGetStoreApplications);
+router.put('/admin/store-applications/:id',    authenticate, requireSuperAdmin, ctrl.adminUpdateStoreApplication);
 
 // ── Admin zones ───────────────────────────────────────────────────────────────
 router.get('/admin/zones',         authenticate, ctrl.adminGetZones);

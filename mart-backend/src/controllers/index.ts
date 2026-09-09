@@ -429,11 +429,49 @@ export const adminCreateStore = asyncHandler(async (req: AdminRequest, res: Resp
 export const adminUpdateStore = asyncHandler(async (req: AdminRequest, res: Response) => {
   const store = await StoreService.update(req.params.id, req.body);
   if (!store) { res.status(404).json({ success: false, error: 'Store not found' }); return; }
-  // Update estimated_delivery setting if provided
   if (req.body.estimatedDelivery) {
     await SettingsService.update(req.params.id, 'estimated_delivery', req.body.estimatedDelivery);
   }
   res.json({ success: true, data: store });
+});
+
+// Store manager updates their own store settings (hours, logo, support phone)
+export const adminUpdateStoreSettings = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = req.admin?.storeId || req.params.id;
+  // Store manager can only update their own store
+  if (req.admin?.role !== 'super_admin' && req.admin?.storeId !== req.params.id) {
+    res.status(403).json({ success: false, error: 'Not authorised' }); return;
+  }
+  const { logoUrl, supportPhone, openingHours, ownerName } = req.body;
+  const store = await StoreService.update(storeId, { logoUrl, supportPhone, openingHours, ownerName });
+  if (!store) { res.status(404).json({ success: false, error: 'Store not found' }); return; }
+  res.json({ success: true, data: store });
+});
+
+// Public: submit store application
+export const submitStoreApplication = asyncHandler(async (req: Request, res: Response) => {
+  const { storeName, ownerName, phone, area, message } = req.body;
+  if (!storeName?.trim() || !ownerName?.trim() || !phone?.trim() || !area?.trim()) {
+    res.status(400).json({ success: false, error: 'storeName, ownerName, phone and area are required' }); return;
+  }
+  const app = await StoreService.createApplication({ storeName, ownerName, phone, area, message });
+  res.status(201).json({ success: true, data: app, message: 'Application submitted. We will review and contact you within 2-3 business days.' });
+});
+
+// Super admin: get all store applications
+export const adminGetStoreApplications = asyncHandler(async (_req: AdminRequest, res: Response) => {
+  const apps = await StoreService.findAllApplications();
+  res.json({ success: true, data: apps });
+});
+
+// Super admin: approve/reject store application
+export const adminUpdateStoreApplication = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { status } = req.body;
+  if (!['approved', 'rejected'].includes(status)) {
+    res.status(400).json({ success: false, error: 'status must be approved or rejected' }); return;
+  }
+  await StoreService.updateApplication(req.params.id, status, req.admin!.id);
+  res.json({ success: true, message: `Application ${status}` });
 });
 
 // ── Customer auth controllers ─────────────────────────────────────────────────

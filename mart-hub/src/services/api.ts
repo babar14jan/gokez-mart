@@ -92,8 +92,8 @@ export const zonesApi = {
 // ── Stores ────────────────────────────────────────────────────────────────────
 export const storesApi = {
   getAll: () => api.get('/admin/stores'),
-  create: (data: { name: string; address?: string; estimatedDelivery?: string }) => api.post('/admin/stores', data),
-  update: (id: string, data: { name?: string; address?: string; isActive?: boolean; estimatedDelivery?: string }) =>
+  create: (data: { name: string; address?: string; ownerName?: string; supportPhone?: string; logoUrl?: string; revenueModel?: string; commissionPercent?: number; monthlyFee?: number; estimatedDelivery?: string }) => api.post('/admin/stores', data),
+  update: (id: string, data: { name?: string; address?: string; isActive?: boolean; isLive?: boolean; ownerName?: string; supportPhone?: string; logoUrl?: string; openingHours?: any; revenueModel?: string; commissionPercent?: number; monthlyFee?: number; estimatedDelivery?: string }) =>
     api.put(`/admin/stores/${id}`, data),
 };
 
