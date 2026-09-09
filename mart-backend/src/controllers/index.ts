@@ -9,6 +9,7 @@ import { OrderService } from '../services/order.service';
 import { SettingsService } from '../services/settings.service';
 import { ZoneService } from '../services/zone.service';
 import { StoreService } from '../services/store.service';
+import { TeamService } from '../services/team.service';
 import { CustomerAuthService } from '../services/customerAuth.service';
 import { CustomerRequest } from '../middleware';
 import { PushService } from '../services/push.service';
@@ -770,4 +771,58 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
 
   const publicUrl = `${config.supabase.url}/storage/v1/object/public/${bucket}/${filename}`;
   res.json({ success: true, data: { url: publicUrl } });
+});
+
+// ── Team management ───────────────────────────────────────────────────────────
+
+export const getStoreTeam = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = req.params.storeId || resolveStoreId(req);
+  const team = await TeamService.getStoreTeam(storeId);
+  res.json({ success: true, data: team });
+});
+
+export const addToStoreTeam = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = req.params.storeId || resolveStoreId(req);
+  const { adminId, role, username, password, name, phone, email } = req.body;
+  if (!role) { res.status(400).json({ success: false, error: 'role is required' }); return; }
+  if (adminId) {
+    await TeamService.addToStore(adminId, storeId, role, req.admin!.id);
+    res.json({ success: true, message: 'Member added to store' });
+  } else {
+    if (!username || !password) { res.status(400).json({ success: false, error: 'username and password required' }); return; }
+    const member = await TeamService.createAndAssign({ username, password, name, phone, email, role, storeId, assignedBy: req.admin!.id });
+    res.status(201).json({ success: true, data: member });
+  }
+});
+
+export const updateStoreTeamMember = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { storeId, userId } = req.params;
+  await TeamService.updateAssignment(userId, storeId, req.body);
+  res.json({ success: true, message: 'Member updated' });
+});
+
+export const removeFromStoreTeam = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { storeId, userId } = req.params;
+  await TeamService.removeFromStore(userId, storeId);
+  res.json({ success: true, message: 'Member removed from store' });
+});
+
+export const lookupUserByPhone = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { phone } = req.query;
+  if (!phone) { res.status(400).json({ success: false, error: 'phone is required' }); return; }
+  const user = await TeamService.lookupByPhone(phone as string);
+  if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return; }
+  const stores = await TeamService.getUserStores(user.id);
+  res.json({ success: true, data: { ...user, stores } });
+});
+
+export const getUserStores = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const stores = await TeamService.getUserStores(req.params.userId);
+  res.json({ success: true, data: stores });
+});
+
+export const deactivateStore = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await StoreService.update(req.params.id, { isActive: false, isLive: false });
+  await TeamService.deactivateStoreAssignments(req.params.id);
+  res.json({ success: true, message: 'Store deactivated and all assignments removed' });
 });

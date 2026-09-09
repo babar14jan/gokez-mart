@@ -99,4 +99,13 @@ router.put('/admin/compliance/grievances/:id', authenticate, ctrl.adminRespondGr
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
 
+// ── Team management ────────────────────────────────────────────────────────────────
+router.get('/admin/stores/:storeId/team',          authenticate, ctrl.getStoreTeam);
+router.post('/admin/stores/:storeId/team',         authenticate, ctrl.addToStoreTeam);
+router.put('/admin/stores/:storeId/team/:userId',  authenticate, ctrl.updateStoreTeamMember);
+router.delete('/admin/stores/:storeId/team/:userId', authenticate, ctrl.removeFromStoreTeam);
+router.get('/admin/users/lookup',                  authenticate, ctrl.lookupUserByPhone);
+router.get('/admin/users/:userId/stores',          authenticate, ctrl.getUserStores);
+router.put('/admin/stores/:id/deactivate',         authenticate, requireSuperAdmin, ctrl.deactivateStore);
+
 export default router;
