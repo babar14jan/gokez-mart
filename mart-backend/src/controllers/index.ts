@@ -190,6 +190,32 @@ export const adminDeleteProduct = asyncHandler(async (req: AdminRequest, res: Re
   res.json({ success: true, message: 'Product deleted' });
 });
 
+// ── Master catalog ────────────────────────────────────────────────────────────
+
+export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { categoryId } = req.query;
+  const result = await query(
+    `SELECT p.id, p.name, p.description, p.photo_url as "photoUrl",
+            p.weight_options as "weightOptions", p.category_id as "categoryId",
+            c.name as "categoryName", c.icon as "categoryIcon"
+     FROM mart_products p
+     LEFT JOIN mart_categories c ON c.id = p.category_id
+     WHERE p.is_catalog = true
+     ${categoryId ? 'AND p.category_id = $1' : ''}
+     ORDER BY c.sort_order ASC, p.name ASC`,
+    categoryId ? [categoryId] : []
+  );
+  res.json({ success: true, data: result.rows });
+});
+
+export const adminAssignFromCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const { price, unit, discountPercent } = req.body;
+  if (!price || !unit) { res.status(400).json({ success: false, error: 'price and unit are required' }); return; }
+  await ProductService.assignToStore(req.params.id, storeId, { price: parseFloat(price), unit, discountPercent: parseFloat(discountPercent) || 0 });
+  res.json({ success: true, message: 'Product assigned to store' });
+});
+
 // ── Admin category controllers ────────────────────────────────────────────────
 
 export const adminGetCategories = asyncHandler(async (_req: AdminRequest, res: Response) => {

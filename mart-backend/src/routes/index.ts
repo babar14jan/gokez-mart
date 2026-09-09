@@ -55,6 +55,9 @@ router.post('/admin/products',         authenticate, ctrl.adminCreateProduct);
 router.put('/admin/products/:id',      authenticate, ctrl.adminUpdateProduct);
 router.delete('/admin/products/:id',   authenticate, ctrl.adminDeleteProduct);
 
+// ── Master catalog (super_admin manages, store managers read + assign) ────────
+router.get('/admin/catalog',             authenticate, ctrl.adminGetCatalog);
+router.post('/admin/catalog/:id/assign', authenticate, ctrl.adminAssignFromCatalog);
 // ── Admin categories ──────────────────────────────────────────────────────────
 router.get('/admin/categories',        authenticate, ctrl.adminGetCategories);
 router.post('/admin/categories',       authenticate, ctrl.adminCreateCategory);
