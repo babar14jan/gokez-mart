@@ -10,7 +10,7 @@ import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 
 type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
-type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
+type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
 
 const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -19,6 +19,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed:        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   preparing:        'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
   out_for_delivery: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  ready_to_pickup:  'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   picked_up:        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   delivered:        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   cancelled:        'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
@@ -28,7 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing',
-  out_for_delivery: 'Out for Delivery', picked_up: 'Picked Up', delivered: 'Delivered',
+  out_for_delivery: 'Out for Delivery', ready_to_pickup: 'Ready to Pickup', picked_up: 'Picked Up', delivered: 'Delivered',
   cancelled: 'Cancelled', failed_delivery: 'Delivery Failed', terminated: 'Terminated',
 };
 
@@ -38,7 +39,8 @@ const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonep
 const NEXT_ACTION: Record<string, { label: string; status: string; color: string } | null> = {
   pending:          { label: '✓ Confirm Order',      status: 'confirmed',        color: 'bg-blue-500 hover:bg-blue-600 text-white' },
   confirmed:        { label: '🍳 Start Preparing',   status: 'preparing',        color: 'bg-indigo-500 hover:bg-indigo-600 text-white' },
-  preparing:        { label: '🛵 Out for Delivery',  status: 'out_for_delivery', color: 'bg-violet-500 hover:bg-violet-600 text-white' },
+  preparing:        { label: '📦 Ready to Pickup',   status: 'ready_to_pickup',  color: 'bg-orange-500 hover:bg-orange-600 text-white' },
+  ready_to_pickup:  { label: '🛵 Out for Delivery',  status: 'out_for_delivery', color: 'bg-violet-500 hover:bg-violet-600 text-white' },
   out_for_delivery: { label: '📦 Picked Up',         status: 'picked_up',        color: 'bg-amber-500 hover:bg-amber-600 text-white' },
   picked_up:        { label: '✅ Mark Delivered',    status: 'delivered',        color: 'bg-emerald-500 hover:bg-emerald-600 text-white' },
   delivered:        null,
@@ -47,15 +49,16 @@ const NEXT_ACTION: Record<string, { label: string; status: string; color: string
 };
 
 const STATUS_TABS: { id: StatusFilter; label: string; dot: string }[] = [
-  { id: '',                label: 'All',         dot: 'bg-gray-400' },
-  { id: 'pending',         label: 'Pending',     dot: 'bg-amber-500' },
-  { id: 'confirmed',       label: 'Confirmed',   dot: 'bg-blue-500' },
-  { id: 'preparing',       label: 'Preparing',   dot: 'bg-indigo-500' },
-  { id: 'out_for_delivery',label: 'On the Way',  dot: 'bg-violet-500' },
-  { id: 'delivered',       label: 'Delivered',   dot: 'bg-emerald-500' },
-  { id: 'cancelled',       label: 'Cancelled',   dot: 'bg-red-400' },
-  { id: 'failed_delivery', label: 'Failed',      dot: 'bg-orange-500' },
-  { id: 'terminated',      label: 'Terminated',  dot: 'bg-gray-400' },
+  { id: '',                 label: 'All',           dot: 'bg-gray-400' },
+  { id: 'pending',          label: 'Pending',       dot: 'bg-amber-500' },
+  { id: 'confirmed',        label: 'Confirmed',     dot: 'bg-blue-500' },
+  { id: 'preparing',        label: 'Preparing',     dot: 'bg-indigo-500' },
+  { id: 'ready_to_pickup',  label: 'Ready',         dot: 'bg-orange-500' },
+  { id: 'out_for_delivery', label: 'On the Way',    dot: 'bg-violet-500' },
+  { id: 'delivered',        label: 'Delivered',     dot: 'bg-emerald-500' },
+  { id: 'cancelled',        label: 'Cancelled',     dot: 'bg-red-400' },
+  { id: 'failed_delivery',  label: 'Failed',        dot: 'bg-orange-500' },
+  { id: 'terminated',       label: 'Terminated',    dot: 'bg-gray-400' },
 ];
 
 const DATE_TABS: { id: DateRange; label: string }[] = [
@@ -318,10 +321,11 @@ export default function OrdersPage() {
                       </button>
                     )}
                     {/* Primary next action */}
-                    {/* Primary next action */}
                     {nextAction && (
-                      // delivery_staff can only mark out_for_delivery → delivered
-                      canManage || nextAction.status === 'delivered' || nextAction.status === 'out_for_delivery'
+                      // picked_up only for delivery_staff, other actions for managers
+                      nextAction.status === 'picked_up'
+                        ? role === 'delivery_staff' || role === 'staff'
+                        : canManage || nextAction.status === 'delivered' || nextAction.status === 'out_for_delivery'
                     ) && (
                       <button
                         onClick={e => updateStatus(order.id, nextAction.status, e)}
@@ -341,13 +345,15 @@ export default function OrdersPage() {
                       <span className="hidden sm:inline">Navigate</span>
                     </button>
 
-                    {/* Receipt */}
+                    {/* Receipt — only for delivered orders */}
+                    {order.status === 'delivered' && (
                     <button
                       onClick={e => { e.stopPropagation(); printReceipt(order); }}
                       className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">
                       <Receipt className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">Receipt</span>
                     </button>
+                    )}
 
                     {/* Cancel — store owner only */}
                     {canManage && (order.status === 'pending' || order.status === 'confirmed') && (

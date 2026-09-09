@@ -45,7 +45,7 @@ export default function DeliveryPage() {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
   };
 
-  const active = orders.filter(o => ['out_for_delivery', 'picked_up'].includes(o.status));
+  const active = orders.filter(o => ['ready_to_pickup', 'out_for_delivery', 'picked_up'].includes(o.status));
   const done = orders.filter(o => o.status === 'delivered').slice(0, 5);
 
   if (loading) return (
@@ -85,7 +85,7 @@ export default function DeliveryPage() {
             }`}>
               {/* Status bar */}
               <div className={`px-4 py-2.5 flex items-center justify-between ${
-                order.status === 'out_for_delivery' ? 'bg-violet-500' : 'bg-amber-500'
+                order.status === 'ready_to_pickup' ? 'bg-orange-500' : order.status === 'out_for_delivery' ? 'bg-violet-500' : 'bg-amber-500'
               }`}>
                 <div className="flex items-center gap-2">
                   {order.status === 'out_for_delivery'

@@ -8,9 +8,20 @@ const STEPS = ['pending', 'confirmed', 'preparing', 'out_for_delivery', 'deliver
 const STEP_LABELS = ['Placed', 'Confirmed', 'Preparing', 'On the Way', 'Delivered'];
 const STEP_ICONS = ['🕐', '✅', '👨🍳', '🛵', '🎉'];
 
+// Map internal statuses to customer-visible step
+const STATUS_TO_STEP: Record<string, string> = {
+  pending: 'pending',
+  confirmed: 'confirmed',
+  preparing: 'preparing',
+  ready_to_pickup: 'preparing',   // customer sees "Being Prepared"
+  out_for_delivery: 'out_for_delivery',
+  picked_up: 'out_for_delivery',  // customer sees "On the Way"
+  delivered: 'delivered',
+};
+
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Order Placed', confirmed: 'Confirmed', preparing: 'Being Prepared',
-  out_for_delivery: 'Out for Delivery', delivered: 'Order Delivered',
+  out_for_delivery: 'Out for Delivery', ready_to_pickup: 'Being Prepared', picked_up: 'On the Way', delivered: 'Order Delivered',
   cancelled: 'Order Cancelled', failed_delivery: 'Delivery Failed', terminated: 'Cancelled by Store',
 };
 
@@ -142,10 +153,12 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
                 <p className="text-xs font-semibold text-gray-900 dark:text-white">{order.fulfilledBy}</p>
               </div>
             )}
-            <button onClick={() => printReceipt(order)}
-              className="w-full flex items-center justify-center gap-1.5 py-2.5 mt-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
-              <Receipt className="w-3.5 h-3.5" /> Download Receipt
-            </button>
+            {order.status === 'delivered' && (
+              <button onClick={() => printReceipt(order)}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 mt-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+                <Receipt className="w-3.5 h-3.5" /> Download Receipt
+              </button>
+            )}
           </div>
 
 
@@ -257,7 +270,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
 
       {/* ── Active orders ── */}
       {activeOrders.map(order => {
-        const curStep = STEPS.indexOf(order.status);
+        const curStep = STEPS.indexOf(STATUS_TO_STEP[order.status] || order.status);
         const canCancel = ['pending', 'confirmed'].includes(order.status);
         return (
           <div key={order.id} className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-md border border-emerald-100 dark:border-emerald-900">

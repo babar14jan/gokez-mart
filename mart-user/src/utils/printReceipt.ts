@@ -1,6 +1,6 @@
 export function printReceipt(order: any) {
   const date = new Date(order.createdAt).toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
+    day: '2-digit', month: 'short', year: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: true,
   });
 
@@ -37,15 +37,19 @@ th:nth-child(2),th:nth-child(3){text-align:center;}
 @media print{.no-print{display:none;}}
 </style>
 </head><body>
+<div class="no-print" style="display:flex;justify-content:space-between;margin-bottom:12px;">
+  <button onclick="window.print()" style="padding:6px 12px;background:#10b981;color:white;border:none;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;">Print</button>
+  <button onclick="window.close()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;">Close</button>
+</div>
 <div class="center">
   <div class="brand">GOKEZ MART</div>
-  <div class="tagline">Gokez Technologies Pvt. Ltd.</div>
+  <div class="tagline">Powered by Gokez Technologies Pvt. Ltd.</div>
 
 </div>
 <div class="divider"></div>
-<div style="display:flex;justify-content:space-between;">
-  <div><div class="label">Order</div><div style="font-size:13px;font-weight:bold;">Order #${order.orderNumber}</div></div>
-  <div style="text-align:right;"><div class="label">Date</div><div style="font-size:12px;">${date}</div></div>
+<div>
+  <div style="font-size:13px;font-weight:bold;">Order #${order.orderNumber}</div>
+  <div style="font-size:10px;color:#555;margin-top:1px;">Order Date: ${date}</div>
 </div>
 ${order.fulfilledBy ? `<div style="margin-top:6px;font-size:11px;color:#555;">🏪 Fulfilled by ${order.fulfilledBy}</div>` : ''}
 <div class="divider"></div>
@@ -73,13 +77,9 @@ ${order.fulfilledBy ? `<div style="margin-top:6px;font-size:11px;color:#555;">�
 <div class="divider"></div>
 <div class="footer">
   <div>Thank you for ordering from Gokez Mart! 🛒</div>
-  <div style="margin-top:4px;">Questions? Visit mart.gokez.com</div>
-  <div style="margin-top:6px;font-size:10px;color:#aaa;border-top:1px dashed #ddd;padding-top:6px;">This is a purchase receipt, not a GST invoice.<br/>© ${new Date().getFullYear()} Gokez Technologies Pvt. Ltd.</div>
+  <div style="margin-top:6px;font-size:10px;color:#aaa;border-top:1px dashed #ddd;padding-top:6px;">This is a purchase receipt, not a GST invoice.</div>
 </div>
-<div class="no-print" style="margin-top:20px;text-align:center;">
-  <button onclick="window.print()" style="padding:10px 24px;background:#10b981;color:white;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;">🖨️ Print / Save as PDF</button>
-  <button onclick="window.close()" style="margin-left:8px;padding:10px 24px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:14px;cursor:pointer;">Close</button>
-</div>
+
 </body></html>`;
 
   const win = window.open('', '_blank', 'width=420,height=700');

@@ -335,6 +335,15 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
       `SELECT customer_id, store_id, order_number FROM mart_orders WHERE id = $1`, [req.params.id]
     );
     const { customer_id, store_id, order_number } = custResult.rows[0] || {};
+
+    // Notify delivery staff when order is ready to pickup
+    if (status === 'ready_to_pickup' && store_id) {
+      PushService.notifyStoreAdmins(store_id, {
+        title: '📦 Order Ready for Pickup',
+        body: `${order_number} is packed and ready — come collect from store`,
+        url: '/delivery',
+      }, ['delivery_staff', 'staff']).catch(() => {});
+    }
     if (customer_id) {
       PushService.notifyCustomer(customer_id, {
         title: 'Gokez Mart 🛒',

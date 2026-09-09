@@ -113,7 +113,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="max-w-lg mx-auto px-4 py-4 pb-36 space-y-3">
+        <div className="max-w-lg mx-auto px-4 py-4 pb-8 space-y-3">
 
           {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-2xl">{error}</div>}
 

@@ -50,6 +50,7 @@ export default function App() {
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
+  const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
   const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string } | null>(null);
 
   const { hasAskedPhone } = useCustomerStore();
@@ -284,24 +285,55 @@ export default function App() {
           setSettings(srRes.data.data || DEFAULT_SETTINGS);
         } finally { setLoading(false); }
       }}
-        activeView={(checkoutActive ? 'categories' : view) as 'home' | 'categories' | 'orders' | 'account'}
+        activeView={view as 'home' | 'categories' | 'orders' | 'account'}
         onNavChange={handleNavChange}
+        onCheckout={async () => {
+          setPreCheckoutView(view);
+          if (!selectedZone) {
+            const loc = await getUserLocation();
+            if (loc) {
+              const match = findMatchingZone(loc.lat, loc.lng, zones);
+              if (match) { setSelectedZone(match.zone); setCheckoutActive(true); return; }
+            }
+            setShowOutsideBlock(true); return;
+          }
+          setCheckoutActive(true);
+        }}
       />
 
 
-      {/* Pages */}
-      {checkoutActive ? (
-        <div className="pb-20">
-          <CheckoutPage
-            settings={settings}
-            zoneName={selectedZone?.name}
-            storeId={selectedZone?.storeId}
-            onBack={() => setCheckoutActive(false)}
-            onHome={() => { setCheckoutActive(false); setView('home'); }}
-            onSuccess={(num: string, preference: string, storeName?: string) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName }); }}
-          />
+      {/* Checkout — overlay on both mobile and desktop */}
+      {checkoutActive && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
+            onClick={() => { setCheckoutActive(false); setView(preCheckoutView); }} />
+          {/* Mobile — full screen slide up */}
+          <div className="sm:hidden absolute inset-0 bg-gray-50 dark:bg-slate-900 overflow-y-auto">
+            <CheckoutPage
+              settings={settings}
+              zoneName={selectedZone?.name}
+              storeId={selectedZone?.storeId}
+              onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
+              onHome={() => { setCheckoutActive(false); setView('home'); }}
+              onSuccess={(num: string, preference: string, storeName?: string) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName }); }}
+            />
+          </div>
+          {/* Desktop — right side drawer */}
+          <div className="hidden sm:block absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
+            <CheckoutPage
+              settings={settings}
+              zoneName={selectedZone?.name}
+              storeId={selectedZone?.storeId}
+              onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
+              onHome={() => { setCheckoutActive(false); setView('home'); }}
+              onSuccess={(num: string, preference: string, storeName?: string) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName }); }}
+            />
+          </div>
         </div>
-      ) : view === 'categories' ? (
+      )}
+
+      {/* Pages */}
+      {view === 'categories' ? (
         <div className="pb-20">
           <CategoriesView categories={categories} products={products} />
         </div>
@@ -407,14 +439,25 @@ export default function App() {
       )}
 
       {/* Floating cart bar — mobile only */}
-      <FloatingCart onOpen={async () => { if (!selectedZone) { const loc = await getUserLocation(); if (loc) { const match = findMatchingZone(loc.lat, loc.lng, zones); if (match) { setSelectedZone(match.zone); setCheckoutActive(true); return; } } setShowOutsideBlock(true); return; } setCheckoutActive(true); }} hidden={checkoutActive} />
+      <FloatingCart onOpen={async () => {
+          setPreCheckoutView(view);
+          if (!selectedZone) {
+            const loc = await getUserLocation();
+            if (loc) {
+              const match = findMatchingZone(loc.lat, loc.lng, zones);
+              if (match) { setSelectedZone(match.zone); setCheckoutActive(true); return; }
+            }
+            setShowOutsideBlock(true); return;
+          }
+          setCheckoutActive(true);
+        }} hidden={checkoutActive} />
 
       {/* Install prompt — Android native / iOS guide */}
       <InstallPrompt />
 
       {/* Bottom nav — mobile only */}
       <div className="sm:hidden">
-        <BottomNav active={(checkoutActive ? 'categories' : view) as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} />
+        <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} />
       </div>
     </div>
   );

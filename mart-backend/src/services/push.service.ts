@@ -53,13 +53,16 @@ export class PushService {
   }
 
   // Send to all admins of a store
-  static async notifyStoreAdmins(storeId: string, payload: PushPayload): Promise<void> {
+  static async notifyStoreAdmins(storeId: string, payload: PushPayload, roles?: string[]): Promise<void> {
+    const roleFilter = roles && roles.length > 0
+      ? `AND a.role IN (${roles.map((_, i) => `$${i + 2}`).join(',')})`
+      : '';
     const result = await query<{ endpoint: string; p256dh: string; auth: string }>(
       `SELECT ps.endpoint, ps.p256dh, ps.auth
        FROM mart_push_subscriptions ps
        JOIN mart_admins a ON a.id = ps.admin_id
-       WHERE a.store_id = $1 OR a.role = 'super_admin'`,
-      [storeId]
+       WHERE (a.store_id = $1 OR a.role = 'super_admin') ${roleFilter}`,
+      roles && roles.length > 0 ? [storeId, ...roles] : [storeId]
     );
     await this.sendToSubscriptions(result.rows, payload);
   }
