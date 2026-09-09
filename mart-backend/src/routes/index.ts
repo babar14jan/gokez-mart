@@ -33,7 +33,7 @@ router.put('/admin/profile',           authenticate, ctrl.adminUpdateProfile);
 router.put('/admin/change-password',   authenticate, ctrl.adminChangePassword);
 
 // ── Admin stores (super_admin only) ──────────────────────────────────────────
-router.get('/admin/stores',                    authenticate, requireSuperAdmin, ctrl.adminGetStores);
+router.get('/admin/stores',                    authenticate, ctrl.adminGetStores);
 router.post('/admin/stores',                   authenticate, requireSuperAdmin, ctrl.adminCreateStore);
 router.put('/admin/stores/:id',                authenticate, requireSuperAdmin, ctrl.adminUpdateStore);
 router.put('/admin/stores/:id/settings',       authenticate, ctrl.adminUpdateStoreSettings);

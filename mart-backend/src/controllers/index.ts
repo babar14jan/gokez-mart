@@ -443,8 +443,13 @@ export const adminDeleteZone = asyncHandler(async (req: AdminRequest, res: Respo
 
 // ── Admin store controllers (super_admin only) ────────────────────────────────
 
-export const adminGetStores = asyncHandler(async (_req: AdminRequest, res: Response) => {
+export const adminGetStores = asyncHandler(async (req: AdminRequest, res: Response) => {
   const stores = await StoreService.findAll();
+  // Non-super-admin only sees their own store
+  if (req.admin?.role !== 'super_admin' && req.admin?.storeId) {
+    res.json({ success: true, data: stores.filter(s => s.id === req.admin!.storeId) });
+    return;
+  }
   res.json({ success: true, data: stores });
 });
 
