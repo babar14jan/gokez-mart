@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, X, Loader2, Store, Clock, Phone, Upload, TrendingUp, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
-import { storesApi, productsApi, usersApi } from '../services/api';
+import { storesApi, productsApi, usersApi, teamApi } from '../services/api';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -38,6 +39,7 @@ export default function StoresPage() {
   const [newPassword, setNewPassword] = useState('');
   const [resettingPwd, setResettingPwd] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState<MartStore | null>(null);
 
   const load = () => Promise.all([storesApi.getAll(), usersApi.getAll()]).then(([sr, ur]) => {
     setStores(sr.data.data || []);
@@ -151,6 +153,11 @@ export default function StoresPage() {
     await load();
   };
 
+  const handleDeactivate = async (storeId: string) => {
+    await teamApi.deactivateStore(storeId);
+    await load();
+  };
+
   const updateHours = (day: string, field: string, value: any) => {
     setForm(f => ({ ...f, openingHours: { ...f.openingHours, [day]: { ...f.openingHours[day], [field]: value } } }));
   };
@@ -225,6 +232,12 @@ export default function StoresPage() {
                     <KeyRound className="w-4 h-4" />
                   </button>
                 )}
+                {s.isActive && (
+                  <button onClick={() => setConfirmDeactivate(s)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Deactivate store">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -232,6 +245,17 @@ export default function StoresPage() {
       </div>
 
       {/* Modal */}
+      {/* Deactivate confirm */}
+      {confirmDeactivate && (
+        <ConfirmDialog
+          title="Deactivate Store"
+          message={`Deactivate ${confirmDeactivate.name}? All team members will lose access. Delivery staff will only lose access to this store.`}
+          confirmLabel="Deactivate"
+          onConfirm={() => { handleDeactivate(confirmDeactivate.id); setConfirmDeactivate(null); }}
+          onCancel={() => setConfirmDeactivate(null)}
+        />
+      )}
+
       {/* Credentials Modal */}
       {credModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
