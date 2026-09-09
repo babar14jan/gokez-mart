@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
+import { useThemeStore } from '../store/themeStore';
 import {
   LayoutDashboard, Package, Tag, ClipboardList,
   Users, Settings, Shield, QrCode,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
-  Menu as MenuIcon, MoreHorizontal,
+  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
@@ -23,7 +24,6 @@ const NAV_ALL = [
   { label: 'Store Applications', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
   { label: 'Users',              href: '/users',               icon: Users,           roles: ['super_admin'] },
   { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'] },
-  { label: 'More',               href: '/more',                icon: MoreHorizontal,  roles: ['super_admin', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
 ];
 
 // Bottom nav tabs per role — max 3 primary + More
@@ -52,7 +52,7 @@ const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.Elem
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  const { username, name, storeId, role } = useAuthStore();
+  const { username, name, storeId, role, logout } = useAuthStore();
   const userRole = role || 'super_admin';
   const NAV = NAV_ALL.filter(item => item.roles.includes(userRole));
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
@@ -84,6 +84,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { isDark, toggle } = useThemeStore();
+  const handleLogout = () => { logout(); navigate('/login'); };
 
   const bottomTabs = BOTTOM_NAV[userRole] || BOTTOM_NAV.staff;
 
@@ -200,15 +203,57 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
             )}
 
-            {/* Desktop user pill — hidden on mobile */}
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                {(name || username || 'A').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
-              </div>
-              <div className="text-left">
-                <p className="text-xs font-semibold text-gray-900 dark:text-white leading-none">{name || username}</p>
-                <p className="text-[10px] text-gray-400 capitalize leading-none mt-0.5">{role?.replace('_', ' ')}</p>
-              </div>
+            {/* Desktop user dropdown — hidden on mobile */}
+            <div className="hidden lg:block relative">
+              <button onClick={() => setUserMenuOpen(o => !o)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-[10px] font-bold flex items-center justify-center">
+                  {(name || username || 'A').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-semibold text-gray-900 dark:text-white leading-none">{name || username}</p>
+                  <p className="text-[10px] text-gray-400 capitalize leading-none mt-0.5">{role?.replace('_', ' ')}</p>
+                </div>
+              </button>
+
+              {userMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[19]" onClick={() => setUserMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-100 dark:border-slate-700 py-2 z-20">
+                    <div className="px-4 py-2.5 border-b border-gray-100 dark:border-slate-700">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{name || username}</p>
+                      <p className="text-xs text-gray-400 capitalize">{role?.replace('_', ' ')}</p>
+                    </div>
+                    <Link to="/profile" onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
+                      <User className="w-4 h-4 text-gray-400" /> My Profile
+                    </Link>
+                    <Link to="/change-password" onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
+                      <KeyRound className="w-4 h-4 text-gray-400" /> Change Password
+                    </Link>
+                    {qrUrl && (
+                      <button onClick={() => { setShowQr(true); setUserMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
+                        <QrCode className="w-4 h-4 text-gray-400" /> Payment QR
+                      </button>
+                    )}
+                    <div className="flex items-center gap-3 px-4 py-2.5">
+                      {isDark ? <Moon className="w-4 h-4 text-gray-400" /> : <Sun className="w-4 h-4 text-gray-400" />}
+                      <span className="text-sm text-gray-700 dark:text-slate-300 flex-1">Dark Mode</span>
+                      <button onClick={toggle} role="switch" aria-checked={isDark}
+                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${isDark ? 'bg-emerald-500' : 'bg-gray-200'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${isDark ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                    <div className="h-px bg-gray-100 dark:bg-slate-700 my-1" />
+                    <button onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                      <LogOut className="w-4 h-4" /> Sign out
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
