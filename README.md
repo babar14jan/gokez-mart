@@ -19,6 +19,7 @@ gokez_mart/
 | Customer App | https://mart.gokez.com |
 | Gokez Hub | https://hub.gokez.com |
 | Store Onboarding | https://hub.gokez.com/apply |
+| Hub Landing Page | https://hub.gokez.com/hub |
 
 ## Development
 
@@ -73,11 +74,12 @@ npm run build --workspace=mart-backend
 - Zepto-style product cards with ADD button on image
 - 3-column mobile product grid
 - Split-view categories (sidebar + product grid)
-- Floating cart pill → direct checkout (no intermediate sheet)
+- Floating cart pill → direct checkout overlay (no page shift)
 - Zepto-style checkout — items editable, address, delivery preference, payment
 - Zone-based delivery
 - Customer OTP auth
 - Order history with Order Again, item thumbnails, bottom sheet detail
+- Order receipt (browser print / save as PDF)
 - "Fulfilled by [Store Name]" on orders
 - DPDP compliance (deletion requests, grievances)
 - Home carousel — marketing cards (swipeable, auto-scroll)
@@ -87,6 +89,8 @@ npm run build --workspace=mart-backend
 - React + TypeScript + Vite + TailwindCSS
 - PWA with service worker
 - Auto-reload on deploy via version polling
+- Public landing page at `/hub`
+- Store partner application page at `/apply`
 - Adaptive bottom nav based on user role
 - Role-based access control (6 roles)
 - Inline profile edit in More page
@@ -100,6 +104,8 @@ npm run build --workspace=mart-backend
 - Batch order dispatch
 - Push notifications for new orders
 - Store deactivation with team access removal
+- Dedicated delivery staff view with Google Maps navigation
+- Order receipt printing
 
 ## Multi-Store Marketplace
 
@@ -157,6 +163,37 @@ Each store can have:
 - **staff** — operations + delivery
 - **delivery_staff** — delivery only, can serve multiple stores
 
+## Order Status Flow
+
+```
+pending → confirmed → preparing → ready_to_pickup → out_for_delivery → picked_up → delivered
+```
+
+| Status | Who acts | Customer sees |
+|--------|----------|---------------|
+| pending | — | Order Placed |
+| confirmed | Store owner/manager | Confirmed |
+| preparing | Store staff | Being Prepared |
+| ready_to_pickup | Store staff | Being Prepared |
+| out_for_delivery | Manager dispatches | Being Prepared |
+| picked_up | Delivery staff | On the Way 🛵 |
+| delivered | Delivery staff | Delivered 🎉 |
+
+## Order Number Format
+
+`MRT` + `YYMMDD` + `4 random chars` = `MRT2509086THE`
+
+- No dashes, short, readable
+- Date embedded for easy sorting
+
+## Order Receipt
+
+- Available for delivered orders only
+- Browser print / Save as PDF
+- Shows: Gokez Mart logo, Order #, date, items, bill details, payment, fulfilled by store
+- Disclaimer: "This is a purchase receipt, not a GST invoice"
+- Powered by Gokez Technologies Pvt. Ltd.
+
 ## PWA Cache Management
 
 Each app (`mart-user` and `mart-hub`) has two version files:
@@ -165,12 +202,6 @@ Each app (`mart-user` and `mart-hub`) has two version files:
 |------|------------|---------| 
 | `public/version.json` | Auto — Vite on every build | Triggers silent page reload when new code is deployed |
 | `public/cache-version.json` | You manually | Forces full SW cache clear on all devices |
-
-### How it works
-
-**`version.json`** — Every time you deploy, Vite generates a unique timestamp. The app polls it every 2 minutes and on every foreground resume (critical for iOS PWA). When the version changes, the app silently reloads.
-
-**`cache-version.json`** — Controls the SW cache name. When you bump it, the SW deletes all old caches on next activation.
 
 ### When to bump `cache-version.json`
 
@@ -191,12 +222,6 @@ Each app (`mart-user` and `mart-hub`) has two version files:
 2. Commit and deploy via feature branch
 3. All users get fresh cache automatically on next open
 
-### Benefits
-- ✅ No manual app reinstall needed
-- ✅ Works on both Android and iOS PWA
-- ✅ Zero downtime
-- ✅ Free — served from Cloudflare CDN
-
 ## Database Migrations
 
 Migrations run automatically on backend startup. To run manually:
@@ -214,6 +239,8 @@ Key migrations:
 - `026` — Gobra store setup
 - `027` — Rename store_manager → store_owner
 - `028` — Multi-store role management (store assignments table)
+- `029` — Add picked_up status
+- `030` — Add ready_to_pickup status
 
 ## Git Workflow
 
