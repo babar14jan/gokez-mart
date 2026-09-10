@@ -19,6 +19,7 @@ import UsersPage from './pages/UsersPage';
 import CompliancePage from './pages/CompliancePage';
 import MorePage from './pages/MorePage';
 import ApplyPage from './pages/ApplyPage';
+import LandingPage from './pages/LandingPage';
 import StoreApplicationsPage from './pages/StoreApplicationsPage';
 import CatalogPage from './pages/CatalogPage';
 import TeamPage from './pages/TeamPage';
@@ -35,7 +36,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 function ProtectedRoute({ children, path }: { children: React.ReactNode; path: string }) {
   const { isAuthenticated, role } = useAuthStore();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <Navigate to="/hub" replace />;
   const userRole = role || 'super_admin';
   const allowed = ROLE_ROUTES[userRole] || ROLE_ROUTES.staff;
   if (!allowed.includes(path)) return <Navigate to="/" replace />;
@@ -69,6 +70,8 @@ export default function App() {
         <Route path="/change-password" element={<ProtectedRoute path="/change-password"><ChangePasswordPage /></ProtectedRoute>} />
         <Route path="/more"             element={<ProtectedRoute path="/more"><MorePage /></ProtectedRoute>} />
         <Route path="/apply"            element={<ApplyPage />} />
+        <Route path="/hub"              element={<LandingPage />} />
+        <Route path="/landing"          element={<LandingPage />} />
         <Route path="/store-applications" element={<ProtectedRoute path="/store-applications"><StoreApplicationsPage /></ProtectedRoute>} />
         <Route path="/catalog"            element={<ProtectedRoute path="/catalog"><CatalogPage /></ProtectedRoute>} />
         <Route path="/team"              element={<ProtectedRoute path="/team"><TeamPage /></ProtectedRoute>} />

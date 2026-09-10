@@ -25,75 +25,84 @@ export default function LoginPage() {
       navigate('/');
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 401) {
-        setError('Invalid username or password');
-      } else if (!err?.response) {
-        setError('Unable to connect. Please check your internet connection.');
-      } else {
-        setError('Something went wrong. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
+      if (status === 401) setError('Invalid username or password');
+      else if (!err?.response) setError('Unable to connect. Please check your internet connection.');
+      else setError('Something went wrong. Please try again.');
+    } finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col">
 
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-16 sm:h-20 w-auto object-contain" />
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-10 w-auto object-contain" />
+          <a href="/hub" className="text-xs font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+            ← Home
+          </a>
         </div>
+      </header>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+      {/* Centered content */}
+      <div className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm">
 
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl mb-5">
-              {error}
-            </div>
-          )}
+          {/* Logo */}
+          <div className="flex flex-col items-center mb-8">
+            <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-16 sm:h-20 w-auto object-contain" />
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Username</label>
-              <input
-                type="text" value={username} onChange={e => setUsername(e.target.value)}
-                required autoFocus placeholder="Enter your username"
-                className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'} value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required placeholder="Enter your password"
-                  className="w-full px-4 py-3 pr-11 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                />
-                <button type="button" onClick={() => setShowPassword(p => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+          {/* Form card */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+            {error && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl mb-5">
+                {error}
               </div>
-            </div>
+            )}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Username</label>
+                <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+                  required autoFocus placeholder="Enter your username"
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Password</label>
+                <div className="relative">
+                  <input type={showPassword ? 'text' : 'password'} value={password}
+                    onChange={e => setPassword(e.target.value)} required placeholder="Enter your password"
+                    className="w-full px-4 py-3 pr-11 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button type="submit" disabled={loading}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm">
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</> : 'Sign In'}
+              </button>
+            </form>
+          </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</> : 'Sign In'}
-            </button>
-          </form>
+          {/* Footer links */}
+          <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-4">
+            By signing in, you agree to our{' '}
+            <a href="https://gokez.com/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 dark:text-slate-300 hover:underline">Terms of Use</a>
+          </p>
+
+          <div className="mt-5 text-center">
+            <p className="text-xs text-gray-400 dark:text-slate-500">Want to bring your store online?</p>
+            <a href="/apply" className="inline-flex items-center gap-1 mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors">
+              Apply to become a store partner →
+            </a>
+          </div>
+
+          <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-4">
+            &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
+          </p>
         </div>
-
-        <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-4">
-          By signing in, you agree to our{' '}
-          <a href="https://gokez.com/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 dark:text-slate-300 hover:underline">Terms of Use</a>
-        </p>
-        <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-1">
-          &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
-        </p>
       </div>
     </div>
   );
