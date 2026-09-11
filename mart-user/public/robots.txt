@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mart.gokez.com/sitemap.xml
