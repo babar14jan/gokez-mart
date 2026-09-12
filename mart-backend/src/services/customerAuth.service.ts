@@ -43,7 +43,7 @@ export class CustomerAuthService {
     const apiKey = process.env.TWO_FACTOR_API_KEY;
     if (!apiKey) throw new Error('SMS service not configured');
 
-    const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/91${cleaned}/AUTOGEN`;
+    const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/91${cleaned}/AUTOGEN2`;
     const res = await fetch(url);
     const data: any = await res.json();
 
@@ -53,7 +53,7 @@ export class CustomerAuthService {
 
     await query(
       `INSERT INTO mart_otps (phone, otp, session_id, expires_at) VALUES ($1, $2, $3, $4)`,
-      [cleaned, '', data.Details, expiresAt]
+      [cleaned, data.OTP || '', data.Details, expiresAt]
     );
 
     return { message: 'OTP sent successfully' };
@@ -92,14 +92,8 @@ export class CustomerAuthService {
     if (process.env.NODE_ENV !== 'production') {
       verified = otp === '123456' || otp === row.otp;
     } else {
-      // 2Factor verify
-      const apiKey = process.env.TWO_FACTOR_API_KEY;
-      if (row.session_id && apiKey) {
-        const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/VERIFY/${row.session_id}/${otp}`;
-        const res = await fetch(url);
-        const data: any = await res.json();
-        verified = data.Status === 'Success';
-      }
+      // Verify against stored OTP (returned by AUTOGEN2)
+      verified = otp === row.otp;
     }
 
     if (!verified) {
