@@ -7,7 +7,8 @@ const inp = 'w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-slate
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   super_admin:    { label: 'Super Admin',    color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
-  store_owner:  { label: 'Store Owner',  color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  store_owner:    { label: 'Store Owner',    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  store_manager:  { label: 'Store Manager',  color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
   sales_manager:  { label: 'Sales Manager',  color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   delivery_staff: { label: 'Delivery Staff', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   staff:          { label: 'Staff',          color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400' },
