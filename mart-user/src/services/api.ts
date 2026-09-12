@@ -79,5 +79,5 @@ export const storeApi = {
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
     paymentMethod: 'cod' | 'upi' | 'phonepay'; notes?: string;
   }) => api.post('/orders', data),
-  trackOrders: (phone: string) => api.get(`/orders/track/${phone}`),
+  trackOrders: () => api.get('/orders/track'),
 };

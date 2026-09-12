@@ -28,6 +28,9 @@ const PRODUCT_SELECT = `
          sp.is_available as "isAvailable",
          sp.availability_status as "availabilityStatus",
          sp.sort_order as "sortOrder",
+         sp.stock_quantity::float as "stockQuantity",
+         sp.low_stock_threshold::float as "lowStockThreshold",
+         sp.stock_unit as "stockUnit",
          p.created_at as "createdAt", p.updated_at as "updatedAt"
   FROM mart_products p
   JOIN mart_store_products sp ON sp.product_id = p.id

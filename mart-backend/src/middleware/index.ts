@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
+import { query } from '../database/db';
 
 export interface AdminRequest extends Request {
   admin?: { id: string; username: string; role: string; storeId: string | null };
@@ -48,12 +49,20 @@ export const requireRole = (...roles: string[]) => (req: AdminRequest, res: Resp
   next();
 };
 
-export const authenticateCustomer = (req: CustomerRequest, res: Response, next: NextFunction): void => {
+export const authenticateCustomer = async (req: CustomerRequest, res: Response, next: NextFunction): Promise<void> => {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) { res.status(401).json({ success: false, error: 'No token provided' }); return; }
   try {
     const payload = jwt.verify(auth.slice(7), config.jwt.secret) as any;
     if (payload.type !== 'customer') throw new Error('Not a customer token');
+    // Check token blacklist (logout)
+    if (payload.jti) {
+      const blacklisted = await query(
+        `SELECT 1 FROM mart_token_blacklist WHERE jti = $1 AND expires_at > NOW()`,
+        [payload.jti]
+      );
+      if (blacklisted.rows.length) { res.status(401).json({ success: false, error: 'Token revoked' }); return; }
+    }
     req.customer = { id: payload.id, phone: payload.phone };
     next();
   } catch {

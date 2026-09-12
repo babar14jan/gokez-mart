@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, RefreshCw, ShieldCheck } from 'lucide-react';
+import { X, RefreshCw, ShieldCheck, ArrowRight } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { subscribeToPush } from '../services/push';
@@ -10,7 +10,7 @@ interface LoginModalProps {
   onSuccess?: () => void;
 }
 
-type Step = 'phone' | 'otp';
+type Step = 'phone' | 'otp' | 'profile';
 
 export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
   const [step, setStep] = useState<Step>('phone');
@@ -19,6 +19,9 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
+  const [newName, setNewName] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const { login } = useCustomerAuthStore();
   const { setPhone: savePhone, setName, addAddress } = useCustomerStore();
@@ -52,16 +55,19 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
     try {
       const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp);
       const { token, customer } = res.data.data;
-
-      // Login to auth store (90-day JWT)
       login(token, customer);
       savePhone(customer.phone);
       if (customer.name) setName(customer.name);
       if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
-      // Only subscribe if permission already granted (don't ask here)
       if (Notification.permission === 'granted') subscribeToPush().catch(() => {});
-      onSuccess?.();
-      onClose();
+      // If returning customer (has name) — done
+      if (customer.name) {
+        onSuccess?.();
+        onClose();
+      } else {
+        // New customer — collect name + address
+        setStep('profile');
+      }
     } catch (err: any) {
       if (!err?.response) setError('No internet connection. Please try again.');
       else setError(err?.response?.data?.error || 'Invalid OTP. Try again.');
@@ -80,6 +86,22 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
     } finally { setLoading(false); }
   };
 
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) { setError('Please enter your name'); return; }
+    setSavingProfile(true); setError('');
+    try {
+      await authApi.updateProfile({ name: newName.trim(), address: newAddress.trim() || undefined });
+      useCustomerAuthStore.getState().updateProfile({ name: newName.trim(), address: newAddress.trim() || undefined });
+      setName(newName.trim());
+      if (newAddress.trim()) addAddress({ label: 'Home', address: newAddress.trim(), isDefault: true });
+      onSuccess?.();
+      onClose();
+    } catch {
+      setError('Failed to save. Please try again.');
+    } finally { setSavingProfile(false); }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-800 w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-6">
@@ -90,7 +112,39 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
           </button>
         </div>
 
-        {step === 'phone' ? (
+        {step === 'profile' ? (
+          <>
+            <div className="text-center mb-5">
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-2xl">👋</span>
+              </div>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Almost there!</h2>
+              <p className="text-sm text-gray-500 dark:text-slate-400">Tell us your name so we can personalise your experience</p>
+            </div>
+            {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-3 py-2 rounded-xl mb-4">{error}</div>}
+            <form onSubmit={handleSaveProfile} className="space-y-3">
+              <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
+                placeholder="Your full name *"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                autoFocus />
+              <textarea value={newAddress} onChange={e => setNewAddress(e.target.value)}
+                placeholder="Delivery address (optional — you can add later)"
+                rows={2}
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none" />
+              <button type="submit" disabled={savingProfile || !newName.trim()}
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm">
+                {savingProfile
+                  ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <><ArrowRight className="w-4 h-4" /> Continue to Checkout</>
+                }
+              </button>
+              <button type="button" onClick={() => { onSuccess?.(); onClose(); }}
+                className="w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 py-1 transition-colors">
+                Skip for now
+              </button>
+            </form>
+          </>
+        ) : step === 'phone' ? (
           <>
             <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-1 text-center">Welcome to GokezMart 👋</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-5 text-center">

@@ -33,8 +33,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const defaultAddr = getDefaultAddress();
   const deliveryAddress = defaultAddr?.address || (isLoggedIn ? authAddress : null);
 
-  const [guestName, setGuestName] = useState((isLoggedIn ? authName : savedName) || '');
-  const [guestPhone, setGuestPhone] = useState((isLoggedIn ? authPhone : savedPhone) || '');
+  const [guestName] = useState((isLoggedIn ? authName : savedName) || '');
+  const [guestPhone] = useState((isLoggedIn ? authPhone : savedPhone) || '');
 
   // Address
   const [showAddressList, setShowAddressList] = useState(false);
@@ -156,17 +156,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               </div>
             )}
           </div>
-
-          {/* ── Guest details (not logged in) ── */}
-          {!isLoggedIn && (
-            <div className={`${card} p-4 space-y-3`}>
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white">Your Details</h2>
-              <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)}
-                className={inp} placeholder="Full name *" required />
-              <input type="tel" value={guestPhone} onChange={e => setGuestPhone(e.target.value)}
-                className={inp} placeholder="10-digit mobile number *" required />
-            </div>
-          )}
 
           {/* ── Address ── */}
           <div className={card}>

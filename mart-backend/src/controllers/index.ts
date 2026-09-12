@@ -15,6 +15,7 @@ import { CustomerRequest } from '../middleware';
 import { PushService } from '../services/push.service';
 import { ComplianceService } from '../services/compliance.service';
 import { query } from '../database/db';
+import { InventoryService } from '../services/inventory.service';
 import { config } from '../config';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -63,6 +64,12 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
   }
+  const cleanPhone = String(guestPhone).replace(/\D/g, '');
+  if (cleanPhone.length !== 10) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  if (!['cod', 'upi', 'phonepay'].includes(paymentMethod)) { res.status(400).json({ success: false, error: 'Invalid payment method' }); return; }
+  if (!Array.isArray(items) || !items.every((i: any) => i.productId && i.price > 0 && Number.isInteger(i.quantity) && i.quantity > 0)) {
+    res.status(400).json({ success: false, error: 'Invalid items' }); return;
+  }
   // Fetch store name for fulfilled_by
   const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
@@ -81,8 +88,8 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({ success: true, data: result });
 });
 
-export const trackOrder = asyncHandler(async (req: Request, res: Response) => {
-  const orders = await OrderService.trackByPhone(req.params.phone);
+export const trackOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const orders = await OrderService.trackByPhone(req.customer!.phone);
   res.json({ success: true, data: orders });
 });
 
@@ -117,7 +124,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
   }
   await query(`UPDATE mart_admins SET last_login_at = NOW() WHERE id = $1`, [admin.id]);
   const token = jwt.sign(
-    { id: admin.id, username: admin.username, role: admin.role, storeId: admin.store_id },
+    { id: admin.id, username: admin.username, role: admin.role, storeId: admin.store_id, jti: require('uuid').v4() },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn } as any
   );
@@ -401,7 +408,11 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
 });
 // ── Admin customer controllers ────────────────────────────────────────────────
 
-export const adminGetCustomers = asyncHandler(async (_req: AdminRequest, res: Response) => {
+export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const allowedRoles = ['super_admin', 'store_owner', 'store_manager', 'sales_manager'];
+  if (!req.admin || !allowedRoles.includes(req.admin.role)) {
+    res.status(403).json({ success: false, error: 'Access denied' }); return;
+  }
   const result = await query(
     `SELECT id, phone, name, address, order_count as "orderCount",
             total_spent::float as "totalSpent", created_at as "createdAt"
@@ -595,8 +606,8 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
   if (!username?.trim() || !password || !role) {
     res.status(400).json({ success: false, error: 'username, password and role are required' }); return;
   }
-  if (password.length < 6) {
-    res.status(400).json({ success: false, error: 'Password must be at least 6 characters' }); return;
+  if (password.length < 8) {
+    res.status(400).json({ success: false, error: 'Password must be at least 8 characters' }); return;
   }
   const valid = ['super_admin', 'store_owner', 'delivery_staff'];
   if (!valid.includes(role)) {
@@ -636,7 +647,7 @@ export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Respo
   if (role !== undefined)    { fields.push(`role = $${i++}`);     params.push(role); }
   if (storeId !== undefined) { fields.push(`store_id = $${i++}`); params.push(role === 'super_admin' ? null : storeId); }
   if (password) {
-    if (password.length < 6) { res.status(400).json({ success: false, error: 'Password must be at least 6 characters' }); return; }
+    if (password.length < 8) { res.status(400).json({ success: false, error: 'Password must be at least 8 characters' }); return; }
     const hash = await bcrypt.hash(password, 12);
     fields.push(`password_hash = $${i++}`); params.push(hash);
   }
@@ -779,8 +790,8 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
   });
 
   if (!uploadRes.ok) {
-    const errText = await uploadRes.text();
-    res.status(500).json({ success: false, error: `Upload failed: ${errText}` });
+    await uploadRes.text(); // consume body
+    res.status(500).json({ success: false, error: 'Upload failed. Please try again.' });
     return;
   }
 
@@ -840,4 +851,58 @@ export const deactivateStore = asyncHandler(async (req: AdminRequest, res: Respo
   await StoreService.update(req.params.id, { isActive: false, isLive: false });
   await TeamService.deactivateStoreAssignments(req.params.id);
   res.json({ success: true, message: 'Store deactivated and all assignments removed' });
+});
+
+// ── Inventory controllers ─────────────────────────────────────────────────────
+
+export const adminGetInventory = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const data = await InventoryService.getStoreInventory(storeId);
+  res.json({ success: true, data });
+});
+
+export const adminRestockProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const { qty, stockUnit, note } = req.body;
+  if (!qty || isNaN(parseFloat(qty)) || parseFloat(qty) <= 0) {
+    res.status(400).json({ success: false, error: 'qty must be a positive number' }); return;
+  }
+  if (!stockUnit) {
+    res.status(400).json({ success: false, error: 'stockUnit is required' }); return;
+  }
+  const result = await InventoryService.restock(
+    req.params.productId, storeId, parseFloat(qty), stockUnit, note || null, req.admin!.id
+  );
+  res.json({ success: true, data: result });
+});
+
+export const adminGetInventoryHistory = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const data = await InventoryService.getHistory(req.params.productId, storeId);
+  res.json({ success: true, data });
+});
+
+export const adminSetProductStock = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const { qty, stockUnit } = req.body;
+  if (qty === undefined || isNaN(parseFloat(qty)) || parseFloat(qty) < 0) {
+    res.status(400).json({ success: false, error: 'qty must be a non-negative number' }); return;
+  }
+  if (!stockUnit) {
+    res.status(400).json({ success: false, error: 'stockUnit is required' }); return;
+  }
+  const result = await InventoryService.setStock(
+    req.params.productId, storeId, parseFloat(qty), stockUnit, req.admin!.id
+  );
+  res.json({ success: true, data: result });
+});
+
+export const adminBulkRestock = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const { items, note } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ success: false, error: 'items array required' }); return;
+  }
+  const results = await InventoryService.bulkRestock(storeId, items, note || null, req.admin!.id);
+  res.json({ success: true, data: results, message: `${results.length} product(s) restocked` });
 });

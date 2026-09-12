@@ -5,7 +5,13 @@ export const config = {
   port: parseInt(process.env.PORT || '3004', 10),
   env: process.env.NODE_ENV || 'development',
   jwt: {
-    secret: process.env.MART_JWT_SECRET || 'mart-dev-secret-change-in-prod',
+    secret: (() => {
+      if (!process.env.MART_JWT_SECRET) {
+        if (process.env.NODE_ENV === 'production') throw new Error('MART_JWT_SECRET env var is required in production');
+        return 'mart-dev-secret-change-in-prod';
+      }
+      return process.env.MART_JWT_SECRET;
+    })(),
     expiresIn: process.env.MART_JWT_EXPIRES_IN || '30d',
   },
   supabase: {

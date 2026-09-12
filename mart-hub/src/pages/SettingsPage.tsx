@@ -15,7 +15,7 @@ const GROUPS = [
   { title: 'Payment Methods',    keys: ['cod_enabled', 'upi_enabled', 'upi_id', 'upi_phone', 'upi_qr_enabled', 'phonepay_qr_url'] },
 ];
 
-const BOOLEAN_KEYS = new Set(['store_open', 'cod_enabled', 'upi_enabled', 'upi_qr_enabled']);
+const BOOLEAN_KEYS = new Set(['store_open', 'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'inventory_tracking']);
 
 // Proper toggle component
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -288,6 +288,55 @@ export default function SettingsPage() {
           </div>
         </div>
       ))}
+
+      {/* Inventory Settings */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
+          <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Inventory</h2>
+        </div>
+        <div className="p-4 space-y-4">
+          {/* Master toggle */}
+          <div className="flex items-center justify-between py-0.5">
+            <div>
+              <label className="text-sm text-gray-700 dark:text-slate-300">Enable Inventory Tracking</label>
+              <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">Track stock levels and deduct on delivery</p>
+            </div>
+            <Toggle
+              checked={values['inventory_tracking'] === 'true'}
+              onChange={() => setValues(v => ({ ...v, inventory_tracking: v['inventory_tracking'] === 'true' ? 'false' : 'true' }))}
+            />
+          </div>
+
+          {values['inventory_tracking'] === 'true' && (
+            <>
+              {/* Auto out of stock */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">When stock hits 0</label>
+                <select
+                  value={values['auto_out_of_stock'] || 'on_zero'}
+                  onChange={e => setValues(v => ({ ...v, auto_out_of_stock: e.target.value }))}
+                  className={inp}>
+                  <option value="on_zero">Auto mark Out of Stock</option>
+                  <option value="never">Do nothing (manual control)</option>
+                </select>
+              </div>
+
+              {/* Low stock threshold */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                  Low Stock Alert Threshold
+                  <span className="ml-1 text-gray-400 font-normal">· send push alert + highlight in yellow</span>
+                </label>
+                <input
+                  type="number" min="1"
+                  value={values['low_stock_threshold'] || '5'}
+                  onChange={e => setValues(v => ({ ...v, low_stock_threshold: e.target.value }))}
+                  className={inp} placeholder="5" />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Delivery Zones */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">

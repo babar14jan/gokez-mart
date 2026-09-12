@@ -122,6 +122,19 @@ export const complianceApi = {
     api.put(`/admin/compliance/grievances/${id}`, { response, status }),
 };
 
+// ── Inventory ────────────────────────────────────────────────────────────────
+export const inventoryApi = {
+  getAll:     (storeId?: string) => api.get('/admin/inventory', { params: storeId ? { storeId } : {} }),
+  bulkRestock: (items: Array<{ productId: string; qty: number; stockUnit: string }>, note: string, storeId?: string) =>
+    api.post('/admin/inventory/bulk-restock', { items, note }, { params: storeId ? { storeId } : {} }),
+  restock:    (productId: string, qty: number, note: string, storeId?: string, stockUnit?: string) =>
+    api.post(`/admin/inventory/${productId}/restock`, { qty, note, stockUnit }, { params: storeId ? { storeId } : {} }),
+  setStock:   (productId: string, qty: number, storeId?: string) =>
+    api.put(`/admin/inventory/${productId}/stock`, { qty }, { params: storeId ? { storeId } : {} }),
+  getHistory: (productId: string, storeId?: string) =>
+    api.get(`/admin/inventory/${productId}/history`, { params: storeId ? { storeId } : {} }),
+};
+
 // ── Team Management ───────────────────────────────────────────────────────────
 export const teamApi = {
   getStoreTeam: (storeId: string) => api.get(`/admin/stores/${storeId}/team`),
