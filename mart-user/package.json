@@ -6,9 +6,19 @@
   "scripts": {
     "dev": "vite --port 5177",
     "build": "tsc && vite build",
-    "preview": "vite preview --port 5177"
+    "preview": "vite preview --port 5177",
+    "cap:sync": "npx cap sync android",
+    "cap:build": "npm run build && npx cap sync android",
+    "cap:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/keyboard": "^8.0.5",
+    "@capacitor/status-bar": "^8.0.3",
     "axios": "^1.6.2",
     "lucide-react": "^0.292.0",
     "react": "^18.2.0",
@@ -27,7 +37,7 @@
     "vite": "^5.0.0"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "^4.0.0",
-    "@rollup/rollup-linux-arm64-gnu": "^4.0.0"
+    "@rollup/rollup-linux-arm64-gnu": "^4.0.0",
+    "@rollup/rollup-linux-x64-gnu": "^4.0.0"
   }
 }

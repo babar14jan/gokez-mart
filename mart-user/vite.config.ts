@@ -18,6 +18,11 @@ function versionPlugin() {
 
 export default defineConfig({
   plugins: [react(), versionPlugin()],
+  base: '/',
+  build: {
+    // Capacitor needs relative paths in the built output
+    outDir: 'dist',
+  },
   server: {
     port: 5177,
     proxy: { '/api': { target: 'http://localhost:3004', changeOrigin: true } },
