@@ -18,6 +18,10 @@ function versionPlugin() {
 
 export default defineConfig({
   plugins: [react(), versionPlugin()],
+  base: '/',
+  build: {
+    outDir: 'dist',
+  },
   server: {
     port: 5178,
     proxy: { '/api': { target: 'http://localhost:3004', changeOrigin: true } },
