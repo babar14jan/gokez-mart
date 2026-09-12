@@ -35,8 +35,8 @@ const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.Elem
   super_admin:    [
     { label: 'Home',      href: '/',          icon: LayoutDashboard },
     { label: 'Orders',    href: '/orders',    icon: ClipboardList },
-    { label: 'Products',  href: '/products',  icon: Package },
     { label: 'Inventory', href: '/inventory', icon: Boxes },
+    { label: 'Products',  href: '/products',  icon: Package },
   ],
   store_owner:  [
     { label: 'Home',      href: '/',          icon: LayoutDashboard },
