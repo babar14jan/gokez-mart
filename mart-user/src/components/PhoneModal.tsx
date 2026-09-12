@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Phone, ArrowRight, X } from 'lucide-react';
 import { useCustomerStore } from '../store/customerStore';
-import { storeApi } from '../services/api';
 
 interface PhoneModalProps {
   onClose: () => void;
@@ -11,7 +10,7 @@ export default function PhoneModal({ onClose }: PhoneModalProps) {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { setPhone: savePhone, setName, addAddress, setHasAskedPhone } = useCustomerStore();
+  const { setPhone: savePhone, setHasAskedPhone } = useCustomerStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,19 +18,6 @@ export default function PhoneModal({ onClose }: PhoneModalProps) {
     if (cleaned.length < 10) { setError('Enter a valid 10-digit number'); return; }
 
     setLoading(true); setError('');
-    try {
-      // Try to fetch existing customer
-      const res = await storeApi.trackOrders(cleaned);
-      const orders: any[] = res.data.data || [];
-      if (orders.length > 0) {
-        const latest = orders[0];
-        if (latest.guestName) setName(latest.guestName);
-        if (latest.guestAddress) {
-          addAddress({ label: 'Home', address: latest.guestAddress, isDefault: true });
-        }
-      }
-    } catch { /* new customer — no data yet */ }
-
     savePhone(cleaned);
     setHasAskedPhone();
     setLoading(false);

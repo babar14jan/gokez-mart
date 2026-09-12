@@ -3,25 +3,27 @@ import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useThemeStore } from '../store/themeStore';
 import {
   LayoutDashboard, Package, Tag, ClipboardList,
-  Users, Settings, Shield, QrCode,
+  Users, Settings, Shield, QrCode, Plus, Boxes,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
+import { useHeaderAction } from '../store/headerActionStore';
 
 const NAV_ALL = [
   { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
   { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
-  { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'] },
+  { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['store_owner', 'store_manager', 'sales_manager', 'staff'] },
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
-  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'] },
+  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
   { label: 'Product Catalog',    href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'My Deliveries',      href: '/delivery',            icon: ClipboardList,   roles: ['delivery_staff', 'staff'] },
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
-  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner'] },
+  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Stores',             href: '/stores',              icon: LayoutDashboard, roles: ['super_admin'] },
   { label: 'Store Applications', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
   { label: 'Users',              href: '/users',               icon: Users,           roles: ['super_admin'] },
@@ -36,33 +38,38 @@ const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.Elem
     { label: 'Products', href: '/products',icon: Package },
   ],
   store_owner:  [
-    { label: 'Home',     href: '/',        icon: LayoutDashboard },
-    { label: 'Orders',   href: '/orders',  icon: ClipboardList },
-    { label: 'Products', href: '/products',icon: Package },
+    { label: 'Home',      href: '/',          icon: LayoutDashboard },
+    { label: 'Orders',    href: '/orders',    icon: ClipboardList },
+    { label: 'Inventory', href: '/inventory', icon: Boxes },
+    { label: 'Products',  href: '/products',  icon: Package },
   ],
   store_manager: [
-    { label: 'Home',     href: '/',        icon: LayoutDashboard },
-    { label: 'Orders',   href: '/orders',  icon: ClipboardList },
-    { label: 'Products', href: '/products',icon: Package },
+    { label: 'Home',      href: '/',          icon: LayoutDashboard },
+    { label: 'Orders',    href: '/orders',    icon: ClipboardList },
+    { label: 'Inventory', href: '/inventory', icon: Boxes },
+    { label: 'Products',  href: '/products',  icon: Package },
   ],
   sales_manager:  [
-    { label: 'Home',     href: '/',        icon: LayoutDashboard },
-    { label: 'Orders',   href: '/orders',  icon: ClipboardList },
-    { label: 'Products', href: '/products',icon: Package },
+    { label: 'Home',      href: '/',          icon: LayoutDashboard },
+    { label: 'Orders',    href: '/orders',    icon: ClipboardList },
+    { label: 'Inventory', href: '/inventory', icon: Boxes },
+    { label: 'Products',  href: '/products',  icon: Package },
   ],
   delivery_staff: [
     { label: 'Deliveries', href: '/delivery', icon: ClipboardList },
     { label: 'Orders',     href: '/orders',   icon: ClipboardList },
   ],
   staff: [
-    { label: 'Home',       href: '/',         icon: LayoutDashboard },
-    { label: 'Orders',     href: '/orders',   icon: ClipboardList },
-    { label: 'Deliveries', href: '/delivery', icon: ClipboardList },
+    { label: 'Home',      href: '/',          icon: LayoutDashboard },
+    { label: 'Orders',    href: '/orders',    icon: ClipboardList },
+    { label: 'Inventory', href: '/inventory', icon: Boxes },
+    { label: 'Products',  href: '/products',  icon: Package },
   ],
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const { username, name, storeId, role, logout } = useAuthStore();
+  const { onAction, label } = useHeaderAction();
   const userRole = role || 'super_admin';
   const NAV = NAV_ALL.filter(item => item.roles.includes(userRole));
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
@@ -113,6 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/': 'Dashboard', '/orders': 'Orders', '/products': 'Products',
     '/categories': 'Categories', '/customers': 'Customers',
     '/analytics': 'Analytics', '/settings': 'Settings',
+    '/inventory': 'Inventory',
     '/profile': 'My Profile', '/change-password': 'Change Password',
     '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Applications',
@@ -204,6 +212,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="hidden lg:block text-sm font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
 
             <div className="flex-1" />
+
+            {/* Mobile-only header action slot — injected by pages */}
+            {onAction && (
+              <button onClick={onAction}
+                className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm flex-shrink-0">
+                <Plus className="w-3.5 h-3.5" /> {label}
+              </button>
+            )}
 
             {/* Store selector — super_admin only */}
             {!storeId && stores.length > 1 && (

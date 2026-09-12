@@ -1,6 +1,7 @@
 import { query, transaction } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 import { SettingsService } from './settings.service';
+import { InventoryService } from './inventory.service';
 
 export interface OrderItem {
   productId: string;
@@ -209,10 +210,32 @@ export class OrderService {
     const result = await query(
       `UPDATE mart_orders SET status = $1, updated_at = NOW()
        WHERE id = $2
-       RETURNING id, order_number as "orderNumber", status`,
+       RETURNING id, order_number as "orderNumber", status, store_id as "storeId"`,
       [status, id]
     );
-    return result.rows[0] || null;
+    const order = result.rows[0] || null;
+
+    // Deduct inventory when order is delivered
+    if (order && status === 'delivered') {
+      try {
+        const itemsRes = await query<{ product_id: string; quantity: number; unit: string }>(
+          `SELECT product_id, quantity, unit FROM mart_order_items WHERE order_id = $1`,
+          [id]
+        );
+        const settings = await SettingsService.getPublic(order.storeId);
+        const autoOutOfStock = (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero';
+        const threshold = parseFloat(settings.low_stock_threshold ?? '5');
+        await InventoryService.deductForOrder(
+          id,
+          order.storeId,
+          itemsRes.rows.map(r => ({ productId: r.product_id, quantity: r.quantity, sellingUnit: r.unit })),
+          autoOutOfStock,
+          threshold
+        );
+      } catch { /* non-blocking — don't fail order status update */ }
+    }
+
+    return order;
   }
 
   static async trackByPhone(phone: string) {

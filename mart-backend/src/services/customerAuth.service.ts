@@ -30,9 +30,8 @@ export class CustomerAuthService {
 
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    // Temporary bypass: set MART_OTP_BYPASS=true in .env to accept 123456 for any phone.
-    // Remove or set to false when real SMS is ready.
-    if (process.env.NODE_ENV !== 'production' || process.env.MART_OTP_BYPASS === 'true') {
+    // Temporary bypass: only allowed in non-production environments.
+    if (process.env.NODE_ENV !== 'production') {
       await query(
         `INSERT INTO mart_otps (phone, otp, expires_at) VALUES ($1, $2, $3)`,
         [cleaned, '123456', expiresAt]
@@ -44,7 +43,7 @@ export class CustomerAuthService {
     const apiKey = process.env.TWO_FACTOR_API_KEY;
     if (!apiKey) throw new Error('SMS service not configured');
 
-    const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/91${cleaned}/AUTOGEN/AUTOGEN/SMS`;
+    const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/91${cleaned}/AUTOGEN`;
     const res = await fetch(url);
     const data: any = await res.json();
 
@@ -90,7 +89,7 @@ export class CustomerAuthService {
 
     let verified = false;
 
-    if (process.env.NODE_ENV !== 'production' || process.env.MART_OTP_BYPASS === 'true') {
+    if (process.env.NODE_ENV !== 'production') {
       verified = otp === '123456' || otp === row.otp;
     } else {
       // 2Factor verify
@@ -130,9 +129,10 @@ export class CustomerAuthService {
     // Record consent on first login (DPDP Act 2023)
     await ComplianceService.recordConsent(customer.id).catch(() => {});
 
-    // Issue 90-day JWT
+    // Issue 90-day JWT with jti for blacklist support
+    const { v4: uuidv4 } = await import('uuid');
     const token = jwt.sign(
-      { id: customer.id, phone: cleaned, type: 'customer' },
+      { id: customer.id, phone: cleaned, type: 'customer', jti: uuidv4() },
       config.jwt.secret,
       { expiresIn: '90d' } as any
     );

@@ -24,7 +24,7 @@ router.get('/products',            ctrl.getProducts);        // ?storeId=
 router.get('/products/:id',        ctrl.getProduct);         // ?storeId=
 router.get('/settings/public',     ctrl.getPublicSettings);  // ?storeId=
 router.post('/orders',             ctrl.placeOrder);
-router.get('/orders/track/:phone', ctrl.trackOrder);
+router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
 router.post('/admin/login',            ctrl.adminLogin);
@@ -98,6 +98,13 @@ router.get('/admin/compliance/grievances',     authenticate, ctrl.adminGetGrieva
 router.put('/admin/compliance/grievances/:id', authenticate, ctrl.adminRespondGrievance);
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
+
+// ── Inventory ─────────────────────────────────────────────────────────────────
+router.get('/admin/inventory',                          authenticate, ctrl.adminGetInventory);
+router.post('/admin/inventory/bulk-restock',            authenticate, ctrl.adminBulkRestock);
+router.post('/admin/inventory/:productId/restock',      authenticate, ctrl.adminRestockProduct);
+router.put('/admin/inventory/:productId/stock',         authenticate, ctrl.adminSetProductStock);
+router.get('/admin/inventory/:productId/history',       authenticate, ctrl.adminGetInventoryHistory);
 
 // ── Team management ────────────────────────────────────────────────────────────────
 router.get('/admin/stores/:storeId/team',          authenticate, ctrl.getStoreTeam);

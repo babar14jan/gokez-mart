@@ -11,6 +11,7 @@ const PUBLIC_KEYS = [
   'min_order_amount', 'delivery_area', 'store_open', 'estimated_delivery',
   'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'phonepay_qr_url',
   'upi_phone', 'upi_id', 'whatsapp_number', 'support_name', 'support_phone',
+  'inventory_tracking', 'auto_out_of_stock', 'low_stock_threshold',
 ];
 
 export class SettingsService {

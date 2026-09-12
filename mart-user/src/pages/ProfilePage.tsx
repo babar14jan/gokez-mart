@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Phone, MapPin, Save, Loader2, LogOut, Pencil, Plus, X, MessageCircle, Bell, Navigation } from 'lucide-react';
+import { User, Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -273,16 +273,6 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             </div>
             <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </button>
-          <button
-            onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/delete-account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-            <span className="text-base">🗑️</span>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Delete My Account</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">Request permanent deletion of your data</p>
-            </div>
-            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
         </div>
 
         {/* Settings */}
@@ -362,29 +352,35 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
         </div>
 
-        {/* Sign out */}
-        <div className="flex justify-center pb-2">
+        {/* Sign out + Delete account */}
+        <div className="flex flex-col items-center gap-2 pb-2">
           <button onClick={async () => {
             try { await authApi.logout(); } catch {}
             logout(); onBack?.();
           }}
             className="flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-600 px-4 py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-            <LogOut className="w-3.5 h-3.5" /> Sign Out
+            Sign Out
+          </button>
+          <button
+            onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/delete-account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            className="text-xs text-gray-400 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-500 transition-colors">
+            Delete my account
           </button>
         </div>
 
         {/* Footer links */}
-        <div className="flex items-center justify-center gap-3 pb-4">
-          <button onClick={() => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
-            Privacy Policy
-          </button>
-          <span className="text-gray-300 dark:text-slate-600 text-[10px]">·</span>
-          <button onClick={() => { window.history.pushState({}, '', '/terms'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
-            Terms of Service
-          </button>
-          <span className="text-gray-300 dark:text-slate-600 text-[10px]">·</span>
+        <div className="flex flex-col items-center gap-1.5 pb-4">
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={() => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+              className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
+              Privacy Policy
+            </button>
+            <span className="text-gray-300 dark:text-slate-600 text-[10px]">·</span>
+            <button onClick={() => { window.history.pushState({}, '', '/terms'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+              className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
+              Terms of Service
+            </button>
+          </div>
           <span className="text-[10px] text-gray-300 dark:text-slate-600">&copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.</span>
         </div>
 

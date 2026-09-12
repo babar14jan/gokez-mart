@@ -10,7 +10,6 @@ import BottomNav from './components/BottomNav';
 import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
-import PhoneModal from './components/PhoneModal';
 import LoginModal from './components/LoginModal';
 import OrderHistoryPage from './pages/OrderHistoryPage';
 import ProfilePage from './pages/ProfilePage';
@@ -52,17 +51,16 @@ export default function App() {
   const [checkoutActive, setCheckoutActive] = useState(false);
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
   const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string } | null>(null);
+  const [pendingCheckout, setPendingCheckout] = useState(false);
 
-  const { hasAskedPhone } = useCustomerStore();
+  const { isLoggedIn } = useCustomerAuthStore();
 
   // Deduplicate addresses on app load (fixes existing duplicates)
   useEffect(() => {
     useCustomerStore.getState().deduplicateAddresses();
   }, []);
-  const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
-  const { isLoggedIn } = useCustomerAuthStore();
 
   const [showOutsideWarning, setShowOutsideWarning] = useState(false);
   const [showOutsideBlock, setShowOutsideBlock] = useState(false);
@@ -99,13 +97,6 @@ export default function App() {
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
-
-  useEffect(() => {
-    if (!hasAskedPhone) {
-      const t = setTimeout(() => setShowPhoneModal(true), 2000);
-      return () => clearTimeout(t);
-    }
-  }, [hasAskedPhone]);
 
   useEffect(() => {
     Promise.all([
@@ -171,10 +162,30 @@ export default function App() {
     return matchCat && matchSearch;
   });
 
-  // Account tab — show login modal if not logged in
+  // Account tab — show login modal if not logged in, but still navigate
   const handleNavChange = (v: View) => {
     if (v === 'account' && !isLoggedIn) { setShowLoginModal(true); return; }
     setView(v);
+  };
+
+  const handleCheckout = async () => {
+    setPreCheckoutView(view);
+    if (!selectedZone) {
+      const loc = await getUserLocation();
+      if (loc) {
+        const match = findMatchingZone(loc.lat, loc.lng, zones);
+        if (match) { setSelectedZone(match.zone); }
+        else { setShowOutsideBlock(true); return; }
+      } else { setShowOutsideBlock(true); return; }
+    }
+    // Require login before checkout
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+      // After login, proceed to checkout
+      setPendingCheckout(true);
+      return;
+    }
+    setCheckoutActive(true);
   };
 
   // Success screen
@@ -219,11 +230,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#fafaf9] dark:bg-slate-900 font-sans">
 
-      {showPhoneModal && !isLoggedIn && <PhoneModal onClose={() => setShowPhoneModal(false)} />}
-      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} onSuccess={() => {
+      {showLoginModal && <LoginModal onClose={() => { setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
         setShowLoginModal(false);
-        const currentName = useCustomerAuthStore.getState().name;
-        if (!currentName) setShowNamePrompt(true); else setView('home');
+        if (pendingCheckout) {
+          setPendingCheckout(false);
+          setCheckoutActive(true);
+        } else {
+          setView('home');
+        }
       }} />}
       {showNamePrompt && <NamePrompt onDone={() => { setShowNamePrompt(false); setView('home'); }} />}
 
@@ -287,18 +301,7 @@ export default function App() {
       }}
         activeView={view as 'home' | 'categories' | 'orders' | 'account'}
         onNavChange={handleNavChange}
-        onCheckout={async () => {
-          setPreCheckoutView(view);
-          if (!selectedZone) {
-            const loc = await getUserLocation();
-            if (loc) {
-              const match = findMatchingZone(loc.lat, loc.lng, zones);
-              if (match) { setSelectedZone(match.zone); setCheckoutActive(true); return; }
-            }
-            setShowOutsideBlock(true); return;
-          }
-          setCheckoutActive(true);
-        }}
+        onCheckout={handleCheckout}
       />
 
 
@@ -439,18 +442,7 @@ export default function App() {
       )}
 
       {/* Floating cart bar — mobile only */}
-      <FloatingCart onOpen={async () => {
-          setPreCheckoutView(view);
-          if (!selectedZone) {
-            const loc = await getUserLocation();
-            if (loc) {
-              const match = findMatchingZone(loc.lat, loc.lng, zones);
-              if (match) { setSelectedZone(match.zone); setCheckoutActive(true); return; }
-            }
-            setShowOutsideBlock(true); return;
-          }
-          setCheckoutActive(true);
-        }} hidden={checkoutActive} />
+      <FloatingCart onOpen={handleCheckout} hidden={checkoutActive} />
 
       {/* Install prompt — Android native / iOS guide */}
       <InstallPrompt />
