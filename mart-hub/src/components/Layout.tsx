@@ -33,9 +33,10 @@ const NAV_ALL = [
 // Bottom nav tabs per role — max 3 primary + More
 const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
   super_admin:    [
-    { label: 'Home',     href: '/',        icon: LayoutDashboard },
-    { label: 'Orders',   href: '/orders',  icon: ClipboardList },
-    { label: 'Products', href: '/products',icon: Package },
+    { label: 'Home',      href: '/',          icon: LayoutDashboard },
+    { label: 'Orders',    href: '/orders',    icon: ClipboardList },
+    { label: 'Products',  href: '/products',  icon: Package },
+    { label: 'Inventory', href: '/inventory', icon: Boxes },
   ],
   store_owner:  [
     { label: 'Home',      href: '/',          icon: LayoutDashboard },
