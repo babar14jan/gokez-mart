@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gokez Hub</string>
+    <string name="title_activity_main">Gokez Hub</string>
+    <string name="package_name">com.gokez.hub</string>
+    <string name="custom_url_scheme">com.gokez.hub</string>
+</resources>
