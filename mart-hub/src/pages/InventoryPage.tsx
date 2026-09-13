@@ -70,7 +70,7 @@ export default function InventoryPage() {
       inventoryApi.getAll(storeId),
       settingsApi.getAll(storeId),
     ]);
-    setItems(inv.data.data || []);
+    setItems([...(inv.data.data || [])]);
     const settingsArr: { key: string; value: string }[] = sets.data.data || [];
     setTrackingEnabled(settingsArr.find(s => s.key === 'inventory_tracking')?.value === 'true');
     setLoading(false);

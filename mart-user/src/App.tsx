@@ -110,6 +110,10 @@ export default function App() {
       setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
       const fetchedZones = zonesRes.data.data || [];
       setZones(fetchedZones);
+      // Default to first zone (Shapoorji) so UI matches what's loaded
+      if (fetchedZones.length > 0) {
+        setSelectedZone(fetchedZones[0]);
+      }
       if (fetchedZones.length > 0) {
         // Ask location on first visit, respect app-level preference after that
         const locationEnabled = localStorage.getItem('mart_location_enabled') !== 'false';
