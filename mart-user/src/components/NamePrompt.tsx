@@ -9,7 +9,7 @@ interface NamePromptProps {
 }
 
 export default function NamePrompt({ onDone }: NamePromptProps) {
-  const { phone, updateProfile } = useCustomerAuthStore();
+  const { updateProfile } = useCustomerAuthStore();
   const { setName: syncName } = useCustomerStore();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -27,10 +27,7 @@ export default function NamePrompt({ onDone }: NamePromptProps) {
   };
 
   const handleSkip = () => {
-    // Fall back to phone last 4 digits as display name
-    const fallback = phone ? `User ${phone.slice(-4)}` : 'Guest';
-    updateProfile({ name: fallback });
-    syncName(fallback);
+    // Don't save a fake name — just skip, name stays null
     onDone();
   };
 
