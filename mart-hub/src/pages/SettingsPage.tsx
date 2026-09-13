@@ -9,13 +9,35 @@ interface Setting { key: string; value: string; label: string; }
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
 const GROUPS = [
-  { title: 'Store',              keys: ['store_name', 'store_address', 'delivery_area', 'estimated_delivery', 'store_open'] },
+  { title: 'Store', keys: ['store_name', 'store_address', 'delivery_area', 'estimated_delivery', 'store_open'] },
   { title: 'Delivery & Pricing', keys: ['delivery_charge', 'free_delivery_above', 'min_order_amount'] },
-  { title: 'Customer Support Contact', keys: ['whatsapp_number', 'support_name', 'support_phone'] },
-  { title: 'Payment Methods',    keys: ['cod_enabled', 'upi_enabled', 'upi_id', 'upi_phone', 'upi_qr_enabled', 'phonepay_qr_url'] },
+  { title: 'Customer Support', keys: ['whatsapp_number', 'support_name', 'support_phone'] },
+  { title: 'Payment Methods', keys: ['cod_enabled', 'upi_enabled', 'upi_id', 'upi_phone', 'upi_qr_enabled', 'phonepay_enabled', 'phonepay_qr_url'] },
 ];
 
-const BOOLEAN_KEYS = new Set(['store_open', 'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'inventory_tracking']);
+// Hardcoded labels and placeholders — never rely on DB labels
+const FIELD_META: Record<string, { label: string; placeholder?: string; hint?: string }> = {
+  store_name:          { label: 'Store Name',                        placeholder: 'e.g. Gokez Mart' },
+  store_address:       { label: 'Store Address',                     placeholder: 'Full store address' },
+  delivery_area:       { label: 'Delivery Area',                     placeholder: 'e.g. Shapoorji, Kolkata', hint: 'Shown to customers on the app' },
+  estimated_delivery:  { label: 'Estimated Delivery Time',           placeholder: 'e.g. 10-15 mins' },
+  store_open:          { label: 'Store is Open' },
+  delivery_charge:     { label: 'Delivery Charge (₹)',               placeholder: 'e.g. 15' },
+  free_delivery_above: { label: 'Free Delivery Above (₹)',           placeholder: 'e.g. 150', hint: 'Orders above this amount get free delivery' },
+  min_order_amount:    { label: 'Minimum Order Amount (₹)',          placeholder: 'e.g. 50' },
+  whatsapp_number:     { label: 'WhatsApp Number',                   placeholder: 'e.g. 918777376280', hint: 'Include country code — 91 for India' },
+  support_name:        { label: 'Support Contact Name',              placeholder: 'e.g. Arman' },
+  support_phone:       { label: 'Support Phone Number',              placeholder: 'e.g. 9330317102' },
+  cod_enabled:         { label: 'Accept Cash on Delivery' },
+  upi_enabled:         { label: 'Accept UPI Payment' },
+  upi_id:              { label: 'UPI ID',                            placeholder: 'e.g. 9330317102@ybl', hint: 'Your UPI VPA / payment address' },
+  upi_phone:           { label: 'UPI Phone Number',                  placeholder: 'e.g. 9330317102', hint: 'Phone number linked to your UPI' },
+  upi_qr_enabled:      { label: 'Show UPI QR Code to Customers' },
+  phonepay_enabled:    { label: 'Accept PhonePe / QR Payments' },
+  phonepay_qr_url:     { label: 'UPI QR Code Image',                 hint: 'Upload any UPI QR (PhonePe, GPay, Paytm, etc.)' },
+};
+
+const BOOLEAN_KEYS = new Set(['store_open', 'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'phonepay_enabled', 'inventory_tracking']);
 
 // Proper toggle component
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -241,15 +263,18 @@ export default function SettingsPage() {
           <div className="p-4 space-y-4">
             {group.keys.map(key => {
               const setting = settings[key];
-              if (!setting) return null;
+              const meta = FIELD_META[key];
+              if (!meta) return null;
+              // Only render if value exists in DB (setting loaded) or it's a known boolean
+              if (!setting && !BOOLEAN_KEYS.has(key)) return null;
 
               // UPI QR upload
               if (key === 'phonepay_qr_url') {
-                const qrEnabled = values['upi_qr_enabled'] === 'true';
+                const qrEnabled = values['upi_qr_enabled'] === 'true' || values['phonepay_enabled'] === 'true';
                 if (!qrEnabled) return null;
                 return (
                   <div key={key} className="space-y-2">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">UPI QR Code</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">{meta.label}</label>
                     <div className="flex items-center gap-3">
                       {qrPreview ? (
                         <img src={qrPreview} alt="UPI QR" className="w-20 h-20 rounded-xl object-contain border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700" />
@@ -263,16 +288,15 @@ export default function SettingsPage() {
                         <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setQrFile(f); setQrPreview(URL.createObjectURL(f)); } }} />
                       </label>
                     </div>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500">Upload any UPI QR code (PhonePe, GPay, Paytm, etc.)</p>
+                    {meta.hint && <p className="text-[10px] text-gray-400 dark:text-slate-500">{meta.hint}</p>}
                   </div>
                 );
               }
 
               if (BOOLEAN_KEYS.has(key)) {
-                const label = key === 'upi_qr_enabled' ? 'Accept UPI QR Payments' : setting.label;
                 return (
                   <div key={key} className="flex items-center justify-between py-0.5">
-                    <label className="text-sm text-gray-700 dark:text-slate-300">{label}</label>
+                    <label className="text-sm text-gray-700 dark:text-slate-300">{meta.label}</label>
                     <Toggle checked={values[key] === 'true'} onChange={() => setValues(v => ({ ...v, [key]: v[key] === 'true' ? 'false' : 'true' }))} />
                   </div>
                 );
@@ -280,8 +304,12 @@ export default function SettingsPage() {
 
               return (
                 <div key={key}>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">{setting.label}</label>
-                  <input type="text" value={values[key] || ''} onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))} className={inp} placeholder={setting.label} />
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">{meta.label}</label>
+                  <input type="text" value={values[key] || ''}
+                    onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))}
+                    className={inp}
+                    placeholder={meta.placeholder || meta.label} />
+                  {meta.hint && <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">{meta.hint}</p>}
                 </div>
               );
             })}
