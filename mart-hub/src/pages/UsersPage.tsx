@@ -8,14 +8,17 @@ const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-6
 
 const ROLES = [
   { value: 'super_admin',    label: 'Super Admin',    desc: 'Full access to all stores' },
-  { value: 'store_owner',  label: 'Store Owner',  desc: 'Full store — orders, products, settings, analytics' },
-  { value: 'sales_manager',  label: 'Sales Manager',  desc: 'Orders, products, customers — no settings/analytics' },
+  { value: 'store_owner',    label: 'Store Owner',    desc: 'Full store — orders, products, settings, analytics' },
+  { value: 'store_manager',  label: 'Store Manager',  desc: 'Day-to-day ops — orders, products, customers, analytics' },
+  { value: 'sales_manager',  label: 'Sales Manager',  desc: 'Orders, products, customers' },
+  { value: 'staff',          label: 'Staff',          desc: 'Orders, packing, inventory, delivery' },
   { value: 'delivery_staff', label: 'Delivery Staff', desc: 'Dispatch and deliver orders only' },
 ];
 
 const ROLE_COLORS: Record<string, string> = {
   super_admin:    'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
-  store_owner:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  store_owner:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  store_manager:  'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
   sales_manager:  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   delivery_staff: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   staff:          'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400',

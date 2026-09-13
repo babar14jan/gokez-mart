@@ -609,7 +609,7 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
   if (password.length < 8) {
     res.status(400).json({ success: false, error: 'Password must be at least 8 characters' }); return;
   }
-  const valid = ['super_admin', 'store_owner', 'delivery_staff'];
+  const valid = ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff', 'delivery_staff'];
   if (!valid.includes(role)) {
     res.status(400).json({ success: false, error: `Role must be one of: ${valid.join(', ')}` }); return;
   }
