@@ -7,6 +7,7 @@ import {
 import { productsApi, categoriesApi, settingsApi, inventoryApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useToast, ToastContainer } from '../hooks/useToast';
 import { useHeaderAction } from '../store/headerActionStore';
 
 function formatStock(qty: number, unit: string): string {
@@ -100,6 +101,7 @@ export default function ProductsPage() {
 
   const storeId = getActiveStoreId();
   const { setHeaderAction, clearHeaderAction } = useHeaderAction();
+  const { toasts, show: showToast } = useToast();
 
   const load = async () => {
     const [p, c, s] = await Promise.all([
@@ -107,8 +109,8 @@ export default function ProductsPage() {
       categoriesApi.getAll(),
       settingsApi.getAll(storeId),
     ]);
-    setProducts(p.data.data || []);
-    setCategories(c.data.data || []);
+    setProducts([...(p.data.data || [])]);
+    setCategories([...(c.data.data || [])]);
     const settingsArr: { key: string; value: string }[] = s.data.data || [];
     setInventoryEnabled(settingsArr.find(x => x.key === 'inventory_tracking')?.value === 'true');
     setLoading(false);
@@ -242,7 +244,10 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    await productsApi.delete(id); setConfirmDeleteId(null); await load();
+    await productsApi.delete(id);
+    setConfirmDeleteId(null);
+    showToast('Product deleted');
+    await load();
   };
 
   const setAvailability = async (p: Product, status: 'available' | 'out_of_stock' | 'hidden') => {
@@ -511,8 +516,10 @@ export default function ProductsPage() {
       {/* Confirm delete (row) */}
       {confirmDeleteId && (
         <ConfirmDialog title="Delete Product" message="Are you sure? This cannot be undone." confirmLabel="Delete"
-          onConfirm={() => handleDelete(confirmDeleteId)} onCancel={() => setConfirmDeleteId(null)} />
+          onConfirm={async () => { await handleDelete(confirmDeleteId); }} onCancel={() => setConfirmDeleteId(null)} />
       )}
+
+      <ToastContainer toasts={toasts} />
 
       {/* Double-confirm delete (modal) */}
       {confirmDeleteProduct && (
@@ -535,7 +542,7 @@ export default function ProductsPage() {
                 className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
                 Cancel
               </button>
-              <button onClick={() => { handleDelete(confirmDeleteProduct.id); setConfirmDeleteProduct(null); }}
+              <button onClick={async () => { await handleDelete(confirmDeleteProduct.id); setConfirmDeleteProduct(null); }}
                 className="flex-1 py-2.5 text-sm font-semibold text-white bg-red-500 rounded-xl hover:bg-red-600 transition-colors">
                 Yes, Delete
               </button>

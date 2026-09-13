@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Tag, Upload } from 'lucide-react';
 import { categoriesApi, productsApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useToast, ToastContainer } from '../hooks/useToast';
 
 interface Category { id: string; name: string; slug: string; icon: string; sortOrder: number; isActive: boolean; productCount: number; }
 
@@ -15,6 +16,7 @@ function CategoryIcon({ icon }: { icon: string }) {
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const { toasts, show: showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -68,6 +70,7 @@ export default function CategoriesPage() {
   const handleDelete = async (id: string) => {
     await categoriesApi.delete(id);
     setConfirmDeleteId(null);
+    showToast('Category deleted');
     await load();
   };
 
@@ -110,12 +113,11 @@ export default function CategoriesPage() {
           title="Delete Category"
           message="Are you sure? This cannot be undone."
           confirmLabel="Delete"
-          onConfirm={() => handleDelete(confirmDeleteId)}
+          onConfirm={async () => { await handleDelete(confirmDeleteId); }}
           onCancel={() => setConfirmDeleteId(null)}
         />
       )}
-
-      {showModal && (
+      <ToastContainer toasts={toasts} />      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
