@@ -417,10 +417,6 @@ export default function OrdersPage() {
 
                     {/* Primary next action */}
                     {nextAction && (
-                      nextAction.status === 'picked_up'
-                        ? ['delivery_staff', 'staff', 'super_admin'].includes(role || '')
-                        : canManage
-                    ) && (
                       <button
                         onClick={e => updateStatus(order.id, nextAction.status, e)}
                         disabled={isUpdating}

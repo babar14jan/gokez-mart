@@ -42,7 +42,7 @@ export class InventoryService {
       stock_unit: string | null;
       availability_status: string;
     }>(
-      `SELECT stock_quantity, stock_unit, availability_status
+      `SELECT stock_quantity::float, stock_unit, availability_status
        FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
       [productId, storeId]
     );
@@ -96,7 +96,7 @@ export class InventoryService {
         low_stock_threshold: number | null;
         availability_status: string;
       }>(
-        `SELECT stock_quantity, stock_unit, low_stock_threshold, availability_status
+        `SELECT stock_quantity::float, stock_unit, low_stock_threshold::float, availability_status
          FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
         [item.productId, storeId]
       );
@@ -179,7 +179,7 @@ export class InventoryService {
     createdBy: string
   ) {
     const cur = await query<{ stock_quantity: number | null }>(
-      `SELECT stock_quantity FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
+      `SELECT stock_quantity::float FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
       [productId, storeId]
     );
     const previous = cur.rows[0]?.stock_quantity ?? null;
