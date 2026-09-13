@@ -16,13 +16,11 @@ const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
 
 // Order pipeline — used for progress bar
 const PIPELINE = [
-  { status: 'pending',          label: 'Placed',     emoji: '🛒' },
-  { status: 'confirmed',        label: 'Confirmed',  emoji: '✅' },
-  { status: 'preparing',        label: 'Preparing',  emoji: '🍳' },
-  { status: 'ready_to_pickup',  label: 'Ready',      emoji: '📦' },
-  { status: 'out_for_delivery', label: 'On Way',     emoji: '🛵' },
-  { status: 'picked_up',        label: 'Picked Up',  emoji: '🤝' },
-  { status: 'delivered',        label: 'Delivered',  emoji: '🎉' },
+  { status: 'pending',          label: 'Pending',          emoji: '🛒' },
+  { status: 'confirmed',        label: 'Confirmed',        emoji: '✅' },
+  { status: 'preparing',        label: 'Preparing',        emoji: '🍳' },
+  { status: 'out_for_delivery', label: 'Out for Delivery', emoji: '🛵' },
+  { status: 'delivered',        label: 'Delivered',        emoji: '🎉' },
 ];
 
 const TERMINAL = ['delivered', 'cancelled', 'failed_delivery', 'terminated'];
@@ -102,7 +100,13 @@ function openGoogleMaps(address: string) {
 // Progress bar component
 function OrderProgress({ status }: { status: string }) {
   if (TERMINAL.includes(status) && status !== 'delivered') return null;
-  const currentIdx = PIPELINE.findIndex(s => s.status === status);
+  // Map statuses not in pipeline to nearest step
+  const mapped: Record<string, string> = {
+    ready_to_pickup: 'preparing',
+    picked_up:       'out_for_delivery',
+  };
+  const lookupStatus = mapped[status] || status;
+  const currentIdx = PIPELINE.findIndex(s => s.status === lookupStatus);
   if (currentIdx === -1) return null;
 
   return (

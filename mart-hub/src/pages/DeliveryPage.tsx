@@ -3,6 +3,49 @@ import { Phone, MapPin, Navigation, RefreshCw, CheckCircle, Package, Clock } fro
 import { ordersApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
+const RIDER_STEPS = [
+  { status: 'ready_to_pickup',  label: 'Ready to Pickup', emoji: '📦' },
+  { status: 'out_for_delivery', label: 'Out for Delivery', emoji: '🛵' },
+  { status: 'picked_up',        label: 'Picked Up',        emoji: '🤝' },
+  { status: 'delivered',        label: 'Delivered',        emoji: '🎉' },
+];
+
+function RiderProgress({ status }: { status: string }) {
+  const currentIdx = RIDER_STEPS.findIndex(s => s.status === status);
+  if (currentIdx === -1) return null;
+  return (
+    <div className="px-4 py-3 bg-gray-50 dark:bg-slate-700/50 flex items-center gap-0">
+      {RIDER_STEPS.map((step, idx) => {
+        const done = idx < currentIdx;
+        const active = idx === currentIdx;
+        const isLast = idx === RIDER_STEPS.length - 1;
+        return (
+          <div key={step.status} className="flex items-center flex-1 min-w-0">
+            <div className="flex flex-col items-center flex-shrink-0">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs transition-all ${
+                active ? 'bg-emerald-500 text-white shadow-md scale-110' :
+                done   ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' :
+                         'bg-gray-200 dark:bg-slate-600 text-gray-400'
+              }`}>
+                {done ? '✓' : step.emoji}
+              </div>
+              <span className={`text-[9px] font-semibold mt-0.5 text-center leading-tight ${
+                active ? 'text-emerald-600 dark:text-emerald-400' :
+                done   ? 'text-gray-400' : 'text-gray-300 dark:text-slate-600'
+              }`}>{step.label}</span>
+            </div>
+            {!isLast && (
+              <div className={`h-0.5 flex-1 mx-0.5 rounded-full ${
+                done ? 'bg-emerald-300 dark:bg-emerald-700' : 'bg-gray-200 dark:bg-slate-600'
+              }`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function DeliveryPage() {
   const { id: myId } = useAuthStore() as any;
   const [orders, setOrders] = useState<any[]>([]);
@@ -98,6 +141,8 @@ export default function DeliveryPage() {
                 </div>
                 <span className="text-white/80 text-xs">Order #{order.orderNumber}</span>
               </div>
+
+              <RiderProgress status={order.status} />
 
               <div className="p-4 space-y-3">
                 {/* Customer info */}

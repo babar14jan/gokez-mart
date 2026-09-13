@@ -4,19 +4,19 @@ import { authApi } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { printReceipt } from '../utils/printReceipt';
 
-const STEPS = ['pending', 'confirmed', 'preparing', 'out_for_delivery', 'delivered'];
-const STEP_LABELS = ['Placed', 'Confirmed', 'Preparing', 'On the Way', 'Delivered'];
-const STEP_ICONS = ['🕐', '✅', '👨🍳', '🛵', '🎉'];
+const STEPS = ['pending', 'preparing', 'out_for_delivery', 'delivered'];
+const STEP_LABELS = ['Order Placed', 'Being Prepared', 'On the Way', 'Delivered'];
+const STEP_ICONS = ['🛒', '🍳', '🛵', '🎉'];
 
-// Map internal statuses to customer-visible step
+// Map internal statuses to customer-visible step (4 steps)
 const STATUS_TO_STEP: Record<string, string> = {
-  pending: 'pending',
-  confirmed: 'confirmed',
-  preparing: 'preparing',
-  ready_to_pickup: 'preparing',   // customer sees "Being Prepared"
+  pending:          'pending',
+  confirmed:        'pending',
+  preparing:        'preparing',
+  ready_to_pickup:  'preparing',
   out_for_delivery: 'out_for_delivery',
-  picked_up: 'out_for_delivery',  // customer sees "On the Way"
-  delivered: 'delivered',
+  picked_up:        'out_for_delivery',
+  delivered:        'delivered',
 };
 
 const STATUS_LABELS: Record<string, string> = {
