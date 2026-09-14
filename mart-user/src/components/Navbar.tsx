@@ -37,8 +37,8 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
         <img src="/mart_web_logo.png?v=2" alt="Gokez Mart"
           className="h-8 w-32 sm:h-10 sm:w-44 object-contain object-left flex-shrink-0" />
 
-        {/* Zone selector — prominent on mobile */}
-        <div className="relative flex-1 sm:flex-none">
+        {/* Zone selector — right aligned on mobile */}
+        <div className="relative ml-auto sm:ml-0 mr-1 sm:mr-0">
           <button onClick={() => setZoneOpen(o => !o)}
             className="flex items-center gap-1 hover:opacity-80 transition-opacity">
             <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
@@ -54,7 +54,7 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
           {zoneOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setZoneOpen(false)} />
-              <div className="absolute top-full mt-1 left-0 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 py-2 z-20">
+              <div className="absolute top-full mt-1 right-0 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 py-2 z-20">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-3 pb-1.5">Delivery Areas</p>
                 {zones.map(zone => (
                   <button key={zone.id} onClick={() => { onZoneChange(zone); setZoneOpen(false); }}
