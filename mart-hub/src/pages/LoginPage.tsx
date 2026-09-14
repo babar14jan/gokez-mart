@@ -10,13 +10,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingTime, setLoadingTime] = useState(0);
   const [error, setError] = useState('');
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setLoadingTime(0);
+    const timer = setInterval(() => setLoadingTime(t => t + 1), 1000);
     try {
       const res = await authApi.login(username, password);
       const d = res.data.data;
@@ -25,10 +27,13 @@ export default function LoginPage() {
       navigate('/');
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 401) setError('Invalid username or password');
-      else if (!err?.response) setError('Unable to connect. Please check your internet connection.');
+      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
+      if (status === 401) setError('Invalid username or password.');
+      else if (status === 429) setError('Too many attempts. Please wait a few minutes and try again.');
+      else if (isTimeout) setError('Server is taking too long — please try again.');
+      else if (!err?.response) setError('Cannot reach server. Check your internet connection and try again.');
       else setError('Something went wrong. Please try again.');
-    } finally { setLoading(false); }
+    } finally { clearInterval(timer); setLoading(false); }
   };
 
   return (
@@ -81,7 +86,7 @@ export default function LoginPage() {
               </div>
               <button type="submit" disabled={loading}
                 className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm">
-                {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</> : 'Sign In'}
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> {loadingTime > 5 ? 'Server waking up...' : 'Signing in...'}</> : 'Sign In'}
               </button>
             </form>
           </div>
