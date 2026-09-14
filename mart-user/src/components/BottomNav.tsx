@@ -11,7 +11,7 @@ const tabs = [
   { id: 'home',       label: 'Home',       Icon: Home },
   { id: 'categories', label: 'Categories', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: ClipboardList },
-  { id: 'account',    label: 'Account',    Icon: User },
+  { id: 'account',    label: 'Profile',    Icon: User },
 ] as const;
 
 export default function BottomNav({ active, onChange }: BottomNavProps) {

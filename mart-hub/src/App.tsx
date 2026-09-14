@@ -61,8 +61,8 @@ export default function App() {
     // Update both theme-color meta tags
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta: Element) => {
       const m = meta as HTMLMetaElement;
-      if (m.media?.includes('dark')) m.content = isDark ? '#0f172a' : '#0f172a';
-      else m.content = isDark ? '#0f172a' : '#f9fafb';
+      if (m.media?.includes('dark')) m.content = isDark ? '#18191a' : '#18191a';
+      else m.content = isDark ? '#18191a' : '#f9fafb';
     });
     // Fallback for single meta tag
     const single = document.querySelector('meta[name="theme-color"]:not([media])');

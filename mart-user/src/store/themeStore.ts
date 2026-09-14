@@ -9,7 +9,7 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      isDark: true,
+      isDark: false,
       toggle: () => {
         const next = !get().isDark;
         set({ isDark: next });
@@ -19,13 +19,13 @@ export const useThemeStore = create<ThemeState>()(
   )
 );
 
-// Apply on load — default dark unless user explicitly chose light
+// Apply on load — default light unless user explicitly chose dark
 const stored = localStorage.getItem('mart-theme');
 if (stored) {
   try {
     const { state } = JSON.parse(stored);
-    document.documentElement.classList.toggle('dark', state?.isDark !== false);
-  } catch { document.documentElement.classList.add('dark'); }
+    document.documentElement.classList.toggle('dark', state?.isDark === true);
+  } catch { document.documentElement.classList.remove('dark'); }
 } else {
-  document.documentElement.classList.add('dark');
+  document.documentElement.classList.remove('dark');
 }

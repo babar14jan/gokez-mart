@@ -197,6 +197,28 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
       {/* Bottom bar */}
       {items.length > 0 && (
         <div className="border-t border-gray-100 dark:border-slate-700 flex-shrink-0">
+
+          {/* Bill Summary */}
+          <div className="px-4 py-3 space-y-2 border-b border-gray-100 dark:border-slate-700">
+            <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Bill Summary</p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
+                <span>Items Total</span>
+                <span className="font-semibold text-gray-900 dark:text-white">₹{sub.toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
+                <span>Delivery Charge</span>
+                <span className={`font-semibold ${actualDelivery === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>
+                  {actualDelivery === 0 ? 'FREE 🎉' : `₹${actualDelivery}`}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1.5 border-t border-gray-100 dark:border-slate-700">
+                <span>Grand Total</span>
+                <span>₹{total.toFixed(0)}</span>
+              </div>
+            </div>
+          </div>
+
           {!canCheckout && (
             <p className="text-xs text-red-500 text-center py-2">
               Minimum order ₹{minOrder}. Add ₹{(minOrder - sub).toFixed(0)} more.
@@ -212,8 +234,8 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
               <p className="text-base font-bold text-white">₹{total.toFixed(0)}</p>
             </div>
             <div className="text-right">
-              <p className="text-sm font-bold text-white">{paymentLabel}</p>
-              <p className="text-[10px] text-emerald-200">on delivery</p>
+              <p className="text-sm font-bold text-white">Proceed to Checkout</p>
+              <p className="text-[10px] text-emerald-200">{paymentLabel} on delivery</p>
             </div>
           </button>
         </div>

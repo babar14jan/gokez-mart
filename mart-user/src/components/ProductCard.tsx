@@ -88,14 +88,14 @@ export default function ProductCard({ product }: ProductCardProps) {
           )}
         </div>
 
-        {/* Info — compact */}
-        <div className="px-2 pt-1.5 pb-2">
-          <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">{displayName(product)}</p>
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex items-baseline gap-1 flex-wrap">
+        {/* Info — fixed height name so all cards align */}
+        <div className="px-2 pt-1.5 pb-2 flex flex-col">
+          <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1" style={{ minHeight: '2.2em' }}>{displayName(product)}</p>
+          <div className="flex items-center justify-between gap-1 mt-auto">
+            <div className="flex flex-col">
               <span className="text-[13px] font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>
               {savings > 0 && (
-                <span className="text-[10px] text-gray-400 dark:text-slate-500 line-through">₹{product.price}</span>
+                <span className="text-[10px] text-gray-400 dark:text-slate-500 line-through leading-none">₹{product.price}</span>
               )}
             </div>
             <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-md flex-shrink-0">{product.unit}</span>
