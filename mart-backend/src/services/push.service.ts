@@ -90,8 +90,8 @@ export class PushService {
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           body
         ).catch(async (err: any) => {
-          // 410 Gone = subscription expired, remove it
-          if (err.statusCode === 410) {
+          // Remove expired or invalid subscriptions
+          if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
             await query(`DELETE FROM mart_push_subscriptions WHERE endpoint = $1`, [sub.endpoint]);
           }
         })
