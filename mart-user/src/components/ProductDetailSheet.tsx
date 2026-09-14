@@ -3,6 +3,15 @@ import { X, Plus, Minus } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 
+function displayName(product: Product): string {
+  const eng = product.name?.trim();
+  const local = product.localName?.trim();
+  if (eng && local) return `${eng} (${local})`;
+  if (eng) return eng;
+  if (local) return local;
+  return '';
+}
+
 interface ProductDetailSheetProps {
   product: Product;
   onClose: () => void;
@@ -73,7 +82,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
           <div>
             <div className="flex items-start justify-between gap-2">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-snug flex-1">
-                {product.name}
+                {displayName(product)}
               </h2>
               {savings > 0 && (
                 <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0 mt-1">

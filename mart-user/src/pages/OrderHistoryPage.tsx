@@ -207,7 +207,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
         price: item.price, photoUrl: item.photoUrl || null,
         availabilityStatus: 'available', isAvailable: true,
         discountPercent: 0, categoryId: '', categoryName: '',
-        description: null, weightOptions: null,
+        description: null, weightOptions: null, localName: null,
       });
     });
     setReorderToast(`${items.length} item${items.length > 1 ? 's' : ''} added to cart`);

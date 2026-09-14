@@ -21,7 +21,7 @@ export interface Category {
 }
 
 export interface Product {
-  id: string; name: string; description: string | null;
+  id: string; name: string; localName: string | null; description: string | null;
   photoUrl: string | null; price: number; unit: string;
   weightOptions: Array<{ label: string; price: number }> | null;
   discountPercent: number; isAvailable: boolean;
