@@ -4,6 +4,7 @@ import { storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
+import { subscribeToPush } from './services/push';
 import { getUserLocation, findMatchingZone } from './services/geofence';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
@@ -57,6 +58,10 @@ export default function App() {
   // Deduplicate addresses on app load (fixes existing duplicates)
   useEffect(() => {
     useCustomerStore.getState().deduplicateAddresses();
+    // Auto-subscribe to push if permission already granted
+    if (Notification.permission === 'granted') {
+      subscribeToPush().catch(() => {});
+    }
   }, []);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);

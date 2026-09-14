@@ -126,6 +126,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
+  const [notifSubscribed, setNotifSubscribed] = useState(false);
   const [locationPermission, setLocationPermission] = useState<string>('prompt');
   const [locationEnabled, setLocationEnabled] = useState(
     localStorage.getItem('mart_location_enabled') !== 'false'
@@ -133,6 +134,15 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
+    // Check actual subscription + auto-subscribe if permission granted but no subscription
+    if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(reg =>
+        reg.pushManager.getSubscription().then(sub => {
+          setNotifSubscribed(!!sub);
+          if (!sub) subscribeToPush().then(ok => setNotifSubscribed(ok)).catch(() => {});
+        })
+      ).catch(() => {});
+    }
   }, []);
 
   const handleLocationToggle = async () => {
@@ -318,10 +328,10 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             <div className="flex-1 min-w-0">
               <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Order Notifications</span>
               <p className="text-[10px] text-gray-400 dark:text-slate-500">
-                {notifPermission === 'granted' ? 'Enabled — get updates on your orders' :
+                {notifPermission === 'granted' ? (notifSubscribed ? 'On — rider dispatch & delivery alerts' : 'Permission granted — tap to enable') :
                  notifPermission === 'denied'  ? 'Blocked — enable in browser settings' :
                  notifPermission === 'unsupported' ? 'Not supported on this browser' :
-                 'Get notified when your order status changes'}
+                 'Get notified when rider is on the way & delivered'}
               </p>
             </div>
             {notifPermission === 'denied' ? (
@@ -331,18 +341,30 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             ) : notifPermission === 'granted' ? (
               <button
                 onClick={async () => {
-                  await unsubscribeFromPush();
-                  setNotifPermission('default');
+                  if (notifSubscribed) {
+                    await unsubscribeFromPush();
+                    setNotifSubscribed(false);
+                  } else {
+                    const ok = await subscribeToPush();
+                    setNotifSubscribed(ok);
+                  }
                 }}
-                className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-emerald-500 transition-colors focus:outline-none">
-                <span className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow translate-x-5 transition duration-200" />
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                  notifSubscribed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'
+                }`}>
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                  notifSubscribed ? 'translate-x-5' : 'translate-x-0'
+                }`} />
               </button>
             ) : (
               <button
                 onClick={async () => {
                   const p = await requestNotificationPermission();
                   setNotifPermission(p);
-                  if (p === 'granted') subscribeToPush().catch(() => {});
+                  if (p === 'granted') {
+                    const ok = await subscribeToPush();
+                    setNotifSubscribed(ok);
+                  }
                 }}
                 className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-200 dark:bg-slate-600 transition-colors focus:outline-none">
                 <span className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow translate-x-0 transition duration-200" />
