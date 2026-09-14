@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
+import { subscribeAdminToPush } from './services/push';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -47,6 +48,14 @@ function ProtectedRoute({ children, path }: { children: React.ReactNode; path: s
 export default function App() {
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
+
+  // Re-subscribe to push on app load if permission already granted
+  useEffect(() => {
+    if (Notification.permission === 'granted') {
+      subscribeAdminToPush().catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     // Update both theme-color meta tags
