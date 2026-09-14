@@ -47,6 +47,7 @@ export default function MorePage() {
   // Push notifications
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default');
   const [enablingNotif, setEnablingNotif] = useState(false);
+  const [notifSubscribed, setNotifSubscribed] = useState(false);
 
   // PWA install
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -58,11 +59,22 @@ export default function MorePage() {
       setForm({ name: d.name || '', email: d.email || '', phone: d.phone || '' });
     }).catch(() => {});
 
-    // Check notification permission
+    // Check notification permission + actual subscription
     if (!('Notification' in window)) {
       setNotifPermission('unsupported');
     } else {
-      setNotifPermission(Notification.permission as any);
+      const perm = Notification.permission as any;
+      setNotifPermission(perm);
+      // Check if actually subscribed
+      if (perm === 'granted' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg =>
+          reg.pushManager.getSubscription().then(sub => {
+            setNotifSubscribed(!!sub);
+            // Auto-subscribe if permission granted but no subscription (new user/device)
+            if (!sub) subscribeAdminToPush().then(ok => setNotifSubscribed(ok)).catch(() => {});
+          })
+        ).catch(() => {});
+      }
     }
 
     // PWA install prompt
@@ -95,7 +107,19 @@ export default function MorePage() {
     try {
       const ok = await subscribeAdminToPush();
       setNotifPermission(ok ? 'granted' : 'denied');
+      setNotifSubscribed(ok);
     } finally { setEnablingNotif(false); }
+  };
+
+  const handleDisableNotifications = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+      }
+      setNotifSubscribed(false);
+    } catch { setNotifSubscribed(false); }
   };
 
   const handleInstall = async () => {
@@ -245,7 +269,7 @@ export default function MorePage() {
           <div className="flex-1 min-w-0">
             <span className="text-sm text-gray-700 dark:text-slate-300">Order Notifications</span>
             <p className="text-[10px] text-gray-400 dark:text-slate-500">
-              {notifPermission === 'granted' ? 'Enabled — get alerts for new orders' :
+              {notifPermission === 'granted' ? (notifSubscribed ? 'Enabled — get alerts for new orders' : 'Permission granted — tap to enable') :
                notifPermission === 'denied'  ? 'Blocked — enable in browser settings' :
                notifPermission === 'unsupported' ? 'Not supported on this browser' :
                'Get notified when new orders arrive'}
@@ -256,7 +280,10 @@ export default function MorePage() {
           ) : notifPermission === 'unsupported' ? (
             <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
           ) : notifPermission === 'granted' ? (
-            <Toggle checked={true} onChange={() => {}} />
+            <Toggle
+              checked={notifSubscribed}
+              onChange={notifSubscribed ? handleDisableNotifications : handleEnableNotifications}
+            />
           ) : (
             <button onClick={handleEnableNotifications} disabled={enablingNotif}
               className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 disabled:opacity-50 transition-colors">
