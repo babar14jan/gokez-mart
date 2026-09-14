@@ -160,6 +160,27 @@ export default function App() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
+  // Silent refresh — products + settings for current store every 3 mins + on tab focus
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const storeId = selectedZone?.storeId;
+        const [catRes, prodRes, srRes] = await Promise.all([
+          storeApi.getCategories(),
+          storeApi.getProducts(undefined, storeId),
+          storeApi.getSettings(storeId),
+        ]);
+        setCategories([...(catRes.data.data || [])]);
+        setProducts([...(prodRes.data.data || [])]);
+        setSettings(srRes.data.data || DEFAULT_SETTINGS);
+      } catch {}
+    };
+    const interval = setInterval(refresh, 3 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+  }, [selectedZone]);
+
   const filteredProducts = products.filter(p => {
     const matchCat = activeCategoryId === 'all' || p.categoryId === activeCategoryId;
     const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
