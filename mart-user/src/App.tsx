@@ -23,7 +23,6 @@ import NamePrompt from './components/NamePrompt';
 import InstallPrompt from './components/InstallPrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useCartStore } from './store/cartStore';
-import CategoryIcon from './components/CategoryIcon';
 import HomeCarousel from './components/HomeCarousel';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
@@ -81,7 +80,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#fafaf9');
+    if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#f0fdf4');
   }, [isDark]);
 
   useEffect(() => {
@@ -253,7 +252,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] dark:bg-slate-900 font-sans">
+    <div className="min-h-screen bg-[#f0fdf4] dark:bg-slate-900 font-sans">
 
       {showLoginModal && <LoginModal onClose={() => { setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
         setShowLoginModal(false);
@@ -389,7 +388,7 @@ export default function App() {
         </div>
       ) : (
         /* Home */
-        <main className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 ${cartItems > 0 ? 'pb-44' : 'pb-28'}`}>
+        <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${cartItems > 0 ? 'pb-44' : 'pb-28'}`}>
 
           {settings.store_open === 'false' && (
             <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium px-4 py-3 rounded-2xl text-center">
@@ -399,12 +398,12 @@ export default function App() {
 
           {/* Search */}
           <div className="relative mt-4 mb-4">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text" value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search vegetables, paneer..."
-              className="w-full pl-11 pr-10 py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/10 shadow-sm transition-all"
+              placeholder="Search groceries, vegetables..."
+              className="w-full pl-11 pr-10 py-3.5 bg-white dark:bg-slate-800 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-md transition-all border-0"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2">
@@ -418,34 +417,37 @@ export default function App() {
 
           {/* Category pills */}
           {!loading && categories.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-4">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-5 mt-1">
               <button onClick={() => setActiveCategoryId('all')}
                 className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                  activeCategoryId === 'all' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
+                  activeCategoryId === 'all'
+                    ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-200'
+                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 shadow-sm'
                 }`}>
                 All
               </button>
               {categories.map(cat => (
                 <button key={cat.id} onClick={() => setActiveCategoryId(cat.id)}
-                  className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                    activeCategoryId === cat.id ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                    activeCategoryId === cat.id
+                      ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-200'
+                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 shadow-sm'
                   }`}>
-                  <CategoryIcon icon={cat.icon} name={cat.name} className="w-4 h-4 object-contain" />
                   {cat.name}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Products grid */}
+          {/* Products */}
           {loading ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
+                <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse shadow-sm">
                   <div className="aspect-square bg-gray-100" />
                   <div className="p-3 space-y-2">
-                    <div className="h-3 bg-gray-100 rounded w-3/4" />
-                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                    <div className="h-3 bg-gray-100 rounded-lg w-3/4" />
+                    <div className="h-3 bg-gray-100 rounded-lg w-1/2" />
                   </div>
                 </div>
               ))}
@@ -456,11 +458,54 @@ export default function App() {
               <p className="text-base font-semibold text-gray-900 dark:text-white mb-1">No products found</p>
               <p className="text-sm text-gray-400">Try a different category or search term</p>
             </div>
+          ) : search || activeCategoryId !== 'all' ? (
+            /* Filtered — flat grid */
+            <>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
+              </p>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                {filteredProducts.map(product => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            </>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {filteredProducts.map(product => (
-                <ProductCard key={product.id} product={product} />
-              ))}
+            /* Home — grouped by category with section headers */
+            <div className="space-y-6">
+              {categories.map(cat => {
+                const catProducts = filteredProducts.filter(p => p.categoryId === cat.id);
+                if (catProducts.length === 0) return null;
+                return (
+                  <div key={cat.id}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h2 className="text-base font-bold text-gray-900 dark:text-white">{cat.name}</h2>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                      {catProducts.map(product => (
+                        <ProductCard key={product.id} product={product} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Uncategorised */}
+              {(() => {
+                const uncat = filteredProducts.filter(p => !p.categoryId);
+                if (uncat.length === 0) return null;
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-sm font-bold text-gray-900 dark:text-white">📦 Others</h2>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                      {uncat.map(product => (
+                        <ProductCard key={product.id} product={product} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </main>

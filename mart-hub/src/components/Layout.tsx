@@ -99,8 +99,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
     // Fetch QR URL for payment collection
     settingsApi.getAll(getActiveStoreId()).then(r => {
-      const qr = (r.data.data || []).find((s: any) => s.key === 'phonepay_qr_url');
-      if (qr?.value) setQrUrl(qr.value);
+      const settingsList = r.data.data || [];
+      const qrEnabled = settingsList.find((s: any) => s.key === 'upi_qr_enabled')?.value === 'true'
+                     || settingsList.find((s: any) => s.key === 'phonepay_enabled')?.value === 'true';
+      const qr = settingsList.find((s: any) => s.key === 'phonepay_qr_url');
+      if (qrEnabled && qr?.value) setQrUrl(qr.value);
+      else setQrUrl(null);
     }).catch(() => {});
   }, [username, storeId]);
 
@@ -213,6 +217,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="hidden lg:block text-sm font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
 
             <div className="flex-1" />
+
+            {/* QR button — mobile, shown when QR is configured */}
+            {qrUrl && (
+              <button onClick={() => setShowQr(true)}
+                className="lg:hidden p-2 rounded-xl text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0">
+                <QrCode className="w-5 h-5" />
+              </button>
+            )}
 
             {/* Mobile-only header action slot — injected by pages */}
             {onAction && (
