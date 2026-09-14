@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Plus, Minus } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import ProductDetailSheet from './ProductDetailSheet';
 
 interface ProductCardProps {
   product: Product;
@@ -11,6 +13,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
   const qty = cartItem?.quantity || 0;
   const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
+  const [showDetail, setShowDetail] = useState(false);
 
   const discountedPrice = product.discountPercent > 0
     ? Math.round(product.price * (1 - product.discountPercent / 100))
@@ -20,69 +23,81 @@ export default function ProductCard({ product }: ProductCardProps) {
     : 0;
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 flex flex-col">
-      {/* Image */}
-      <div className="relative rounded-t-xl overflow-hidden bg-gray-50 dark:bg-slate-700 aspect-square">
-        {product.photoUrl
-          ? <img src={product.photoUrl} alt={product.name} className={`w-full h-full object-cover ${isOutOfStock ? 'opacity-40' : ''}`} />
-          : <div className="w-full h-full flex items-center justify-center text-3xl">🥦</div>
-        }
+    <>
+      <div
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-md hover:shadow-lg transition-shadow flex flex-col overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+        onClick={() => setShowDetail(true)}
+      >
+        {/* Image */}
+        <div className="relative bg-gray-50 dark:bg-slate-700 aspect-square overflow-hidden rounded-t-2xl">
+          {product.photoUrl
+            ? <img src={product.photoUrl} alt={product.name}
+                className={`w-full h-full object-cover ${isOutOfStock ? 'opacity-40' : ''}`}
+                loading="lazy" decoding="async" />
+            : <div className="w-full h-full flex items-center justify-center text-4xl">🥦</div>
+          }
 
-        {/* Discount badge — top left */}
-        {savings > 0 && !isOutOfStock && (
-          <span className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
-            {product.discountPercent}% OFF
-          </span>
-        )}
+          {/* Discount badge */}
+          {savings > 0 && !isOutOfStock && (
+            <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-lg shadow-sm">
+              {product.discountPercent}% OFF
+            </span>
+          )}
 
-        {/* Out of stock */}
-        {isOutOfStock && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-slate-800/60">
-            <span className="bg-slate-700 text-white text-[10px] font-bold px-2 py-1 rounded-full">Out of Stock</span>
-          </div>
-        )}
+          {/* Out of stock overlay */}
+          {isOutOfStock && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-slate-800/70">
+              <span className="bg-gray-800 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">Out of Stock</span>
+            </div>
+          )}
 
-        {/* ADD / qty — bottom right corner of image */}
-        {!isOutOfStock && (
-          <div className="absolute bottom-0 right-0 z-10">
-            {qty === 0 ? (
-              <button
-                onClick={() => addItem(product)}
-                className="bg-white dark:bg-slate-800 border border-emerald-500 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-tl-xl rounded-br-xl shadow-sm active:scale-95 transition-transform"
-              >
-                ADD
-              </button>
-            ) : (
-              <div className="flex items-center gap-0.5 bg-emerald-500 rounded-tl-xl rounded-br-xl px-1 py-0.5 shadow-md">
-                <button onClick={() => updateQty(product.id, product.unit, qty - 1)}
-                  className="w-5 h-5 flex items-center justify-center text-white">
-                  <Minus className="w-3 h-3" strokeWidth={2.5} />
+          {/* ADD / qty — stops propagation so card tap doesn't open sheet */}
+          {!isOutOfStock && (
+            <div className="absolute bottom-0 right-0 z-10" onClick={e => e.stopPropagation()}>
+              {qty === 0 ? (
+                <button
+                  onClick={() => addItem(product)}
+                  className="bg-white dark:bg-slate-800 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-tl-2xl rounded-br-2xl shadow-md active:scale-95 transition-all hover:bg-emerald-50"
+                >
+                  ADD
                 </button>
-                <span className="text-xs font-bold text-white w-4 text-center">{qty}</span>
-                <button onClick={() => addItem(product)}
-                  className="w-5 h-5 flex items-center justify-center text-white">
-                  <Plus className="w-3 h-3" strokeWidth={2.5} />
-                </button>
-              </div>
+              ) : (
+                <div className="flex items-center gap-1 bg-emerald-500 rounded-tl-2xl rounded-br-2xl px-1.5 py-1 shadow-lg">
+                  <button onClick={() => updateQty(product.id, product.unit, qty - 1)}
+                    className="w-6 h-6 flex items-center justify-center text-white active:scale-90 transition-transform">
+                    <Minus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </button>
+                  <span className="text-sm font-bold text-white w-5 text-center">{qty}</span>
+                  <button onClick={() => addItem(product)}
+                    className="w-6 h-6 flex items-center justify-center text-white active:scale-90 transition-transform">
+                    <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="px-2.5 pt-2 pb-2.5 flex flex-col gap-0.5">
+          <p className="text-[13px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">{product.name}</p>
+          <p className="text-[11px] text-gray-400 dark:text-slate-500">{product.unit}</p>
+          <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
+            <span className="text-sm font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>
+            {savings > 0 && (
+              <span className="text-[10px] text-gray-400 dark:text-slate-500 line-through">₹{product.price}</span>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="px-2 pt-1.5 pb-2">
-        <p className="text-xs font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight">{product.name}</p>
-        <p className="text-[10px] text-gray-400 mt-0.5">{product.unit}</p>
-        <div className="flex items-center gap-1 mt-1 flex-wrap">
-          <span className="text-xs font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>
           {savings > 0 && (
-            <>
-              <span className="text-[10px] text-gray-400 line-through">₹{product.price}</span>
-              <span className="text-[9px] font-bold text-emerald-600">₹{savings} OFF</span>
-            </>
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Save ₹{savings}</span>
           )}
         </div>
       </div>
-    </div>
+
+      {/* Product detail bottom sheet */}
+      {showDetail && (
+        <ProductDetailSheet product={product} onClose={() => setShowDetail(false)} />
+      )}
+    </>
   );
 }

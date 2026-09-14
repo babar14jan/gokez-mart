@@ -183,7 +183,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Order status breakdown */}
+        {/* Order status breakdown — vertical bar chart */}
         <div className="page-card">
           <div className="page-card-header">
             <div className="flex items-center gap-2">
@@ -192,35 +192,75 @@ export default function DashboardPage() {
             </div>
             <span className="text-[10px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{rangeLabel}</span>
           </div>
-          <div className="p-4 space-y-3">
-            {[
-              { label: 'Pending',          key: 'pending',          color: 'bg-amber-500' },
-              { label: 'Confirmed',        key: 'confirmed',        color: 'bg-blue-500' },
-              { label: 'Preparing',        key: 'preparing',        color: 'bg-indigo-500' },
-              { label: 'Out for Delivery', key: 'out_for_delivery', color: 'bg-violet-500' },
-              { label: 'Delivered',        key: 'delivered',        color: 'bg-emerald-500' },
-              { label: 'Cancelled',        key: 'cancelled',        color: 'bg-red-400' },
-            ].map(s => {
-              const count = filtered.filter(o => o.status === s.key).length;
-              const pct = filtered.length ? Math.round((count / filtered.length) * 100) : 0;
-              return (
-                <div key={s.key}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-600 dark:text-slate-400">{s.label}</span>
-                    <span className="text-xs font-bold text-gray-900 dark:text-white">{count}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-gray-100 dark:bg-slate-600 overflow-hidden">
-                    <div className={`h-full ${s.color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-            {filtered.length === 0 && (
+          <div className="p-4">
+            {filtered.length === 0 ? (
               <div className="flex flex-col items-center py-6 text-gray-400 dark:text-slate-500">
                 <XCircle className="w-6 h-6 mb-1 opacity-30" />
                 <p className="text-xs">No orders for this period</p>
               </div>
-            )}
+            ) : (() => {
+              const bars = range === 'today'
+                ? [
+                    { label: 'Pending',    keys: ['pending'],                                                    color: 'bg-amber-400',   textColor: 'text-amber-600 dark:text-amber-400' },
+                    { label: 'Confirmed',  keys: ['confirmed'],                                                  color: 'bg-blue-400',    textColor: 'text-blue-600 dark:text-blue-400' },
+                    { label: 'Preparing',  keys: ['preparing', 'ready_to_pickup'],                              color: 'bg-indigo-400',  textColor: 'text-indigo-600 dark:text-indigo-400' },
+                    { label: 'On Way',     keys: ['out_for_delivery', 'picked_up'],                             color: 'bg-violet-400',  textColor: 'text-violet-600 dark:text-violet-400' },
+                    { label: 'Delivered',  keys: ['delivered'],                                                  color: 'bg-emerald-500', textColor: 'text-emerald-600 dark:text-emerald-400' },
+                    { label: 'Cancelled',  keys: ['cancelled', 'failed_delivery', 'terminated'],                color: 'bg-red-400',     textColor: 'text-red-500 dark:text-red-400' },
+                  ]
+                : [
+                    { label: 'Delivered',  keys: ['delivered'],                                                  color: 'bg-emerald-500', textColor: 'text-emerald-600 dark:text-emerald-400' },
+                    { label: 'Cancelled',  keys: ['cancelled', 'failed_delivery', 'terminated'],                color: 'bg-red-400',     textColor: 'text-red-500 dark:text-red-400' },
+                    { label: 'In Progress',keys: ['pending','confirmed','preparing','ready_to_pickup','out_for_delivery','picked_up'], color: 'bg-amber-400', textColor: 'text-amber-600 dark:text-amber-400' },
+                  ];
+
+              const counts = bars.map(b => ({
+                ...b,
+                count: filtered.filter(o => b.keys.includes(o.status)).length,
+              }));
+              const maxCount = Math.max(...counts.map(b => b.count), 1);
+              const total = filtered.length;
+              return (
+                <>
+                  {/* Chart area */}
+                  <div className="flex items-end justify-center gap-3 h-32 mb-3">
+                    {counts.map(bar => {
+                      const heightPct = bar.count > 0 ? Math.max((bar.count / maxCount) * 100, 8) : 0;
+                      return (
+                        <div key={bar.label} className="flex flex-col items-center gap-1 w-14">
+                          {/* Count on top */}
+                          <span className={`text-xs font-bold ${bar.count > 0 ? bar.textColor : 'text-gray-300 dark:text-slate-600'}`}>
+                            {bar.count}
+                          </span>
+                          {/* Bar */}
+                          <div className="w-full flex items-end" style={{ height: '80px' }}>
+                            <div
+                              className={`w-full rounded-t-lg transition-all duration-700 ${bar.count > 0 ? bar.color : 'bg-gray-100 dark:bg-slate-700'}`}
+                              style={{ height: bar.count > 0 ? `${heightPct}%` : '4px' }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Labels */}
+                  <div className="flex justify-center gap-3">
+                    {counts.map(bar => (
+                      <div key={bar.label} className="w-14 text-center">
+                        <p className="text-[9px] font-semibold text-gray-500 dark:text-slate-400 leading-tight">{bar.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Summary */}
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between">
+                    <span className="text-[11px] text-gray-400 dark:text-slate-500">Total orders</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">{total}</span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>

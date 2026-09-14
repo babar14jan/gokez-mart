@@ -49,8 +49,15 @@ export default function App() {
   const isDark = useThemeStore(s => s.isDark);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#f9fafb');
+    // Update both theme-color meta tags
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta: Element) => {
+      const m = meta as HTMLMetaElement;
+      if (m.media?.includes('dark')) m.content = isDark ? '#0f172a' : '#0f172a';
+      else m.content = isDark ? '#0f172a' : '#f9fafb';
+    });
+    // Fallback for single meta tag
+    const single = document.querySelector('meta[name="theme-color"]:not([media])');
+    if (single) (single as HTMLMetaElement).content = isDark ? '#0f172a' : '#f9fafb';
   }, [isDark]);
 
   return (
