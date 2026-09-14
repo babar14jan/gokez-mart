@@ -117,6 +117,11 @@ export default function ProductsPage() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   // ── Filtered + sorted product list ───────────────────────────────────────
   const displayProducts = useMemo(() => {
@@ -246,6 +251,8 @@ export default function ProductsPage() {
   const handleDelete = async (id: string) => {
     await productsApi.delete(id);
     setConfirmDeleteId(null);
+    setConfirmDeleteProduct(null);
+    setShowModal(false);
     showToast('Product deleted');
     await load();
   };

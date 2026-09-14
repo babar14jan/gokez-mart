@@ -77,6 +77,11 @@ export default function InventoryPage() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   const sorted = useMemo(() => {
     if (!sortLowFirst) return items;
