@@ -4,86 +4,91 @@ export function printReceipt(order: any) {
     hour: '2-digit', minute: '2-digit', hour12: true,
   });
 
-  const itemRows = (order.items || []).map((item: any) => `
-    <tr>
-      <td style="padding:4px 0;font-size:13px;">${item.productName}</td>
-      <td style="padding:4px 0;font-size:13px;text-align:center;">${item.unit}</td>
-      <td style="padding:4px 0;font-size:13px;text-align:center;">×${item.quantity}</td>
-      <td style="padding:4px 0;font-size:13px;text-align:right;">₹${item.total}</td>
-    </tr>`).join('');
-
   const paymentLabel: Record<string, string> = {
     cod: 'Cash on Delivery', upi: 'UPI', phonepay: 'PhonePe',
   };
 
-  const html = `<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8"/>
-<title>Order #${order.orderNumber} — Receipt</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Courier New',monospace;max-width:320px;margin:0 auto;padding:20px;color:#111;}
-.center{text-align:center;}
-.brand{font-size:20px;font-weight:bold;letter-spacing:2px;}
-.tagline{font-size:11px;color:#555;margin-top:2px;}
-.divider{border-top:1px dashed #999;margin:10px 0;}
-.divider-solid{border-top:1px solid #111;margin:10px 0;}
-.label{font-size:11px;color:#555;}
-table{width:100%;border-collapse:collapse;}
-th{font-size:11px;color:#555;text-align:left;padding:4px 0;border-bottom:1px solid #ddd;}
-th:last-child{text-align:right;}
-th:nth-child(2),th:nth-child(3){text-align:center;}
-.footer{font-size:11px;color:#555;text-align:center;margin-top:16px;}
-@media print{.no-print{display:none;}}
-</style>
-</head><body>
-<div class="no-print" style="display:flex;justify-content:space-between;margin-bottom:12px;">
-  <button onclick="window.print()" style="padding:6px 12px;background:#10b981;color:white;border:none;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;">Print</button>
-  <button onclick="window.close()" style="padding:6px 12px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:13px;font-weight:bold;cursor:pointer;">Close</button>
-</div>
-<div class="center">
-  <img src="https://mart.gokez.com/mart_web_logo.png" alt="Gokez Mart" style="height:48px;object-fit:contain;" />
-  <div class="tagline">Powered by Gokez Technologies Pvt. Ltd.</div>
+  const itemRows = (order.items || []).map((item: any) => `
+    <tr>
+      <td style="padding:6px 0;font-size:13px;border-bottom:1px solid #f0f0f0;">${item.productName}<br/><span style="font-size:11px;color:#888;">${item.unit} × ${item.quantity}</span></td>
+      <td style="padding:6px 0;font-size:13px;text-align:right;border-bottom:1px solid #f0f0f0;font-weight:600;">₹${item.total}</td>
+    </tr>`).join('');
 
-</div>
-<div class="divider"></div>
-<div>
-  <div style="font-size:13px;font-weight:bold;">Order #${order.orderNumber}</div>
-  <div style="font-size:10px;color:#555;margin-top:1px;">Order Date: ${date}</div>
-</div>
-${order.fulfilledBy ? `<div style="margin-top:6px;font-size:11px;color:#555;">🏪 Fulfilled by ${order.fulfilledBy}</div>` : ''}
-<div class="divider"></div>
-<div><div class="label" style="margin-bottom:4px;">Deliver to</div>
-<div style="font-size:12px;">${order.guestName}</div>
-<div style="font-size:11px;color:#555;">${order.guestAddress}</div></div>
-<div class="divider"></div>
-<table>
-  <thead><tr>
-    <th>Item</th><th style="text-align:center;">Unit</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Amount</th>
-  </tr></thead>
-  <tbody>${itemRows}</tbody>
-</table>
-<div class="divider-solid"></div>
-<table>
-  <tr><td style="font-size:12px;padding:2px 0;">Subtotal</td><td style="font-size:12px;text-align:right;">₹${order.subtotal}</td></tr>
-  <tr><td style="font-size:12px;padding:2px 0;">Delivery</td><td style="font-size:12px;text-align:right;">${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td></tr>
-  <tr><td style="font-size:14px;font-weight:bold;padding-top:6px;">TOTAL PAID</td><td style="font-size:14px;font-weight:bold;text-align:right;padding-top:6px;">₹${order.total}</td></tr>
-</table>
-<div class="divider"></div>
-<div style="display:flex;justify-content:space-between;">
-  <span class="label">Payment</span>
-  <span style="font-size:12px;font-weight:bold;">${paymentLabel[order.paymentMethod] || (order.paymentMethod || '').toUpperCase()}</span>
-</div>
-<div class="divider"></div>
-<div class="footer">
-  <div>Thank you for ordering from Gokez Mart! 🛒</div>
-  <div style="margin-top:6px;font-size:10px;color:#aaa;border-top:1px dashed #ddd;padding-top:6px;">This is a purchase receipt, not a GST invoice.</div>
-</div>
+  const receiptHtml = `
+    <div style="font-family:'Courier New',monospace;max-width:400px;margin:0 auto;padding:20px 16px;color:#111;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" style="height:44px;object-fit:contain;" onerror="this.style.display='none'" />
+        <div style="font-size:11px;color:#888;margin-top:4px;">Powered by Gokez Technologies Pvt. Ltd.</div>
+      </div>
+      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:14px;font-weight:bold;">Order #${order.orderNumber}</div>
+        <div style="font-size:11px;color:#666;margin-top:2px;">${date}</div>
+        ${order.fulfilledBy ? `<div style="font-size:11px;color:#666;margin-top:2px;">🏪 ${order.fulfilledBy}</div>` : ''}
+      </div>
+      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Deliver to</div>
+        <div style="font-size:13px;font-weight:600;">${order.guestName}</div>
+        <div style="font-size:12px;color:#555;">${order.guestAddress}</div>
+      </div>
+      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="font-size:10px;color:#888;text-align:left;padding-bottom:6px;border-bottom:1px solid #ddd;text-transform:uppercase;">Item</th>
+            <th style="font-size:10px;color:#888;text-align:right;padding-bottom:6px;border-bottom:1px solid #ddd;text-transform:uppercase;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+      <div style="border-top:2px solid #111;margin:12px 0;"></div>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><td style="font-size:12px;padding:3px 0;color:#555;">Subtotal</td><td style="font-size:12px;text-align:right;color:#555;">₹${order.subtotal}</td></tr>
+        <tr><td style="font-size:12px;padding:3px 0;color:#555;">Delivery</td><td style="font-size:12px;text-align:right;color:#555;">${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td></tr>
+        <tr><td style="font-size:15px;font-weight:bold;padding-top:8px;">TOTAL PAID</td><td style="font-size:15px;font-weight:bold;text-align:right;padding-top:8px;">₹${order.total}</td></tr>
+      </table>
+      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:11px;color:#888;">Payment</span>
+        <span style="font-size:13px;font-weight:bold;">${paymentLabel[order.paymentMethod] || (order.paymentMethod || '').toUpperCase()}</span>
+      </div>
+      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="text-align:center;font-size:12px;color:#555;">Thank you for ordering from Gokez Mart! 🛒</div>
+      <div style="text-align:center;font-size:10px;color:#aaa;margin-top:8px;">This is a purchase receipt, not a GST invoice.</div>
+    </div>
+  `;
 
-</body></html>`;
+  const existing = document.getElementById('__receipt_overlay__');
+  if (existing) existing.remove();
 
-  const win = window.open('', '_blank', 'width=420,height=700');
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
+  const overlay = document.createElement('div');
+  overlay.id = '__receipt_overlay__';
+  overlay.style.cssText = `position:fixed;inset:0;z-index:9999;background:white;overflow-y:auto;-webkit-overflow-scrolling:touch;`;
+
+  const actionBar = document.createElement('div');
+  actionBar.className = '__receipt_no_print__';
+  actionBar.style.cssText = `position:sticky;top:0;background:white;border-bottom:1px solid #e5e7eb;padding:12px 16px;display:flex;gap:8px;z-index:1;`;
+  actionBar.innerHTML = `
+    <button onclick="window.print()" style="flex:1;padding:12px;background:#10b981;color:white;border:none;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">🖨️ Print / Save PDF</button>
+    <button id="__receipt_close__" style="flex:1;padding:12px;background:#f3f4f6;color:#374151;border:none;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">✕ Close</button>
+  `;
+
+  const content = document.createElement('div');
+  content.innerHTML = receiptHtml;
+
+  overlay.appendChild(actionBar);
+  overlay.appendChild(content);
+  document.body.appendChild(overlay);
+
+  document.getElementById('__receipt_close__')?.addEventListener('click', () => overlay.remove());
+
+  const style = document.createElement('style');
+  style.id = '__receipt_print_style__';
+  style.textContent = `@media print { body > *:not(#__receipt_overlay__) { display:none !important; } #__receipt_overlay__ { position:static !important; overflow:visible !important; } .__receipt_no_print__ { display:none !important; } }`;
+  document.head.appendChild(style);
+
+  window.addEventListener('afterprint', () => {
+    document.getElementById('__receipt_print_style__')?.remove();
+  }, { once: true });
 }

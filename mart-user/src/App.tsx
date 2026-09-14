@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, X, CheckCircle } from 'lucide-react';
+import { Search, X, CheckCircle, Zap, Leaf, Tag, RotateCcw } from 'lucide-react';
 import { storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -523,78 +523,79 @@ export default function App() {
             </div>
           )}
 
-          {/* Trust badges */}
-          <div className="mt-8 grid grid-cols-2 gap-3">
+          {/* Trust badges — 4 cards one row */}
+          <div className="mt-8 grid grid-cols-4 gap-2">
             {[
-              { icon: '🚚', title: 'Fast Delivery', desc: 'Fresh groceries at your door in 10-15 mins' },
-              { icon: '🌿', title: 'Fresh & Quality', desc: '100% fresh products, quality guaranteed' },
-              { icon: '💰', title: 'Best Prices', desc: 'Competitive prices with great offers' },
-              { icon: '🔄', title: 'Easy Returns', desc: 'Not satisfied? Return at doorstep' },
-            ].map(b => (
-              <div key={b.title} className="bg-white dark:bg-slate-800 rounded-2xl p-3.5 shadow-sm">
-                <span className="text-2xl">{b.icon}</span>
-                <p className="text-xs font-bold text-gray-900 dark:text-white mt-1.5">{b.title}</p>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 leading-snug">{b.desc}</p>
-              </div>
-            ))}
+              { icon: 'Zap',       title: 'Quick',      desc: 'Delivered in 10-15 mins' },
+              { icon: 'Leaf',      title: 'Farm Fresh', desc: 'Sourced & delivered fresh' },
+              { icon: 'Tag',       title: 'Best Price', desc: 'Great deals every day' },
+              { icon: 'RotateCcw', title: 'Returns',    desc: 'Easy return at doorstep' },
+            ].map(b => {
+              const icons: Record<string, React.ReactNode> = {
+                Zap:       <Zap       className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
+                Leaf:      <Leaf      className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
+                Tag:       <Tag       className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
+                RotateCcw: <RotateCcw className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
+              };
+              return (
+                <div key={b.title} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex flex-col items-center text-center p-2.5 sm:p-4 gap-1.5">
+                  {icons[b.icon]}
+                  <p className="text-[11px] sm:text-sm font-bold text-gray-900 dark:text-white leading-tight">{b.title}</p>
+                  <p className="text-[9px] sm:text-xs text-gray-400 dark:text-slate-500 leading-snug hidden sm:block">{b.desc}</p>
+                </div>
+              );
+            })}
           </div>
 
           {/* Home footer */}
-          <div className="mt-8 pb-4 space-y-4">
+          {/* Footer */}
+          <div className="mt-8 pb-4 border-t border-gray-300 dark:border-slate-700 pt-5 space-y-3">
+
             {/* Contact */}
-            {(settings.support_phone || settings.whatsapp_number) && (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm">
-                <p className="text-xs font-bold text-gray-900 dark:text-white mb-3">Get in Touch</p>
-                <div className="space-y-2">
-                  {settings.support_phone && (
-                    <a href={`tel:${settings.support_phone}`}
-                      className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
-                      <span className="text-base">📞</span> {settings.support_phone}
-                    </a>
-                  )}
-                  {settings.whatsapp_number && (
-                    <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
-                      <span className="text-base">💬</span> WhatsApp Support
-                    </a>
-                  )}
-                  {settings.store_address && (
-                    <div className="flex items-start gap-2 text-xs text-gray-400 dark:text-slate-500">
-                      <span className="text-base">📍</span>
-                      <span className="leading-snug">{settings.store_address}</span>
-                    </div>
-                  )}
-                </div>
+            {(settings.support_phone || settings.whatsapp_number || settings.store_address) && (
+              <div className="flex items-center justify-center gap-4 flex-wrap">
+                {settings.support_phone && (
+                  <a href={`tel:${settings.support_phone}`}
+                    className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
+                    <span className="text-sm">📞</span> {settings.support_phone}
+                  </a>
+                )}
+                {settings.whatsapp_number && (
+                  <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
+                    <span className="text-sm">💬</span> WhatsApp
+                  </a>
+                )}
+                {settings.store_address && (
+                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500">
+                    <span className="text-sm">📍</span> {settings.store_address}
+                  </span>
+                )}
               </div>
             )}
 
             {/* Quick links */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm">
-              <p className="text-xs font-bold text-gray-900 dark:text-white mb-3">Quick Links</p>
-              <div className="grid grid-cols-2 gap-y-2">
-                {[
-                  { label: 'My Orders', action: () => { (window as any).__navToOrders?.(); } },
-                  { label: 'My Account', action: () => { (window as any).__navToAccount?.(); } },
-                  { label: 'Privacy Policy', action: () => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); } },
-                  { label: 'Terms of Service', action: () => { window.history.pushState({}, '', '/terms'); window.dispatchEvent(new PopStateEvent('popstate')); } },
-                ].map(l => (
-                  <button key={l.label} onClick={l.action}
-                    className="text-left text-xs text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+            <div className="flex items-center justify-center gap-1 flex-wrap">
+              {[
+                { label: 'My Orders',  action: () => { (window as any).__navToOrders?.(); } },
+                { label: 'My Account', action: () => { (window as any).__navToAccount?.(); } },
+                { label: 'Privacy',    action: () => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); } },
+                { label: 'Terms',      action: () => { window.history.pushState({}, '', '/terms'); window.dispatchEvent(new PopStateEvent('popstate')); } },
+              ].map((l, i, arr) => (
+                <span key={l.label} className="flex items-center">
+                  <button onClick={l.action}
+                    className="text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
                     {l.label}
                   </button>
-                ))}
-              </div>
+                  {i < arr.length - 1 && <span className="text-gray-400 dark:text-slate-600 mx-1.5">·</span>}
+                </span>
+              ))}
             </div>
 
             {/* Copyright */}
-            <div className="text-center pb-2">
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">
-                &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
-              </p>
-              <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">
-                {settings.store_name} · {settings.delivery_area || 'Kolkata'}
-              </p>
-            </div>
+            <p className="text-center text-[10px] text-gray-500 dark:text-slate-500">
+              &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
+            </p>
           </div>
         </main>
       )}

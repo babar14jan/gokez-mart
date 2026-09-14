@@ -118,7 +118,7 @@ function AddressCard({
 export default function ProfilePage({ onBack, supportName, supportPhone, whatsappNumber }: ProfilePageProps) {
   const { name, phone, address, address2, updateProfile, logout } = useCustomerAuthStore();
   const { setName: syncName } = useCustomerStore();
-  const { isDark, toggle } = useThemeStore();
+  const { } = useThemeStore();
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(name || '');
@@ -288,16 +288,6 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
         {/* Settings */}
         <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Settings</p>
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
-
-          {/* Dark mode */}
-          <div className="flex items-center gap-3 px-4 py-3">
-            <span className="text-base">{isDark ? '🌙' : '☀️'}</span>
-            <span className="text-sm font-medium text-gray-800 dark:text-slate-200 flex-1">Dark Mode</span>
-            <button onClick={toggle} role="switch" aria-checked={isDark}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isDark ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
-              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isDark ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
-          </div>
 
           {/* Location */}
           <div className="flex items-center gap-3 px-4 py-3">
