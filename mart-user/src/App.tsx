@@ -200,6 +200,10 @@ export default function App() {
     setView(v);
   };
 
+  // Expose nav to footer quick links
+  (window as any).__navToOrders = () => handleNavChange('orders');
+  (window as any).__navToAccount = () => handleNavChange('account');
+
   const handleCheckout = async () => {
     setPreCheckoutView(view);
     if (!selectedZone) {
@@ -334,6 +338,8 @@ export default function App() {
         activeView={view as 'home' | 'categories' | 'orders' | 'account'}
         onNavChange={handleNavChange}
         onCheckout={handleCheckout}
+        search={search}
+        onSearch={setSearch}
       />
 
 
@@ -404,8 +410,8 @@ export default function App() {
             </div>
           )}
 
-          {/* Search */}
-          <div className="relative mt-4 mb-4">
+          {/* Search — desktop only, mobile search is in Navbar */}
+          <div className="relative mt-4 mb-4 hidden sm:block">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text" value={search}
@@ -516,6 +522,80 @@ export default function App() {
               })()}
             </div>
           )}
+
+          {/* Trust badges */}
+          <div className="mt-8 grid grid-cols-2 gap-3">
+            {[
+              { icon: '🚚', title: 'Fast Delivery', desc: 'Fresh groceries at your door in 10-15 mins' },
+              { icon: '🌿', title: 'Fresh & Quality', desc: '100% fresh products, quality guaranteed' },
+              { icon: '💰', title: 'Best Prices', desc: 'Competitive prices with great offers' },
+              { icon: '🔄', title: 'Easy Returns', desc: 'Not satisfied? Return at doorstep' },
+            ].map(b => (
+              <div key={b.title} className="bg-white dark:bg-slate-800 rounded-2xl p-3.5 shadow-sm">
+                <span className="text-2xl">{b.icon}</span>
+                <p className="text-xs font-bold text-gray-900 dark:text-white mt-1.5">{b.title}</p>
+                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5 leading-snug">{b.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Home footer */}
+          <div className="mt-8 pb-4 space-y-4">
+            {/* Contact */}
+            {(settings.support_phone || settings.whatsapp_number) && (
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm">
+                <p className="text-xs font-bold text-gray-900 dark:text-white mb-3">Get in Touch</p>
+                <div className="space-y-2">
+                  {settings.support_phone && (
+                    <a href={`tel:${settings.support_phone}`}
+                      className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
+                      <span className="text-base">📞</span> {settings.support_phone}
+                    </a>
+                  )}
+                  {settings.whatsapp_number && (
+                    <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
+                      <span className="text-base">💬</span> WhatsApp Support
+                    </a>
+                  )}
+                  {settings.store_address && (
+                    <div className="flex items-start gap-2 text-xs text-gray-400 dark:text-slate-500">
+                      <span className="text-base">📍</span>
+                      <span className="leading-snug">{settings.store_address}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Quick links */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-bold text-gray-900 dark:text-white mb-3">Quick Links</p>
+              <div className="grid grid-cols-2 gap-y-2">
+                {[
+                  { label: 'My Orders', action: () => { (window as any).__navToOrders?.(); } },
+                  { label: 'My Account', action: () => { (window as any).__navToAccount?.(); } },
+                  { label: 'Privacy Policy', action: () => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); } },
+                  { label: 'Terms of Service', action: () => { window.history.pushState({}, '', '/terms'); window.dispatchEvent(new PopStateEvent('popstate')); } },
+                ].map(l => (
+                  <button key={l.label} onClick={l.action}
+                    className="text-left text-xs text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Copyright */}
+            <div className="text-center pb-2">
+              <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
+              </p>
+              <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">
+                {settings.store_name} · {settings.delivery_area || 'Kolkata'}
+              </p>
+            </div>
+          </div>
         </main>
       )}
 
