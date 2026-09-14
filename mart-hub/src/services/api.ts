@@ -6,11 +6,18 @@ const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3004
 
 export const api = axios.create({
   baseURL: API_URL,
-  timeout: 60000, // 60s — allows Render free tier to wake up
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-store',
   },
+});
+
+// Cache-busting interceptor for GET requests only
+api.interceptors.request.use(config => {
+  if (config.method === 'get') {
+    config.headers['Cache-Control'] = 'no-store';
+  }
+  return config;
 });
 
 api.interceptors.request.use(config => {
