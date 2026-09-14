@@ -173,6 +173,11 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   const getStaleMinutes = (order: any): number | null => {
     const threshold = STALE_MINS[order.status];
