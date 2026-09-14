@@ -15,21 +15,18 @@ export default function FloatingCart({ onOpen, hidden }: FloatingCartProps) {
     <div className="sm:hidden fixed bottom-[5.5rem] left-1/2 -translate-x-1/2 z-40">
       <button
         onClick={onOpen}
-        className="flex items-center gap-3 bg-emerald-500 hover:bg-emerald-600 text-white pl-4 pr-4 py-3 rounded-full shadow-xl shadow-emerald-500/40 active:scale-95 transition-all whitespace-nowrap"
+        className="flex items-center justify-center gap-2.5 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-full shadow-lg active:scale-95 transition-all whitespace-nowrap"
       >
-        {/* Cart icon — left */}
-        <ShoppingCart className="w-5 h-5 text-white flex-shrink-0" />
+        <ShoppingCart className="w-5 h-5 flex-shrink-0" />
 
-        {/* View Cart + item count — stacked */}
-        <div className="flex flex-col items-start leading-tight">
+        <div className="flex flex-col items-center leading-tight">
           <span className="text-sm font-bold">View Cart</span>
-          <span className="text-[11px] text-emerald-200 font-medium">
+          <span className="text-[10px] text-emerald-200 font-medium">
             {totalItems} {totalItems === 1 ? 'item' : 'items'}
           </span>
         </div>
 
-        {/* Big arrow — right, covers both lines */}
-        <ArrowRight className="w-6 h-6 text-white flex-shrink-0" />
+        <ArrowRight className="w-4 h-4 flex-shrink-0" />
       </button>
     </div>
   );
