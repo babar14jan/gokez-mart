@@ -1,5 +1,4 @@
 // Cache version — controlled by /cache-version.json
-// Bump the version in that file to force clear all caches on next deploy
 let CACHE_NAME = 'gokez-hub-v1';
 
 self.addEventListener('install', (e) => {
@@ -10,7 +9,13 @@ self.addEventListener('install', (e) => {
       .catch(() => {})
       .then(() =>
         caches.open(CACHE_NAME).then(c =>
-          c.addAll(['/index.html']).catch(() => {})
+          c.addAll([
+            '/',
+            '/index.html',
+            '/manifest.json',
+            '/icons/icon-192.png',
+            '/icons/icon-512.png',
+          ]).catch(() => {})
         )
       )
       .then(() => self.skipWaiting())
@@ -34,14 +39,40 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Fetch — network first, fallback to cache for navigation only
+// Fetch — network first for navigation, cache-first for assets
 self.addEventListener('fetch', (e) => {
   if (e.request.url.includes('/api/')) return;
+
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request).catch(() =>
-        caches.match('/index.html').then(r => r || fetch(e.request))
-      )
+      fetch(e.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          return response;
+        })
+        .catch(() =>
+          caches.match('/index.html')
+            .then(r => r || caches.match('/'))
+            .then(r => r || new Response('App is offline. Please check your connection.', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain' },
+            }))
+        )
+    );
+    return;
+  }
+
+  if (e.request.destination === 'image' || e.request.destination === 'style' || e.request.destination === 'script') {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          return response;
+        }).catch(() => cached || new Response('', { status: 404 }));
+      })
     );
   }
 });
