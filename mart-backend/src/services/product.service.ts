@@ -6,6 +6,7 @@ export interface MartProduct {
   categoryId: string | null;
   categoryName?: string;
   name: string;
+  localName: string | null;
   description: string | null;
   photoUrl: string | null;
   price: number;
@@ -21,7 +22,7 @@ export interface MartProduct {
 
 const PRODUCT_SELECT = `
   SELECT p.id, p.category_id as "categoryId", c.name as "categoryName",
-         p.name, p.description, p.photo_url as "photoUrl",
+         p.name, p.local_name as "localName", p.description, p.photo_url as "photoUrl",
          p.weight_options as "weightOptions",
          sp.price::float, sp.unit,
          sp.discount_percent::float as "discountPercent",
@@ -92,9 +93,9 @@ export class ProductService {
   static async create(data: Partial<MartProduct> & { storeId: string }): Promise<MartProduct> {
     const id = uuidv4();
     await query(
-      `INSERT INTO mart_products (id, category_id, name, description, photo_url, weight_options)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [id, data.categoryId || null, data.name, data.description || null,
+      `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, weight_options)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [id, data.categoryId || null, data.name, data.localName || null, data.description || null,
        data.photoUrl || null, data.weightOptions ? JSON.stringify(data.weightOptions) : null]
     );
     await query(
@@ -118,6 +119,7 @@ export class ProductService {
     let gi = 1;
     if (data.categoryId !== undefined) { globalFields.push(`category_id = $${gi++}`); globalParams.push(data.categoryId); }
     if (data.name !== undefined)       { globalFields.push(`name = $${gi++}`);        globalParams.push(data.name); }
+    if (data.localName !== undefined)  { globalFields.push(`local_name = $${gi++}`);  globalParams.push(data.localName); }
     if (data.description !== undefined){ globalFields.push(`description = $${gi++}`); globalParams.push(data.description); }
     if (data.photoUrl !== undefined)   { globalFields.push(`photo_url = $${gi++}`);   globalParams.push(data.photoUrl); }
     if (data.weightOptions !== undefined){ globalFields.push(`weight_options = $${gi++}`); globalParams.push(JSON.stringify(data.weightOptions)); }

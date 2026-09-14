@@ -4,6 +4,16 @@ import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import ProductDetailSheet from './ProductDetailSheet';
 
+// Display name: English (Hindi) or just English or just Hindi — never empty brackets
+function displayName(product: Product): string {
+  const eng = product.name?.trim();
+  const local = product.localName?.trim();
+  if (eng && local) return `${eng} (${local})`;
+  if (eng) return eng;
+  if (local) return local;
+  return '';
+}
+
 interface ProductCardProps {
   product: Product;
 }
@@ -80,7 +90,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Info — compact */}
         <div className="px-2 pt-1.5 pb-2">
-          <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">{product.name}</p>
+          <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">{displayName(product)}</p>
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-[13px] font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>

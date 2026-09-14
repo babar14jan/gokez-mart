@@ -63,7 +63,7 @@ export default function ProductsPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [form, setForm] = useState({
-    name: '', categoryId: '', price: '', unit: '1 kg',
+    name: '', localName: '', categoryId: '', price: '', unit: '1 kg',
     discountPercent: '0', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
   });
@@ -194,7 +194,7 @@ export default function ProductsPage() {
   // ── Product CRUD ──────────────────────────────────────────────────────────
   const openCreate = useCallback(() => {
     setEditing(null);
-    setForm({ name: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', discountPercent: '0', description: '', availabilityStatus: 'available' });
+    setForm({ name: '', localName: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', discountPercent: '0', description: '', availabilityStatus: 'available' });
     setPhotoFile(null); setPhotoPreview(null);
     setShowModal(true);
   }, [categories]);
@@ -207,7 +207,7 @@ export default function ProductsPage() {
   const openEdit = (p: Product) => {
     setEditing(p);
     setForm({
-      name: p.name, categoryId: p.categoryId || '', price: String(p.price),
+      name: p.name, localName: (p as any).localName || '', categoryId: p.categoryId || '', price: String(p.price),
       unit: p.unit, discountPercent: String(p.discountPercent),
       description: p.description || '',
       availabilityStatus: p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock'),
@@ -646,6 +646,13 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name *</label>
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                  Hindi Name <span className="text-gray-400 font-normal">(in English)</span>
+                </label>
+                <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo, Pyaaz" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Category</label>

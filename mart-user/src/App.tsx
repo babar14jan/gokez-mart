@@ -187,7 +187,10 @@ export default function App() {
 
   const filteredProducts = products.filter(p => {
     const matchCat = activeCategoryId === 'all' || p.categoryId === activeCategoryId;
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase();
+    const matchSearch = !search ||
+      p.name.toLowerCase().includes(q) ||
+      (p.localName?.toLowerCase().includes(q) ?? false);
     return matchCat && matchSearch;
   });
 
