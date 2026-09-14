@@ -78,19 +78,18 @@ export default function ProductCard({ product }: ProductCardProps) {
           )}
         </div>
 
-        {/* Info */}
-        <div className="px-2.5 pt-2 pb-2.5 flex flex-col gap-0.5">
-          <p className="text-[13px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">{product.name}</p>
-          <p className="text-[11px] text-gray-400 dark:text-slate-500">{product.unit}</p>
-          <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
-            <span className="text-sm font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>
-            {savings > 0 && (
-              <span className="text-[10px] text-gray-400 dark:text-slate-500 line-through">₹{product.price}</span>
-            )}
+        {/* Info — compact */}
+        <div className="px-2 pt-1.5 pb-2">
+          <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">{product.name}</p>
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-baseline gap-1 flex-wrap">
+              <span className="text-[13px] font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>
+              {savings > 0 && (
+                <span className="text-[10px] text-gray-400 dark:text-slate-500 line-through">₹{product.price}</span>
+              )}
+            </div>
+            <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-md flex-shrink-0">{product.unit}</span>
           </div>
-          {savings > 0 && (
-            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Save ₹{savings}</span>
-          )}
         </div>
       </div>
 
