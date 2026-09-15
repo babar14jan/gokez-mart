@@ -338,8 +338,12 @@ export default function MorePage() {
             Support
           </a>
         </div>
-        <span className="text-[10px] text-gray-300 dark:text-slate-600">
-          A product of Gokez Technologies Pvt. Ltd. &copy; {new Date().getFullYear()}
+        <span className="text-[11px] text-gray-400 dark:text-slate-500">
+          A product of{' '}
+          <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
+            Gokez Technologies Pvt. Ltd.
+          </span>
+          {' '}&copy; {new Date().getFullYear()}
         </span>
       </div>
 

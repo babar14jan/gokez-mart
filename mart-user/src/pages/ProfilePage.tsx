@@ -393,7 +393,12 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
               Terms of Service
             </button>
           </div>
-          <span className="text-[10px] text-gray-300 dark:text-slate-600">&copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.</span>
+          <span className="text-[11px] text-gray-400 dark:text-slate-500">
+            &copy; {new Date().getFullYear()}{' '}
+            <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
+              Gokez Technologies Pvt. Ltd.
+            </span>
+          </span>
         </div>
 
       </div>

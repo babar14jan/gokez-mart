@@ -526,22 +526,25 @@ export default function App() {
           {/* Trust badges — 4 cards one row */}
           <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
-              { icon: 'Zap',       title: 'Quick',      desc: 'Delivered in 10-15 mins' },
-              { icon: 'Leaf',      title: 'Farm Fresh', desc: 'Sourced & delivered fresh' },
-              { icon: 'Tag',       title: 'Best Price', desc: 'Great deals every day' },
-              { icon: 'RotateCcw', title: 'Returns',    desc: 'Easy return at doorstep' },
+              { icon: 'Zap',       title: 'Quick',      desc: 'Delivered in 10-15 mins', bg: 'from-amber-400 to-orange-400',   iconColor: 'text-white' },
+              { icon: 'Leaf',      title: 'Farm Fresh', desc: 'Sourced & delivered fresh', bg: 'from-emerald-400 to-green-500', iconColor: 'text-white' },
+              { icon: 'Tag',       title: 'Best Price', desc: 'Great deals every day',     bg: 'from-blue-400 to-indigo-500',   iconColor: 'text-white' },
+              { icon: 'RotateCcw', title: 'Returns',    desc: 'Easy return at doorstep',   bg: 'from-violet-400 to-purple-500', iconColor: 'text-white' },
             ].map(b => {
               const icons: Record<string, React.ReactNode> = {
-                Zap:       <Zap       className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
-                Leaf:      <Leaf      className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
-                Tag:       <Tag       className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
-                RotateCcw: <RotateCcw className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
+                Zap:       <Zap       className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
+                Leaf:      <Leaf      className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
+                Tag:       <Tag       className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
+                RotateCcw: <RotateCcw className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
               };
               return (
-                <div key={b.title} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex flex-col items-center text-center p-3 sm:p-4 gap-1.5">
-                  {icons[b.icon]}
-                  <p className="text-[11px] sm:text-sm font-bold text-gray-900 dark:text-white leading-tight">{b.title}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 leading-snug">{b.desc}</p>
+                <div key={b.title} className={`bg-gradient-to-br ${b.bg} rounded-2xl flex flex-col items-center text-center p-3 sm:p-4 gap-1.5 shadow-md relative overflow-hidden`}>
+                  <div className="absolute inset-0 bg-black/10 rounded-2xl" />
+                  <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/25 flex items-center justify-center">
+                    {icons[b.icon]}
+                  </div>
+                  <p className="relative text-[12px] sm:text-sm font-bold text-white leading-tight drop-shadow-sm">{b.title}</p>
+                  <p className="relative text-[11px] sm:text-xs font-semibold text-white leading-snug drop-shadow-sm">{b.desc}</p>
                 </div>
               );
             })}
@@ -600,8 +603,12 @@ export default function App() {
             </div>
 
             {/* Copyright */}
-            <p className="text-center text-[10px] text-gray-500 dark:text-slate-500">
-              A product of Gokez Technologies Pvt. Ltd. &copy; {new Date().getFullYear()}
+            <p className="text-center text-[11px] text-gray-400 dark:text-slate-500">
+              A product of{' '}
+              <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
+                Gokez Technologies Pvt. Ltd.
+              </span>
+              {' '}&copy; {new Date().getFullYear()}
             </p>
           </div>
         </main>
