@@ -90,13 +90,14 @@ export class ProductService {
   }
 
   // Create global product + store_product entry
-  static async create(data: Partial<MartProduct> & { storeId: string }): Promise<MartProduct> {
+  static async create(data: Partial<MartProduct> & { storeId: string; isCatalog?: boolean }): Promise<MartProduct> {
     const id = uuidv4();
     await query(
-      `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, weight_options)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, weight_options, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [id, data.categoryId || null, data.name, data.localName || null, data.description || null,
-       data.photoUrl || null, data.weightOptions ? JSON.stringify(data.weightOptions) : null]
+       data.photoUrl || null, data.weightOptions ? JSON.stringify(data.weightOptions) : null,
+       data.isCatalog === true]
     );
     await query(
       `INSERT INTO mart_store_products
@@ -123,6 +124,7 @@ export class ProductService {
     if (data.description !== undefined){ globalFields.push(`description = $${gi++}`); globalParams.push(data.description); }
     if (data.photoUrl !== undefined)   { globalFields.push(`photo_url = $${gi++}`);   globalParams.push(data.photoUrl); }
     if (data.weightOptions !== undefined){ globalFields.push(`weight_options = $${gi++}`); globalParams.push(JSON.stringify(data.weightOptions)); }
+    if ((data as any).isCatalog !== undefined) { globalFields.push(`is_catalog = $${gi++}`); globalParams.push((data as any).isCatalog === true); }
     if (globalFields.length) {
       globalFields.push(`updated_at = NOW()`);
       globalParams.push(id);
@@ -162,7 +164,7 @@ export class ProductService {
     await query(`DELETE FROM mart_products WHERE id = $1`, [id]);
   }
 
-  // Assign an existing product to a store
+  // Assign an existing catalog product to a store
   static async assignToStore(productId: string, storeId: string, data: {
     price: number; unit: string; discountPercent?: number;
   }): Promise<void> {
@@ -174,5 +176,46 @@ export class ProductService {
          discount_percent = EXCLUDED.discount_percent, updated_at = NOW()`,
       [storeId, productId, data.price, data.unit, data.discountPercent || 0]
     );
+  }
+
+  // Bulk assign multiple catalog products to a store
+  static async bulkAssignToStore(storeId: string, items: Array<{
+    productId: string; price: number; unit: string; discountPercent?: number;
+  }>): Promise<void> {
+    for (const item of items) {
+      await this.assignToStore(item.productId, storeId, item);
+    }
+  }
+
+  // Get product IDs already assigned to a store (from catalog)
+  static async getStoreProductIds(storeId: string): Promise<string[]> {
+    const result = await query<{ product_id: string }>(
+      `SELECT sp.product_id FROM mart_store_products sp
+       JOIN mart_products p ON p.id = sp.product_id
+       WHERE sp.store_id = $1 AND p.is_catalog = true`,
+      [storeId]
+    );
+    return result.rows.map(r => r.product_id);
+  }
+
+  // Create catalog-only product (no store assignment)
+  static async createCatalogProduct(data: {
+    name: string; localName?: string; description?: string;
+    photoUrl?: string; categoryId?: string;
+  }): Promise<{ id: string; name: string }> {
+    const id = uuidv4();
+    const result = await query<{ id: string; name: string }>(
+      `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,true)
+       RETURNING id, name`,
+      [id, data.categoryId || null, data.name, data.localName || null,
+       data.description || null, data.photoUrl || null]
+    );
+    return result.rows[0];
+  }
+
+  // Update is_catalog flag on existing product
+  static async setCatalogFlag(id: string, isCatalog: boolean): Promise<void> {
+    await query(`UPDATE mart_products SET is_catalog = $1, updated_at = NOW() WHERE id = $2`, [isCatalog, id]);
   }
 }

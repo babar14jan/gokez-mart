@@ -133,6 +133,18 @@ export const complianceApi = {
     api.put(`/admin/compliance/grievances/${id}`, { response, status }),
 };
 
+// ── Catalog ────────────────────────────────────────────────────────────────────────────────
+export const catalogApi = {
+  getAll: (params?: { categoryId?: string; search?: string }) =>
+    api.get('/admin/catalog', { params }),
+  create: (data: { name: string; localName?: string; description?: string; photoUrl?: string; categoryId?: string }) =>
+    api.post('/admin/catalog', data),
+  update: (id: string, data: { name?: string; localName?: string; description?: string; photoUrl?: string; categoryId?: string }) =>
+    api.put(`/admin/catalog/${id}`, data),
+  delete: (id: string) => api.delete(`/admin/catalog/${id}`),
+  bulkAddToStore: (productIds: string[], storeId?: string) =>
+    api.post('/admin/products/bulk-from-catalog', { productIds }, { params: storeId ? { storeId } : {} }),
+};
 // ── Inventory ────────────────────────────────────────────────────────────────
 export const inventoryApi = {
   getAll:     (storeId?: string) => api.get('/admin/inventory', { params: storeId ? { storeId } : {} }),

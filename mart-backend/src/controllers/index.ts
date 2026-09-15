@@ -204,28 +204,88 @@ export const adminDeleteProduct = asyncHandler(async (req: AdminRequest, res: Re
 
 // ── Master catalog ────────────────────────────────────────────────────────────
 
+// Browse catalog — all authenticated roles
 export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { categoryId } = req.query;
+  const { categoryId, search } = req.query;
+  const conditions: string[] = ['p.is_catalog = true'];
+  const params: unknown[] = [];
+  let i = 1;
+  if (categoryId) { conditions.push(`p.category_id = $${i++}`); params.push(categoryId); }
+  if (search) { conditions.push(`p.name ILIKE $${i++}`); params.push(`%${search}%`); }
   const result = await query(
-    `SELECT p.id, p.name, p.description, p.photo_url as "photoUrl",
-            p.weight_options as "weightOptions", p.category_id as "categoryId",
+    `SELECT p.id, p.name, p.local_name as "localName", p.description,
+            p.photo_url as "photoUrl", p.category_id as "categoryId",
             c.name as "categoryName", c.icon as "categoryIcon"
      FROM mart_products p
      LEFT JOIN mart_categories c ON c.id = p.category_id
-     WHERE p.is_catalog = true
-     ${categoryId ? 'AND p.category_id = $1' : ''}
-     ORDER BY c.sort_order ASC, p.name ASC`,
-    categoryId ? [categoryId] : []
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY c.sort_order ASC NULLS LAST, p.name ASC`,
+    params
   );
   res.json({ success: true, data: result.rows });
 });
 
-export const adminAssignFromCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
+// Create catalog product — super_admin only (name + photo + category, no price/store)
+export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { name, localName, description, photoUrl, categoryId } = req.body;
+  if (!name?.trim()) { res.status(400).json({ success: false, error: 'name is required' }); return; }
+  const product = await ProductService.createCatalogProduct({ name: name.trim(), localName, description, photoUrl, categoryId });
+  res.status(201).json({ success: true, data: product });
+});
+
+// Update catalog product — super_admin only
+export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { name, localName, description, photoUrl, categoryId } = req.body;
+  const fields: string[] = [];
+  const params: unknown[] = [];
+  let i = 1;
+  if (name !== undefined)        { fields.push(`name = $${i++}`);        params.push(name); }
+  if (localName !== undefined)   { fields.push(`local_name = $${i++}`);  params.push(localName); }
+  if (description !== undefined) { fields.push(`description = $${i++}`); params.push(description); }
+  if (photoUrl !== undefined)    { fields.push(`photo_url = $${i++}`);   params.push(photoUrl); }
+  if (categoryId !== undefined)  { fields.push(`category_id = $${i++}`); params.push(categoryId || null); }
+  if (!fields.length) { res.status(400).json({ success: false, error: 'Nothing to update' }); return; }
+  fields.push(`updated_at = NOW()`);
+  params.push(req.params.id);
+  const result = await query(
+    `UPDATE mart_products SET ${fields.join(', ')} WHERE id = $${i} AND is_catalog = true
+     RETURNING id, name, local_name as "localName", description, photo_url as "photoUrl", category_id as "categoryId"`,
+    params
+  );
+  if (!result.rows[0]) { res.status(404).json({ success: false, error: 'Catalog product not found' }); return; }
+  res.json({ success: true, data: result.rows[0] });
+});
+
+// Delete catalog product — super_admin only, blocked if used in any store
+export const adminDeleteCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const check = await query(
+    `SELECT COUNT(*) as cnt FROM mart_store_products WHERE product_id = $1`, [req.params.id]
+  );
+  if (parseInt(check.rows[0].cnt) > 0) {
+    res.status(400).json({ success: false, error: 'Cannot delete — product is used in one or more stores' });
+    return;
+  }
+  await query(`DELETE FROM mart_products WHERE id = $1 AND is_catalog = true`, [req.params.id]);
+  res.json({ success: true, message: 'Catalog product deleted' });
+});
+
+// Bulk add from catalog — creates store products with name+photo only, hidden by default
+export const adminBulkAddFromCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = resolveStoreId(req);
-  const { price, unit, discountPercent } = req.body;
-  if (!price || !unit) { res.status(400).json({ success: false, error: 'price and unit are required' }); return; }
-  await ProductService.assignToStore(req.params.id, storeId, { price: parseFloat(price), unit, discountPercent: parseFloat(discountPercent) || 0 });
-  res.json({ success: true, message: 'Product assigned to store' });
+  const { productIds } = req.body; // array of catalog product IDs
+  if (!Array.isArray(productIds) || productIds.length === 0) {
+    res.status(400).json({ success: false, error: 'productIds array required' }); return;
+  }
+  // For each catalog product, create a store_product entry with placeholder price=0, hidden
+  for (const productId of productIds) {
+    await query(
+      `INSERT INTO mart_store_products (store_id, product_id, price, unit, discount_percent, availability_status, is_available)
+       VALUES ($1, $2, 0, '1 kg', 0, 'hidden', false)
+       ON CONFLICT (store_id, product_id) DO NOTHING`,
+      [storeId, productId]
+    );
+  }
+  res.json({ success: true, message: `${productIds.length} product(s) added to store. Set price and availability to make them live.` });
 });
 
 // ── Admin category controllers ────────────────────────────────────────────────

@@ -20,7 +20,7 @@ const NAV_ALL = [
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
-  { label: 'Product Catalog',    href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'My Deliveries',      href: '/delivery',            icon: ClipboardList,   roles: ['delivery_staff', 'staff'] },
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
   { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
@@ -129,7 +129,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/profile': 'My Profile', '/change-password': 'Change Password',
     '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Applications',
-    '/catalog': 'Product Catalog',
+    '/catalog': 'Catalog',
     '/team': 'My Team',
     '/delivery': 'My Deliveries',
   };
