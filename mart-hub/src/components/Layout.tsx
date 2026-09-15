@@ -170,13 +170,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         <SidebarLinks />
 
-        {/* Powered by */}
+        {/* Footer */}
         <div className="flex-shrink-0 border-t border-gray-100 dark:border-slate-700 px-4 py-3">
           {collapsed ? (
             <div className="flex justify-center"><Sparkles className="w-3.5 h-3.5 text-emerald-400" /></div>
           ) : (
             <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-              Powered by{' '}
+              A product of{' '}
               <span className="font-semibold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent">
                 Gokez Technologies Pvt. Ltd.
               </span>

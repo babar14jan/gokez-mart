@@ -601,7 +601,7 @@ export default function App() {
 
             {/* Copyright */}
             <p className="text-center text-[10px] text-gray-500 dark:text-slate-500">
-              &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
+              A product of Gokez Technologies Pvt. Ltd. &copy; {new Date().getFullYear()}
             </p>
           </div>
         </main>
