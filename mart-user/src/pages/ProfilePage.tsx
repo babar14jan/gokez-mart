@@ -381,7 +381,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
         </div>
 
         {/* Footer links */}
-        <div className="flex flex-col items-center gap-1.5 pb-4">
+        <div className="flex flex-col items-center gap-1.5 pb-28">
           <div className="flex items-center justify-center gap-3">
             <button onClick={() => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); }}
               className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
