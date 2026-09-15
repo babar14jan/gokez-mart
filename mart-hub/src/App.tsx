@@ -48,13 +48,14 @@ function ProtectedRoute({ children, path }: { children: React.ReactNode; path: s
 export default function App() {
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
-  // Re-subscribe to push on app load if permission already granted
+  // Re-subscribe to push only when authenticated and permission already granted
   useEffect(() => {
-    if (Notification.permission === 'granted') {
+    if (isAuthenticated && Notification.permission === 'granted') {
       subscribeAdminToPush().catch(() => {});
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);

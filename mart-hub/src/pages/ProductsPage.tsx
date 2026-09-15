@@ -2,10 +2,11 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   Plus, Pencil, Trash2, Loader2, X, Package,
   Percent, GripVertical, Check, History, ArrowDownCircle,
-  Camera, ChevronDown, SlidersHorizontal, ArrowUpDown,
+  Camera, ChevronDown, SlidersHorizontal, ArrowUpDown, BookOpen, Search,
 } from 'lucide-react';
-import { productsApi, categoriesApi, settingsApi, inventoryApi } from '../services/api';
+import { productsApi, categoriesApi, settingsApi, inventoryApi, catalogApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
+import { useAuthStore } from '../store/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast, ToastContainer } from '../hooks/useToast';
 import { useHeaderAction } from '../store/headerActionStore';
@@ -53,6 +54,8 @@ function stockStatus(p: Product): 'untracked' | 'out' | 'low' | 'ok' {
 }
 
 export default function ProductsPage() {
+  const { role } = useAuthStore();
+  const isSuperAdmin = role === 'super_admin';
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +69,7 @@ export default function ProductsPage() {
     name: '', localName: '', categoryId: '', price: '', unit: '1 kg',
     discountPercent: '0', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
+    isCatalog: false,
   });
 
   // Filter + Sort (replaces tabs + sortModes)
@@ -102,6 +106,53 @@ export default function ProductsPage() {
   const storeId = getActiveStoreId();
   const { setHeaderAction, clearHeaderAction } = useHeaderAction();
   const { toasts, show: showToast } = useToast();
+
+  // Catalog browser state
+  interface CatalogItem { id: string; name: string; localName: string | null; photoUrl: string | null; categoryId: string | null; categoryName: string | null; categoryIcon: string | null; }
+  const [showCatalogBrowser, setShowCatalogBrowser] = useState(false);
+  const [catalogBrowserMode, setCatalogBrowserMode] = useState<'single' | 'bulk'>('single');
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogCat, setCatalogCat] = useState('all');
+  const [catalogSelected, setCatalogSelected] = useState<Set<string>>(new Set());
+  const [bulkAdding, setBulkAdding] = useState(false);
+
+  const openCatalogBrowser = async (mode: 'single' | 'bulk') => {
+    setCatalogBrowserMode(mode);
+    setCatalogSearch(''); setCatalogCat('all'); setCatalogSelected(new Set());
+    setShowCatalogBrowser(true);
+    if (catalogItems.length === 0) {
+      setCatalogLoading(true);
+      try { const res = await catalogApi.getAll(); setCatalogItems(res.data.data || []); }
+      catch {} finally { setCatalogLoading(false); }
+    }
+  };
+
+  const catalogFiltered = useMemo(() => catalogItems.filter(p => {
+    const matchCat = catalogCat === 'all' || p.categoryId === catalogCat;
+    const matchSearch = !catalogSearch || p.name.toLowerCase().includes(catalogSearch.toLowerCase()) || (p.localName || '').toLowerCase().includes(catalogSearch.toLowerCase());
+    return matchCat && matchSearch;
+  }), [catalogItems, catalogCat, catalogSearch]);
+
+  const pickFromCatalog = (item: CatalogItem) => {
+    setForm(f => ({ ...f, name: item.name, localName: item.localName || '' }));
+    setPhotoPreview(item.photoUrl); setPhotoFile(null);
+    setShowCatalogBrowser(false);
+  };
+
+  const handleBulkAddFromCatalog = async () => {
+    if (catalogSelected.size === 0) return;
+    setBulkAdding(true);
+    try {
+      await catalogApi.bulkAddToStore([...catalogSelected], storeId);
+      setShowCatalogBrowser(false);
+      showToast(`${catalogSelected.size} product(s) added — set price & availability to make them live`);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Failed to add products');
+    } finally { setBulkAdding(false); }
+  };
 
   const load = async () => {
     const [p, c, s] = await Promise.all([
@@ -194,7 +245,7 @@ export default function ProductsPage() {
   // ── Product CRUD ──────────────────────────────────────────────────────────
   const openCreate = useCallback(() => {
     setEditing(null);
-    setForm({ name: '', localName: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', discountPercent: '0', description: '', availabilityStatus: 'available' });
+    setForm({ name: '', localName: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', discountPercent: '0', description: '', availabilityStatus: 'available', isCatalog: false });
     setPhotoFile(null); setPhotoPreview(null);
     setShowModal(true);
   }, [categories]);
@@ -211,6 +262,7 @@ export default function ProductsPage() {
       unit: p.unit, discountPercent: String(p.discountPercent),
       description: p.description || '',
       availabilityStatus: p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock'),
+      isCatalog: (p as any).isCatalog || false,
     });
     setPhotoFile(null); setPhotoPreview(p.photoUrl);
     setLastRestock(null);
@@ -239,7 +291,7 @@ export default function ProductsPage() {
           photoUrl = editing?.photoUrl || null;
         }
       }
-      const data = { ...form, price: parseFloat(form.price), discountPercent: parseFloat(form.discountPercent), photoUrl, isAvailable: form.availabilityStatus === 'available' };
+      const data = { ...form, price: parseFloat(form.price), discountPercent: parseFloat(form.discountPercent), photoUrl, isAvailable: form.availabilityStatus === 'available', isCatalog: isSuperAdmin ? form.isCatalog : undefined };
       if (editing) await productsApi.update(editing.id, { ...data, storeId });
       else await productsApi.create({ ...data, storeId });
       setShowModal(false); await load();
@@ -335,6 +387,9 @@ export default function ProductsPage() {
             )}
             {p.categoryName && (
               <span className="text-[10px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{p.categoryName}</span>
+            )}
+            {isSuperAdmin && (p as any).isCatalog && (
+              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded-full">Catalog</span>
             )}
           </div>
         </div>
@@ -476,6 +531,12 @@ export default function ProductsPage() {
         )}
 
         <div className="flex-1" />
+
+        {/* Bulk Add from Catalog — desktop only */}
+        <button onClick={() => openCatalogBrowser('bulk')}
+          className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 text-xs font-semibold rounded-xl transition-colors">
+          <BookOpen className="w-3.5 h-3.5" /> Bulk from Catalog
+        </button>
 
         {/* Add Product — desktop only */}
         <button onClick={openCreate}
@@ -644,7 +705,15 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name *</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Name *</label>
+                  {!editing && (
+                    <button type="button" onClick={() => openCatalogBrowser('single')}
+                      className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                      <BookOpen className="w-3 h-3" /> Browse Catalog
+                    </button>
+                  )}
+                </div>
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" />
               </div>
 
@@ -698,6 +767,26 @@ export default function ProductsPage() {
                   <option value="hidden">👁 Hide</option>
                 </select>
               </div>
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, isCatalog: !f.isCatalog }))}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all ${
+                    form.isCatalog
+                      ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+                      : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700'
+                  }`}>
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-gray-900 dark:text-white">Add to Master Catalog</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">All stores can browse and import this product</p>
+                  </div>
+                  <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                    form.isCatalog ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 dark:border-slate-500'
+                  }`}>
+                    {form.isCatalog && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                </button>
+              )}
             </div>
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">Cancel</button>
@@ -706,6 +795,108 @@ export default function ProductsPage() {
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Product'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Catalog Browser Modal ── */}
+      {showCatalogBrowser && (
+        <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !bulkAdding && setShowCatalogBrowser(false)} />
+          <div className="relative bg-white dark:bg-slate-800 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  {catalogBrowserMode === 'bulk' ? 'Bulk Add from Catalog' : 'Browse Catalog'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {catalogBrowserMode === 'bulk' ? 'Select products to add — set price & availability later' : 'Pick a product to auto-fill name & photo'}
+                </p>
+              </div>
+              <button onClick={() => setShowCatalogBrowser(false)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Search + category filter */}
+            <div className="px-4 pt-3 pb-2 space-y-2 flex-shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input type="text" value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)}
+                  placeholder="Search..." autoFocus
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                <button onClick={() => setCatalogCat('all')}
+                  className={`flex-shrink-0 px-3 py-1 rounded-xl text-xs font-semibold transition-all ${catalogCat === 'all' ? 'bg-emerald-500 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400'}`}>
+                  All
+                </button>
+                {categories.map(cat => (
+                  <button key={cat.id} onClick={() => setCatalogCat(cat.id)}
+                    className={`flex-shrink-0 px-3 py-1 rounded-xl text-xs font-semibold transition-all ${catalogCat === cat.id ? 'bg-emerald-500 text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400'}`}>
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Product list */}
+            <div className="overflow-y-auto flex-1 px-4 pb-4">
+              {catalogLoading ? (
+                <div className="flex justify-center py-12"><div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
+              ) : catalogFiltered.length === 0 ? (
+                <div className="text-center py-12 text-gray-400"><Package className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm">No products found.</p></div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {catalogFiltered.map(item => {
+                    const isSelected = catalogSelected.has(item.id);
+                    return (
+                      <div key={item.id}
+                        onClick={() => {
+                          if (catalogBrowserMode === 'single') { pickFromCatalog(item); return; }
+                          setCatalogSelected(s => { const n = new Set(s); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n; });
+                        }}
+                        className={`relative rounded-xl border overflow-hidden cursor-pointer transition-all ${
+                          isSelected ? 'border-indigo-400 ring-2 ring-indigo-300 dark:ring-indigo-700' : 'border-gray-100 dark:border-slate-700 hover:border-emerald-300'
+                        } bg-white dark:bg-slate-700`}>
+                        <div className="aspect-square bg-gray-50 dark:bg-slate-600">
+                          {item.photoUrl
+                            ? <img src={item.photoUrl} alt={item.name} className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-2xl">🥦</div>
+                          }
+                          {catalogBrowserMode === 'bulk' && (
+                            <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                              isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white/80 border-gray-300'
+                            }`}>
+                              {isSelected && <Check className="w-3 h-3 text-white" />}
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-1.5">
+                          <p className="text-[11px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight">{item.name}</p>
+                          {item.localName && <p className="text-[10px] text-gray-400 truncate">{item.localName}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Bulk mode footer */}
+            {catalogBrowserMode === 'bulk' && (
+              <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0 flex gap-3">
+                <button onClick={() => setShowCatalogBrowser(false)} disabled={bulkAdding}
+                  className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl disabled:opacity-50">
+                  Cancel
+                </button>
+                <button onClick={handleBulkAddFromCatalog} disabled={bulkAdding || catalogSelected.size === 0}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+                  {bulkAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {bulkAdding ? 'Adding...' : `Add ${catalogSelected.size || ''} product${catalogSelected.size !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
