@@ -524,7 +524,7 @@ export default function App() {
           )}
 
           {/* Trust badges — 4 cards one row */}
-          <div className="mt-8 grid grid-cols-4 gap-2">
+          <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { icon: 'Zap',       title: 'Quick',      desc: 'Delivered in 10-15 mins' },
               { icon: 'Leaf',      title: 'Farm Fresh', desc: 'Sourced & delivered fresh' },
@@ -538,10 +538,10 @@ export default function App() {
                 RotateCcw: <RotateCcw className="w-7 h-7 sm:w-9 sm:h-9 text-emerald-500" />,
               };
               return (
-                <div key={b.title} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex flex-col items-center text-center p-2.5 sm:p-4 gap-1.5">
+                <div key={b.title} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex flex-col items-center text-center p-3 sm:p-4 gap-1.5">
                   {icons[b.icon]}
                   <p className="text-[11px] sm:text-sm font-bold text-gray-900 dark:text-white leading-tight">{b.title}</p>
-                  <p className="text-[9px] sm:text-xs text-gray-400 dark:text-slate-500 leading-snug hidden sm:block">{b.desc}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 leading-snug">{b.desc}</p>
                 </div>
               );
             })}
@@ -556,19 +556,26 @@ export default function App() {
               <div className="flex items-center justify-center gap-4 flex-wrap">
                 {settings.support_phone && (
                   <a href={`tel:${settings.support_phone}`}
-                    className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
-                    <span className="text-sm">📞</span> {settings.support_phone}
+                    className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.47 11.47 0 003.58.57 1 1 0 011 1V21a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1 11.47 11.47 0 00.57 3.58 1 1 0 01-.25 1.01l-2.2 2.2z"/>
+                    </svg>
+                    {settings.support_phone}
                   </a>
                 )}
                 {settings.whatsapp_number && (
                   <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
-                    <span className="text-sm">💬</span> WhatsApp
+                    className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 hover:text-green-600 transition-colors">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-4 h-4" />
+                    WhatsApp
                   </a>
                 )}
                 {settings.store_address && (
-                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500">
-                    <span className="text-sm">📍</span> {settings.store_address}
+                  <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1112 6a2.5 2.5 0 010 5.5z"/>
+                    </svg>
+                    {settings.store_address}
                   </span>
                 )}
               </div>

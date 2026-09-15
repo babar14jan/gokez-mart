@@ -106,9 +106,14 @@ export default function MorePage() {
     setEnablingNotif(true);
     try {
       const ok = await subscribeAdminToPush();
-      setNotifPermission(ok ? 'granted' : 'denied');
+      // Re-read actual browser permission state after the attempt
+      if ('Notification' in window) setNotifPermission(Notification.permission as any);
       setNotifSubscribed(ok);
-    } finally { setEnablingNotif(false); }
+      if (!ok && Notification.permission === 'denied') {
+        alert('Notifications are blocked. Please enable them in your browser/device settings, then try again.');
+      }
+    } catch { setNotifSubscribed(false); }
+    finally { setEnablingNotif(false); }
   };
 
   const handleDisableNotifications = async () => {
@@ -139,7 +144,7 @@ export default function MorePage() {
       { label: 'Analytics',          href: '/analytics',          icon: BarChart3 },
       { label: 'Customers',          href: '/customers',          icon: Users },
       { label: 'Categories',         href: '/categories',         icon: Tag },
-      { label: 'Product Catalog',    href: '/catalog',            icon: Package },
+      { label: 'Catalog',            href: '/catalog',            icon: Package },
       { label: 'Store Applications', href: '/store-applications', icon: Store },
       { label: 'Stores',             href: '/stores',             icon: LayoutDashboard },
       { label: 'Users',              href: '/users',              icon: Users },
@@ -150,19 +155,19 @@ export default function MorePage() {
       { label: 'My Team',         href: '/team',      icon: Users },
       { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
       { label: 'Customers',       href: '/customers', icon: Users },
-      { label: 'Product Catalog', href: '/catalog',   icon: Package },
+      { label: 'Catalog',         href: '/catalog',   icon: Package },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     store_manager: [
       { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
       { label: 'Customers',       href: '/customers', icon: Users },
-      { label: 'Product Catalog', href: '/catalog',   icon: Package },
+      { label: 'Catalog',         href: '/catalog',   icon: Package },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     sales_manager: [
       { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
       { label: 'Customers',       href: '/customers', icon: Users },
-      { label: 'Product Catalog', href: '/catalog',   icon: Package },
+      { label: 'Catalog',         href: '/catalog',   icon: Package },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     delivery_staff: [],
@@ -280,10 +285,14 @@ export default function MorePage() {
           ) : notifPermission === 'unsupported' ? (
             <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
           ) : notifPermission === 'granted' ? (
-            <Toggle
-              checked={notifSubscribed}
-              onChange={notifSubscribed ? handleDisableNotifications : handleEnableNotifications}
-            />
+            enablingNotif ? (
+              <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+            ) : (
+              <Toggle
+                checked={notifSubscribed}
+                onChange={notifSubscribed ? handleDisableNotifications : handleEnableNotifications}
+              />
+            )
           ) : (
             <button onClick={handleEnableNotifications} disabled={enablingNotif}
               className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 disabled:opacity-50 transition-colors">
