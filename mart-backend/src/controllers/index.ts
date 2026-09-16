@@ -471,6 +471,7 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
     store_closed:      '😔 Sorry — our store had to close unexpectedly. You will not be charged. Please reorder.',
     out_of_stock:      '😔 Sorry — an item became unavailable after dispatch. You will not be charged. Please reorder.',
     technical_issue:   '😔 Sorry — a technical issue prevented delivery. You will not be charged. Please reorder.',
+    outside_area:      '😔 Sorry — your delivery address is currently outside our delivery zone. You will not be charged. We are expanding soon and will be in your area! 🌱',
     other:             '😔 Sorry — your order had to be cancelled by our team. You will not be charged. Please reorder.',
   };
   if (ord.customer_id) {
