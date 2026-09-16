@@ -86,7 +86,7 @@ export default function CategoriesPage() {
       </div>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         {categories.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 dark:text-slate-500"><Tag className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">No categories yet.</p></div>
+          <div className="text-center py-16 text-gray-500 dark:text-slate-400"><Tag className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">No categories yet.</p></div>
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-slate-700">
             {categories.map(c => (
@@ -96,11 +96,11 @@ export default function CategoriesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{c.name}</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500">{c.productCount} products · /{c.slug}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{c.productCount} products · /{c.slug}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => setConfirmDeleteId(c.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => setConfirmDeleteId(c.id)} className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
             ))}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CheckCircle, ArrowRight, Loader2, Phone, MapPin, User, MessageSquare, Store } from 'lucide-react';
 import { api } from '../services/api';
 
-const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
+const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
 
 const BENEFITS = [
   { icon: '📱', title: 'Your store on every phone', sub: 'Customers order from you without leaving home' },
@@ -87,7 +87,7 @@ export default function ApplyPage() {
             <div key={i} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
               <span className="text-2xl">{b.icon}</span>
               <p className="text-xs font-bold text-gray-900 dark:text-white mt-2 leading-tight">{b.title}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{b.sub}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">{b.sub}</p>
             </div>
           ))}
         </div>
@@ -96,7 +96,7 @@ export default function ApplyPage() {
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-50 dark:border-slate-700">
             <h2 className="text-base font-bold text-gray-900 dark:text-white">Apply to join</h2>
-            <p className="text-xs text-gray-400 mt-0.5">We'll review and contact you within 2-3 business days</p>
+            <p className="text-xs text-gray-500 mt-0.5">We'll review and contact you within 2-3 business days</p>
           </div>
 
           <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
@@ -148,7 +148,7 @@ export default function ApplyPage() {
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</> : <>Submit Application <ArrowRight className="w-4 h-4" /></>}
             </button>
 
-            <p className="text-[10px] text-gray-400 text-center">
+            <p className="text-[10px] text-gray-500 text-center">
               By applying you agree to our{' '}
               <a href="https://gokez.com" target="_blank" rel="noopener noreferrer" className="underline">Terms</a>.
               We'll never share your information.
@@ -158,7 +158,7 @@ export default function ApplyPage() {
 
         {/* Already a partner */}
         <div className="text-center pb-8">
-          <p className="text-xs text-gray-400">Already a store partner?{' '}
+          <p className="text-xs text-gray-500">Already a store partner?{' '}
             <a href="/login" className="text-emerald-600 font-semibold hover:underline">Sign in to Gokez Hub →</a>
           </p>
         </div>

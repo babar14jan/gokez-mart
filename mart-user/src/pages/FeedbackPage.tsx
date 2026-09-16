@@ -61,7 +61,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
             {/* Star rating */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5 text-center">
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">How was your experience?</p>
-              <p className="text-xs text-gray-400 dark:text-slate-500 mb-4">Tap a star to rate</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Tap a star to rate</p>
               <div className="flex items-center justify-center gap-2 mb-2">
                 {[1,2,3,4,5].map(i => (
                   <button key={i}
@@ -96,7 +96,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
                         : 'border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600'
                     }`}>
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">{cat.label}</span>
-                    <span className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{cat.desc}</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">{cat.desc}</span>
                   </button>
                 ))}
               </div>
@@ -104,13 +104,13 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
 
             {/* Message */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-5">
-              <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">Tell us more <span className="text-gray-400 font-normal text-xs">(optional)</span></p>
+              <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">Tell us more <span className="text-gray-500 font-normal text-xs">(optional)</span></p>
               <textarea
                 value={message}
                 onChange={e => setMessage(e.target.value)}
                 placeholder="Share your experience in detail..."
                 rows={3}
-                className="w-full mt-2 px-3 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 resize-none transition-all"
+                className="w-full mt-2 px-3 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 resize-none transition-all"
               />
             </div>
 

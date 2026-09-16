@@ -51,7 +51,7 @@ export default function GrievancePage() {
 
         {/* Submit form */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
-          <p className="text-xs text-gray-400 dark:text-slate-500 mb-4">
+          <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
             Under the DPDP Act 2023, you have the right to raise a grievance about how your data is handled. We will respond within 30 days.
           </p>
           {submitted && <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs px-3 py-2 rounded-xl mb-3">✓ Grievance submitted successfully.</div>}
@@ -75,7 +75,7 @@ export default function GrievancePage() {
         {/* Past grievances */}
         {!loading && grievances.length > 0 && (
           <>
-            <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Past Grievances</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-1">Past Grievances</p>
             <div className="space-y-2">
               {grievances.map(g => (
                 <div key={g.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
@@ -90,7 +90,7 @@ export default function GrievancePage() {
                       <p className="text-xs text-gray-700 dark:text-slate-300">{g.response}</p>
                     </div>
                   )}
-                  <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-2">{new Date(g.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-2">{new Date(g.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                 </div>
               ))}
             </div>

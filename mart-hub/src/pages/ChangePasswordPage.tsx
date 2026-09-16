@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { api } from '../services/api';
 
-const inp = (extra = '') => `w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 text-gray-900 dark:text-white placeholder:text-gray-400 transition-all pr-11 ${extra}`;
+const inp = (extra = '') => `w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 text-gray-900 dark:text-white placeholder:text-gray-500 transition-all pr-11 ${extra}`;
 
 export default function ChangePasswordPage() {
   const [current, setCurrent] = useState('');
@@ -36,7 +36,7 @@ export default function ChangePasswordPage() {
       <div className="page-card">
         <div className="page-card-header">
           <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <KeyRound className="w-4 h-4 text-gray-500 dark:text-slate-400" />
             <p className="page-card-title">Update Password</p>
           </div>
         </div>
@@ -50,7 +50,7 @@ export default function ChangePasswordPage() {
               <input type={showCurrent ? 'text' : 'password'} value={current} onChange={e => setCurrent(e.target.value)}
                 className={inp()} placeholder="Enter current password" required />
               <button type="button" onClick={() => setShowCurrent(p => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-400">
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 dark:text-slate-400">
                 {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
@@ -62,7 +62,7 @@ export default function ChangePasswordPage() {
               <input type={showNew ? 'text' : 'password'} value={newPass} onChange={e => setNewPass(e.target.value)}
                 className={inp()} placeholder="Min. 8 characters" required />
               <button type="button" onClick={() => setShowNew(p => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-400">
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 dark:text-slate-400">
                 {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
@@ -71,7 +71,7 @@ export default function ChangePasswordPage() {
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Confirm New Password</label>
             <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-              className={`w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 text-gray-900 dark:text-white placeholder:text-gray-400 transition-all ${confirm && confirm !== newPass ? 'border-red-300 dark:border-red-700' : confirm && confirm === newPass ? 'border-emerald-300 dark:border-emerald-700' : 'border-gray-200 dark:border-slate-600'}`}
+              className={`w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 text-gray-900 dark:text-white placeholder:text-gray-500 transition-all ${confirm && confirm !== newPass ? 'border-red-300 dark:border-red-700' : confirm && confirm === newPass ? 'border-emerald-300 dark:border-emerald-700' : 'border-gray-200 dark:border-slate-600'}`}
               placeholder="Re-enter new password" required />
             {confirm && confirm === newPass && <p className="text-[11px] text-emerald-600 mt-1 font-medium">✓ Passwords match</p>}
           </div>

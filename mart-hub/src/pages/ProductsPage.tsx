@@ -253,7 +253,7 @@ export default function ProductsPage() {
   }, [categories]);
 
   useEffect(() => {
-    setHeaderAction('Add Product', openCreate);
+    setHeaderAction('+ Product', openCreate);
     return () => clearHeaderAction();
   }, [openCreate]);
 
@@ -388,7 +388,7 @@ export default function ProductsPage() {
               </span>
             )}
             {p.categoryName && (
-              <span className="text-[10px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{p.categoryName}</span>
+              <span className="text-[10px] text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{p.categoryName}</span>
             )}
             {isSuperAdmin && (p as any).isCatalog && (
               <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded-full">Catalog</span>
@@ -405,7 +405,7 @@ export default function ProductsPage() {
                 </p>
               </>
             ) : (
-              <p className="text-sm text-gray-300 dark:text-slate-600">—</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
             )}
           </div>
         )}
@@ -419,7 +419,7 @@ export default function ProductsPage() {
               <option value="hidden">👁 Hide</option>
             </select>
             <button onClick={() => openEdit(p)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
+              className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
               <Pencil className="w-4 h-4" />
             </button>
           </div>
@@ -431,7 +431,7 @@ export default function ProductsPage() {
   return (
     <div className="space-y-4" onClick={() => { setShowFilterMenu(false); setShowSortMenu(false); }}>
 
-      {/* Header: Filter | Sort | Reorder | Add Product (desktop) */}
+      {/* Header: Filter | Sort | Reorder | + Product (desktop) */}
       <div className="flex items-center gap-2">
 
         {/* Filter dropdown */}
@@ -454,7 +454,7 @@ export default function ProductsPage() {
             <div className="absolute left-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-30 overflow-hidden">
               {/* Status section */}
               <div className="px-3 pt-3 pb-1">
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Status</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Status</p>
                 {(['all', 'available', 'out_of_stock', 'low_stock', 'hidden'] as FilterStatus[]).map(s => (
                   <button key={s} onClick={() => { setFilterStatus(s); setShowFilterMenu(false); }}
                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -467,7 +467,7 @@ export default function ProductsPage() {
               </div>
               {/* Category section */}
               <div className="px-3 pt-2 pb-3 border-t border-gray-100 dark:border-slate-700 mt-1">
-                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-1.5">Category</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Category</p>
                 {[{ id: 'all', name: 'All Categories' }, ...categories, { id: '__uncat__', name: 'Uncategorised' }].map(c => (
                   <button key={c.id} onClick={() => { setFilterCategory(c.id); setShowFilterMenu(false); }}
                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -541,10 +541,10 @@ export default function ProductsPage() {
           <BookOpen className="w-3.5 h-3.5" /> Bulk from Catalog
         </button>
 
-        {/* Add Product — desktop only */}
+        {/* + Product — desktop only */}
         <button onClick={openCreate}
           className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
-          <Plus className="w-3.5 h-3.5" /> Add Product
+          <Plus className="w-3.5 h-3.5" /> Product
         </button>
       </div>
 
@@ -564,7 +564,7 @@ export default function ProductsPage() {
       {/* Product list */}
       <div className={`page-card ${reorderMode ? 'pb-24 sm:pb-0' : ''}`}>
         {products.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-gray-500">
             <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No products yet. Add your first product.</p>
           </div>
@@ -573,7 +573,7 @@ export default function ProductsPage() {
             {reorderList.map((p, i) => <ProductRow key={p.id} p={p} index={i} />)}
           </div>
         ) : displayProducts.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
+          <div className="text-center py-12 text-gray-500">
             <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No products match this filter.</p>
           </div>
@@ -645,7 +645,7 @@ export default function ProductsPage() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-gray-900 dark:text-white">{editing ? 'Edit Product' : 'Add Product'}</h2>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white">{editing ? 'Edit Product' : '+ Product'}</h2>
                 {editing && (
                   <button onClick={() => setConfirmDeleteProduct(editing)}
                     className="ml-6 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-800 transition-colors">
@@ -675,8 +675,8 @@ export default function ProductsPage() {
                     </>
                   ) : (
                     <label className="w-20 h-20 rounded-2xl bg-gray-100 dark:bg-slate-700 border-2 border-dashed border-gray-300 dark:border-slate-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
-                      <Camera className="w-6 h-6 text-gray-400" />
-                      <span className="text-[10px] text-gray-400">Add photo</span>
+                      <Camera className="w-6 h-6 text-gray-500" />
+                      <span className="text-[10px] text-gray-500">Add photo</span>
                       <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
                     </label>
                   )}
@@ -739,7 +739,7 @@ export default function ProductsPage() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
-                  Hindi Name <span className="text-gray-400 font-normal">(in English)</span>
+                  Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
                 </label>
                 <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo, Pyaaz" />
               </div>
@@ -798,7 +798,7 @@ export default function ProductsPage() {
                   }`}>
                   <div className="text-left">
                     <p className="text-xs font-bold text-gray-900 dark:text-white">Add to Master Catalog</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">All stores can browse and import this product</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">All stores can browse and import this product</p>
                   </div>
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
                     form.isCatalog ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 dark:border-slate-500'
@@ -829,19 +829,19 @@ export default function ProductsPage() {
                 <p className="text-sm font-bold text-gray-900 dark:text-white">
                   {catalogBrowserMode === 'bulk' ? 'Bulk Add from Catalog' : 'Browse Catalog'}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-500 mt-0.5">
                   {catalogBrowserMode === 'bulk' ? 'Select products to add — set price & availability later' : 'Pick a product to auto-fill name & photo'}
                 </p>
               </div>
               <button onClick={() => setShowCatalogBrowser(false)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
 
             {/* Search + category filter */}
             <div className="px-4 pt-3 pb-2 space-y-2 flex-shrink-0">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input type="text" value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)}
                   placeholder="Search..." autoFocus
                   className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
@@ -865,7 +865,7 @@ export default function ProductsPage() {
               {catalogLoading ? (
                 <div className="flex justify-center py-12"><div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
               ) : catalogFiltered.length === 0 ? (
-                <div className="text-center py-12 text-gray-400"><Package className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm">No products found.</p></div>
+                <div className="text-center py-12 text-gray-500"><Package className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm">No products found.</p></div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {catalogFiltered.map(item => {
@@ -894,7 +894,7 @@ export default function ProductsPage() {
                         </div>
                         <div className="p-1.5">
                           <p className="text-[11px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight">{item.name}</p>
-                          {item.localName && <p className="text-[10px] text-gray-400 truncate">{item.localName}</p>}
+                          {item.localName && <p className="text-[10px] text-gray-500 truncate">{item.localName}</p>}
                         </div>
                       </div>
                     );
@@ -932,7 +932,7 @@ export default function ProductsPage() {
                 <p className="text-xs text-gray-500 dark:text-slate-400">{restocking.name} · {restocking.unit} · <span className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{restocking.price}</span></p>
               </div>
               <button onClick={() => setRestocking(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
             <div className="bg-gray-50 dark:bg-slate-700 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
@@ -991,7 +991,7 @@ export default function ProductsPage() {
                 <p className="text-xs text-gray-500 dark:text-slate-400 truncate max-w-[260px]">{historyProduct.name}</p>
               </div>
               <button onClick={() => setHistoryProduct(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
             <div className="overflow-y-auto flex-1 p-4">
@@ -1000,7 +1000,7 @@ export default function ProductsPage() {
                   <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : history.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
+                <div className="text-center py-10 text-gray-500">
                   <History className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">No history yet.</p>
                 </div>
@@ -1022,11 +1022,11 @@ export default function ProductsPage() {
                               {isPos ? '+' : ''}{entry.changeQty}
                             </span>
                           </div>
-                          {entry.orderNumber && <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">Order #{entry.orderNumber}</p>}
-                          {entry.note && <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">{entry.note}</p>}
+                          {entry.orderNumber && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">Order #{entry.orderNumber}</p>}
+                          {entry.note && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{entry.note}</p>}
                           <div className="flex items-center justify-between mt-1">
-                            <span className="text-[10px] text-gray-400 dark:text-slate-500">{entry.createdByName || entry.createdByUsername || 'System'}</span>
-                            <span className="text-[10px] text-gray-400 dark:text-slate-500">{date}</span>
+                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{entry.createdByName || entry.createdByUsername || 'System'}</span>
+                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{date}</span>
                           </div>
                         </div>
                       </div>

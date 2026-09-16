@@ -37,7 +37,7 @@ export default function PhoneModal({ onClose }: PhoneModalProps) {
           <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-2xl flex items-center justify-center">
             <Phone className="w-5 h-5 text-emerald-600" />
           </div>
-          <button onClick={handleSkip} className="p-1.5 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={handleSkip} className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -64,7 +64,7 @@ export default function PhoneModal({ onClose }: PhoneModalProps) {
               value={phone}
               onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               placeholder="10-digit mobile number"
-              className="flex-1 bg-transparent text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none"
+              className="flex-1 bg-transparent text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none"
               autoFocus
               inputMode="numeric"
             />
@@ -80,7 +80,7 @@ export default function PhoneModal({ onClose }: PhoneModalProps) {
           </button>
         </form>
 
-        <p className="text-[11px] text-gray-400 dark:text-slate-500 text-center mt-3">
+        <p className="text-[11px] text-gray-500 dark:text-slate-400 text-center mt-3">
           Your number is only used for order delivery. We don't spam.
         </p>
       </div>

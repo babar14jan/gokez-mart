@@ -23,7 +23,7 @@ function SummaryCard({ label, value, sub, icon, gradient }: { label: string; val
       <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white mb-3`}>{icon}</div>
       <p className="text-xl font-bold text-gray-900 dark:text-white leading-none">{value}</p>
       <p className="text-xs text-gray-500 mt-1">{label}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -48,7 +48,7 @@ function BarChart({ data, color = 'bg-emerald-500', valuePrefix = '' }: { data: 
       <div className="flex gap-0.5">
         {data.map((d, i) => (
           <div key={i} className="flex-1 text-center">
-            {d.label && <span className="text-[8px] text-gray-400 dark:text-slate-500">{d.label}</span>}
+            {d.label && <span className="text-[8px] text-gray-500 dark:text-slate-400">{d.label}</span>}
           </div>
         ))}
       </div>
@@ -79,7 +79,7 @@ function DateSelector({ range, setRange, customFrom, setCustomFrom, customTo, se
       {range === 'custom' && (
         <div className="flex items-center gap-2">
           <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-          <span className="text-xs text-gray-400 dark:text-slate-500">to</span>
+          <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
           <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
         </div>
       )}
@@ -183,11 +183,11 @@ function RevenueTab({ orders }: { orders: any[] }) {
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="page-card p-4">
           <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-4">Revenue by Day</p>
-          {dailyRevenue.every(d => d.value === 0) ? <p className="text-xs text-gray-400 text-center py-8">No delivered orders in this period</p> : <BarChart data={dailyRevenue} color="bg-emerald-500" valuePrefix="₹" />}
+          {dailyRevenue.every(d => d.value === 0) ? <p className="text-xs text-gray-500 text-center py-8">No delivered orders in this period</p> : <BarChart data={dailyRevenue} color="bg-emerald-500" valuePrefix="₹" />}
         </div>
         <div className="page-card p-4">
           <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-4">Payment Method Breakdown</p>
-          {paymentBreakdown.length === 0 ? <p className="text-xs text-gray-400 text-center py-8">No delivered orders in this period</p> : (
+          {paymentBreakdown.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No delivered orders in this period</p> : (
             <div className="space-y-4">
               {paymentBreakdown.map(p => (
                 <div key={p.method}>
@@ -198,7 +198,7 @@ function RevenueTab({ orders }: { orders: any[] }) {
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-bold text-gray-900 dark:text-white">₹{p.revenue.toFixed(0)}</span>
-                      <span className="text-[10px] text-gray-400 ml-1.5">{p.count} orders · {totalRevenue > 0 ? Math.round((p.revenue / totalRevenue) * 100) : 0}%</span>
+                      <span className="text-[10px] text-gray-500 ml-1.5">{p.count} orders · {totalRevenue > 0 ? Math.round((p.revenue / totalRevenue) * 100) : 0}%</span>
                     </div>
                   </div>
                   <div className="h-2 rounded-full bg-gray-100 dark:bg-slate-600 overflow-hidden">
@@ -214,7 +214,7 @@ function RevenueTab({ orders }: { orders: any[] }) {
       {dailyTable.length > 0 && (
         <div className="page-card">
           <div className="page-card-header"><p className="page-card-title">Revenue by Day</p></div>
-          <div className="hidden sm:grid grid-cols-4 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          <div className="hidden sm:grid grid-cols-4 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
             <div>Date</div><div className="text-center">Orders</div><div className="text-center">Avg Value</div><div className="text-right">Revenue</div>
           </div>
           {dailyTable.slice(0, 14).map((r, i) => (
@@ -289,7 +289,7 @@ function OrdersTab({ orders }: { orders: any[] }) {
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="page-card p-4">
           <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-4">Daily Orders</p>
-          {dailyOrders.every(d => d.value === 0) ? <p className="text-xs text-gray-400 text-center py-8">No orders in this period</p> : <BarChart data={dailyOrders} color="bg-emerald-500" />}
+          {dailyOrders.every(d => d.value === 0) ? <p className="text-xs text-gray-500 text-center py-8">No orders in this period</p> : <BarChart data={dailyOrders} color="bg-emerald-500" />}
         </div>
         <div className="page-card p-4">
           <div className="flex items-center justify-between mb-4">
@@ -305,7 +305,7 @@ function OrdersTab({ orders }: { orders: any[] }) {
             {[{ label: '2 weeks ago', value: twoWeeksAgo }, { label: 'Last week', value: lastWeek }, { label: 'This week', value: thisWeek }].map(w => (
               <div key={w.label} className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-2">
                 <p className="text-base font-bold text-gray-900 dark:text-white">{w.value}</p>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500">{w.label}</p>
+                <p className="text-[10px] text-gray-500 dark:text-slate-400">{w.label}</p>
               </div>
             ))}
           </div>
@@ -315,7 +315,7 @@ function OrdersTab({ orders }: { orders: any[] }) {
       {dailyTable.length > 0 && (
         <div className="page-card">
           <div className="page-card-header"><p className="page-card-title">Orders by Day</p></div>
-          <div className="hidden sm:grid grid-cols-5 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          <div className="hidden sm:grid grid-cols-5 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
             <div>Date</div><div className="text-center">Total</div><div className="text-center">Delivered</div><div className="text-center">Cancelled</div><div className="text-right">Revenue</div>
           </div>
           {dailyTable.slice(0, 14).map((r, i) => (
@@ -372,16 +372,16 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="page-card">
           <div className="page-card-header">
-            <div className="flex items-center gap-2"><Package className="w-4 h-4 text-gray-400 dark:text-slate-500" /><p className="page-card-title">Top Products by Units Sold</p></div>
+            <div className="flex items-center gap-2"><Package className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Top Products by Units Sold</p></div>
           </div>
-          {topProducts.length === 0 ? <p className="text-xs text-gray-400 text-center py-8">No order data yet</p> : (
+          {topProducts.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No order data yet</p> : (
             <div>
               {topProducts.map((p, i) => (
                 <div key={p.name} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
-                  <span className="text-xs font-bold text-gray-400 w-5">#{i + 1}</span>
+                  <span className="text-xs font-bold text-gray-500 w-5">#{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{p.name}</p>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500">{p.units} units sold</p>
+                    <p className="text-[10px] text-gray-500 dark:text-slate-400">{p.units} units sold</p>
                   </div>
                   <p className="text-xs font-bold text-gray-900 dark:text-white">₹{p.revenue.toFixed(0)}</p>
                 </div>
@@ -392,13 +392,13 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
 
         <div className="page-card">
           <div className="page-card-header">
-            <div className="flex items-center gap-2"><Tag className="w-4 h-4 text-gray-400 dark:text-slate-500" /><p className="page-card-title">Orders by Category</p></div>
+            <div className="flex items-center gap-2"><Tag className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Orders by Category</p></div>
           </div>
-          {topCats.length === 0 ? <p className="text-xs text-gray-400 text-center py-8">No order data yet</p> : (
+          {topCats.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No order data yet</p> : (
             <div>
               {topCats.map(([name, count], i) => (
                 <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
-                  <span className="text-xs font-bold text-gray-400 w-5">#{i + 1}</span>
+                  <span className="text-xs font-bold text-gray-500 w-5">#{i + 1}</span>
                   <p className="flex-1 text-xs font-semibold text-gray-900 dark:text-white truncate">{name}</p>
                   <div className="flex items-center gap-2">
                     <div className="w-20 h-1.5 rounded-full bg-gray-100 dark:bg-slate-600 overflow-hidden">
@@ -414,10 +414,10 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
       </div>
 
       <div className="page-card">
-        <div className="page-card-header"><div className="flex items-center gap-2"><Users className="w-4 h-4 text-gray-400 dark:text-slate-500" /><p className="page-card-title">Top Customers by Spend</p></div></div>
-        {topCustomers.length === 0 ? <p className="text-xs text-gray-400 text-center py-8">No customers yet</p> : (
+        <div className="page-card-header"><div className="flex items-center gap-2"><Users className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Top Customers by Spend</p></div></div>
+        {topCustomers.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No customers yet</p> : (
           <div>
-            <div className="hidden sm:grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+            <div className="hidden sm:grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
               <div className="col-span-1">#</div><div className="col-span-4">Customer</div><div className="col-span-3">Phone</div><div className="col-span-2 text-center">Orders</div><div className="col-span-2 text-right">Spent</div>
             </div>
             {topCustomers.map((c: any, i: number) => (
@@ -427,11 +427,11 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
                     <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                       <span className="text-xs font-bold text-emerald-700">{(c.name || c.phone)[0].toUpperCase()}</span>
                     </div>
-                    <div><p className="text-xs font-semibold text-gray-900 dark:text-white">{c.name || 'Guest'}</p><p className="text-[10px] text-gray-400 dark:text-slate-500">{c.phone} · {c.orderCount} orders</p></div>
+                    <div><p className="text-xs font-semibold text-gray-900 dark:text-white">{c.name || 'Guest'}</p><p className="text-[10px] text-gray-500 dark:text-slate-400">{c.phone} · {c.orderCount} orders</p></div>
                   </div>
                   <p className="text-sm font-bold text-gray-900 dark:text-white">₹{c.totalSpent.toFixed(0)}</p>
                 </div>
-                <div className="hidden sm:block col-span-1 text-xs font-bold text-gray-400 dark:text-slate-500">#{i + 1}</div>
+                <div className="hidden sm:block col-span-1 text-xs font-bold text-gray-500 dark:text-slate-400">#{i + 1}</div>
                 <div className="hidden sm:flex col-span-4 items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                     <span className="text-xs font-bold text-emerald-700">{(c.name || c.phone)[0].toUpperCase()}</span>

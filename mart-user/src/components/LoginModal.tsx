@@ -107,7 +107,7 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
       <div className="bg-white dark:bg-slate-800 w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-6">
 
         <div className="flex items-center justify-end mb-5">
-          <button onClick={onClose} className="p-1.5 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700">
+          <button onClick={onClose} className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -125,12 +125,12 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
             <form onSubmit={handleSaveProfile} className="space-y-3">
               <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
                 placeholder="Your full name *"
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 autoFocus />
               <textarea value={newAddress} onChange={e => setNewAddress(e.target.value)}
                 placeholder="Delivery address (optional — you can add later)"
                 rows={2}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none" />
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none" />
               <button type="submit" disabled={savingProfile || !newName.trim()}
                 className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm">
                 {savingProfile
@@ -139,7 +139,7 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
                 }
               </button>
               <button type="button" onClick={() => { onSuccess?.(); onClose(); }}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 py-1 transition-colors">
+                className="w-full text-sm text-gray-500 hover:text-gray-600 dark:hover:text-slate-300 py-1 transition-colors">
                 Skip for now
               </button>
             </form>
@@ -160,7 +160,7 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
                   type="tel" value={phone}
                   onChange={e => setPhone(e.target.value.replace(/\D/g,'').slice(0,10))}
                   placeholder="10-digit mobile number"
-                  className="flex-1 bg-transparent text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none"
+                  className="flex-1 bg-transparent text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none"
                   autoFocus inputMode="numeric"
                 />
               </div>
@@ -204,7 +204,7 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
           <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Your data is secure. We never share your information.</span>
         </div>
-        <p className="text-center text-[10px] text-gray-400 dark:text-slate-500 mt-3">
+        <p className="text-center text-[10px] text-gray-500 dark:text-slate-400 mt-3">
           By continuing, you agree to our{' '}
           <a href="/terms" target="_blank" rel="noopener noreferrer"
             className="font-semibold text-gray-600 dark:text-slate-300 hover:underline">
@@ -216,7 +216,7 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
             Privacy Policy
           </a>
         </p>
-        <p className="text-center text-[10px] text-gray-400 dark:text-slate-500 mt-1">
+        <p className="text-center text-[10px] text-gray-500 dark:text-slate-400 mt-1">
           &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
         </p>
       </div>

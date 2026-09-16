@@ -19,10 +19,10 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-bold text-gray-900 dark:text-white">Customers <span className="text-sm font-normal text-gray-400 dark:text-slate-500">({customers.length})</span></h1>
+      <h1 className="text-lg font-bold text-gray-900 dark:text-white">Customers <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({customers.length})</span></h1>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         {customers.length === 0 ? (
-          <div className="text-center py-16 text-gray-400 dark:text-slate-500"><Users className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">No customers yet.</p></div>
+          <div className="text-center py-16 text-gray-500 dark:text-slate-400"><Users className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">No customers yet.</p></div>
         ) : (
           <div className="divide-y divide-gray-50 dark:divide-slate-700">
             {customers.map(c => (
@@ -32,11 +32,11 @@ export default function CustomersPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{c.name || 'Guest'}</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500">{c.phone}{c.address ? ` · ${c.address}` : ''}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{c.phone}{c.address ? ` · ${c.address}` : ''}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-gray-900 dark:text-white">₹{c.totalSpent.toFixed(0)}</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500">{c.orderCount} order{c.orderCount !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{c.orderCount} order{c.orderCount !== 1 ? 's' : ''}</p>
                 </div>
               </div>
             ))}

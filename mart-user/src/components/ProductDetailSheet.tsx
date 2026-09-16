@@ -90,7 +90,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-400 dark:text-slate-500 mt-0.5">{product.unit}</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">{product.unit}</p>
             {product.categoryName && (
               <span className="inline-block mt-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
                 {product.categoryName}
@@ -103,7 +103,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
             <span className="text-2xl font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>
             {savings > 0 && (
               <>
-                <span className="text-base text-gray-400 dark:text-slate-500 line-through">₹{product.price}</span>
+                <span className="text-base text-gray-500 dark:text-slate-400 line-through">₹{product.price}</span>
                 <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Save ₹{savings}</span>
               </>
             )}
@@ -121,7 +121,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
           <div className="pt-1">
             {isOutOfStock ? (
               <div className="w-full py-4 bg-gray-100 dark:bg-slate-700 rounded-2xl text-center">
-                <p className="text-sm font-semibold text-gray-400 dark:text-slate-500">Out of Stock</p>
+                <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">Out of Stock</p>
               </div>
             ) : qty === 0 ? (
               <button onClick={() => addItem(product, product.unit, discountedPrice)}

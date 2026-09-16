@@ -10,7 +10,7 @@ export default function TermsPage() {
         <h1 className="text-sm font-bold text-gray-900 dark:text-white">Terms of Service</h1>
       </div>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 pb-36">
-        <p className="text-xs text-gray-400 dark:text-slate-500 mb-8">Last updated: {updated}</p>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mb-8">Last updated: {updated}</p>
 
         <div className="space-y-8 text-sm text-gray-600 dark:text-slate-400 leading-relaxed">
 

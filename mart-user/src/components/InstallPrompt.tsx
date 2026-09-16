@@ -123,10 +123,10 @@ export default function InstallPrompt() {
                 <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-10 h-10 rounded-xl" />
                 <div>
                   <p className="text-sm font-bold text-gray-900 dark:text-white">Add to Home Screen</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500">3 quick steps</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">3 quick steps</p>
                 </div>
               </div>
-              <button onClick={dismiss} className="p-1.5 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700">
+              <button onClick={dismiss} className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -139,7 +139,7 @@ export default function InstallPrompt() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">Tap the Share button</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">At the bottom of Safari, tap the Share icon</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">At the bottom of Safari, tap the Share icon</p>
                   <div className="mt-2 inline-flex items-center gap-1.5 bg-gray-100 dark:bg-slate-700 px-3 py-1.5 rounded-xl">
                     <Share className="w-4 h-4 text-blue-500" />
                     <span className="text-xs font-medium text-gray-700 dark:text-slate-300">Share</span>
@@ -154,7 +154,7 @@ export default function InstallPrompt() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">Scroll down and tap</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Find and tap "Add to Home Screen"</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Find and tap "Add to Home Screen"</p>
                   <div className="mt-2 inline-flex items-center gap-1.5 bg-gray-100 dark:bg-slate-700 px-3 py-1.5 rounded-xl">
                     <Plus className="w-4 h-4 text-gray-600 dark:text-slate-300" />
                     <span className="text-xs font-medium text-gray-700 dark:text-slate-300">Add to Home Screen</span>
@@ -169,12 +169,12 @@ export default function InstallPrompt() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">Tap Add</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Confirm by tapping "Add" in the top right</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Confirm by tapping "Add" in the top right</p>
                 </div>
               </div>
             </div>
 
-            <p className="text-[10px] text-gray-400 dark:text-slate-500 text-center mt-5">
+            <p className="text-[10px] text-gray-500 dark:text-slate-400 text-center mt-5">
               Once added, you'll get order notifications even when the app is closed
             </p>
           </div>

@@ -102,7 +102,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-xl font-bold text-gray-900 dark:text-white leading-none">{k.value}</p>
                 <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1">{k.label}</p>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{k.sub}</p>
+                <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">{k.sub}</p>
               </div>
             </div>
           );
@@ -119,20 +119,20 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 page-card">
           <div className="page-card-header">
             <div className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+              <ClipboardList className="w-4 h-4 text-gray-500 dark:text-slate-400" />
               <h2 className="page-card-title">Recent Orders</h2>
-              <span className="text-[10px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{rangeLabel}</span>
+              <span className="text-[10px] text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{rangeLabel}</span>
             </div>
             <Link to="/orders" className="text-xs font-medium text-emerald-600 hover:text-emerald-700">View all →</Link>
           </div>
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-slate-500">
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-slate-400">
               <ShoppingBag className="w-8 h-8 mb-2 opacity-30" />
               <p className="text-sm">No orders for this period</p>
             </div>
           ) : (
             <div>
-              <div className="hidden sm:grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              <div className="hidden sm:grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                 <div className="col-span-2">Order</div>
                 <div className="col-span-2">Status</div>
                 <div className="col-span-3">Customer</div>
@@ -149,13 +149,13 @@ export default function DashboardPage() {
                         <p className="text-sm font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
                         <span className={`badge ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>{order.status.replace(/_/g, ' ')}</span>
                       </div>
-                      <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{order.guestName} · {order.guestPhone} · {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{order.guestName} · {order.guestPhone} · {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}</p>
                     </div>
                     <p className="text-sm font-bold text-gray-900 dark:text-white">₹{order.total}</p>
                   </div>
                   <div className="hidden sm:block col-span-2">
                     <p className="text-xs font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">
+                    <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">
                       {new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
@@ -164,7 +164,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="hidden sm:block col-span-3">
                     <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{order.guestName}</p>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500 truncate">{order.guestAddress?.split(',')[0]}</p>
+                    <p className="text-[10px] text-gray-500 dark:text-slate-400 truncate">{order.guestAddress?.split(',')[0]}</p>
                   </div>
                   <div className="hidden sm:block col-span-2 text-xs text-gray-600 dark:text-slate-400">{order.guestPhone}</div>
                   <div className="hidden sm:block col-span-1 text-xs text-gray-600 dark:text-slate-400">{PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}</div>
@@ -187,14 +187,14 @@ export default function DashboardPage() {
         <div className="page-card">
           <div className="page-card-header">
             <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+              <TrendingUp className="w-4 h-4 text-gray-500 dark:text-slate-400" />
               <h2 className="page-card-title">Order Status</h2>
             </div>
-            <span className="text-[10px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{rangeLabel}</span>
+            <span className="text-[10px] text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{rangeLabel}</span>
           </div>
           <div className="p-4">
             {filtered.length === 0 ? (
-              <div className="flex flex-col items-center py-6 text-gray-400 dark:text-slate-500">
+              <div className="flex flex-col items-center py-6 text-gray-500 dark:text-slate-400">
                 <XCircle className="w-6 h-6 mb-1 opacity-30" />
                 <p className="text-xs">No orders for this period</p>
               </div>
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                       return (
                         <div key={bar.label} className="flex flex-col items-center gap-1 w-14">
                           {/* Count on top */}
-                          <span className={`text-xs font-bold ${bar.count > 0 ? bar.textColor : 'text-gray-300 dark:text-slate-600'}`}>
+                          <span className={`text-xs font-bold ${bar.count > 0 ? bar.textColor : 'text-gray-500 dark:text-slate-400'}`}>
                             {bar.count}
                           </span>
                           {/* Bar */}
@@ -255,7 +255,7 @@ export default function DashboardPage() {
 
                   {/* Summary */}
                   <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400 dark:text-slate-500">Total orders</span>
+                    <span className="text-[11px] text-gray-500 dark:text-slate-400">Total orders</span>
                     <span className="text-sm font-bold text-gray-900 dark:text-white">{total}</span>
                   </div>
                 </>

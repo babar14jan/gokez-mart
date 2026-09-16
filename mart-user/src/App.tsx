@@ -245,7 +245,7 @@ export default function App() {
               {successData.preference === 'within_15' ? '10-15 mins' : successData.preference === 'within_30' ? '30 mins' : '1 hour'}
             </span>.
             {successData.storeName && (
-              <span className="block text-xs text-gray-400 mt-1">🏪 Fulfilled by {successData.storeName}</span>
+              <span className="block text-xs text-gray-500 mt-1">🏪 Fulfilled by {successData.storeName}</span>
             )}
           </p>
           <button onClick={() => { setSuccessData(null); setView('orders'); }}
@@ -258,7 +258,7 @@ export default function App() {
           </button>
           {settings.whatsapp_number && (
             <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
-              className="text-xs text-gray-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+              className="text-xs text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
               Need help? Chat on WhatsApp →
             </a>
           )}
@@ -295,7 +295,7 @@ export default function App() {
               className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">
               Continue Browsing
             </button>
-            <p className="text-[11px] text-gray-400 mt-3">You can browse products but ordering is not available in your area.</p>
+            <p className="text-[11px] text-gray-500 mt-3">You can browse products but ordering is not available in your area.</p>
           </div>
         </div>
       )}
@@ -418,16 +418,16 @@ export default function App() {
 
           {/* Search — desktop only, mobile search is in Navbar */}
           <div className="relative mt-4 mb-4 hidden sm:block">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text" value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search groceries, vegetables..."
-              className="w-full pl-11 pr-10 py-3.5 bg-white dark:bg-slate-800 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-md transition-all border-0"
+              className="w-full pl-11 pr-10 py-3.5 bg-white dark:bg-slate-800 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-md transition-all border-0"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2">
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             )}
           </div>
@@ -476,12 +476,12 @@ export default function App() {
             <div className="text-center py-16">
               <div className="text-5xl mb-3">🔍</div>
               <p className="text-base font-semibold text-gray-900 dark:text-white mb-1">No products found</p>
-              <p className="text-sm text-gray-400">Try a different category or search term</p>
+              <p className="text-sm text-gray-500">Try a different category or search term</p>
             </div>
           ) : search || activeCategoryId !== 'all' ? (
             /* Filtered — flat grid */
             <>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                 {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
               </p>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
@@ -597,8 +597,8 @@ export default function App() {
                   </a>
                 )}
                 {settings.store_address && (
-                  <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                  <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1112 6a2.5 2.5 0 010 5.5z"/>
                     </svg>
                     {settings.store_address}
@@ -621,13 +621,13 @@ export default function App() {
                     className="text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
                     {l.label}
                   </button>
-                  {i < arr.length - 1 && <span className="text-gray-400 dark:text-slate-600 mx-1.5">·</span>}
+                  {i < arr.length - 1 && <span className="text-gray-500 dark:text-slate-400 mx-1.5">·</span>}
                 </span>
               ))}
             </div>
 
             {/* Copyright */}
-            <p className="text-center text-[11px] text-gray-400 dark:text-slate-500">
+            <p className="text-center text-[11px] text-gray-500 dark:text-slate-400">
               A product of{' '}
               <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
                 Gokez Technologies Pvt. Ltd.

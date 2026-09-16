@@ -79,7 +79,7 @@ export default function StoreApplicationsPage() {
 
       {/* List */}
       {filtered.length === 0 ? (
-        <div className="page-card text-center py-12 text-gray-400 dark:text-slate-500">
+        <div className="page-card text-center py-12 text-gray-500 dark:text-slate-400">
           <Store className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No {filter === 'all' ? '' : filter} applications.</p>
           {filter === 'pending' && (
@@ -102,7 +102,7 @@ export default function StoreApplicationsPage() {
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-900 dark:text-white">{app.storeName}</p>
-                        <p className="text-xs text-gray-400 dark:text-slate-500">
+                        <p className="text-xs text-gray-500 dark:text-slate-400">
                           {new Date(app.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </p>
                       </div>
@@ -115,20 +115,20 @@ export default function StoreApplicationsPage() {
                   {/* Details grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3 pl-13">
                     <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                      <User className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <User className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                       {app.ownerName}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                      <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <Phone className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                       {app.phone}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400 sm:col-span-2">
-                      <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <MapPin className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                       {app.area}
                     </div>
                     {app.message && (
                       <div className="flex items-start gap-2 text-xs text-gray-500 dark:text-slate-400 sm:col-span-2 bg-gray-50 dark:bg-slate-700/50 rounded-xl p-2.5">
-                        <MessageSquare className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
+                        <MessageSquare className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 mt-0.5" />
                         <span className="italic">{app.message}</span>
                       </div>
                     )}

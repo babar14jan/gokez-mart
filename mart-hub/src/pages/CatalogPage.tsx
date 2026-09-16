@@ -154,7 +154,7 @@ export default function CatalogPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-400 dark:text-slate-500">Master product list — name &amp; photo only. Stores browse this when adding products.</p>
+        <p className="text-xs text-gray-500 dark:text-slate-400">Master product list — name &amp; photo only. Stores browse this when adding products.</p>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
             <Upload className="w-3.5 h-3.5" /> Bulk Upload
@@ -168,10 +168,10 @@ export default function CatalogPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
         <input type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search by name..." className={`${inp} pl-9`} />
-        {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-4 h-4 text-gray-400" /></button>}
+        {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-4 h-4 text-gray-500" /></button>}
       </div>
 
       {/* Category tabs */}
@@ -188,11 +188,11 @@ export default function CatalogPage() {
         ))}
       </div>
 
-      <p className="text-xs text-gray-400">{filtered.length} product{filtered.length !== 1 ? 's' : ''}</p>
+      <p className="text-xs text-gray-500">{filtered.length} product{filtered.length !== 1 ? 's' : ''}</p>
 
       {/* Grid */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-gray-500">
           <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{search || activeCat !== 'all' ? 'No products match.' : 'No products in catalog yet.'}</p>
         </div>
@@ -214,7 +214,7 @@ export default function CatalogPage() {
               </div>
               <div className="p-2 flex flex-col flex-1">
                 <p className="text-xs font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight">{p.name}</p>
-                {p.localName && <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{p.localName}</p>}
+                {p.localName && <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{p.localName}</p>}
                 <div className="mt-auto pt-2 flex gap-1.5">
                   <button onClick={() => openEdit(p)}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
@@ -259,8 +259,8 @@ export default function CatalogPage() {
                     </>
                   ) : (
                     <label className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-slate-700 border-2 border-dashed border-gray-300 dark:border-slate-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
-                      <Camera className="w-6 h-6 text-gray-400" />
-                      <span className="text-[10px] text-gray-400">Add photo</span>
+                      <Camera className="w-6 h-6 text-gray-500" />
+                      <span className="text-[10px] text-gray-500">Add photo</span>
                       <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
                     </label>
                   )}
@@ -333,12 +333,12 @@ export default function CatalogPage() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
               <div>
                 <p className="text-sm font-bold text-gray-900 dark:text-white">Bulk Upload from Images</p>
-                <p className="text-xs text-gray-400 mt-0.5">Filename becomes product name. Edit before saving.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Filename becomes product name. Edit before saving.</p>
               </div>
               {!bulkUploading && (
                 <button onClick={() => { setShowBulkUpload(false); setBulkItems([]); setBulkProgress(0); }}
                   className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                  <X className="w-4 h-4 text-gray-400" />
+                  <X className="w-4 h-4 text-gray-500" />
                 </button>
               )}
             </div>
@@ -346,7 +346,7 @@ export default function CatalogPage() {
             {/* Add more images */}
             {!bulkUploading && (
               <div className="px-5 pt-3 flex-shrink-0">
-                <label className="flex items-center justify-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-gray-400 hover:border-emerald-400 hover:text-emerald-600 cursor-pointer transition-colors">
+                <label className="flex items-center justify-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-gray-500 hover:border-emerald-400 hover:text-emerald-600 cursor-pointer transition-colors">
                   <Upload className="w-4 h-4" /> Add more images
                   <input type="file" accept="image/*" multiple className="hidden" onChange={handleBulkFileSelect} />
                 </label>
@@ -358,7 +358,7 @@ export default function CatalogPage() {
               <div className="px-5 pt-3 flex-shrink-0">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Uploading...</p>
-                  <p className="text-xs text-gray-400">{bulkProgress}%</p>
+                  <p className="text-xs text-gray-500">{bulkProgress}%</p>
                 </div>
                 <div className="w-full h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
                   <div className="h-full bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${bulkProgress}%` }} />
@@ -369,7 +369,7 @@ export default function CatalogPage() {
             {/* Items list */}
             <div className="overflow-y-auto flex-1 p-4 space-y-2">
               {bulkItems.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
+                <div className="text-center py-10 text-gray-500">
                   <Upload className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">Select images to upload</p>
                 </div>
