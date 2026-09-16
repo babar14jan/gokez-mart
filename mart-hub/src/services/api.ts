@@ -177,3 +177,9 @@ export const auditApi = {
   getLogs: (params?: { adminId?: string; action?: string; limit?: number }) =>
     api.get('/admin/compliance/audit-logs', { params }),
 };
+
+// ── Feedback ────────────────────────────────────────────────────────────────────────────────
+export const feedbackApi = {
+  getAll: (params?: { storeId?: string; rating?: number; category?: string; limit?: number; offset?: number }) =>
+    api.get('/admin/feedback', { params }),
+};

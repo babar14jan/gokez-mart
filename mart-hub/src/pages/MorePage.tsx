@@ -5,7 +5,7 @@ import {
   KeyRound, Settings, LayoutDashboard, Tag, Users,
   BarChart3, Shield, ChevronRight, Moon, Sun,
   Pencil, X, Loader2, Save, Mail, Phone, Store, Package,
-  Bell, Download,
+  Bell, Download, MessageSquare,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
@@ -153,6 +153,7 @@ export default function MorePage() {
       { label: 'Customers',          href: '/customers',          icon: Users },
       { label: 'Categories',         href: '/categories',         icon: Tag },
       { label: 'Catalog',            href: '/catalog',            icon: Package },
+      { label: 'Feedback',           href: '/feedback',           icon: MessageSquare },
       { label: 'Store Requests', href: '/store-applications', icon: Store },
       { label: 'Stores',             href: '/stores',             icon: LayoutDashboard },
       { label: 'Users',              href: '/users',              icon: Users },
@@ -164,18 +165,21 @@ export default function MorePage() {
       { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
       { label: 'Customers',       href: '/customers', icon: Users },
       { label: 'Catalog',         href: '/catalog',   icon: Package },
+      { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     store_manager: [
       { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
       { label: 'Customers',       href: '/customers', icon: Users },
       { label: 'Catalog',         href: '/catalog',   icon: Package },
+      { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     sales_manager: [
       { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
       { label: 'Customers',       href: '/customers', icon: Users },
       { label: 'Catalog',         href: '/catalog',   icon: Package },
+      { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     delivery_staff: [],
@@ -187,57 +191,90 @@ export default function MorePage() {
   return (
     <div className="max-w-lg mx-auto space-y-4 pb-6">
 
-      {/* Profile card */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-        <div className="flex items-center gap-3 p-4">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-lg font-bold flex items-center justify-center flex-shrink-0">
-            {displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{form.name || displayName}</p>
-            <p className="text-xs text-gray-400 dark:text-slate-500 mb-1">@{username}</p>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${roleInfo.color}`}>
-              {roleInfo.label}
-            </span>
-          </div>
-          {!editing && (
-            <button onClick={() => setEditing(true)}
-              className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-              <Pencil className="w-4 h-4 text-gray-400" />
-            </button>
-          )}
-        </div>
+      {/* Profile cover card */}
+      {(() => {
+        const initial = displayName.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase();
+        const gradients: Record<string, string> = {
+          super_admin:    'from-indigo-600 via-violet-600 to-purple-700',
+          store_owner:    'from-emerald-600 via-teal-600 to-cyan-700',
+          store_manager:  'from-teal-500 via-emerald-600 to-green-700',
+          sales_manager:  'from-amber-500 via-orange-500 to-red-500',
+          delivery_staff: 'from-blue-500 via-indigo-500 to-violet-600',
+          staff:          'from-slate-600 via-slate-700 to-slate-800',
+        };
+        const gradient = gradients[role || 'staff'] || gradients.staff;
+        return (
+          <div className={`relative bg-gradient-to-br ${gradient} w-full rounded-2xl overflow-hidden`} style={{ minHeight: '140px' }}>
+            {/* Decorative circles */}
+            <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white/10 pointer-events-none" />
+            <div className="absolute right-6 -bottom-10 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
 
-        {editing && (
-          <div className="border-t border-gray-100 dark:border-slate-700 p-4 space-y-3">
-            {error && <p className="text-xs text-red-500">{error}</p>}
-            {saved && <p className="text-xs text-emerald-600">✓ Profile updated</p>}
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Name *</label>
-              <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="Your name" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Mail className="w-3 h-3" /> Email</label>
-              <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inp} placeholder="your@email.com" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Phone className="w-3 h-3" /> Phone</label>
-              <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inp} placeholder="+91 XXXXX XXXXX" />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={handleCancel}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-semibold text-gray-600 bg-gray-100 dark:bg-slate-700 rounded-xl hover:bg-gray-200 transition-colors">
-                <X className="w-3.5 h-3.5" /> Cancel
+            {/* Edit button top-right */}
+            {!editing && (
+              <button onClick={() => setEditing(true)}
+                className="absolute top-3 right-3 p-2 bg-white/20 hover:bg-white/30 text-white rounded-xl border border-white/30 transition-colors z-10">
+                <Pencil className="w-3.5 h-3.5" />
               </button>
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors">
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                {saving ? 'Saving...' : 'Save'}
-              </button>
+            )}
+
+            <div className="relative z-10 p-4 flex items-end gap-4 pb-4 pt-8">
+              {/* Avatar */}
+              <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center shadow-md flex-shrink-0">
+                <span className="text-2xl font-black text-white tracking-tight">{initial}</span>
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0 pb-1">
+                {editing ? (
+                  <p className="text-sm font-bold text-white/80">Editing profile...</p>
+                ) : (
+                  <>
+                    <p className="text-lg font-black text-white drop-shadow truncate">{form.name || displayName}</p>
+                    <p className="text-xs text-white/70 font-medium">@{username}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30`}>
+                        {roleInfo.label}
+                      </span>
+                      {form.email && <span className="text-[10px] text-white/70">{form.email}</span>}
+                      {form.phone && <span className="text-[10px] text-white/70">{form.phone}</span>}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
+
+            {/* Edit form */}
+            {editing && (
+              <div className="bg-white dark:bg-slate-800 mx-3 mb-3 rounded-xl p-4 space-y-3">
+                {error && <p className="text-xs text-red-500">{error}</p>}
+                {saved && <p className="text-xs text-emerald-600">✓ Profile updated</p>}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Name *</label>
+                  <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="Your name" autoFocus />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Mail className="w-3 h-3" /> Email</label>
+                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className={inp} placeholder="your@email.com" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1"><Phone className="w-3 h-3" /> Phone</label>
+                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inp} placeholder="+91 XXXXX XXXXX" />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={handleCancel}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-semibold text-gray-600 bg-gray-100 dark:bg-slate-700 rounded-xl hover:bg-gray-200 transition-colors">
+                    <X className="w-3.5 h-3.5" /> Cancel
+                  </button>
+                  <button onClick={handleSave} disabled={saving}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors">
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Account */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
@@ -326,10 +363,13 @@ export default function MorePage() {
       </div>
 
       {/* Sign out */}
-      <div className="flex justify-center">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-red-100 dark:border-red-900/30 overflow-hidden">
         <button onClick={() => setConfirmLogout(true)}
-          className="text-sm font-medium text-red-500 hover:text-red-600 px-4 py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-          Sign Out
+          className="w-full flex items-center gap-3 px-4 py-3.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span className="text-sm font-semibold flex-1 text-left">Sign Out</span>
         </button>
       </div>
 

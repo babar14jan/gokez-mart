@@ -14,7 +14,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
   const filteredProducts = products.filter(p => p.categoryId === activeCatId);
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] overflow-hidden">
+    <div className="flex overflow-hidden" style={{ height: 'calc(100vh - 8rem)' }}>
 
       {/* Left sidebar */}
       <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">

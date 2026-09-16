@@ -12,7 +12,7 @@ export default function FloatingCart({ onOpen, hidden }: FloatingCartProps) {
   if (totalItems === 0 || hidden) return null;
 
   return (
-    <div className="sm:hidden fixed bottom-[5.5rem] left-1/2 -translate-x-1/2 z-40">
+    <div className="sm:hidden fixed left-1/2 -translate-x-1/2 z-40" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px) + 8px)' }}>
       <button
         onClick={onOpen}
         className="flex items-center justify-center gap-2.5 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-full shadow-lg active:scale-95 transition-all whitespace-nowrap"

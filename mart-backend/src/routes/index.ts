@@ -107,6 +107,10 @@ router.post('/compliance/data-export',         authenticateCustomer, ctrl.custom
 router.get('/compliance/data-export',          authenticateCustomer, ctrl.customerGetDataExport);
 router.put('/compliance/marketing-consent',    authenticateCustomer, ctrl.customerUpdateMarketingConsent);
 router.get('/compliance/marketing-consent',    authenticateCustomer, ctrl.customerGetMarketingConsent);
+
+// ── Feedback ────────────────────────────────────────────────────────────────────────────────
+router.post('/feedback',                       authenticateCustomer, ctrl.customerSubmitFeedback);
+router.get('/admin/feedback',                  authenticate, ctrl.adminGetFeedback);
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
 

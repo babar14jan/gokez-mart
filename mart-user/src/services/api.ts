@@ -90,3 +90,9 @@ export const storeApi = {
   }) => api.post('/orders', data),
   trackOrders: () => api.get('/orders/track'),
 };
+
+// ── Feedback ────────────────────────────────────────────────────────────────────────────────
+export const feedbackApi = {
+  submit: (data: { rating: number; category: string; message?: string; storeId?: string; orderId?: string }) =>
+    api.post('/feedback', data),
+};

@@ -85,7 +85,7 @@ function AddressModalForm({ stored, onSave, onCancel, saving }: {
 }
 
 export default function ProfilePage({ onBack, supportName, supportPhone, whatsappNumber }: ProfilePageProps) {
-  const { name, phone, address, address2, photoUrl, updateProfile, logout } = useCustomerAuthStore();
+  const { name, phone, address, address2, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName } = useCustomerStore();
   const { } = useThemeStore();
 
@@ -119,6 +119,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
     authApi.getMarketingConsent().then(r => setMarketingConsent(r.data.data.granted)).catch(() => {});
+    if (!isLoggedIn) return;
     // Check actual subscription + auto-subscribe if permission granted but no subscription
     if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(reg =>
@@ -183,7 +184,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
           : (phone || '?')[0].toUpperCase();
         const gradient = 'from-slate-800 via-purple-900 to-slate-900';
         return (
-          <div className={`relative bg-gradient-to-br ${gradient} dark:from-violet-900 dark:via-purple-800 dark:to-indigo-900 w-full`} style={{ minHeight: '160px' }}>
+          <div className={`relative bg-gradient-to-br ${gradient} dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 w-full`} style={{ minHeight: '160px' }}>
             {/* Decorative circles */}
             <div className="absolute -right-8 -top-8 w-56 h-56 rounded-full bg-white/10 pointer-events-none" />
             <div className="absolute right-8 -bottom-12 w-40 h-40 rounded-full bg-white/10 pointer-events-none" />
@@ -371,7 +372,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
         {/* Support */}
         {(supportName || supportPhone) && (
           <>
-            <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Support</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Contact Store</p>
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center flex-shrink-0">
@@ -380,21 +381,23 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{supportName || 'Support'}</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{supportName || 'Store Support'}</p>
                   <p className="text-xs text-gray-400 dark:text-slate-500">{supportPhone || ''}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {supportPhone && (
                     <a href={`tel:${supportPhone}`}
-                      className="flex items-center justify-center w-9 h-9 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 transition-colors">
-                      <Phone className="w-4 h-4" />
+                      className="flex items-center justify-center w-9 h-9 bg-blue-50 dark:bg-blue-900/30 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.47 11.47 0 003.58.57 1 1 0 011 1V21a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1 11.47 11.47 0 00.57 3.58 1 1 0 01-.25 1.01l-2.2 2.2z"/>
+                      </svg>
                     </a>
                   )}
                   {(whatsappNumber || supportPhone) && (
-                    <a href={`https://wa.me/${(whatsappNumber || supportPhone)?.replace(/\D/g, '')}`}
+                    <a href={`https://wa.me/${(whatsappNumber || supportPhone)?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I need help with my order on Gokez Mart.`)}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="flex items-center justify-center w-9 h-9 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl hover:bg-green-100 transition-colors">
-                      <MessageCircle className="w-4 h-4" />
+                      className="flex items-center justify-center w-9 h-9 bg-green-50 dark:bg-green-900/20 rounded-xl hover:bg-green-100 transition-colors">
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-5 h-5" />
                     </a>
                   )}
                 </div>
@@ -402,6 +405,35 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             </div>
           </>
         )}
+
+        {/* Help & Support */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider px-4 pt-3 pb-1">Contact Gokez</p>
+          <a href="mailto:support@gokez.com"
+            className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Email Support</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500">support@gokez.com</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </a>
+          <a href="https://wa.me/918777376280?text=Hi%2C%20I%20need%20help%20with%20Gokez%20Mart." target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+            <div className="w-8 h-8 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center flex-shrink-0">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">WhatsApp Support</p>
+              <p className="text-xs text-gray-400 dark:text-slate-500">Chat with us on WhatsApp</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </a>
+        </div>
 
         {/* Settings */}
         <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Settings</p>
@@ -531,8 +563,10 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
               onClick={async () => {
                 setExportLoading(true);
                 try {
-                  const res = await authApi.requestDataExport();
-                  const data = res.data.data?.data || res.data.data;
+                  // First request the export, then fetch the actual data
+                  await authApi.requestDataExport();
+                  const res = await authApi.getDataExport();
+                  const data = res.data.data?.data;
                   if (data) {
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -540,6 +574,8 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                     a.href = url; a.download = 'my-gokez-data.json'; a.click();
                     URL.revokeObjectURL(url);
                     setExportReady(true);
+                  } else {
+                    alert('Export not ready. Please try again.');
                   }
                 } catch { alert('Failed to export data. Please try again.'); }
                 finally { setExportLoading(false); }
@@ -549,6 +585,20 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             </button>
           </div>
         </div>
+
+        {/* Share Feedback */}
+        <button
+          onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/feedback'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="w-full flex items-center justify-between px-4 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">⭐</span>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Share Feedback</p>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500">Rate your experience with Gokez Mart</p>
+            </div>
+          </div>
+          <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+        </button>
 
         {/* Sign out + Delete account */}
         <div className="flex flex-col items-center gap-2 pb-2">
@@ -567,7 +617,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
         </div>
 
         {/* Footer links */}
-        <div className="flex flex-col items-center gap-1.5 pb-28">
+        <div className="flex flex-col items-center gap-1.5 pb-36">
           <div className="flex items-center justify-center gap-3">
             <button onClick={() => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); }}
               className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
