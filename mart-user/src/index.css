@@ -36,3 +36,8 @@ body { background-color: #f0fdf4; color: #111827; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Safe area support for iOS home indicator */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

@@ -19,14 +19,16 @@ import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import GrievancePage from './pages/GrievancePage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
+import FeedbackPage from './pages/FeedbackPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import InstallPrompt from './components/InstallPrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
+import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 
-type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account';
+type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
 const DEFAULT_SETTINGS: PublicSettings = {
   store_name: 'Gokez Mart', store_address: 'Kolkata',
@@ -44,6 +46,7 @@ export default function App() {
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
     if (path === '/grievance') return 'grievance';
+    if (path === '/feedback') return 'feedback';
     if (path === '/delete-account') return 'delete-account';
     if (path === '/account') return 'account';
     return 'home';
@@ -94,6 +97,7 @@ export default function App() {
       if (path === '/privacy') setView('privacy');
       else if (path === '/terms') setView('terms');
       else if (path === '/grievance') setView('grievance');
+      else if (path === '/feedback') setView('feedback');
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
       else setView('home');
@@ -375,23 +379,25 @@ export default function App() {
 
       {/* Pages */}
       {view === 'categories' ? (
-        <div className="pb-20">
+        <div className={PAGE_BOTTOM}>
           <CategoriesView categories={categories} products={products} />
         </div>
       ) : view === 'grievance' ? (
-        <div className="pb-20"><GrievancePage /></div>
+        <div className={PAGE_BOTTOM}><GrievancePage /></div>
+      ) : view === 'feedback' ? (
+        <div className={PAGE_BOTTOM}><FeedbackPage storeId={selectedZone?.storeId} /></div>
       ) : view === 'delete-account' ? (
-        <div className="pb-20"><DeleteAccountPage /></div>
+        <div className={PAGE_BOTTOM}><DeleteAccountPage /></div>
       ) : view === 'privacy' ? (
-        <div className="pb-20"><PrivacyPage /></div>
+        <div className={PAGE_BOTTOM}><PrivacyPage /></div>
       ) : view === 'terms' ? (
-        <div className="pb-20"><TermsPage /></div>
+        <div className={PAGE_BOTTOM}><TermsPage /></div>
       ) : view === 'orders' ? (
-        <div className="pb-20">
+        <div className={PAGE_BOTTOM}>
           <OrderHistoryPage onBack={() => setView('home')} />
         </div>
       ) : view === 'account' ? (
-        <div className="pb-20">
+        <div className={PAGE_BOTTOM}>
           <ProfilePage
             onBack={() => setView('home')}
             supportName={settings.support_name}
@@ -402,7 +408,7 @@ export default function App() {
         </div>
       ) : (
         /* Home */
-        <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${cartItems > 0 ? 'pb-44' : 'pb-28'}`}>
+        <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${cartItems > 0 ? PAGE_BOTTOM_CART : PAGE_BOTTOM}`}>
 
           {settings.store_open === 'false' && (
             <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium px-4 py-3 rounded-2xl text-center">
@@ -524,7 +530,24 @@ export default function App() {
           )}
 
           {/* Trust badges — 4 cards one row */}
-          <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* About section */}
+          <div className="mt-8 flex justify-center">
+            <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+              Who We Are
+            </span>
+          </div>
+          <div className="mt-2 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
+            <img src="/mart_web_logo.png" alt="Gokez Mart" className="h-10 w-auto object-contain mx-auto mb-1" />
+            <p className="text-sm font-black text-gray-900 dark:text-white mb-4">Shop local. Support local.</p>
+            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3">Gokez Mart — Hyperlocal Commerce Platform</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+              We bring local stores online — connecting you directly with neighbourhood vendors, no warehouses, no middlemen. Every order supports a real family business and keeps the trust they’ve built in your community over years.
+            </p>
+          </div>
+
+          {/* Feature cards */}
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { icon: 'Zap',       title: 'Quick',      desc: 'Delivered in 10-15 mins', bg: 'from-amber-400 to-orange-400',   iconColor: 'text-white' },
               { icon: 'Leaf',      title: 'Farm Fresh', desc: 'Sourced & delivered fresh', bg: 'from-emerald-400 to-green-500', iconColor: 'text-white' },
@@ -554,7 +577,7 @@ export default function App() {
           {/* Footer */}
           <div className="mt-8 pb-4 border-t border-gray-300 dark:border-slate-700 pt-5 space-y-3">
 
-            {/* Contact */}
+            {/* Contact — store support */}
             {(settings.support_phone || settings.whatsapp_number || settings.store_address) && (
               <div className="flex items-center justify-center gap-4 flex-wrap">
                 {settings.support_phone && (
@@ -583,6 +606,7 @@ export default function App() {
                 )}
               </div>
             )}
+
 
             {/* Quick links */}
             <div className="flex items-center justify-center gap-1 flex-wrap">

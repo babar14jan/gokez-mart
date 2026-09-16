@@ -47,7 +47,7 @@ export default function GrievancePage() {
         <h1 className="text-sm font-bold text-gray-900 dark:text-white">Submit a Grievance</h1>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 space-y-4 pb-24">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 space-y-4 pb-36">
 
         {/* Submit form */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">

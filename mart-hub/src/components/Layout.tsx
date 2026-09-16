@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, Tag, ClipboardList,
   Users, Settings, Shield, QrCode, Plus, Boxes,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
-  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun,
+  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
@@ -21,6 +21,7 @@ const NAV_ALL = [
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
   { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Feedback',         href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'My Deliveries',      href: '/delivery',            icon: ClipboardList,   roles: ['delivery_staff', 'staff'] },
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
   { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
@@ -130,6 +131,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Requests',
     '/catalog': 'Catalog',
+    '/feedback': 'Feedback',
     '/team': 'My Team',
     '/delivery': 'My Deliveries',
   };
@@ -203,23 +205,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Sticky header */}
         <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
-          <div className="flex items-center justify-between h-14 px-4 sm:px-6 gap-4">
+          <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery'].includes(pathname) ? (
+              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback'].includes(pathname) ? (
                 <button onClick={() => navigate(-1)}
                   className="p-2 -ml-1 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
                   <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
                 </button>
               ) : pathname === '/' ? (
-                <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-8 object-contain" />
+                <div className="flex flex-col items-start">
+                  <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-8 object-contain object-left" />
+                  <p className="text-[9px] font-bold text-gray-900 dark:text-white tracking-wide leading-none mt-0.5">
+                    Bringing local stores online.
+                  </p>
+                </div>
               ) : (
-                <span className="text-sm font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+                <span className="text-base font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
               )}
             </div>
 
             {/* Desktop header — page title only */}
-            <span className="hidden lg:block text-sm font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+            <span className="hidden lg:block text-base font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
 
             <div className="flex-1" />
 

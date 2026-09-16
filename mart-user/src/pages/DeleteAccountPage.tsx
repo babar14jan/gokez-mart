@@ -40,7 +40,7 @@ export default function DeleteAccountPage() {
         <h1 className="text-sm font-bold text-gray-900 dark:text-white">Delete My Account</h1>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 pb-24 space-y-4">
+      <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 pb-36 space-y-4">
 
         {loading ? (
           <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>

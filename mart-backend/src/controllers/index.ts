@@ -905,6 +905,81 @@ export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res
   res.json({ success: true, data: { url: publicUrl } });
 });
 
+// ── Feedback ────────────────────────────────────────────────────────────────────────────────
+
+export const customerSubmitFeedback = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { rating, category, message, storeId, orderId } = req.body;
+  if (!rating || rating < 1 || rating > 5) { res.status(400).json({ success: false, error: 'Rating 1-5 required' }); return; }
+  if (!category) { res.status(400).json({ success: false, error: 'Category required' }); return; }
+
+  // Fetch customer details
+  const custRes = await query<{ name: string | null; phone: string }>(
+    `SELECT name, phone FROM mart_customers WHERE id = $1`, [req.customer!.id]
+  );
+  const customer = custRes.rows[0];
+
+  // Fetch store name if storeId provided
+  let storeName = null;
+  if (storeId) {
+    const storeRes = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId]);
+    storeName = storeRes.rows[0]?.name || null;
+  }
+
+  const result = await query(
+    `INSERT INTO mart_feedback (customer_id, store_id, order_id, rating, category, message, customer_name, customer_phone, store_name)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id, rating, category, created_at as "createdAt"`,
+    [req.customer!.id, storeId || null, orderId || null, rating, category,
+     message?.trim() || null, customer?.name || null, customer?.phone || null, storeName]
+  );
+  res.status(201).json({ success: true, data: result.rows[0], message: 'Thank you for your feedback!' });
+});
+
+export const adminGetFeedback = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const { rating, category, limit, offset } = req.query;
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let i = 1;
+
+  // Super admin sees all, store roles see only their store
+  if (req.admin?.role !== 'super_admin') {
+    conditions.push(`store_id = $${i++}`); params.push(storeId);
+  } else if (req.query.storeId) {
+    conditions.push(`store_id = $${i++}`); params.push(req.query.storeId);
+  }
+  if (rating)   { conditions.push(`rating = $${i++}`);   params.push(parseInt(rating as string)); }
+  if (category) { conditions.push(`category = $${i++}`); params.push(category); }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  params.push(parseInt(limit as string) || 50);
+  params.push(parseInt(offset as string) || 0);
+
+  const result = await query(
+    `SELECT id, rating, category, message, customer_name as "customerName",
+            customer_phone as "customerPhone", store_name as "storeName",
+            created_at as "createdAt"
+     FROM mart_feedback ${where}
+     ORDER BY created_at DESC
+     LIMIT $${i} OFFSET $${i+1}`,
+    params
+  );
+
+  // Summary stats
+  const statsRes = await query(
+    `SELECT
+       COUNT(*)::int as total,
+       ROUND(AVG(rating)::numeric, 1)::float as avg_rating,
+       COUNT(*) FILTER (WHERE rating = 5)::int as five_star,
+       COUNT(*) FILTER (WHERE rating = 4)::int as four_star,
+       COUNT(*) FILTER (WHERE rating <= 3)::int as low_star
+     FROM mart_feedback ${where}`,
+    params.slice(0, -2)
+  );
+
+  res.json({ success: true, data: result.rows, stats: statsRes.rows[0] });
+});
+
 // ── Admin photo upload ────────────────────────────────────────────────────────
 
 export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Response) => {
