@@ -58,43 +58,75 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
 }));
 
+// ── Body parsing BEFORE rate limiters so req.body is available ────────────────
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
+// ── Input sanitization ────────────────────────────────────────────────────────
+app.use(mongoSanitize());
+app.use(hpp());
+
 // ── Rate limiting ─────────────────────────────────────────────────────────────
-// General API — 200 req / 15 min
+const isProd = config.env === 'production';
+
+// 1. General API — 300 req / 15 min per IP
 app.use('/api/v1', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: config.env === 'production' ? 200 : 1000,
+  max: isProd ? 300 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests, please try again later' },
   skip: (req) => req.path === '/health',
 }));
 
-// Auth endpoints — 10 req / 15 min
-app.use('/api/v1/auth', rateLimit({
+// 2. OTP send — 3 req / 15 min per phone number (falls back to IP)
+app.use('/api/v1/auth/send-otp', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: config.env === 'production' ? 10 : 100,
+  max: isProd ? 3 : 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: 'Too many authentication attempts, please try again later' },
-  keyGenerator: (req) => req.body?.phone || req.ip || 'unknown',
+  message: { success: false, error: 'Too many OTP requests. Please wait 15 minutes before trying again.' },
+  keyGenerator: (req) => {
+    const phone = req.body?.phone?.replace(/\D/g, '');
+    return phone && phone.length === 10 ? `otp_send_${phone}` : req.ip || 'unknown';
+  },
 }));
 
-// Admin login — 5 req / 15 min
+// 3. OTP verify — 5 req / 15 min per phone (DB also enforces 5 attempts)
+app.use('/api/v1/auth/verify-otp', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 5 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many verification attempts. Please request a new OTP.' },
+  keyGenerator: (req) => {
+    const phone = req.body?.phone?.replace(/\D/g, '');
+    return phone && phone.length === 10 ? `otp_verify_${phone}` : req.ip || 'unknown';
+  },
+}));
+
+// 4. Admin login — 5 req / 15 min per IP + username combo
 app.use('/api/v1/admin/login', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: config.env === 'production' ? 5 : 50,
+  max: isProd ? 5 : 50,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: 'Too many login attempts, please try again later' },
+  message: { success: false, error: 'Too many login attempts. Please try again in 15 minutes.' },
+  keyGenerator: (req) => {
+    const username = req.body?.username?.toLowerCase().trim();
+    return username ? `admin_login_${username}_${req.ip}` : req.ip || 'unknown';
+  },
 }));
 
-// ── Body parsing (strict size limits) ────────────────────────────────────────
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: true, limit: '100kb' }));
-
-// ── Input sanitization ────────────────────────────────────────────────────────
-app.use(mongoSanitize());  // prevent NoSQL injection via $ operators
-app.use(hpp());            // prevent HTTP parameter pollution
+// 5. Order placement — 10 orders / 5 min per IP (prevent order spam)
+app.use('/api/v1/orders', rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: isProd ? 10 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many orders placed. Please wait a few minutes.' },
+  skip: (req) => req.method !== 'POST',
+}));
 
 // ── Compression & logging ─────────────────────────────────────────────────────
 app.use(compression());

@@ -53,13 +53,22 @@ export const authApi = {
   verifyOtp: (phone: string, otp: string) => api.post('/auth/verify-otp', { phone, otp }),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
-  updateProfile: (data: { name?: string; address?: string; address2?: string }) => api.put('/auth/profile', data),
+  updateProfile: (data: { name?: string; address?: string; address2?: string; photoUrl?: string }) => api.put('/auth/profile', data),
   getOrders: () => api.get('/auth/orders'),
+  uploadPhoto: (file: File) => {
+    const form = new FormData();
+    form.append('photo', file);
+    return api.post('/auth/upload/photo', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
   cancelOrder: (orderId: string) => api.put(`/auth/orders/${orderId}/cancel`),
   requestDeletion: (reason?: string) => api.post('/compliance/deletion', { reason }),
   getDeletionStatus: () => api.get('/compliance/deletion'),
   submitGrievance: (subject: string, description: string) => api.post('/compliance/grievances', { subject, description }),
   getGrievances: () => api.get('/compliance/grievances'),
+  requestDataExport: () => api.post('/compliance/data-export'),
+  getDataExport: () => api.get('/compliance/data-export'),
+  getMarketingConsent: () => api.get('/compliance/marketing-consent'),
+  updateMarketingConsent: (granted: boolean) => api.put('/compliance/marketing-consent', { granted }),
 };
 
 export const storeApi = {

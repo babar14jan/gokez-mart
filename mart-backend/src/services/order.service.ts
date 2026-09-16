@@ -177,7 +177,7 @@ export class OrderService {
               o.guest_phone as "guestPhone", o.guest_address as "guestAddress",
               o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
               o.total::float, o.payment_method as "paymentMethod",
-              o.status, o.notes, o.created_at as "createdAt",
+              o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
               o.delivery_by_name as "deliveryByName",
               o.delivery_by_phone as "deliveryByPhone",
               o.delivery_preference as "deliveryPreference",

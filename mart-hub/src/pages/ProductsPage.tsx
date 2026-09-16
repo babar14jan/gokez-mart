@@ -75,7 +75,9 @@ export default function ProductsPage() {
   // Filter + Sort (replaces tabs + sortModes)
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [sortMode, setSortMode] = useState<SortMode>('manual');
+  const [sortMode, setSortMode] = useState<SortMode>(
+    () => (localStorage.getItem('hub_products_sort') as SortMode) || 'manual'
+  );
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
 
@@ -498,7 +500,7 @@ export default function ProductsPage() {
             <div className="absolute left-0 top-full mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-30 overflow-hidden p-2">
               {(['manual', 'discount', 'stock', 'az'] as SortMode[]).map(m => (
                 (!inventoryEnabled && m === 'stock') ? null :
-                <button key={m} onClick={() => { setSortMode(m); setShowSortMenu(false); }}
+                <button key={m} onClick={() => { setSortMode(m); localStorage.setItem('hub_products_sort', m); setShowSortMenu(false); }}
                   className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     sortMode === m ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
                   }`}>
@@ -518,7 +520,8 @@ export default function ProductsPage() {
             <GripVertical className="w-3.5 h-3.5" /> Reorder
           </button>
         ) : (
-          <>
+          /* Desktop reorder buttons — hidden on mobile, shown via sticky bar below */
+          <div className="hidden sm:flex items-center gap-2">
             <button onClick={cancelReorder}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-gray-50 transition-all">
               <X className="w-3.5 h-3.5" /> Cancel
@@ -527,7 +530,7 @@ export default function ProductsPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all">
               {savingOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Save Order
             </button>
-          </>
+          </div>
         )}
 
         <div className="flex-1" />
@@ -559,7 +562,7 @@ export default function ProductsPage() {
       )}
 
       {/* Product list */}
-      <div className="page-card">
+      <div className={`page-card ${reorderMode ? 'pb-24 sm:pb-0' : ''}`}>
         {products.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -588,6 +591,23 @@ export default function ProductsPage() {
       )}
 
       <ToastContainer toasts={toasts} />
+
+      {/* Mobile sticky reorder bar */}
+      {reorderMode && (
+        <div className="sm:hidden fixed bottom-20 left-0 right-0 z-40 px-4">
+          <div className="flex gap-2 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 p-2">
+            <button onClick={cancelReorder}
+              className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 transition-all">
+              <X className="w-3.5 h-3.5" /> Cancel
+            </button>
+            <button onClick={saveReorder} disabled={savingOrder}
+              className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all">
+              {savingOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              {savingOrder ? 'Saving...' : 'Save Order'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Double-confirm delete (modal) */}
       {confirmDeleteProduct && (

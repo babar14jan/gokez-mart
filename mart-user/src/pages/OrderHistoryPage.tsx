@@ -29,10 +29,19 @@ const STATUS_EMOJI: Record<string, string> = {
   delivered: '✅', cancelled: '❌', failed_delivery: '😔', terminated: '❌',
 };
 
-const CLOSED = ['delivered', 'cancelled', 'failed_delivery', 'terminated'];
+const CLOSED = ['cancelled', 'failed_delivery', 'terminated'];
+const DELIVERED = ['delivered'];
+const ALL_CLOSED = [...CLOSED, ...DELIVERED];
+
+// Only show delivered in current tab if delivered within last 30 mins
+function isRecentlyDelivered(order: any): boolean {
+  if (order.status !== 'delivered') return false;
+  const updated = new Date(order.updatedAt || order.createdAt).getTime();
+  return Date.now() - updated < 30 * 60 * 1000;
+}
 
 function hasActiveOrder(orders: any[]) {
-  return orders.some(o => !CLOSED.includes(o.status));
+  return orders.some(o => !ALL_CLOSED.includes(o.status));
 }
 
 function formatDateTime(dateStr: string) {
@@ -220,12 +229,15 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
   useEffect(() => { fetchOrders(); }, []);
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
-    if (hasActiveOrder(orders)) pollRef.current = setInterval(() => fetchOrders(true), 10000);
+    // Keep polling while any order is not fully closed
+    const hasLive = orders.some(o => !ALL_CLOSED.includes(o.status));
+    if (hasLive) pollRef.current = setInterval(() => fetchOrders(true), 10000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [orders]);
 
-  const activeOrders = orders.filter(o => !CLOSED.includes(o.status));
-  const pastOrders = orders.filter(o => CLOSED.includes(o.status));
+  const activeOrders = orders.filter(o => !ALL_CLOSED.includes(o.status));
+  const deliveredOrders = orders.filter(o => isRecentlyDelivered(o));
+  const pastOrders = orders.filter(o => ALL_CLOSED.includes(o.status) && !isRecentlyDelivered(o));
 
   // Filtered past orders
   const filteredPast = pastOrders.filter(o => {
@@ -239,8 +251,8 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
     return matchFilter && matchSearch;
   });
 
-  // Auto-switch to past tab if no active orders
-  const showTab = activeOrders.length > 0 ? activeTab : 'past';
+  // Auto-switch to past tab if no active or delivered orders
+  const showTab = (activeOrders.length > 0 || deliveredOrders.length > 0) ? activeTab : 'past';
 
   if (loading) return (
     <div className="flex justify-center items-center py-24">
@@ -282,9 +294,9 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
               : 'text-gray-500 dark:text-slate-400'
           }`}>
           Current
-          {activeOrders.length > 0 && (
+          {(activeOrders.length + deliveredOrders.length) > 0 && (
             <span className="w-5 h-5 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-              {activeOrders.length}
+              {activeOrders.length + deliveredOrders.length}
             </span>
           )}
         </button>
@@ -319,13 +331,12 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
       {/* Past tab: search + filter */}
       {showTab === 'past' && pastOrders.length > 0 && (
         <div className="space-y-2">
-          {/* Search */}
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
             <input
               type="text" value={pastSearch}
               onChange={e => setPastSearch(e.target.value)}
-              placeholder="Search by order # or product..."
+              placeholder="Search by order #..."
               className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm border-0"
             />
             {pastSearch && (
@@ -334,7 +345,6 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
               </button>
             )}
           </div>
-          {/* Filter pills */}
           <div className="flex gap-2">
             {(['all', 'delivered', 'cancelled'] as const).map(f => (
               <button key={f} onClick={() => setPastFilter(f)}
@@ -343,21 +353,24 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
                     ? 'bg-emerald-500 text-white'
                     : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 shadow-sm'
                 }`}>
-                {f === 'all' ? 'All' : f === 'delivered' ? '✅ Delivered' : '❌ Cancelled'}
+                {f === 'all' ? 'All' : f === 'delivered' ? 'Delivered' : 'Cancelled'}
               </button>
             ))}
           </div>
         </div>
-      )}      {/* ── Current tab: Active orders ── */}
+      )}
+
+      {/* ── Current tab: Active orders ── */}
       {showTab === 'current' && (
-        activeOrders.length === 0 ? (
+        activeOrders.length === 0 && deliveredOrders.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-4xl mb-3">✅</div>
             <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No active orders</p>
             <p className="text-xs text-gray-400">All your orders have been delivered.</p>
           </div>
         ) : (
-          activeOrders.map(order => {
+          <>
+            {activeOrders.map(order => {
         const curStep = STEPS.indexOf(STATUS_TO_STEP[order.status] || order.status);
         const canCancel = ['pending', 'confirmed'].includes(order.status);
         return (
@@ -467,7 +480,44 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
             )}
           </div>
         );
-      })
+      })}
+
+            {/* Delivered orders — same style as past cards */}
+            {deliveredOrders.map(order => (
+              <div key={order.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-emerald-200 dark:border-emerald-800 overflow-hidden shadow-sm">
+                <div className="px-4 pt-4 pb-3">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">
+                          🎉 Order Delivered!
+                        </p>
+                        <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                          {(order.items || []).length} items
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Placed {formatDateTime(order.createdAt)}
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">₹{order.total}</span>
+                  </div>
+                  <ItemThumbnails items={order.items || []} />
+                </div>
+                <div className="flex border-t border-gray-100 dark:border-slate-700">
+                  <button onClick={() => setSelectedOrder(order)}
+                    className="flex-1 py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                    View Details
+                  </button>
+                  <div className="w-px bg-gray-100 dark:bg-slate-700" />
+                  <button onClick={() => handleOrderAgain(order)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
+                    <RotateCcw className="w-3.5 h-3.5" /> Order Again
+                  </button>
+                </div>
+              </div>
+            ))}
+          </>
         )
       )}
 

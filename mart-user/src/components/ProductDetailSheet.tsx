@@ -124,7 +124,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
                 <p className="text-sm font-semibold text-gray-400 dark:text-slate-500">Out of Stock</p>
               </div>
             ) : qty === 0 ? (
-              <button onClick={() => addItem(product)}
+              <button onClick={() => addItem(product, product.unit, discountedPrice)}
                 className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold rounded-2xl active:scale-[0.98] transition-all shadow-sm shadow-emerald-200 dark:shadow-none">
                 Add to Cart
               </button>
@@ -135,7 +135,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
                   <Minus className="w-5 h-5 text-white" strokeWidth={2.5} />
                 </button>
                 <span className="text-lg font-bold text-white">{qty} in cart</span>
-                <button onClick={() => addItem(product)}
+                <button onClick={() => addItem(product, product.unit, discountedPrice)}
                   className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center active:scale-90 transition-transform">
                   <Plus className="w-5 h-5 text-white" strokeWidth={2.5} />
                 </button>

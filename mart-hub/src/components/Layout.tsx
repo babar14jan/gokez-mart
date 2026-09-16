@@ -25,7 +25,7 @@ const NAV_ALL = [
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
   { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Stores',             href: '/stores',              icon: LayoutDashboard, roles: ['super_admin'] },
-  { label: 'Store Applications', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
+  { label: 'Store Requests', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
   { label: 'Users',              href: '/users',               icon: Users,           roles: ['super_admin'] },
   { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'] },
 ];
@@ -128,7 +128,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/inventory': 'Inventory',
     '/profile': 'My Profile', '/change-password': 'Change Password',
     '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
-    '/store-applications': 'Store Applications',
+    '/store-applications': 'Store Requests',
     '/catalog': 'Catalog',
     '/team': 'My Team',
     '/delivery': 'My Deliveries',
@@ -163,9 +163,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* ── Desktop sidebar ── */}
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
-        {/* Logo */}
-        <div className={`flex items-center justify-center border-b border-gray-200 dark:border-slate-700 flex-shrink-0 ${collapsed ? 'px-2 py-5' : 'py-5'}`}>
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-12 w-auto object-contain" />
+        {/* Logo + slogan */}
+        <div className={`flex flex-col items-start justify-center border-b border-gray-200 dark:border-slate-700 flex-shrink-0 px-4 ${collapsed ? 'py-5' : 'py-4'}`}>
+          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-12 w-auto object-contain object-left" />
+          {!collapsed && (
+            <p className="text-[9px] font-bold text-gray-900 dark:text-white tracking-wide mt-1">
+              Bringing local stores online.
+            </p>
+          )}
         </div>
 
         <SidebarLinks />

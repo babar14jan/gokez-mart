@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Loader2, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
-import { complianceApi } from '../services/api';
+import { Loader2, CheckCircle, XCircle, MessageSquare, ShieldCheck } from 'lucide-react';
+import { complianceApi, auditApi } from '../services/api';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -17,12 +17,18 @@ const DELETION_STATUS_COLORS: Record<string, string> = {
   rejected: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
 };
 
-type Tab = 'grievances' | 'deletions';
+const AUDIT_STATUS_COLORS: Record<string, string> = {
+  success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  failed:  'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+};
+
+type Tab = 'grievances' | 'deletions' | 'audit';
 
 export default function CompliancePage() {
   const [tab, setTab] = useState<Tab>('grievances');
   const [grievances, setGrievances] = useState<any[]>([]);
   const [deletions, setDeletions] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [responding, setResponding] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
@@ -31,12 +37,14 @@ export default function CompliancePage() {
 
   const load = async () => {
     setLoading(true);
-    const [gr, dr] = await Promise.all([
+    const [gr, dr, al] = await Promise.all([
       complianceApi.getGrievances().catch(() => ({ data: { data: [] } })),
       complianceApi.getDeletions().catch(() => ({ data: { data: [] } })),
+      auditApi.getLogs({ limit: 200 }).catch(() => ({ data: { data: [] } })),
     ]);
     setGrievances(gr.data.data || []);
     setDeletions(dr.data.data || []);
+    setAuditLogs(al.data.data || []);
     setLoading(false);
   };
 
@@ -60,14 +68,19 @@ export default function CompliancePage() {
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>;
 
+  const tabs: [Tab, string, number][] = [
+    ['grievances', 'Grievances',       grievances.filter(g => g.status === 'open').length],
+    ['deletions',  'Deletion Requests', deletions.filter(d => d.status === 'pending').length],
+    ['audit',      'Audit Log',         0],
+  ];
+
   return (
     <div className="space-y-4">
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-slate-700">
-        {([['grievances', 'Grievances', grievances.filter(g => g.status === 'open').length],
-           ['deletions',  'Deletion Requests', deletions.filter(d => d.status === 'pending').length]] as const).map(([id, label, count]) => (
+      <div className="flex border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
+        {tabs.map(([id, label, count]) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all flex-shrink-0 ${
               tab === id ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300'
             }`}>
             {label}
@@ -165,6 +178,38 @@ export default function CompliancePage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Audit Log */}
+      {tab === 'audit' && (
+        <div className="space-y-2">
+          {auditLogs.length === 0 ? (
+            <div className="page-card text-center py-12 text-gray-400 dark:text-slate-500">
+              <ShieldCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No audit logs yet.</p>
+            </div>
+          ) : (
+            <div className="page-card divide-y divide-gray-50 dark:divide-slate-700">
+              {auditLogs.map(log => (
+                <div key={log.id} className="flex items-start gap-3 px-4 py-3">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${log.status === 'success' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-gray-900 dark:text-white">{log.username || '—'}</span>
+                      <span className="text-[10px] text-gray-400 dark:text-slate-500 capitalize">{log.role?.replace(/_/g, ' ')}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${AUDIT_STATUS_COLORS[log.status]}`}>{log.action}</span>
+                    </div>
+                    {log.detail && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{log.detail}</p>}
+                    {log.ipAddress && <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">IP: {log.ipAddress}</p>}
+                  </div>
+                  <span className="text-[10px] text-gray-400 dark:text-slate-500 flex-shrink-0">
+                    {new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

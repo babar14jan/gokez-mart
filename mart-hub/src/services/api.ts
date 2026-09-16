@@ -118,7 +118,7 @@ export const usersApi = {
   getAll: () => api.get('/admin/users'),
   create: (data: { username: string; password: string; name?: string; email?: string; phone?: string; role: string; storeId?: string }) =>
     api.post('/admin/users', data),
-  update: (id: string, data: { name?: string; email?: string; phone?: string; role?: string; storeId?: string; password?: string }) =>
+  update: (id: string, data: { name?: string; email?: string; phone?: string; role?: string; storeId?: string; password?: string; isActive?: boolean }) =>
     api.put(`/admin/users/${id}`, data),
   delete: (id: string) => api.delete(`/admin/users/${id}`),
 };
@@ -170,4 +170,10 @@ export const teamApi = {
   lookupByPhone: (phone: string) => api.get('/admin/users/lookup', { params: { phone } }),
   getUserStores: (userId: string) => api.get(`/admin/users/${userId}/stores`),
   deactivateStore: (storeId: string) => api.put(`/admin/stores/${storeId}/deactivate`),
+};
+
+// ── Compliance extras ─────────────────────────────────────────────────────────
+export const auditApi = {
+  getLogs: (params?: { adminId?: string; action?: string; limit?: number }) =>
+    api.get('/admin/compliance/audit-logs', { params }),
 };

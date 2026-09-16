@@ -66,21 +66,21 @@ export default function ProductCard({ product }: ProductCardProps) {
             <div className="absolute bottom-0 right-0 z-10" onClick={e => e.stopPropagation()}>
               {qty === 0 ? (
                 <button
-                  onClick={() => addItem(product)}
-                  className="bg-white dark:bg-slate-800 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-tl-2xl rounded-br-2xl shadow-md active:scale-95 transition-all hover:bg-emerald-50"
+                  onClick={() => addItem(product, product.unit, discountedPrice)}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-tl-2xl rounded-br-2xl shadow-md active:scale-95 transition-all"
                 >
                   ADD
                 </button>
               ) : (
-                <div className="flex items-center gap-1 bg-emerald-500 rounded-tl-2xl rounded-br-2xl px-1.5 py-1 shadow-lg">
+                <div className="flex items-center bg-emerald-500 rounded-tl-2xl rounded-br-2xl shadow-lg overflow-hidden">
                   <button onClick={() => updateQty(product.id, product.unit, qty - 1)}
-                    className="w-6 h-6 flex items-center justify-center text-white active:scale-90 transition-transform">
-                    <Minus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    className="w-7 h-7 flex items-center justify-center text-white active:bg-emerald-600 transition-colors">
+                    <Minus className="w-3 h-3" strokeWidth={2.5} />
                   </button>
-                  <span className="text-sm font-bold text-white w-5 text-center">{qty}</span>
-                  <button onClick={() => addItem(product)}
-                    className="w-6 h-6 flex items-center justify-center text-white active:scale-90 transition-transform">
-                    <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  <span className="text-[11px] font-bold text-white w-4 text-center">{qty}</span>
+                  <button onClick={() => addItem(product, product.unit, discountedPrice)}
+                    className="w-7 h-7 flex items-center justify-center text-white active:bg-emerald-600 transition-colors">
+                    <Plus className="w-3 h-3" strokeWidth={2.5} />
                   </button>
                 </div>
               )}
@@ -93,9 +93,9 @@ export default function ProductCard({ product }: ProductCardProps) {
           <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1" style={{ minHeight: '2.2em' }}>{displayName(product)}</p>
           <div className="flex items-center justify-between gap-1 mt-auto">
             <div className="flex flex-col">
-              <span className="text-[13px] font-bold text-gray-900 dark:text-white">₹{discountedPrice}</span>
+              <span className="text-[15px] font-bold text-gray-900 dark:text-white leading-tight">₹{discountedPrice}</span>
               {savings > 0 && (
-                <span className="text-[10px] text-gray-400 dark:text-slate-500 line-through leading-none">₹{product.price}</span>
+                <span className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 line-through leading-none">₹{product.price}</span>
               )}
             </div>
             <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-md flex-shrink-0">{product.unit}</span>

@@ -146,7 +146,8 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
           </>
         ) : step === 'phone' ? (
           <>
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-1 text-center">Welcome to GokezMart 👋</h2>
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-1 text-center">Welcome to Gokez Mart 👋</h2>
+            <p className="text-xs font-bold text-gray-900 dark:text-white text-center mb-4">Shop local. Support local.</p>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-5 text-center">
               Enter your mobile number to continue
             </p>
