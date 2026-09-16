@@ -41,9 +41,10 @@ function formatStock(qty: number, unit: string): string {
 }
 
 function stockStatus(item: InventoryItem): 'untracked' | 'out' | 'low' | 'ok' {
+  // If manually marked out_of_stock or availability is off, treat as out
+  if (item.availabilityStatus === 'out_of_stock') return 'out';
   if (item.stockQuantity === null) return 'untracked';
   if (item.stockQuantity <= 0) return 'out';
-  // Only show 'low' if a threshold has been explicitly set
   if (item.lowStockThreshold !== null && item.stockQuantity <= item.lowStockThreshold) return 'low';
   return 'ok';
 }
@@ -90,11 +91,8 @@ export default function InventoryPage() {
   }, [items, sortLowFirst]);
 
   const tracked  = items.filter(i => i.stockQuantity !== null);
-  const outCount = tracked.filter(i => (i.stockQuantity ?? 0) <= 0).length;
-  const lowCount = tracked.filter(i => {
-    if ((i.stockQuantity ?? 0) <= 0) return false;
-    return i.lowStockThreshold !== null && (i.stockQuantity ?? 0) <= i.lowStockThreshold;
-  }).length;
+  const outCount = items.filter(i => stockStatus(i) === 'out').length;
+  const lowCount = items.filter(i => stockStatus(i) === 'low').length;
 
   const enterEditMode = () => {
     const rows: Record<string, EditRow> = {};

@@ -112,17 +112,32 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
   const result = await query<{
     id: string; username: string; password_hash: string;
     name: string | null; email: string | null; phone: string | null;
-    role: string; store_id: string | null;
+    role: string; store_id: string | null; is_active: boolean;
   }>(
-    `SELECT id, username, password_hash, name, email, phone, role, store_id
+    `SELECT id, username, password_hash, name, email, phone, role, store_id, is_active
      FROM mart_admins WHERE username = $1`, [username]
   );
   const admin = result.rows[0];
   if (!admin || !(await bcrypt.compare(password, admin.password_hash))) {
+    // Audit failed login
+    ComplianceService.logAudit({
+      username, action: 'login', detail: `Failed login attempt`,
+      ipAddress: req.ip, userAgent: req.headers['user-agent'], status: 'failed',
+    }).catch(() => {});
     res.status(401).json({ success: false, error: 'Invalid credentials' });
     return;
   }
+  if (!admin.is_active) {
+    res.status(403).json({ success: false, error: 'Your account has been deactivated. Contact your administrator.' });
+    return;
+  }
   await query(`UPDATE mart_admins SET last_login_at = NOW() WHERE id = $1`, [admin.id]);
+  // Audit log
+  ComplianceService.logAudit({
+    adminId: admin.id, username: admin.username, role: admin.role,
+    action: 'login', detail: `Login from ${req.ip}`,
+    ipAddress: req.ip, userAgent: req.headers['user-agent'],
+  }).catch(() => {});
   const token = jwt.sign(
     { id: admin.id, username: admin.username, role: admin.role, storeId: admin.store_id, jti: require('uuid').v4() },
     config.jwt.secret,
@@ -650,6 +665,7 @@ export const adminGetUsers = asyncHandler(async (_req: AdminRequest, res: Respon
   const result = await query(
     `SELECT id, username, name, email, phone, role,
             store_id as "storeId",
+            is_active as "isActive",
             last_login_at as "lastLoginAt",
             created_at as "createdAt"
      FROM mart_admins
@@ -689,20 +705,23 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
 });
 
 export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, email, phone, role, storeId, password } = req.body;
+  const { name, email, phone, role, storeId, password, isActive } = req.body;
   const { id } = req.params;
-  // Prevent editing own role
   if (id === req.admin!.id && role && role !== req.admin!.role) {
     res.status(400).json({ success: false, error: 'Cannot change your own role' }); return;
+  }
+  if (id === req.admin!.id && isActive === false) {
+    res.status(400).json({ success: false, error: 'Cannot deactivate your own account' }); return;
   }
   const fields: string[] = [];
   const params: unknown[] = [];
   let i = 1;
-  if (name !== undefined)    { fields.push(`name = $${i++}`);     params.push(name?.trim() || null); }
-  if (email !== undefined)   { fields.push(`email = $${i++}`);    params.push(email?.trim() || null); }
-  if (phone !== undefined)   { fields.push(`phone = $${i++}`);    params.push(phone?.trim() || null); }
-  if (role !== undefined)    { fields.push(`role = $${i++}`);     params.push(role); }
-  if (storeId !== undefined) { fields.push(`store_id = $${i++}`); params.push(role === 'super_admin' ? null : storeId); }
+  if (name !== undefined)     { fields.push(`name = $${i++}`);      params.push(name?.trim() || null); }
+  if (email !== undefined)    { fields.push(`email = $${i++}`);     params.push(email?.trim() || null); }
+  if (phone !== undefined)    { fields.push(`phone = $${i++}`);     params.push(phone?.trim() || null); }
+  if (role !== undefined)     { fields.push(`role = $${i++}`);      params.push(role); }
+  if (storeId !== undefined)  { fields.push(`store_id = $${i++}`);  params.push(role === 'super_admin' ? null : storeId); }
+  if (isActive !== undefined) { fields.push(`is_active = $${i++}`); params.push(isActive); }
   if (password) {
     if (password.length < 8) { res.status(400).json({ success: false, error: 'Password must be at least 8 characters' }); return; }
     const hash = await bcrypt.hash(password, 12);
@@ -713,7 +732,7 @@ export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Respo
   params.push(id);
   const result = await query(
     `UPDATE mart_admins SET ${fields.join(', ')} WHERE id = $${i}
-     RETURNING id, username, name, email, phone, role, store_id as "storeId"`,
+     RETURNING id, username, name, email, phone, role, store_id as "storeId", is_active as "isActive"`,
     params
   );
   if (!result.rows[0]) { res.status(404).json({ success: false, error: 'User not found' }); return; }
@@ -824,6 +843,66 @@ export const customerLogout = asyncHandler(async (req: CustomerRequest, res: Res
     } catch {}
   }
   res.json({ success: true, message: 'Logged out' });
+});
+
+// ── Audit log ─────────────────────────────────────────────────────────────────
+
+export const adminGetAuditLogs = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { adminId, action, limit } = req.query;
+  const logs = await ComplianceService.getAuditLogs({
+    adminId: adminId as string,
+    action: action as string,
+    limit: limit ? parseInt(limit as string) : 200,
+  });
+  res.json({ success: true, data: logs });
+});
+
+// ── Data export (Right to Portability) ───────────────────────────────────────
+
+export const customerRequestDataExport = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const result = await ComplianceService.requestDataExport(req.customer!.id);
+  res.json({ success: true, data: result, message: 'Your data export is ready.' });
+});
+
+export const customerGetDataExport = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const result = await ComplianceService.getDataExport(req.customer!.id);
+  if (!result) { res.status(404).json({ success: false, error: 'No export found' }); return; }
+  res.json({ success: true, data: result });
+});
+
+// ── Marketing consent ─────────────────────────────────────────────────────────
+
+export const customerUpdateMarketingConsent = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { granted } = req.body;
+  if (typeof granted !== 'boolean') { res.status(400).json({ success: false, error: 'granted must be boolean' }); return; }
+  await ComplianceService.updateMarketingConsent(req.customer!.id, granted);
+  res.json({ success: true, message: `Marketing consent ${granted ? 'granted' : 'withdrawn'}` });
+});
+
+export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const granted = await ComplianceService.getMarketingConsent(req.customer!.id);
+  res.json({ success: true, data: { granted } });
+});
+
+export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
+  const bucket = config.supabase.bucket;
+  const filename = `customers/${req.customer!.id}-${Date.now()}.${req.file.mimetype.split('/')[1] || 'jpg'}`;
+  const uploadUrl = `${config.supabase.url}/storage/v1/object/${bucket}/${filename}`;
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.supabase.serviceRoleKey}`,
+      'Content-Type': req.file.mimetype,
+      'x-upsert': 'true',
+      'cache-control': 'max-age=31536000',
+    },
+    body: req.file.buffer,
+  });
+  if (!uploadRes.ok) { res.status(500).json({ success: false, error: 'Upload failed' }); return; }
+  const publicUrl = `${config.supabase.url}/storage/v1/object/public/${bucket}/${filename}`;
+  await CustomerAuthService.updateProfile(req.customer!.id, { photoUrl: publicUrl });
+  res.json({ success: true, data: { url: publicUrl } });
 });
 
 // ── Admin photo upload ────────────────────────────────────────────────────────

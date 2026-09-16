@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -39,84 +39,53 @@ interface ProfilePageProps {
   onNavigate?: (view: string) => void;
 }
 
-function AddressCard({
-  label, icon, stored, fieldKey, onSave, saving, saved,
-}: {
-  label: string; icon: 'primary' | 'secondary';
-  stored: string | null; fieldKey: 'address' | 'address2';
-  onSave: (key: 'address' | 'address2', val: string) => Promise<void>;
-  saving: string | null; saved: string | null;
+
+function AddressModalForm({ stored, onSave, onCancel, saving }: {
+  stored: string | null;
+  onSave: (val: string) => Promise<void>;
+  onCancel: () => void;
+  saving: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<AddressFields>(parse(stored));
   const f = (k: keyof AddressFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
-
-  const handleSave = async () => {
-    await onSave(fieldKey, serialize(form));
-    setEditing(false);
-  };
-
-  const cancel = () => { setForm(parse(stored)); setEditing(false); };
-
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <MapPin className={`w-3.5 h-3.5 flex-shrink-0 ${icon === 'primary' ? 'text-emerald-500' : 'text-gray-400'}`} />
-          <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">{label}</span>
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] font-medium text-gray-400 mb-1">Flat / House No.</label>
+          <input type="text" value={form.flat} onChange={f('flat')} className={inp} placeholder="e.g. A-204" autoFocus />
         </div>
-        {!editing && (
-          <button onClick={() => setEditing(true)}
-            className="p-1 text-gray-400 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
-            {stored ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-          </button>
-        )}
+        <div>
+          <label className="block text-[10px] font-medium text-gray-400 mb-1">Block / Tower</label>
+          <input type="text" value={form.block} onChange={f('block')} className={inp} placeholder="e.g. Block B" />
+        </div>
       </div>
-
-      {editing ? (
-        <div className="space-y-2 mt-1">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-[10px] font-medium text-gray-400 mb-1">Flat / House No.</label>
-              <input type="text" value={form.flat} onChange={f('flat')} className={inp} placeholder="e.g. A-204" autoFocus />
-            </div>
-            <div>
-              <label className="block text-[10px] font-medium text-gray-400 mb-1">Block / Tower</label>
-              <input type="text" value={form.block} onChange={f('block')} className={inp} placeholder="e.g. Block B" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-[10px] font-medium text-gray-400 mb-1">Street / Area</label>
-            <input type="text" value={form.street} onChange={f('street')} className={inp} placeholder="e.g. Kolkata" />
-          </div>
-          <div>
-            <label className="block text-[10px] font-medium text-gray-400 mb-1">Pincode</label>
-            <input type="tel" inputMode="numeric" maxLength={6} value={form.pincode} onChange={f('pincode')} className={inp} placeholder="700102" />
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button onClick={handleSave} disabled={saving === fieldKey}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50">
-              {saving === fieldKey ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
-            </button>
-            <button onClick={cancel}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
-              <X className="w-3 h-3" /> Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm text-gray-700 dark:text-slate-300">
-          {stored || <span className="text-gray-400 italic text-xs">Tap + to add</span>}
-        </p>
-      )}
-      {saved === fieldKey && <p className="text-xs text-emerald-600 mt-1">Saved ✓</p>}
+      <div>
+        <label className="block text-[10px] font-medium text-gray-400 mb-1">Street / Area</label>
+        <input type="text" value={form.street} onChange={f('street')} className={inp} placeholder="e.g. Kolkata" />
+      </div>
+      <div>
+        <label className="block text-[10px] font-medium text-gray-400 mb-1">Pincode</label>
+        <input type="tel" inputMode="numeric" maxLength={6} value={form.pincode} onChange={f('pincode')} className={inp} placeholder="700102" />
+      </div>
+      <div className="flex gap-2 pt-2">
+        <button onClick={onCancel}
+          className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl transition-colors">
+          Cancel
+        </button>
+        <button onClick={() => onSave(serialize(form))} disabled={saving}
+          className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? 'Saving...' : 'Save Address'}
+        </button>
+      </div>
     </div>
   );
 }
 
 export default function ProfilePage({ onBack, supportName, supportPhone, whatsappNumber }: ProfilePageProps) {
-  const { name, phone, address, address2, updateProfile, logout } = useCustomerAuthStore();
+  const { name, phone, address, address2, photoUrl, updateProfile, logout } = useCustomerAuthStore();
   const { setName: syncName } = useCustomerStore();
   const { } = useThemeStore();
 
@@ -131,9 +100,25 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
   const [locationEnabled, setLocationEnabled] = useState(
     localStorage.getItem('mart_location_enabled') !== 'false'
   );
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportReady, setExportReady] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<'address' | 'address2' | null>(null);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const res = await authApi.uploadPhoto(file);
+      updateProfile({ photoUrl: res.data.data.url });
+    } catch { alert('Failed to upload photo. Please try again.'); }
+    finally { setPhotoUploading(false); e.target.value = ''; }
+  };
 
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
+    authApi.getMarketingConsent().then(r => setMarketingConsent(r.data.data.granted)).catch(() => {});
     // Check actual subscription + auto-subscribe if permission granted but no subscription
     if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(reg =>
@@ -190,50 +175,198 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 font-sans">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-3">
 
-        {/* Avatar + name */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              {editingName ? (
-                <div className="flex items-center gap-2">
-                  <input autoFocus type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
-                    className={`${inp} py-1.5 flex-1`} placeholder="Your full name" />
-                  <button onClick={saveName} disabled={saving === 'name'}
-                    className="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg flex-shrink-0 transition-colors">
-                    {saving === 'name' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  </button>
-                  <button onClick={() => { setEditingName(false); setNameVal(name || ''); }}
-                    className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg flex-shrink-0">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+      {/* Profile cover — full width, Facebook style */}
+      {(() => {
+        const initial = name
+          ? name.trim().split(/\s+/).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
+          : (phone || '?')[0].toUpperCase();
+        const gradient = 'from-slate-800 via-purple-900 to-slate-900';
+        return (
+          <div className={`relative bg-gradient-to-br ${gradient} dark:from-violet-900 dark:via-purple-800 dark:to-indigo-900 w-full`} style={{ minHeight: '160px' }}>
+            {/* Decorative circles */}
+            <div className="absolute -right-8 -top-8 w-56 h-56 rounded-full bg-white/10 pointer-events-none" />
+            <div className="absolute right-8 -bottom-12 w-40 h-40 rounded-full bg-white/10 pointer-events-none" />
+            <div className="absolute left-1/3 top-4 w-24 h-24 rounded-full bg-white/5 pointer-events-none" />
+
+            {/* Content pinned to bottom */}
+            <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-4 pt-8 flex items-end gap-4">
+              {/* Avatar */}
+              <div className="relative flex-shrink-0">
+                <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm border-3 border-white/40 flex items-center justify-center shadow-xl overflow-hidden" style={{ border: '3px solid rgba(255,255,255,0.4)' }}>
+                  {photoUrl
+                    ? <img src={photoUrl} alt={name || ''} className="w-full h-full object-cover" />
+                    : <span className="text-3xl font-black text-white drop-shadow tracking-tight">{initial}</span>
+                  }
                 </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white truncate flex-1">{name || 'Add your name'}</p>
-                  <button onClick={() => setEditingName(true)}
-                    className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg flex-shrink-0 transition-colors">
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
+                <label className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer hover:bg-gray-100 transition-colors">
+                  {photoUploading
+                    ? <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />
+                    : <Camera className="w-3.5 h-3.5 text-purple-600" />
+                  }
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
+                </label>
+              </div>
+
+              {/* Name + phone */}
+              <div className="flex-1 min-w-0 pb-1">
+                {editingName ? (
+                  <div className="flex items-center gap-2">
+                    <input autoFocus type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder:text-white/60 focus:outline-none focus:border-white/60" placeholder="Your full name" />
+                    <button onClick={saveName} disabled={saving === 'name'}
+                      className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg flex-shrink-0 border border-white/30">
+                      {saving === 'name' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    </button>
+                    <button onClick={() => { setEditingName(false); setNameVal(name || ''); }}
+                      className="p-1.5 text-white/70 hover:bg-white/20 rounded-lg flex-shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="text-xl font-black text-white drop-shadow truncate">
+                      {name || <span className="font-normal text-white/70 text-base">Add your name</span>}
+                    </p>
+                    <button onClick={() => setEditingName(true)}
+                      className="absolute top-3 right-3 p-2 bg-white/20 hover:bg-white/30 text-white rounded-xl border border-white/30 transition-colors">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="w-3 h-3 text-white/70" />
+                    <span className="text-sm font-semibold text-white">+91 {phone}</span>
+                  </div>
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                    <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Verified
+                  </span>
                 </div>
-              )}
-              <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                <Phone className="w-3 h-3" /> +91 {phone}
-              </p>
+                {saved === 'name' && <p className="text-xs text-white/90 mt-1 font-semibold">Name saved ✓</p>}
+                {error && <p className="text-xs text-red-200 mt-1">{error}</p>}
+              </div>
             </div>
           </div>
-          {saved === 'name' && <p className="text-xs text-emerald-600 mt-2">Name saved ✓</p>}
-          {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+        );
+      })()}
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-3">
+
+        {/* Addresses — now below profile card */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Addresses</p>
+          </div>
+
+          {/* Default address */}
+          <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700">
+            <div className="flex items-start justify-between gap-2 pt-3">
+              <div className="flex items-start gap-2 flex-1 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">Default</span>
+                  </div>
+                  {saving === 'address' ? (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-medium text-gray-400 mb-1">Flat / House No.</label>
+                          <input type="text" value={parse(address).flat}
+                            onChange={e => { const p = parse(address); p.flat = e.target.value; saveAddress('address', serialize(p)); }}
+                            className={inp} placeholder="e.g. A-204" autoFocus />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-gray-400 mb-1">Block / Tower</label>
+                          <input type="text" value={parse(address).block}
+                            onChange={e => { const p = parse(address); p.block = e.target.value; saveAddress('address', serialize(p)); }}
+                            className={inp} placeholder="e.g. Block B" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug">
+                      {address || <span className="text-gray-400 italic text-xs">No default address — tap Edit to add</span>}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setEditingAddress('address')}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg border border-gray-200 dark:border-slate-600 transition-colors flex-shrink-0">
+                <Pencil className="w-3 h-3" /> Edit
+              </button>
+            </div>
+          </div>
+
+          {/* Secondary address */}
+          {(address2 || editingAddress === 'address2') ? (
+            <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700">
+              <div className="flex items-start justify-between gap-2 pt-3">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-gray-50 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] font-semibold text-gray-400 dark:text-slate-500">Other address</span>
+                    <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug mt-0.5">
+                      {address2 || <span className="text-gray-400 italic text-xs">Tap Edit to add</span>}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {address2 && (
+                    <button
+                      onClick={async () => {
+                        const tmp = address2;
+                        await saveAddress('address', tmp);
+                        await saveAddress('address2', address || '');
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors">
+                      ★ Default
+                    </button>
+                  )}
+                  <button onClick={() => setEditingAddress('address2')}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg border border-gray-200 dark:border-slate-600 transition-colors">
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
+              <button onClick={() => setEditingAddress('address2')}
+                className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+                <Plus className="w-3.5 h-3.5" /> Add another address
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Addresses */}
-        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Addresses</p>
-        <AddressCard label="Default Address" icon="primary" stored={address} fieldKey="address" onSave={saveAddress} saving={saving} saved={saved} />
-        <AddressCard label="Secondary Address" icon="secondary" stored={address2} fieldKey="address2" onSave={saveAddress} saving={saving} saved={saved} />
+        {/* Address edit modal */}
+        {editingAddress && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                  {editingAddress === 'address' ? 'Edit Default Address' : 'Edit Other Address'}
+                </p>
+                <button onClick={() => setEditingAddress(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+              <AddressModalForm
+                stored={editingAddress === 'address' ? address : address2}
+                onSave={async (val) => { await saveAddress(editingAddress, val); setEditingAddress(null); }}
+                onCancel={() => setEditingAddress(null)}
+                saving={saving === editingAddress}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Support */}
         {(supportName || supportPhone) && (
@@ -269,21 +402,6 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             </div>
           </>
         )}
-
-        {/* Your Rights (DPDP) */}
-        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Your Rights</p>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
-          <button
-            onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/grievance'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-            <span className="text-base">💬</span>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Submit a Grievance</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">Complaint or concern about your data or service</p>
-            </div>
-            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </button>
-        </div>
 
         {/* Settings */}
         <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Settings</p>
@@ -364,6 +482,74 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
         </div>
 
+        {/* Data & Privacy */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1">Data &amp; Privacy</p>
+
+          {/* Marketing consent */}
+          <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
+            <Bell className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-700 dark:text-slate-300">Promotional Notifications</p>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500">Offers, deals and new arrivals</p>
+            </div>
+            <button onClick={async () => {
+              const next = !marketingConsent;
+              setMarketingConsent(next);
+              try { await authApi.updateMarketingConsent(next); }
+              catch { setMarketingConsent(!next); }
+            }}
+              role="switch" aria-checked={marketingConsent}
+              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${marketingConsent ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${marketingConsent ? 'translate-x-4' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          {/* Submit a Grievance */}
+          <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
+            <MessageCircle className="w-4 h-4 text-violet-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-700 dark:text-slate-300">Submit a Grievance</p>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500">Complaint or concern about your data or service</p>
+            </div>
+            <button
+              onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/grievance'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+              className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 px-2.5 py-1 rounded-lg hover:bg-violet-100 transition-colors flex-shrink-0">
+              Open
+            </button>
+          </div>
+
+          {/* Download my data */}
+          <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
+            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-700 dark:text-slate-300">Download My Data</p>
+              <p className="text-[10px] text-gray-400 dark:text-slate-500">Export your profile, orders &amp; history</p>
+            </div>
+            <button
+              disabled={exportLoading}
+              onClick={async () => {
+                setExportLoading(true);
+                try {
+                  const res = await authApi.requestDataExport();
+                  const data = res.data.data?.data || res.data.data;
+                  if (data) {
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = 'my-gokez-data.json'; a.click();
+                    URL.revokeObjectURL(url);
+                    setExportReady(true);
+                  }
+                } catch { alert('Failed to export data. Please try again.'); }
+                finally { setExportLoading(false); }
+              }}
+              className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 disabled:opacity-50 transition-colors">
+              {exportLoading ? 'Preparing...' : exportReady ? 'Downloaded ✓' : 'Export'}
+            </button>
+          </div>
+        </div>
+
         {/* Sign out + Delete account */}
         <div className="flex flex-col items-center gap-2 pb-2">
           <button onClick={async () => {
@@ -394,10 +580,11 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             </button>
           </div>
           <span className="text-[11px] text-gray-400 dark:text-slate-500">
-            &copy; {new Date().getFullYear()}{' '}
+            A product of{' '}
             <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
               Gokez Technologies Pvt. Ltd.
             </span>
+            {' '}&copy; {new Date().getFullYear()}
           </span>
         </div>
 

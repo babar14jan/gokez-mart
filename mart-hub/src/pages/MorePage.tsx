@@ -10,7 +10,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { api } from '../services/api';
-import { subscribeAdminToPush } from '../services/push';
+import { subscribeAdminToPush, unsubscribeAdminFromPush } from '../services/push';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -70,8 +70,7 @@ export default function MorePage() {
         navigator.serviceWorker.ready.then(reg =>
           reg.pushManager.getSubscription().then(sub => {
             setNotifSubscribed(!!sub);
-            // Auto-subscribe if permission granted but no subscription (new user/device)
-            if (!sub) subscribeAdminToPush().then(ok => setNotifSubscribed(ok)).catch(() => {});
+            // Don't auto-subscribe silently — let user do it via toggle
           })
         ).catch(() => {});
       }
@@ -105,24 +104,33 @@ export default function MorePage() {
   const handleEnableNotifications = async () => {
     setEnablingNotif(true);
     try {
-      const ok = await subscribeAdminToPush();
-      // Re-read actual browser permission state after the attempt
-      if ('Notification' in window) setNotifPermission(Notification.permission as any);
-      setNotifSubscribed(ok);
-      if (!ok && Notification.permission === 'denied') {
-        alert('Notifications are blocked. Please enable them in your browser/device settings, then try again.');
+      // First check if browser has blocked notifications
+      if ('Notification' in window && Notification.permission === 'denied') {
+        setNotifPermission('denied');
+        alert('Notifications are blocked in your browser. Please go to browser settings → Site Settings → Notifications and allow notifications for this site.');
+        return;
       }
-    } catch { setNotifSubscribed(false); }
-    finally { setEnablingNotif(false); }
+      const ok = await subscribeAdminToPush();
+      // Re-read actual browser permission state
+      if ('Notification' in window) {
+        const perm = Notification.permission as any;
+        setNotifPermission(perm);
+        // Only set subscribed if actually succeeded
+        setNotifSubscribed(ok);
+        if (!ok && perm !== 'denied') {
+          // Failed for a non-permission reason (network, VAPID etc)
+          alert('Could not enable notifications. Please try again or check your internet connection.');
+        }
+      }
+    } catch (e: any) {
+      console.warn('[Push] Enable failed:', e?.message);
+      setNotifSubscribed(false);
+    } finally { setEnablingNotif(false); }
   };
 
   const handleDisableNotifications = async () => {
     try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.getSubscription();
-        if (sub) await sub.unsubscribe();
-      }
+      await unsubscribeAdminFromPush();
       setNotifSubscribed(false);
     } catch { setNotifSubscribed(false); }
   };
@@ -145,7 +153,7 @@ export default function MorePage() {
       { label: 'Customers',          href: '/customers',          icon: Users },
       { label: 'Categories',         href: '/categories',         icon: Tag },
       { label: 'Catalog',            href: '/catalog',            icon: Package },
-      { label: 'Store Applications', href: '/store-applications', icon: Store },
+      { label: 'Store Requests', href: '/store-applications', icon: Store },
       { label: 'Stores',             href: '/stores',             icon: LayoutDashboard },
       { label: 'Users',              href: '/users',              icon: Users },
       { label: 'Compliance',         href: '/compliance',         icon: Shield },

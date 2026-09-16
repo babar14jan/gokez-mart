@@ -113,7 +113,7 @@ export class CustomerAuthService {
     );
 
     const customerRes = await query<any>(
-      `SELECT id, phone, name, address, address2, order_count as "orderCount",
+      `SELECT id, phone, name, address, address2, photo_url as "photoUrl", order_count as "orderCount",
               total_spent::float as "totalSpent", last_seen_at as "lastSeenAt"
        FROM mart_customers WHERE phone = $1`,
       [cleaned]
@@ -137,7 +137,7 @@ export class CustomerAuthService {
   // ── Get customer from token ─────────────────────────────────────────────────
   static async getCustomer(customerId: string): Promise<any> {
     const result = await query<any>(
-      `SELECT id, phone, name, address, address2, order_count as "orderCount",
+      `SELECT id, phone, name, address, address2, photo_url as "photoUrl", order_count as "orderCount",
               total_spent::float as "totalSpent", last_seen_at as "lastSeenAt"
        FROM mart_customers WHERE id = $1`,
       [customerId]
@@ -146,19 +146,20 @@ export class CustomerAuthService {
   }
 
   // ── Update customer profile ─────────────────────────────────────────────────
-  static async updateProfile(customerId: string, data: { name?: string; address?: string; address2?: string }): Promise<any> {
+  static async updateProfile(customerId: string, data: { name?: string; address?: string; address2?: string; photoUrl?: string }): Promise<any> {
     const fields: string[] = [];
     const params: unknown[] = [];
     let i = 1;
-    if (data.name !== undefined)     { fields.push(`name = $${i++}`);     params.push(data.name); }
-    if (data.address !== undefined)  { fields.push(`address = $${i++}`);  params.push(data.address); }
-    if (data.address2 !== undefined) { fields.push(`address2 = $${i++}`); params.push(data.address2); }
+    if (data.name !== undefined)     { fields.push(`name = $${i++}`);      params.push(data.name); }
+    if (data.address !== undefined)  { fields.push(`address = $${i++}`);   params.push(data.address); }
+    if (data.address2 !== undefined) { fields.push(`address2 = $${i++}`);  params.push(data.address2); }
+    if (data.photoUrl !== undefined) { fields.push(`photo_url = $${i++}`); params.push(data.photoUrl); }
     if (!fields.length) return this.getCustomer(customerId);
     fields.push(`updated_at = NOW()`);
     params.push(customerId);
     const result = await query<any>(
       `UPDATE mart_customers SET ${fields.join(', ')} WHERE id = $${i}
-       RETURNING id, phone, name, address, address2, order_count as "orderCount",
+       RETURNING id, phone, name, address, address2, photo_url as "photoUrl", order_count as "orderCount",
                  total_spent::float as "totalSpent"`,
       params
     );

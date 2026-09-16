@@ -18,27 +18,68 @@ export async function registerAdminSW(): Promise<void> {
 
 export async function subscribeAdminToPush(): Promise<boolean> {
   try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.warn('[Push] Not supported');
+      return false;
+    }
+
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return false;
+    if (permission !== 'granted') {
+      console.warn('[Push] Permission not granted:', permission);
+      return false;
+    }
 
     const keyRes = await api.get('/push/vapid-public-key');
     const publicKey = keyRes.data.data.publicKey;
-    if (!publicKey) return false;
+    if (!publicKey) {
+      console.warn('[Push] No VAPID public key from server');
+      return false;
+    }
 
     const reg = await navigator.serviceWorker.ready;
-    const existing = await reg.pushManager.getSubscription();
-    if (existing) await existing.unsubscribe();
 
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
-    });
+    // Check if already subscribed with same key — reuse
+    let sub = await reg.pushManager.getSubscription();
 
+    if (sub) {
+      // Check if subscription is for the same VAPID key
+      const existingKey = sub.options?.applicationServerKey;
+      const newKey = urlBase64ToUint8Array(publicKey);
+      const existingKeyBase64 = existingKey
+        ? btoa(String.fromCharCode(...new Uint8Array(existingKey as ArrayBuffer)))
+        : null;
+      const newKeyBase64 = btoa(String.fromCharCode(...newKey));
+      if (existingKeyBase64 !== newKeyBase64) {
+        // Different key — unsubscribe and resubscribe
+        await sub.unsubscribe();
+        sub = null;
+      }
+    }
+
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+      });
+    }
+
+    // Save to backend
     await api.post('/push/subscribe/admin', sub.toJSON());
+    console.log('[Push] Admin subscribed successfully');
     return true;
-  } catch (e) {
-    console.warn('[Push] Admin subscribe failed:', e);
+  } catch (e: any) {
+    console.warn('[Push] Admin subscribe failed:', e?.message || e);
     return false;
+  }
+}
+
+export async function unsubscribeAdminFromPush(): Promise<void> {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe();
+  } catch (e) {
+    console.warn('[Push] Unsubscribe failed:', e);
   }
 }

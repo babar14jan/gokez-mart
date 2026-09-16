@@ -86,9 +86,14 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
       {/* Row 1 */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center gap-3">
 
-        {/* Logo */}
-        <img src="/mart_web_logo.png?v=2" alt="Gokez Mart"
-          className="h-8 w-32 sm:h-10 sm:w-44 object-contain object-left flex-shrink-0" />
+        {/* Logo + slogan */}
+        <div className="flex flex-col items-start flex-shrink-0">
+          <img src="/mart_web_logo.png?v=2" alt="Gokez Mart"
+            className="h-8 w-32 sm:h-10 sm:w-44 object-contain object-left" />
+          <p className="text-[9px] sm:text-[10px] font-bold text-gray-900 dark:text-white tracking-wide leading-none mt-0.5">
+            Shop local. Support local.
+          </p>
+        </div>
 
         {/* ── Desktop layout ── */}
         {/* Center: nav items + Cart */}
@@ -131,24 +136,26 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
         </div>
       </div>
 
-      {/* Row 2: Search — mobile only */}
-      <div className="sm:hidden px-4 pb-2.5">
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => onSearch(e.target.value)}
-            placeholder="Search groceries, vegetables..."
-            className="w-full pl-10 pr-9 py-2.5 bg-gray-100 dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white dark:focus:bg-slate-700 transition-all border-0"
-          />
-          {search && (
-            <button onClick={() => onSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-              <X className="w-4 h-4 text-gray-400" />
-            </button>
-          )}
+      {/* Row 2: Search — mobile only, hidden on profile and orders pages */}
+      {activeView !== 'account' && activeView !== 'orders' && (
+        <div className="sm:hidden px-4 pb-2.5">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => onSearch(e.target.value)}
+              placeholder="Search groceries, vegetables..."
+              className="w-full pl-10 pr-9 py-2.5 bg-gray-100 dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white dark:focus:bg-slate-700 transition-all border-0"
+            />
+            {search && (
+              <button onClick={() => onSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="border-b border-gray-100 dark:border-slate-800" />
     </header>

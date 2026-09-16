@@ -4,7 +4,7 @@ const CARDS = [
   {
     icon: '⚡',
     title: 'Delivering in 10-15 mins',
-    sub: 'From our store to your door. Fresh. Fast. Every time.',
+    sub: 'Shop local. Support local. Fresh from your neighbourhood, fast.',
     gradient: 'from-emerald-500 via-teal-500 to-cyan-500',
     dot: 'bg-emerald-400',
     textColor: 'text-white',
@@ -22,7 +22,7 @@ const CARDS = [
   {
     icon: '🛵',
     title: 'Free Delivery',
-    sub: 'On orders above ₹150. No hidden charges. Delivery is on us.',
+    sub: 'On orders above ₹199. No hidden charges. Delivery is on us.',
     gradient: 'from-violet-500 via-purple-500 to-indigo-500',
     dot: 'bg-violet-400',
     textColor: 'text-white',

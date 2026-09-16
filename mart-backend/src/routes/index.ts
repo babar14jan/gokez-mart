@@ -91,6 +91,7 @@ router.post('/push/subscribe/admin',    authenticate, ctrl.adminSavePushSub);
 
 // ── DPDP Compliance ──────────────────────────────────────────────────────────
 router.post('/auth/logout',                    authenticateCustomer, ctrl.customerLogout);
+router.post('/auth/upload/photo',              authenticateCustomer, upload.single('photo'), ctrl.customerUploadPhoto);
 router.post('/compliance/deletion',            authenticateCustomer, ctrl.customerRequestDeletion);
 router.get('/compliance/deletion',             authenticateCustomer, ctrl.customerGetDeletionStatus);
 router.post('/compliance/grievances',          authenticateCustomer, ctrl.customerSubmitGrievance);
@@ -99,6 +100,13 @@ router.get('/admin/compliance/deletions',      authenticate, requireSuperAdmin, 
 router.put('/admin/compliance/deletions/:id',  authenticate, requireSuperAdmin, ctrl.adminProcessDeletion);
 router.get('/admin/compliance/grievances',     authenticate, ctrl.adminGetGrievances);
 router.put('/admin/compliance/grievances/:id', authenticate, ctrl.adminRespondGrievance);
+router.get('/admin/compliance/audit-logs',     authenticate, requireSuperAdmin, ctrl.adminGetAuditLogs);
+
+// Customer data export + marketing consent
+router.post('/compliance/data-export',         authenticateCustomer, ctrl.customerRequestDataExport);
+router.get('/compliance/data-export',          authenticateCustomer, ctrl.customerGetDataExport);
+router.put('/compliance/marketing-consent',    authenticateCustomer, ctrl.customerUpdateMarketingConsent);
+router.get('/compliance/marketing-consent',    authenticateCustomer, ctrl.customerGetMarketingConsent);
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
 

@@ -10,93 +10,90 @@ export function printReceipt(order: any) {
 
   const itemRows = (order.items || []).map((item: any) => `
     <tr>
-      <td style="padding:6px 0;font-size:13px;border-bottom:1px solid #f0f0f0;">${item.productName}<br/><span style="font-size:11px;color:#888;">${item.unit} × ${item.quantity}</span></td>
-      <td style="padding:6px 0;font-size:13px;text-align:right;border-bottom:1px solid #f0f0f0;font-weight:600;">₹${item.total}</td>
+      <td style="padding:8px 0;font-size:14px;font-weight:600;color:#111;border-bottom:1px solid #e5e7eb;">
+        ${item.productName}
+        <br/><span style="font-size:12px;font-weight:400;color:#555;">${item.unit} × ${item.quantity}</span>
+      </td>
+      <td style="padding:8px 0;font-size:14px;font-weight:700;color:#111;text-align:right;border-bottom:1px solid #e5e7eb;">₹${item.total}</td>
     </tr>`).join('');
 
   const receiptHtml = `
-    <div style="font-family:'Courier New',monospace;max-width:400px;margin:0 auto;padding:20px 16px;color:#111;">
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:420px;margin:0 auto;padding:24px 20px;color:#111;background:#fff;">
 
       <!-- Header -->
-      <div style="text-align:center;margin-bottom:16px;">
-        <img src="/mart_web_logo.png" alt="Gokez Mart" style="height:44px;object-fit:contain;" onerror="this.style.display='none'" />
-        <div style="font-size:11px;color:#888;margin-top:4px;">Powered by Gokez Technologies Pvt. Ltd.</div>
+      <div style="text-align:center;margin-bottom:20px;">
+        <img src="/mart_web_logo.png" alt="Gokez Mart" style="height:48px;object-fit:contain;display:block;margin:0 auto;" onerror="this.style.display='none'" />
+        <div style="font-size:13px;font-weight:700;color:#555;margin-top:6px;letter-spacing:0.3px;">Shop local. Support local.</div>
+        <div style="font-size:12px;color:#666;margin-top:4px;font-weight:500;">A product of Gokez Technologies Pvt. Ltd.</div>
       </div>
 
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="border-top:2px dashed #ccc;margin:16px 0;"></div>
 
       <!-- Order info -->
-      <div style="margin-bottom:8px;">
-        <div style="font-size:14px;font-weight:bold;">Order #${order.orderNumber}</div>
-        <div style="font-size:11px;color:#666;margin-top:2px;">${date}</div>
-        ${order.fulfilledBy ? `<div style="font-size:11px;color:#666;margin-top:2px;">🏪 ${order.fulfilledBy}</div>` : ''}
+      <div style="margin-bottom:12px;">
+        <div style="font-size:18px;font-weight:800;color:#111;letter-spacing:-0.3px;">Order #${order.orderNumber}</div>
+        <div style="font-size:13px;color:#555;margin-top:4px;font-weight:500;">${date}</div>
+        ${order.fulfilledBy ? `<div style="font-size:13px;color:#555;margin-top:3px;font-weight:500;">🏪 Fulfilled by ${order.fulfilledBy}</div>` : ''}
       </div>
 
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
 
       <!-- Deliver to -->
-      <div style="margin-bottom:8px;">
-        <div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Deliver to</div>
-        <div style="font-size:13px;font-weight:600;">${order.guestName}</div>
-        <div style="font-size:12px;color:#555;">${order.guestAddress}</div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Deliver to</div>
+        <div style="font-size:15px;font-weight:700;color:#111;">${order.guestName}</div>
+        <div style="font-size:13px;color:#444;font-weight:500;margin-top:2px;line-height:1.4;">${order.guestAddress}</div>
       </div>
 
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
 
       <!-- Items -->
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Items Ordered</div>
       <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr>
-            <th style="font-size:10px;color:#888;text-align:left;padding-bottom:6px;border-bottom:1px solid #ddd;text-transform:uppercase;">Item</th>
-            <th style="font-size:10px;color:#888;text-align:right;padding-bottom:6px;border-bottom:1px solid #ddd;text-transform:uppercase;">Amount</th>
-          </tr>
-        </thead>
         <tbody>${itemRows}</tbody>
       </table>
 
-      <div style="border-top:2px solid #111;margin:12px 0;"></div>
+      <div style="border-top:2px solid #111;margin:16px 0;"></div>
 
       <!-- Bill -->
       <table style="width:100%;border-collapse:collapse;">
         <tr>
-          <td style="font-size:12px;padding:3px 0;color:#555;">Subtotal</td>
-          <td style="font-size:12px;text-align:right;color:#555;">₹${order.subtotal}</td>
+          <td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Subtotal</td>
+          <td style="font-size:13px;text-align:right;color:#555;font-weight:500;">₹${order.subtotal}</td>
         </tr>
         <tr>
-          <td style="font-size:12px;padding:3px 0;color:#555;">Delivery</td>
-          <td style="font-size:12px;text-align:right;color:#555;">${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td>
+          <td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Delivery</td>
+          <td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td>
         </tr>
         <tr>
-          <td style="font-size:15px;font-weight:bold;padding-top:8px;">TOTAL PAID</td>
-          <td style="font-size:15px;font-weight:bold;text-align:right;padding-top:8px;">₹${order.total}</td>
+          <td style="font-size:17px;font-weight:800;color:#111;padding-top:10px;border-top:1px solid #e5e7eb;">TOTAL PAID</td>
+          <td style="font-size:17px;font-weight:800;color:#111;text-align:right;padding-top:10px;border-top:1px solid #e5e7eb;">₹${order.total}</td>
         </tr>
       </table>
 
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
 
       <!-- Payment -->
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:11px;color:#888;">Payment</span>
-        <span style="font-size:13px;font-weight:bold;">${paymentLabel[order.paymentMethod] || (order.paymentMethod || '').toUpperCase()}</span>
+        <span style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Payment Method</span>
+        <span style="font-size:14px;font-weight:700;color:#111;">${paymentLabel[order.paymentMethod] || (order.paymentMethod || '').toUpperCase()}</span>
       </div>
 
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
 
       <!-- Footer -->
-      <div style="text-align:center;font-size:12px;color:#555;">
+      <div style="text-align:center;font-size:14px;font-weight:600;color:#333;">
         Thank you for ordering from Gokez Mart! 🛒
       </div>
-      <div style="text-align:center;font-size:10px;color:#aaa;margin-top:8px;">
+      <div style="text-align:center;font-size:11px;color:#999;margin-top:8px;font-weight:500;">
         This is a purchase receipt, not a GST invoice.
       </div>
     </div>
   `;
 
-  // Remove any existing receipt overlay
   const existing = document.getElementById('__receipt_overlay__');
   if (existing) existing.remove();
 
-  // Create full-screen overlay
   const overlay = document.createElement('div');
   overlay.id = '__receipt_overlay__';
   overlay.style.cssText = `
@@ -108,7 +105,6 @@ export function printReceipt(order: any) {
     -webkit-overflow-scrolling: touch;
   `;
 
-  // Action bar
   const actionBar = document.createElement('div');
   actionBar.className = '__receipt_no_print__';
   actionBar.style.cssText = `
@@ -122,15 +118,15 @@ export function printReceipt(order: any) {
     z-index: 1;
   `;
   actionBar.innerHTML = `
-    <button onclick="window.print()" style="flex:1;padding:12px;background:#10b981;color:white;border:none;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">
+    <button onclick="window.print()" style="padding:8px 16px;background:#10b981;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
       🖨️ Print / Save PDF
     </button>
-    <button id="__receipt_close__" style="flex:1;padding:12px;background:#f3f4f6;color:#374151;border:none;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;">
+    <div style="flex:1;"></div>
+    <button id="__receipt_close__" style="padding:8px 12px;background:#ef4444;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;">
       ✕ Close
     </button>
   `;
 
-  // Receipt content
   const content = document.createElement('div');
   content.innerHTML = receiptHtml;
 
@@ -138,12 +134,10 @@ export function printReceipt(order: any) {
   overlay.appendChild(content);
   document.body.appendChild(overlay);
 
-  // Close button
   document.getElementById('__receipt_close__')?.addEventListener('click', () => {
     overlay.remove();
   });
 
-  // Print styles — hide everything except receipt
   const style = document.createElement('style');
   style.id = '__receipt_print_style__';
   style.textContent = `
@@ -155,7 +149,6 @@ export function printReceipt(order: any) {
   `;
   document.head.appendChild(style);
 
-  // Clean up print style after printing
   window.addEventListener('afterprint', () => {
     document.getElementById('__receipt_print_style__')?.remove();
   }, { once: true });

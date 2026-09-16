@@ -28,7 +28,8 @@ const EMPTY_FORM = { username: '', password: '', name: '', email: '', phone: '',
 
 interface AdminUser {
   id: string; username: string; name: string | null; email: string | null;
-  phone: string | null; role: string; storeId: string | null; lastLoginAt: string | null; createdAt: string;
+  phone: string | null; role: string; storeId: string | null;
+  isActive: boolean; lastLoginAt: string | null; createdAt: string;
 }
 
 export default function UsersPage() {
@@ -100,6 +101,15 @@ export default function UsersPage() {
     setConfirmDelete(null); await load();
   };
 
+  const toggleActive = async (u: AdminUser) => {
+    try {
+      await usersApi.update(u.id, { isActive: !u.isActive });
+      await load();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to update');
+    }
+  };
+
   const handleRemoveFromStore = async () => {
     if (!confirmRemoveStore) return;
     await teamApi.removeMember(confirmRemoveStore.storeId, confirmRemoveStore.userId);
@@ -153,23 +163,37 @@ export default function UsersPage() {
             <div className="sm:hidden flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{u.name || u.username}</p>
+                  <p className={`text-sm font-semibold ${u.isActive ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-slate-500 line-through'}`}>{u.name || u.username}</p>
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ROLE_COLORS[u.role] || ROLE_COLORS.staff}`}>{u.role.replace(/_/g, ' ')}</span>
+                  {!u.isActive && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">Inactive</span>}
                 </div>
                 <p className="text-xs text-gray-400 dark:text-slate-500">@{u.username} · {storeName(u.storeId)}</p>
               </div>
               <div className="flex gap-1">
+                {u.id !== currentUserId && (
+                  <button onClick={() => toggleActive(u)}
+                    className={`p-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      u.isActive
+                        ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                        : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                    }`}>
+                    {u.isActive ? 'Deactivate' : 'Activate'}
+                  </button>
+                )}
                 <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"><Pencil className="w-4 h-4" /></button>
                 {u.id !== currentUserId && <button onClick={() => setConfirmDelete(u)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 className="w-4 h-4" /></button>}
               </div>
             </div>
             {/* Desktop */}
             <div className="hidden sm:block col-span-3">
-              <p className="text-xs font-semibold text-gray-900 dark:text-white">{u.name || u.username}</p>
+              <p className={`text-xs font-semibold ${u.isActive ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-slate-500 line-through'}`}>{u.name || u.username}</p>
               <p className="text-[10px] text-gray-400 dark:text-slate-500">@{u.username}</p>
             </div>
             <div className="hidden sm:block col-span-2">
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ROLE_COLORS[u.role] || ROLE_COLORS.staff}`}>{u.role.replace(/_/g, ' ')}</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ROLE_COLORS[u.role] || ROLE_COLORS.staff}`}>{u.role.replace(/_/g, ' ')}</span>
+                {!u.isActive && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">Inactive</span>}
+              </div>
             </div>
             <div className="hidden sm:block col-span-2">
               {u.role === 'delivery_staff' && userStores[u.id]?.length > 0 ? (
@@ -193,6 +217,19 @@ export default function UsersPage() {
               {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'Never'}
             </div>
             <div className="hidden sm:flex col-span-1 justify-end gap-1">
+              {u.id !== currentUserId && (
+                <button onClick={() => toggleActive(u)}
+                  title={u.isActive ? 'Deactivate user' : 'Activate user'}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    u.isActive
+                      ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                      : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                  }`}>
+                  {u.isActive
+                    ? <EyeOff className="w-4 h-4" />
+                    : <Eye className="w-4 h-4" />}
+                </button>
+              )}
               <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"><Pencil className="w-4 h-4" /></button>
               {u.id !== currentUserId && <button onClick={() => setConfirmDelete(u)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"><Trash2 className="w-4 h-4" /></button>}
             </div>
