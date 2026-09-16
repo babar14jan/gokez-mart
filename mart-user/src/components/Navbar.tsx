@@ -30,7 +30,23 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
   const totalItems = useCartStore(s => s.totalItems());
   const { isDark, toggle } = useThemeStore();
 
-  const ZoneDropdown = () => (
+  const ZoneDropdown = () => {
+    // Only show dropdown if more than 1 zone
+    if (zones.length <= 1) {
+      if (!selectedZone) return null;
+      return (
+        <div className="flex items-center gap-1">
+          <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+          <div className="text-left">
+            <p className="text-[9px] text-gray-500 dark:text-slate-400 leading-none">Delivery in</p>
+            <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate max-w-[90px]">
+              {selectedZone.name}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return (
     <div className="relative">
       <button onClick={() => setZoneOpen(o => !o)}
         className="flex items-center gap-1 hover:opacity-80 transition-opacity">
@@ -65,6 +81,7 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
       )}
     </div>
   );
+  };
 
   const DarkToggle = ({ size = 'md' }: { size?: 'sm' | 'md' }) => (
     <button onClick={toggle}

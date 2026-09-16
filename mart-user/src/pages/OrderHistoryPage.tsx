@@ -25,6 +25,13 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Order Cancelled', failed_delivery: 'Delivery Failed', terminated: 'Cancelled by Store',
 };
 
+const TERMINATION_MESSAGES: Record<string, { title: string; sub: string }> = {
+  outside_area: {
+    title: 'Outside delivery area',
+    sub: "We're sorry — your address is currently outside our delivery zone. We're expanding soon and will be in your area! 🌱",
+  },
+};
+
 const STATUS_EMOJI: Record<string, string> = {
   delivered: '✅', cancelled: '❌', failed_delivery: '😔', terminated: '❌',
 };
@@ -536,8 +543,11 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
             </div>
           ) : filteredPast.map(order => {
             const emoji = STATUS_EMOJI[order.status] || '❌';
+            const termMsg = order.terminationReason ? TERMINATION_MESSAGES[order.terminationReason] : null;
             return (
-              <div key={order.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm">
+              <div key={order.id} className={`bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden shadow-sm ${
+                termMsg ? 'border-amber-200 dark:border-amber-800' : 'border-gray-100 dark:border-slate-700'
+              }`}>
                 {/* Card body */}
                 <div className="px-4 pt-4 pb-3">
                   {/* Status + date */}
@@ -557,6 +567,14 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
                     </div>
                     <span className="text-sm font-bold text-gray-900 dark:text-white">₹{order.total}</span>
                   </div>
+
+                  {/* Special outside_area message */}
+                  {termMsg && (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5 mb-3">
+                      <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mb-0.5">📍 {termMsg.title}</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500 leading-relaxed">{termMsg.sub}</p>
+                    </div>
+                  )}
 
                   {/* Item thumbnails */}
                   <ItemThumbnails items={order.items || []} />

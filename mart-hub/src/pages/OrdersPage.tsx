@@ -494,6 +494,7 @@ export default function OrdersPage() {
                         disabled={terminating === order.id}
                         className="text-xs border border-red-200 dark:border-red-800 rounded-xl px-2.5 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 focus:outline-none cursor-pointer font-semibold disabled:opacity-50">
                         <option value="" disabled>🛑 Terminate?</option>
+                        <option value="outside_area">📍 Outside delivery area</option>
                         <option value="rider_unavailable">Rider unavailable</option>
                         <option value="store_closed">Store closed</option>
                         <option value="out_of_stock">Out of stock</option>

@@ -608,24 +608,6 @@ export default function App() {
             )}
 
 
-            {/* Quick links */}
-            <div className="flex items-center justify-center gap-1 flex-wrap">
-              {[
-                { label: 'My Orders',  action: () => { (window as any).__navToOrders?.(); } },
-                { label: 'My Account', action: () => { (window as any).__navToAccount?.(); } },
-                { label: 'Privacy',    action: () => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); } },
-                { label: 'Terms',      action: () => { window.history.pushState({}, '', '/terms'); window.dispatchEvent(new PopStateEvent('popstate')); } },
-              ].map((l, i, arr) => (
-                <span key={l.label} className="flex items-center">
-                  <button onClick={l.action}
-                    className="text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-                    {l.label}
-                  </button>
-                  {i < arr.length - 1 && <span className="text-gray-500 dark:text-slate-400 mx-1.5">·</span>}
-                </span>
-              ))}
-            </div>
-
             {/* Copyright */}
             <p className="text-center text-[11px] text-gray-500 dark:text-slate-400">
               A product of{' '}
