@@ -31,7 +31,7 @@ function RiderProgress({ status }: { status: string }) {
               </div>
               <span className={`text-[9px] font-semibold mt-0.5 text-center leading-tight ${
                 active ? 'text-emerald-600 dark:text-emerald-400' :
-                done   ? 'text-gray-400' : 'text-gray-300 dark:text-slate-600'
+                done   ? 'text-gray-400' : 'text-gray-500 dark:text-slate-400'
               }`}>{step.label}</span>
             </div>
             {!isLast && (
@@ -103,12 +103,12 @@ export default function DeliveryPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-400 dark:text-slate-500">
+          <p className="text-xs text-gray-500 dark:text-slate-400">
             {active.length} active · {done.length} delivered today
           </p>
         </div>
         <button onClick={() => load()} disabled={refreshing}
-          className="p-2 rounded-xl text-gray-400 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50">
+          className="p-2 rounded-xl text-gray-500 hover:text-emerald-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50">
           <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
@@ -118,7 +118,7 @@ export default function DeliveryPage() {
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 text-center py-16 px-6">
           <div className="text-5xl mb-3">🛵</div>
           <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No active deliveries</p>
-          <p className="text-xs text-gray-400">You'll get a notification when orders are assigned to you.</p>
+          <p className="text-xs text-gray-500">You'll get a notification when orders are assigned to you.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -150,7 +150,7 @@ export default function DeliveryPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-gray-900 dark:text-white">{order.guestName}</p>
                     <div className="flex items-start gap-1.5 mt-1">
-                      <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
+                      <MapPin className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-gray-500 dark:text-slate-400 leading-snug">{order.guestAddress}</p>
                     </div>
                   </div>
@@ -172,7 +172,7 @@ export default function DeliveryPage() {
                 <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl px-3 py-2">
                   <p className="text-xs text-gray-500 dark:text-slate-400">
                     {(order.items || []).length} item{(order.items || []).length !== 1 ? 's' : ''} · ₹{order.total}
-                    {order.deliveryNote && <span className="ml-2 text-gray-400">· {order.deliveryNote}</span>}
+                    {order.deliveryNote && <span className="ml-2 text-gray-500">· {order.deliveryNote}</span>}
                   </p>
                 </div>
 
@@ -212,7 +212,7 @@ export default function DeliveryPage() {
       {/* Done today */}
       {done.length > 0 && (
         <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider px-1 mb-2">
             <Clock className="w-3.5 h-3.5 inline mr-1" />Delivered Today
           </p>
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
@@ -221,7 +221,7 @@ export default function DeliveryPage() {
                 <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{order.guestName}</p>
-                  <p className="text-xs text-gray-400 truncate">{order.guestAddress}</p>
+                  <p className="text-xs text-gray-500 truncate">{order.guestAddress}</p>
                 </div>
                 <span className="text-xs font-bold text-gray-500 dark:text-slate-400">₹{order.total}</span>
               </div>

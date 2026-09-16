@@ -57,7 +57,7 @@ export default function LoginPage() {
           <div className="flex flex-col items-center mb-8">
             <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-16 sm:h-20 w-auto object-contain" />
             <p className="text-xs font-bold text-gray-900 dark:text-white tracking-wide mt-2 text-center">
-              Bringing local stores online.
+              Bringing local stores online
             </p>
           </div>
 
@@ -73,16 +73,16 @@ export default function LoginPage() {
                 <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Username</label>
                 <input type="text" value={username} onChange={e => setUsername(e.target.value)}
                   required autoFocus placeholder="Enter your username"
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Password</label>
                 <div className="relative">
                   <input type={showPassword ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)} required placeholder="Enter your password"
-                    className="w-full px-4 py-3 pr-11 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-400 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
+                    className="w-full px-4 py-3 pr-11 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
                   <button type="button" onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -95,19 +95,19 @@ export default function LoginPage() {
           </div>
 
           {/* Footer links */}
-          <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-4">
+          <p className="text-center text-xs text-gray-500 dark:text-slate-400 mt-4">
             By signing in, you agree to our{' '}
             <a href="https://gokez.com/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-gray-600 dark:text-slate-300 hover:underline">Terms of Use</a>
           </p>
 
           <div className="mt-5 text-center">
-            <p className="text-xs text-gray-400 dark:text-slate-500">Want to bring your store online?</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Want to bring your store online?</p>
             <a href="/apply" className="inline-flex items-center gap-1 mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors">
               Apply to become a store partner →
             </a>
           </div>
 
-          <p className="text-center text-xs text-gray-400 dark:text-slate-500 mt-4">
+          <p className="text-center text-xs text-gray-500 dark:text-slate-400 mt-4">
             &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
           </p>
         </div>

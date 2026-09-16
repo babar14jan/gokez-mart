@@ -26,7 +26,7 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
               key={id}
               onClick={() => onChange(id)}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-colors
-                ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}`}
+                ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'}`}
             >
               <div className="relative">
                 <Icon className={`w-6 h-6 transition-transform ${isActive ? 'scale-110' : ''}`} />

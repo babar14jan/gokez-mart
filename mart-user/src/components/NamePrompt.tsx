@@ -43,7 +43,7 @@ export default function NamePrompt({ onDone }: NamePromptProps) {
         <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1 text-center">
           What should we call you? 👋
         </h2>
-        <p className="text-sm text-gray-400 dark:text-slate-500 text-center mb-5">
+        <p className="text-sm text-gray-500 dark:text-slate-400 text-center mb-5">
           Helps us personalise your experience
         </p>
 
@@ -54,7 +54,7 @@ export default function NamePrompt({ onDone }: NamePromptProps) {
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           placeholder="Your name"
-          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400 mb-3"
+          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-500 mb-3"
         />
 
         <button
@@ -67,7 +67,7 @@ export default function NamePrompt({ onDone }: NamePromptProps) {
 
         <button
           onClick={handleSkip}
-          className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          className="w-full py-2 text-xs text-gray-500 hover:text-gray-600 transition-colors"
         >
           Skip for now
         </button>

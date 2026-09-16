@@ -60,22 +60,22 @@ export default function FeedbackPage() {
             <div className="flex justify-center mt-0.5">
               <StarDisplay rating={Math.round(stats.avg_rating || 0)} />
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">Avg Rating</p>
+            <p className="text-[10px] text-gray-500 mt-1">Avg Rating</p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-3 py-3 text-center">
             <p className="text-xl font-black text-gray-900 dark:text-white">{stats.total}</p>
-            <p className="text-[10px] text-gray-400 mt-1">Total Reviews</p>
+            <p className="text-[10px] text-gray-500 mt-1">Total Reviews</p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-3 py-3 text-center">
             <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{stats.five_star}</p>
-            <p className="text-[10px] text-gray-400 mt-1">5 Star</p>
+            <p className="text-[10px] text-gray-500 mt-1">5 Star</p>
           </div>
         </div>
       )}
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
-        <Filter className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+        <Filter className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
         <select value={filterRating} onChange={e => setFilterRating(e.target.value ? parseInt(e.target.value) : '')}
           className="text-xs border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-1.5 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 focus:outline-none focus:border-emerald-500">
           <option value="">All Ratings</option>
@@ -92,7 +92,7 @@ export default function FeedbackPage() {
       {loading ? (
         <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
       ) : feedback.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-gray-500">
           <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No feedback yet.</p>
         </div>
@@ -108,12 +108,12 @@ export default function FeedbackPage() {
                       {CATEGORY_LABELS[f.category] || f.category}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-1">
                     {f.customerName || 'Anonymous'} {f.customerPhone ? `· ${f.customerPhone}` : ''}
                     {f.storeName ? ` · ${f.storeName}` : ''}
                   </p>
                 </div>
-                <span className="text-[10px] text-gray-400 dark:text-slate-500 flex-shrink-0">
+                <span className="text-[10px] text-gray-500 dark:text-slate-400 flex-shrink-0">
                   {new Date(f.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                 </span>
               </div>

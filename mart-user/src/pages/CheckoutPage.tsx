@@ -15,7 +15,7 @@ interface CheckoutPageProps {
   onSuccess: (orderNumber: string, preference: string, storeName?: string) => void;
 }
 
-const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
+const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
 
 const PREFERENCES = [
   { value: 'within_15', label: '⚡ 10-15 mins', sub: 'Fastest' },
@@ -108,7 +108,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
         <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
         <button onClick={onBack} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-          <X className="w-5 h-5 text-gray-400" />
+          <X className="w-5 h-5 text-gray-500" />
         </button>
       </div>
 
@@ -128,7 +128,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   }
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.productName}</p>
-                    <p className="text-xs text-gray-400">{item.unit} · ₹{item.price}</p>
+                    <p className="text-xs text-gray-500">{item.unit} · ₹{item.price}</p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity - 1)}
@@ -162,7 +162,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             <div className="flex items-start gap-2.5 px-4 py-3">
               <MapPin className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Deliver to</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Deliver to</p>
                 {deliveryAddress && !addingNew
                   ? <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug">{deliveryAddress}</p>
                   : <p className="text-xs text-red-500 font-medium">No address — add one below</p>
@@ -185,7 +185,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                     <div className={`w-3.5 h-3.5 rounded-full border-2 mt-0.5 flex-shrink-0 ${addr.isDefault ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`} />
                     <div>
                       <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">{addr.label}</p>
-                      <p className="text-[11px] text-gray-400 leading-snug">{addr.address}</p>
+                      <p className="text-[11px] text-gray-500 leading-snug">{addr.address}</p>
                     </div>
                   </button>
                 ))}
@@ -215,7 +215,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             {/* Delivery time */}
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm text-gray-700 dark:text-slate-300">
-                {selectedPref.label} <span className="text-gray-400 text-xs">· {selectedPref.sub}</span>
+                {selectedPref.label} <span className="text-gray-500 text-xs">· {selectedPref.sub}</span>
               </span>
               <button type="button" onClick={() => { setShowPreferences(s => !s); setShowNotes(false); }}
                 className="text-xs font-semibold text-emerald-600">
@@ -231,7 +231,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                     <input type="radio" name="preference" value={p.value} checked={deliveryPreference === p.value}
                       onChange={() => { setDeliveryPreference(p.value); setShowPreferences(false); }} className="hidden" />
                     <p className="text-xs font-bold text-gray-900 dark:text-white">{p.label}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{p.sub}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{p.sub}</p>
                   </label>
                 ))}
               </div>
@@ -288,7 +288,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   <span className="text-xs font-semibold text-gray-900 dark:text-white">{opt.label}</span>
                 </label>
               ))}
-              <span className="text-[10px] text-gray-400 ml-auto">on delivery</span>
+              <span className="text-[10px] text-gray-500 ml-auto">on delivery</span>
             </div>
           </div>
 

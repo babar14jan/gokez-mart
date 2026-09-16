@@ -10,7 +10,7 @@ export default function PrivacyPage() {
         <h1 className="text-sm font-bold text-gray-900 dark:text-white">Privacy Policy</h1>
       </div>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 pb-36">
-        <p className="text-xs text-gray-400 dark:text-slate-500 mb-8">Last updated: {updated}</p>
+        <p className="text-xs text-gray-500 dark:text-slate-400 mb-8">Last updated: {updated}</p>
 
         <div className="space-y-8 text-sm text-gray-600 dark:text-slate-400 leading-relaxed">
 
@@ -112,7 +112,7 @@ export default function PrivacyPage() {
               <p className="font-semibold text-gray-800 dark:text-white mb-2">Gokez Technologies Pvt. Ltd.</p>
               <p className="text-gray-600 dark:text-slate-400">Email: <a href="mailto:support@gokez.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">support@gokez.com</a></p>
               <p className="text-gray-600 dark:text-slate-400">Kolkata, West Bengal, India</p>
-              <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">We acknowledge grievances within 24 hours and resolve within 30 days as required under DPDP Act, 2023.</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">We acknowledge grievances within 24 hours and resolve within 30 days as required under DPDP Act, 2023.</p>
             </div>
           </section>
 

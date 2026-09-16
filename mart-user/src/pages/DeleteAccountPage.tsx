@@ -48,7 +48,7 @@ export default function DeleteAccountPage() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
             <p className="text-2xl mb-3">✓</p>
             <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">Request Submitted</p>
-            <p className="text-xs text-gray-400 dark:text-slate-500">Your account deletion request has been submitted. We will process it within 30 days. You will be signed out shortly.</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Your account deletion request has been submitted. We will process it within 30 days. You will be signed out shortly.</p>
           </div>
         ) : existing?.status === 'pending' ? (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-2xl p-4">
@@ -89,7 +89,7 @@ export default function DeleteAccountPage() {
               </button>
             </div>
 
-            <p className="text-[10px] text-gray-400 dark:text-slate-500 text-center px-4">
+            <p className="text-[10px] text-gray-500 dark:text-slate-400 text-center px-4">
               Under the DPDP Act 2023, you have the right to request deletion of your personal data. We will process your request within 30 days.
             </p>
           </>

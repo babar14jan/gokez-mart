@@ -146,7 +146,7 @@ export default function InventoryPage() {
     <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
       <Package className="w-12 h-12 text-gray-200 dark:text-slate-700" />
       <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">Inventory tracking is off</p>
-      <p className="text-xs text-gray-400 dark:text-slate-500">Enable it in Settings → Inventory to start tracking stock.</p>
+      <p className="text-xs text-gray-500 dark:text-slate-400">Enable it in Settings → Inventory to start tracking stock.</p>
     </div>
   );
 
@@ -157,15 +157,15 @@ export default function InventoryPage() {
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-3 py-2 text-center">
           <p className="text-base font-bold text-gray-900 dark:text-white">{tracked.length}</p>
-          <p className="text-[10px] text-gray-400 dark:text-slate-500">Tracked</p>
+          <p className="text-[10px] text-gray-500 dark:text-slate-400">Tracked</p>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-100 dark:border-amber-900/30 px-3 py-2 text-center">
           <p className="text-base font-bold text-amber-600 dark:text-amber-400">{lowCount}</p>
-          <p className="text-[10px] text-gray-400 dark:text-slate-500">Low Stock</p>
+          <p className="text-[10px] text-gray-500 dark:text-slate-400">Low Stock</p>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-red-100 dark:border-red-900/30 px-3 py-2 text-center">
           <p className="text-base font-bold text-red-600 dark:text-red-400">{outCount}</p>
-          <p className="text-[10px] text-gray-400 dark:text-slate-500">Out of Stock</p>
+          <p className="text-[10px] text-gray-500 dark:text-slate-400">Out of Stock</p>
         </div>
       </div>
 
@@ -219,7 +219,7 @@ export default function InventoryPage() {
             value={note}
             onChange={e => setNote(e.target.value)}
             placeholder="e.g. Morning delivery, Supplier stock..."
-            className="flex-1 bg-transparent text-xs text-gray-700 dark:text-slate-300 placeholder:text-gray-400 focus:outline-none"
+            className="flex-1 bg-transparent text-xs text-gray-700 dark:text-slate-300 placeholder:text-gray-500 focus:outline-none"
           />
         </div>
       )}
@@ -227,7 +227,7 @@ export default function InventoryPage() {
       {/* Inventory table */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
         {sorted.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
+          <div className="text-center py-16 text-gray-500">
             <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No products found.</p>
           </div>
@@ -238,7 +238,7 @@ export default function InventoryPage() {
               const stockColor = s === 'out' ? 'text-red-600 dark:text-red-400'
                 : s === 'low' ? 'text-amber-600 dark:text-amber-400'
                 : s === 'ok' ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-gray-300 dark:text-slate-600';
+                : 'text-gray-500 dark:text-slate-400';
               const row = editRows[item.productId];
               const newTotal = row?.qty && !isNaN(parseFloat(row.qty)) && parseFloat(row.qty) !== 0
                 ? Math.max(0, (item.stockQuantity ?? 0) + parseFloat(row.qty))
@@ -261,9 +261,9 @@ export default function InventoryPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.name}</p>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className="text-xs text-gray-400 dark:text-slate-500">{item.sellingUnit}</span>
+                      <span className="text-xs text-gray-500 dark:text-slate-400">{item.sellingUnit}</span>
                       {item.categoryName && (
-                        <span className="text-[10px] text-gray-400 dark:text-slate-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{item.categoryName}</span>
+                        <span className="text-[10px] text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{item.categoryName}</span>
                       )}
                       {s === 'out' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Out</span>}
                       {s === 'low' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Low</span>}
@@ -280,7 +280,7 @@ export default function InventoryPage() {
                         </p>
                       </>
                     ) : (
-                      <p className="text-sm text-gray-300 dark:text-slate-600">—</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
                     )}
                   </div>
 
@@ -323,7 +323,7 @@ export default function InventoryPage() {
                   ) : (
                     /* View mode: history button */
                     <button onClick={() => openHistory(item)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
                       title="Stock history">
                       <History className="w-4 h-4" />
                     </button>
@@ -347,7 +347,7 @@ export default function InventoryPage() {
                 <p className="text-xs text-gray-500 dark:text-slate-400 truncate max-w-[260px]">{historyItem.name}</p>
               </div>
               <button onClick={() => setHistoryItem(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
             <div className="overflow-y-auto flex-1 p-4">
@@ -356,7 +356,7 @@ export default function InventoryPage() {
                   <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : history.length === 0 ? (
-                <div className="text-center py-10 text-gray-400">
+                <div className="text-center py-10 text-gray-500">
                   <History className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">No history yet.</p>
                 </div>
@@ -378,11 +378,11 @@ export default function InventoryPage() {
                               {isPos ? '+' : ''}{entry.changeQty} {entry.stockUnit || ''}
                             </span>
                           </div>
-                          {entry.orderNumber && <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">Order #{entry.orderNumber}</p>}
-                          {entry.note && <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">{entry.note}</p>}
+                          {entry.orderNumber && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">Order #{entry.orderNumber}</p>}
+                          {entry.note && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{entry.note}</p>}
                           <div className="flex items-center justify-between mt-1">
-                            <span className="text-[10px] text-gray-400 dark:text-slate-500">{entry.createdByName || entry.createdByUsername || 'System'}</span>
-                            <span className="text-[10px] text-gray-400 dark:text-slate-500">{date}</span>
+                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{entry.createdByName || entry.createdByUsername || 'System'}</span>
+                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{date}</span>
                           </div>
                         </div>
                       </div>

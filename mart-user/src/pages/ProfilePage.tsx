@@ -53,20 +53,20 @@ function AddressModalForm({ stored, onSave, onCancel, saving }: {
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[10px] font-medium text-gray-400 mb-1">Flat / House No.</label>
+          <label className="block text-[10px] font-medium text-gray-500 mb-1">Flat / House No.</label>
           <input type="text" value={form.flat} onChange={f('flat')} className={inp} placeholder="e.g. A-204" autoFocus />
         </div>
         <div>
-          <label className="block text-[10px] font-medium text-gray-400 mb-1">Block / Tower</label>
+          <label className="block text-[10px] font-medium text-gray-500 mb-1">Block / Tower</label>
           <input type="text" value={form.block} onChange={f('block')} className={inp} placeholder="e.g. Block B" />
         </div>
       </div>
       <div>
-        <label className="block text-[10px] font-medium text-gray-400 mb-1">Street / Area</label>
+        <label className="block text-[10px] font-medium text-gray-500 mb-1">Street / Area</label>
         <input type="text" value={form.street} onChange={f('street')} className={inp} placeholder="e.g. Kolkata" />
       </div>
       <div>
-        <label className="block text-[10px] font-medium text-gray-400 mb-1">Pincode</label>
+        <label className="block text-[10px] font-medium text-gray-500 mb-1">Pincode</label>
         <input type="tel" inputMode="numeric" maxLength={6} value={form.pincode} onChange={f('pincode')} className={inp} placeholder="700102" />
       </div>
       <div className="flex gap-2 pt-2">
@@ -258,7 +258,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
         {/* Addresses — now below profile card */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Addresses</p>
+            <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Addresses</p>
           </div>
 
           {/* Default address */}
@@ -276,13 +276,13 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[10px] font-medium text-gray-400 mb-1">Flat / House No.</label>
+                          <label className="block text-[10px] font-medium text-gray-500 mb-1">Flat / House No.</label>
                           <input type="text" value={parse(address).flat}
                             onChange={e => { const p = parse(address); p.flat = e.target.value; saveAddress('address', serialize(p)); }}
                             className={inp} placeholder="e.g. A-204" autoFocus />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-gray-400 mb-1">Block / Tower</label>
+                          <label className="block text-[10px] font-medium text-gray-500 mb-1">Block / Tower</label>
                           <input type="text" value={parse(address).block}
                             onChange={e => { const p = parse(address); p.block = e.target.value; saveAddress('address', serialize(p)); }}
                             className={inp} placeholder="e.g. Block B" />
@@ -291,7 +291,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                     </div>
                   ) : (
                     <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug">
-                      {address || <span className="text-gray-400 italic text-xs">No default address — tap Edit to add</span>}
+                      {address || <span className="text-gray-500 italic text-xs">No default address — tap Edit to add</span>}
                     </p>
                   )}
                 </div>
@@ -309,12 +309,12 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
               <div className="flex items-start justify-between gap-2 pt-3">
                 <div className="flex items-start gap-2 flex-1 min-w-0">
                   <div className="w-7 h-7 rounded-lg bg-gray-50 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[10px] font-semibold text-gray-400 dark:text-slate-500">Other address</span>
+                    <span className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">Other address</span>
                     <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug mt-0.5">
-                      {address2 || <span className="text-gray-400 italic text-xs">Tap Edit to add</span>}
+                      {address2 || <span className="text-gray-500 italic text-xs">Tap Edit to add</span>}
                     </p>
                   </div>
                 </div>
@@ -356,7 +356,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                   {editingAddress === 'address' ? 'Edit Default Address' : 'Edit Other Address'}
                 </p>
                 <button onClick={() => setEditingAddress(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                  <X className="w-4 h-4 text-gray-400" />
+                  <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
               <AddressModalForm
@@ -372,7 +372,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
         {/* Support */}
         {(supportName || supportPhone) && (
           <>
-            <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Contact Store</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-1">Contact Store</p>
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center flex-shrink-0">
@@ -382,7 +382,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-gray-900 dark:text-white">{supportName || 'Store Support'}</p>
-                  <p className="text-xs text-gray-400 dark:text-slate-500">{supportPhone || ''}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{supportPhone || ''}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {supportPhone && (
@@ -408,7 +408,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
         {/* Help & Support */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider px-4 pt-3 pb-1">Contact Gokez</p>
+          <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider px-4 pt-3 pb-1">Contact Gokez</p>
           <a href="mailto:support@gokez.com"
             className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
             <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
@@ -418,7 +418,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Email Support</p>
-              <p className="text-xs text-gray-400 dark:text-slate-500">support@gokez.com</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">support@gokez.com</p>
             </div>
             <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </a>
@@ -429,14 +429,14 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 dark:text-slate-200">WhatsApp Support</p>
-              <p className="text-xs text-gray-400 dark:text-slate-500">Chat with us on WhatsApp</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Chat with us on WhatsApp</p>
             </div>
             <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </a>
         </div>
 
         {/* Settings */}
-        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide px-1">Settings</p>
+        <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-1">Settings</p>
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
 
           {/* Location */}
@@ -444,7 +444,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             <Navigation className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Location</span>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">
                 {locationPermission === 'denied'
                   ? 'Blocked in browser — enable in browser settings'
                   : locationEnabled
@@ -467,7 +467,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             <Bell className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Order Notifications</span>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">
                 {notifPermission === 'granted' ? (notifSubscribed ? 'On — rider dispatch & delivery alerts' : 'Permission granted — tap to enable') :
                  notifPermission === 'denied'  ? 'Blocked — enable in browser settings' :
                  notifPermission === 'unsupported' ? 'Not supported on this browser' :
@@ -477,7 +477,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             {notifPermission === 'denied' ? (
               <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">Blocked</span>
             ) : notifPermission === 'unsupported' ? (
-              <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
+              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
             ) : notifPermission === 'granted' ? (
               <button
                 onClick={async () => {
@@ -516,14 +516,14 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
         {/* Data & Privacy */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-4 pt-3 pb-1">Data &amp; Privacy</p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-4 pt-3 pb-1">Data &amp; Privacy</p>
 
           {/* Marketing consent */}
           <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
-            <Bell className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <Bell className="w-4 h-4 text-gray-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-700 dark:text-slate-300">Promotional Notifications</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">Offers, deals and new arrivals</p>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">Offers, deals and new arrivals</p>
             </div>
             <button onClick={async () => {
               const next = !marketingConsent;
@@ -542,7 +542,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             <MessageCircle className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-700 dark:text-slate-300">Submit a Grievance</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">Complaint or concern about your data or service</p>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">Complaint or concern about your data or service</p>
             </div>
             <button
               onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/grievance'); window.dispatchEvent(new PopStateEvent('popstate')); }}
@@ -553,10 +553,10 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
           {/* Download my data */}
           <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
-            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <User className="w-4 h-4 text-gray-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-gray-700 dark:text-slate-300">Download My Data</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">Export your profile, orders &amp; history</p>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">Export your profile, orders &amp; history</p>
             </div>
             <button
               disabled={exportLoading}
@@ -594,7 +594,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
             <span className="text-xl">⭐</span>
             <div className="text-left">
               <p className="text-sm font-semibold text-gray-900 dark:text-white">Share Feedback</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500">Rate your experience with Gokez Mart</p>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">Rate your experience with Gokez Mart</p>
             </div>
           </div>
           <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
@@ -611,7 +611,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
           </button>
           <button
             onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/delete-account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="text-xs text-gray-400 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-500 transition-colors">
+            className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-500 dark:hover:text-slate-400 transition-colors">
             Delete my account
           </button>
         </div>
@@ -620,16 +620,16 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
         <div className="flex flex-col items-center gap-1.5 pb-36">
           <div className="flex items-center justify-center gap-3">
             <button onClick={() => { window.history.pushState({}, '', '/privacy'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-              className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
+              className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">
               Privacy Policy
             </button>
-            <span className="text-gray-300 dark:text-slate-600 text-[10px]">·</span>
+            <span className="text-gray-500 dark:text-slate-400 text-[10px]">·</span>
             <button onClick={() => { window.history.pushState({}, '', '/terms'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-              className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300">
+              className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">
               Terms of Service
             </button>
           </div>
-          <span className="text-[11px] text-gray-400 dark:text-slate-500">
+          <span className="text-[11px] text-gray-500 dark:text-slate-400">
             A product of{' '}
             <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
               Gokez Technologies Pvt. Ltd.

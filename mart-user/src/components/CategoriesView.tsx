@@ -40,7 +40,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
       <div className="flex-1 overflow-y-auto">
         <div className="p-2 pb-36">
           {filteredProducts.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
+            <div className="text-center py-16 text-gray-500">
               <p className="text-sm">No products in this category</p>
             </div>
           ) : (

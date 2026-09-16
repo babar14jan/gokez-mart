@@ -241,7 +241,7 @@ export default function SettingsPage() {
                       <>
                         <input type="time" value={branding.openingHours[day]?.open || '09:00'} onChange={e => updateHours(day, 'open', e.target.value)}
                           className="text-xs border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
-                        <span className="text-xs text-gray-400">to</span>
+                        <span className="text-xs text-gray-500">to</span>
                         <input type="time" value={branding.openingHours[day]?.close || '21:00'} onChange={e => updateHours(day, 'close', e.target.value)}
                           className="text-xs border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
                       </>
@@ -280,7 +280,7 @@ export default function SettingsPage() {
                         <img src={qrPreview} alt="UPI QR" className="w-20 h-20 rounded-xl object-contain border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700" />
                       ) : (
                         <div className="w-20 h-20 rounded-xl bg-gray-100 dark:bg-slate-700 border border-dashed border-gray-300 dark:border-slate-600 flex items-center justify-center">
-                          <span className="text-xs text-gray-400 dark:text-slate-500">No QR</span>
+                          <span className="text-xs text-gray-500 dark:text-slate-400">No QR</span>
                         </div>
                       )}
                       <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">
@@ -288,7 +288,7 @@ export default function SettingsPage() {
                         <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setQrFile(f); setQrPreview(URL.createObjectURL(f)); } }} />
                       </label>
                     </div>
-                    {meta.hint && <p className="text-[10px] text-gray-400 dark:text-slate-500">{meta.hint}</p>}
+                    {meta.hint && <p className="text-[10px] text-gray-500 dark:text-slate-400">{meta.hint}</p>}
                   </div>
                 );
               }
@@ -309,7 +309,7 @@ export default function SettingsPage() {
                     onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))}
                     className={inp}
                     placeholder={meta.placeholder || meta.label} />
-                  {meta.hint && <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">{meta.hint}</p>}
+                  {meta.hint && <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-1">{meta.hint}</p>}
                 </div>
               );
             })}
@@ -327,7 +327,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between py-0.5">
             <div>
               <label className="text-sm text-gray-700 dark:text-slate-300">Enable Inventory Tracking</label>
-              <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">Track stock levels and deduct on delivery</p>
+              <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">Track stock levels and deduct on delivery</p>
             </div>
             <Toggle
               checked={values['inventory_tracking'] === 'true'}
@@ -353,7 +353,7 @@ export default function SettingsPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                   Low Stock Alert Threshold
-                  <span className="ml-1 text-gray-400 font-normal">· send push alert + highlight in yellow</span>
+                  <span className="ml-1 text-gray-500 font-normal">· send push alert + highlight in yellow</span>
                 </label>
                 <input
                   type="number" min="1"
@@ -391,7 +391,7 @@ export default function SettingsPage() {
         )}
 
         {zones.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 dark:text-slate-500">
+          <div className="text-center py-8 text-gray-500 dark:text-slate-400">
             <MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" />
             <p className="text-xs">No delivery zones yet.</p>
           </div>
@@ -403,18 +403,18 @@ export default function SettingsPage() {
                   <MapPin className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">{zone.name}</p>
-                    <p className="text-xs text-gray-400 dark:text-slate-500">{zone.radiusKm}km radius · {zone.lat}, {zone.lng}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{zone.radiusKm}km radius · {zone.lat}, {zone.lng}</p>
                   </div>
                   <Toggle
                     checked={zone.isActive}
                     onChange={async () => { await zonesApi.update(zone.id, { isActive: !zone.isActive }); await loadZones(); }}
                   />
                   <button onClick={() => { setEditingZone({ ...zone, lat: String(zone.lat), lng: String(zone.lng), radiusKm: String(zone.radiusKm) }); setAddingZone(false); }}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button onClick={() => setConfirmDeleteZoneId(zone.id)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

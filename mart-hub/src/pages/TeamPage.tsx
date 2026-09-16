@@ -95,7 +95,7 @@ export default function TeamPage() {
   return (
     <div className="space-y-4 max-w-2xl">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-400 dark:text-slate-500">{team.length} member{team.length !== 1 ? 's' : ''} in your store</p>
+        <p className="text-xs text-gray-500 dark:text-slate-400">{team.length} member{team.length !== 1 ? 's' : ''} in your store</p>
         <button onClick={() => { setShowModal(true); setMode('search'); setPhone(''); setFoundUser(null); setNotFound(false); }} className="btn-primary">
           <Plus className="w-4 h-4" /> Add Member
         </button>
@@ -103,7 +103,7 @@ export default function TeamPage() {
 
       {/* Team list */}
       {team.length === 0 ? (
-        <div className="page-card text-center py-12 text-gray-400 dark:text-slate-500">
+        <div className="page-card text-center py-12 text-gray-500 dark:text-slate-400">
           <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No team members yet.</p>
           <p className="text-xs mt-1">Add your store manager, staff and delivery team.</p>
@@ -126,7 +126,7 @@ export default function TeamPage() {
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Inactive</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">@{member.username}{member.phone ? ` · ${member.phone}` : ''}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">@{member.username}{member.phone ? ` · ${member.phone}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {/* Active toggle */}
@@ -136,12 +136,12 @@ export default function TeamPage() {
                   </button>
                   {/* Edit role */}
                   <button onClick={() => setEditingMember(member)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
                     <Pencil className="w-4 h-4" />
                   </button>
                   {/* Remove */}
                   <button onClick={() => setConfirmRemove(member)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -163,7 +163,7 @@ export default function TeamPage() {
                     onChange={() => setEditingMember((m: any) => ({ ...m, role: r.value }))} className="accent-emerald-500 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">{r.label}</p>
-                    <p className="text-xs text-gray-400">{r.desc}</p>
+                    <p className="text-xs text-gray-500">{r.desc}</p>
                   </div>
                 </label>
               ))}
@@ -217,10 +217,10 @@ export default function TeamPage() {
                       <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-gray-900 dark:text-white">{foundUser.name || foundUser.username}</p>
-                        <p className="text-xs text-gray-400">@{foundUser.username}</p>
+                        <p className="text-xs text-gray-500">@{foundUser.username}</p>
                         {foundUser.stores?.length > 0 && (
                           <div className="flex items-center gap-1 mt-1 flex-wrap">
-                            <Store className="w-3 h-3 text-gray-400" />
+                            <Store className="w-3 h-3 text-gray-500" />
                             {foundUser.stores.map((s: any) => (
                               <span key={s.id} className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-500 px-1.5 py-0.5 rounded-full">{s.name}</span>
                             ))}
@@ -263,7 +263,7 @@ export default function TeamPage() {
                           onChange={() => setSelectedRole(r.value)} className="accent-emerald-500 mt-0.5" />
                         <div>
                           <p className="text-sm font-semibold text-gray-900 dark:text-white">{r.label}</p>
-                          <p className="text-xs text-gray-400">{r.desc}</p>
+                          <p className="text-xs text-gray-500">{r.desc}</p>
                         </div>
                       </label>
                     ))}

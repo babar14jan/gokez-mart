@@ -93,7 +93,7 @@ export default function CompliancePage() {
       {tab === 'grievances' && (
         <div className="space-y-3">
           {grievances.length === 0 ? (
-            <div className="page-card text-center py-12 text-gray-400 dark:text-slate-500">
+            <div className="page-card text-center py-12 text-gray-500 dark:text-slate-400">
               <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No grievances yet.</p>
             </div>
@@ -105,7 +105,7 @@ export default function CompliancePage() {
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">{g.subject}</p>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${GRIEVANCE_STATUS_COLORS[g.status] || ''}`}>{g.status.replace(/_/g, ' ')}</span>
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{g.customerName || 'Unknown'} · {g.customerPhone} · {new Date(g.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{g.customerName || 'Unknown'} · {g.customerPhone} · {new Date(g.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
                 </div>
               </div>
               <p className="text-xs text-gray-600 dark:text-slate-400 mb-3">{g.description}</p>
@@ -148,7 +148,7 @@ export default function CompliancePage() {
       {tab === 'deletions' && (
         <div className="space-y-3">
           {deletions.length === 0 ? (
-            <div className="page-card text-center py-12 text-gray-400 dark:text-slate-500">
+            <div className="page-card text-center py-12 text-gray-500 dark:text-slate-400">
               <p className="text-sm">No deletion requests.</p>
             </div>
           ) : deletions.map(d => (
@@ -159,9 +159,9 @@ export default function CompliancePage() {
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">{d.customerName || 'Unknown'}</p>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${DELETION_STATUS_COLORS[d.status] || ''}`}>{d.status}</span>
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">{d.customerPhone} · {new Date(d.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{d.customerPhone} · {new Date(d.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                   {d.reason && <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">Reason: {d.reason}</p>}
-                  {d.notes && <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Notes: {d.notes}</p>}
+                  {d.notes && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Notes: {d.notes}</p>}
                 </div>
                 {d.status === 'pending' && (
                   <div className="flex gap-2 flex-shrink-0">
@@ -185,7 +185,7 @@ export default function CompliancePage() {
       {tab === 'audit' && (
         <div className="space-y-2">
           {auditLogs.length === 0 ? (
-            <div className="page-card text-center py-12 text-gray-400 dark:text-slate-500">
+            <div className="page-card text-center py-12 text-gray-500 dark:text-slate-400">
               <ShieldCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm">No audit logs yet.</p>
             </div>
@@ -197,13 +197,13 @@ export default function CompliancePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold text-gray-900 dark:text-white">{log.username || '—'}</span>
-                      <span className="text-[10px] text-gray-400 dark:text-slate-500 capitalize">{log.role?.replace(/_/g, ' ')}</span>
+                      <span className="text-[10px] text-gray-500 dark:text-slate-400 capitalize">{log.role?.replace(/_/g, ' ')}</span>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${AUDIT_STATUS_COLORS[log.status]}`}>{log.action}</span>
                     </div>
                     {log.detail && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{log.detail}</p>}
-                    {log.ipAddress && <p className="text-[10px] text-gray-300 dark:text-slate-600 mt-0.5">IP: {log.ipAddress}</p>}
+                    {log.ipAddress && <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">IP: {log.ipAddress}</p>}
                   </div>
-                  <span className="text-[10px] text-gray-400 dark:text-slate-500 flex-shrink-0">
+                  <span className="text-[10px] text-gray-500 dark:text-slate-400 flex-shrink-0">
                     {new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
                   </span>
                 </div>

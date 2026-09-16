@@ -70,7 +70,7 @@ export default function LandingPage() {
           <div className="absolute top-0 right-0 h-full w-72 bg-white shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
               <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-8 w-auto object-contain" />
-              <button onClick={() => setMobileOpen(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-500" /></button>
+              <button onClick={() => setMobileOpen(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="flex flex-col gap-1 p-4">
               <a href="#why" onClick={() => setMobileOpen(false)} className="px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-lg">Why Join</a>
@@ -115,7 +115,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">Why join Gokez Mart?</h2>
-            <p className="mt-3 text-slate-500 text-sm max-w-xl mx-auto">
+            <p className="mt-3 text-slate-400 text-sm max-w-xl mx-auto">
               Built for local stores — so you can serve your neighbourhood and grow your business.
             </p>
           </div>
@@ -126,7 +126,7 @@ export default function LandingPage() {
                   <u.icon className="w-5 h-5 text-emerald-600" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-900 mb-1.5">{u.title}</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">{u.desc}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{u.desc}</p>
               </div>
             ))}
           </div>
@@ -138,7 +138,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">How it works</h2>
-            <p className="mt-3 text-slate-500 text-sm">Three simple steps to start receiving orders.</p>
+            <p className="mt-3 text-slate-400 text-sm">Three simple steps to start receiving orders.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
             {STEPS.map((s, i) => (
@@ -147,7 +147,7 @@ export default function LandingPage() {
                   {s.num}
                 </div>
                 <h3 className="text-base font-bold text-slate-900 mb-2">{s.title}</h3>
-                <p className="text-sm text-slate-500">{s.desc}</p>
+                <p className="text-sm text-slate-400">{s.desc}</p>
               </div>
             ))}
           </div>
@@ -181,7 +181,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-7 w-auto object-contain" />
           <p className="text-xs text-slate-400 text-center">
-            Built for local stores. Powered by <span className="font-semibold text-slate-500">Gokez Technologies Pvt. Ltd.</span>
+            Built for local stores. Powered by <span className="font-semibold text-slate-400">Gokez Technologies Pvt. Ltd.</span>
           </p>
           <div className="flex items-center gap-5 text-xs text-slate-400">
             <a href="/login" className="hover:text-emerald-600 transition-colors">Sign In</a>
