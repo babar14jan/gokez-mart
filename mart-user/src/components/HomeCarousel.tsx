@@ -81,12 +81,14 @@ export default function HomeCarousel() {
 
   return (
     <div className="mt-4 mb-4">
-      <div
-        className="relative w-full overflow-hidden rounded-2xl shadow-lg"
-        style={{ aspectRatio: '16/9' }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
+      {/* Mobile: full-width single slide */}
+      <div className="sm:hidden">
+        <div
+          className="relative w-full overflow-hidden rounded-2xl shadow-lg"
+          style={{ aspectRatio: '16/9' }}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
         {/* Background — image or gradient */}
         {slide.image_url ? (
           <img
@@ -160,12 +162,64 @@ export default function HomeCarousel() {
         </button>
       </div>
 
-      {/* Dots */}
-      <div className="flex items-center justify-center gap-1.5 mt-2.5">
+      {/* Dots — mobile only */}
+      <div className="sm:hidden flex items-center justify-center gap-1.5 mt-2.5">
         {slides.map((_, i) => (
           <button key={i} onClick={() => goTo(i)}
             className={`rounded-full transition-all duration-300 ${active === i ? 'w-5 h-1.5 bg-emerald-500' : 'w-1.5 h-1.5 bg-gray-300 dark:bg-slate-600'}`} />
         ))}
+      </div>
+      </div>{/* end mobile-only */}
+
+      {/* Desktop: horizontal scroll strip of smaller cards */}
+      <div className="hidden sm:block">
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+          {slides.map((s, i) => {
+            const isCamp = !!s.campaign_id;
+            return (
+              <div
+                key={s.id}
+                onClick={() => goTo(i)}
+                className={`relative flex-shrink-0 overflow-hidden rounded-2xl shadow-md cursor-pointer transition-all ${
+                  active === i ? 'ring-2 ring-emerald-500 scale-[1.02]' : 'opacity-80 hover:opacity-100'
+                }`}
+                style={{ width: 'calc(33.333% - 8px)', aspectRatio: '16/9' }}
+              >
+                {/* Background */}
+                {s.image_url ? (
+                  <img src={s.image_url} alt={s.title || ''} className="w-full h-full object-cover" loading="lazy" />
+                ) : (
+                  <div className={`w-full h-full bg-gradient-to-br ${s.gradient}`}>
+                    <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
+                  </div>
+                )}
+                {/* Campaign overlay */}
+                {isCamp && <div className="absolute inset-0 bg-black/20" />}
+                {isCamp && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3 z-10">
+                    {s.campaignBadge && (
+                      <span className="text-[9px] font-bold bg-white/25 text-white px-2 py-0.5 rounded-full mb-1.5 border border-white/30">{s.campaignBadge}</span>
+                    )}
+                    {discountLabel(s) && (
+                      <p className="text-2xl font-black text-white drop-shadow leading-none mb-1">{discountLabel(s)}</p>
+                    )}
+                    {s.title && <p className="text-xs font-bold text-white/90">{s.title}</p>}
+                    {!s.couponCode && s.campaign_id && (
+                      <span className="text-[9px] text-white/70 mt-1">✨ Auto-applied</span>
+                    )}
+                    {s.couponCode && (
+                      <span className="text-[9px] font-mono font-bold text-white bg-white/20 px-2 py-0.5 rounded-lg mt-1">{s.couponCode}</span>
+                    )}
+                  </div>
+                )}
+                {/* Active indicator */}
+                {active === i && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
