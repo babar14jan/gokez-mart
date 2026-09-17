@@ -25,8 +25,9 @@ const FALLBACK: Slide[] = [
 
 function discountLabel(slide: Slide): string {
   if (!slide.discountType) return '';
-  if (slide.discountType === 'flat') return `₹${slide.discountValue} OFF`;
-  if (slide.discountType === 'percent') return `${slide.discountValue}% OFF`;
+  const val = slide.discountValue ? Math.round(slide.discountValue) : 0;
+  if (slide.discountType === 'flat') return `₹${val} OFF`;
+  if (slide.discountType === 'percent') return `${val}% OFF`;
   if (slide.discountType === 'free_delivery') return 'FREE DELIVERY';
   return '';
 }
@@ -104,31 +105,39 @@ export default function HomeCarousel() {
 
         {/* Campaign overlay — shown on campaign slides */}
         {isCampaignSlide && (
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-black/20" />
         )}
 
-        {/* Campaign content */}
+        {/* Campaign content — fully centered, responsive */}
         {isCampaignSlide && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-10">
             {slide.campaignBadge && (
-              <span className="inline-block text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full mb-1.5 backdrop-blur-sm">
+              <span className="inline-block text-[11px] sm:text-xs font-bold bg-white/25 text-white px-3 py-1 rounded-full mb-3 backdrop-blur-sm border border-white/30">
                 {slide.campaignBadge}
               </span>
             )}
             {discountLabel(slide) && (
-              <p className="text-2xl font-black text-white drop-shadow leading-tight">{discountLabel(slide)}</p>
+              <p className="text-4xl sm:text-5xl font-black text-white drop-shadow-lg leading-none mb-2">
+                {discountLabel(slide)}
+              </p>
             )}
-            {slide.title && <p className="text-sm font-bold text-white/90 mt-0.5">{slide.title}</p>}
-            {slide.couponCode && (
+            {slide.title && (
+              <p className="text-sm sm:text-base font-bold text-white/90 mb-1">{slide.title}</p>
+            )}
+            {slide.subtitle && (
+              <p className="text-xs sm:text-sm text-white/70 mb-3">{slide.subtitle}</p>
+            )}
+            {slide.couponCode ? (
               <button
                 onClick={() => copyCode(slide.couponCode!)}
-                className="mt-2 flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-xl border border-white/30 hover:bg-white/30 transition-colors">
-                <span className="font-mono">{slide.couponCode}</span>
-                <span className="text-[10px] opacity-80">{copied ? '✓ Copied!' : 'Tap to copy'}</span>
+                className="flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl border border-white/30 hover:bg-white/30 transition-colors">
+                <span className="font-mono tracking-wider">{slide.couponCode}</span>
+                <span className="text-[10px] sm:text-xs opacity-80">{copied ? '✓ Copied!' : 'Tap to copy'}</span>
               </button>
-            )}
-            {!slide.couponCode && slide.campaign_id && (
-              <p className="text-[10px] text-white/70 mt-1">Auto-applied at checkout</p>
+            ) : slide.campaign_id && (
+              <span className="text-[11px] sm:text-xs text-white/80 bg-white/15 px-3 py-1 rounded-full border border-white/20">
+                ✨ Auto-applied at checkout
+              </span>
             )}
           </div>
         )}
