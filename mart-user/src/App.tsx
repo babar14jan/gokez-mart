@@ -53,7 +53,7 @@ export default function App() {
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
-  const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string } | null>(null);
+  const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number } | null>(null);
   const [pendingCheckout, setPendingCheckout] = useState(false);
 
   const { isLoggedIn } = useCustomerAuthStore();
@@ -240,6 +240,11 @@ export default function App() {
             <CheckCircle className="w-8 h-8 text-emerald-500" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Order Placed! 🎉</h2>
+            {successData.savedAmount && successData.savedAmount > 0 && (
+              <div className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-full mb-2">
+                🎉 You saved ₹{successData.savedAmount.toFixed(0)} with this order!
+              </div>
+            )}
           <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">
             Order <span className="font-bold text-gray-900 dark:text-white">Order #{successData.num}</span>
           </p>
@@ -364,7 +369,7 @@ export default function App() {
               zoneGpsConfirmed={zoneGpsConfirmed}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
-              onSuccess={(num: string, preference: string, storeName?: string) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
             />
           </div>
           {/* Desktop — right side drawer */}
@@ -376,7 +381,7 @@ export default function App() {
               zoneGpsConfirmed={zoneGpsConfirmed}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
-              onSuccess={(num: string, preference: string, storeName?: string) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
             />
           </div>
         </div>

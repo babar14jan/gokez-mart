@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { X, RefreshCw, ShieldCheck, ArrowRight } from 'lucide-react';
-import { authApi } from '../services/api';
+import { X, RefreshCw, ShieldCheck, ArrowRight, Tag } from 'lucide-react';
+import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { subscribeToPush } from '../services/push';
 import { useCustomerStore } from '../store/customerStore';
@@ -10,7 +10,7 @@ interface LoginModalProps {
   onSuccess?: () => void;
 }
 
-type Step = 'phone' | 'otp' | 'profile';
+type Step = 'phone' | 'otp' | 'profile' | 'offer';
 
 export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
   const [step, setStep] = useState<Step>('phone');
@@ -18,6 +18,7 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [welcomeOffer, setWelcomeOffer] = useState<any | null>(null);
   const [resendTimer, setResendTimer] = useState(0);
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
@@ -60,10 +61,19 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
       if (customer.name) setName(customer.name);
       if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
       if (Notification.permission === 'granted') subscribeToPush().catch(() => {});
-      // If returning customer (has name) — done
+      // If returning customer (has name) — check for offers then done
       if (customer.name) {
-        onSuccess?.();
-        onClose();
+        // Check for eligible campaigns
+        campaignApi.getEligible(0, '').then(r => {
+          const offers = r.data.data || [];
+          if (offers.length > 0) {
+            setWelcomeOffer(offers[0]);
+            setStep('offer');
+          } else {
+            onSuccess?.();
+            onClose();
+          }
+        }).catch(() => { onSuccess?.(); onClose(); });
       } else {
         // New customer — collect name + address
         setStep('profile');
@@ -112,7 +122,32 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
           </button>
         </div>
 
-        {step === 'profile' ? (
+        {step === 'offer' && welcomeOffer ? (
+          <>
+            <div className="text-center mb-5">
+              <div className={`w-full h-24 rounded-2xl bg-gradient-to-br ${welcomeOffer.carousel_gradient || 'from-violet-500 via-purple-600 to-indigo-600'} flex flex-col items-center justify-center mb-4 relative overflow-hidden`}>
+                <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
+                {welcomeOffer.badge_text && <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full mb-1">{welcomeOffer.badge_text}</span>}
+                <p className="text-2xl font-black text-white drop-shadow">
+                  {welcomeOffer.discount_type === 'flat' ? `₹${welcomeOffer.discount_value} OFF` :
+                   welcomeOffer.discount_type === 'percent' ? `${welcomeOffer.discount_value}% OFF` : 'FREE DELIVERY'}
+                </p>
+              </div>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">{welcomeOffer.title} 🎉</h2>
+              <p className="text-sm text-gray-500 dark:text-slate-400">{welcomeOffer.subtitle || 'Applied automatically at checkout'}</p>
+              {welcomeOffer.coupon_code && (
+                <div className="mt-2 inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 text-xs font-bold px-3 py-1.5 rounded-xl">
+                  <Tag className="w-3.5 h-3.5" />
+                  Code: <span className="font-mono">{welcomeOffer.coupon_code}</span>
+                </div>
+              )}
+            </div>
+            <button onClick={() => { onSuccess?.(); onClose(); }}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm">
+              <ArrowRight className="w-4 h-4" /> Start Shopping
+            </button>
+          </>
+        ) : step === 'profile' ? (
           <>
             <div className="text-center mb-5">
               <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-3">
