@@ -23,6 +23,9 @@ export interface CreateOrderDto {
   items: OrderItem[];
   paymentMethod: 'cod' | 'upi' | 'phonepay';
   notes?: string;
+  campaignId?: string | null;
+  campaignDiscount?: number;
+  couponCodeUsed?: string | null;
 }
 
 export class OrderService {
@@ -44,7 +47,8 @@ export class OrderService {
 
     const subtotal = data.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const actualDelivery = subtotal >= freeAbove ? 0 : deliveryCharge;
-    const total = subtotal + actualDelivery;
+    const campaignDiscount = data.campaignDiscount || 0;
+    const total = Math.max(0, subtotal + actualDelivery - campaignDiscount);
     // Retry on order number collision (extremely rare but safe)
     let orderNumber = this.generateOrderNumber();
     const existing = await query(`SELECT 1 FROM mart_orders WHERE order_number = $1`, [orderNumber]);
@@ -75,14 +79,16 @@ export class OrderService {
         `INSERT INTO mart_orders
            (id, order_number, store_id, customer_id, guest_name, guest_phone, guest_address,
             subtotal, delivery_charge, total, payment_method, notes,
-            delivery_preference, delivery_note, fulfilled_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+            delivery_preference, delivery_note, fulfilled_by,
+            campaign_id, campaign_discount, coupon_code_used)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
         [orderId, orderNumber, data.storeId, customerId, data.guestName, data.guestPhone,
          data.guestAddress, subtotal, actualDelivery, total,
          data.paymentMethod, data.notes || null,
          data.deliveryPreference || 'within_15',
          data.deliveryNote || 'Ring the bell',
-         data.storeName || null]
+         data.storeName || null,
+         data.campaignId || null, campaignDiscount, data.couponCodeUsed || null]
       );
 
       // Create order items
@@ -180,6 +186,9 @@ export class OrderService {
               o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
               o.termination_reason as "terminationReason",
               o.cancellation_reason as "cancellationReason",
+              o.campaign_id as "campaignId",
+              o.campaign_discount::float as "campaignDiscount",
+              o.coupon_code_used as "couponCodeUsed",
               o.delivery_by_name as "deliveryByName",
               o.delivery_by_phone as "deliveryByPhone",
               o.delivery_preference as "deliveryPreference",

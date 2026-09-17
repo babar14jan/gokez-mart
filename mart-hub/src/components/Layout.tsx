@@ -22,6 +22,7 @@ const NAV_ALL = [
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
   { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Feedback',         href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Campaigns',         href: '/campaigns',           icon: Tag,             roles: ['super_admin', 'store_owner'] },
   { label: 'My Deliveries',      href: '/delivery',            icon: ClipboardList,   roles: ['delivery_staff', 'staff'] },
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
   { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
@@ -132,6 +133,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/store-applications': 'Store Requests',
     '/catalog': 'Catalog',
     '/feedback': 'Feedback',
+    '/campaigns': 'Campaigns',
     '/team': 'My Team',
     '/delivery': 'My Deliveries',
   };
@@ -208,7 +210,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback'].includes(pathname) ? (
+              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns'].includes(pathname) ? (
                 <button onClick={() => navigate(-1)}
                   className="p-2 -ml-1 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
                   <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />

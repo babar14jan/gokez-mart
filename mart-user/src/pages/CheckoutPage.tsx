@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
-import { storeApi } from '../services/api';
+import { storeApi, campaignApi } from '../services/api';
 import type { PublicSettings } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
@@ -58,12 +58,77 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Campaign / coupon
+  const cartSubtotal = subtotal(); // early calc for useEffect
+  const [eligibleCampaigns, setEligibleCampaigns] = useState<any[]>([]);
+  const [appliedCampaign, setAppliedCampaign] = useState<any | null>(null);
+  const [campaignDiscount, setCampaignDiscount] = useState(0);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [showOffers, setShowOffers] = useState(false);
+
+  useEffect(() => {
+    if (!storeId) return;
+    campaignApi.getEligible(cartSubtotal, storeId)
+      .then(r => {
+        const campaigns = r.data.data || [];
+        setEligibleCampaigns(campaigns);
+        // Auto-apply first eligible auto-apply campaign
+        const autoApply = campaigns.find((c: any) => !c.coupon_code);
+        if (autoApply && !appliedCampaign) {
+          const disc = calcDiscount(autoApply, cartSubtotal);
+          setAppliedCampaign(autoApply);
+          setCampaignDiscount(disc);
+        }
+      }).catch(() => {});
+  }, [storeId, cartSubtotal]);
+
+  const calcDiscount = (campaign: any, cartTotal: number): number => {
+    if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), cartTotal);
+    if (campaign.discount_type === 'percent') {
+      const d = (cartTotal * parseFloat(campaign.discount_value)) / 100;
+      return campaign.max_discount ? Math.min(d, parseFloat(campaign.max_discount)) : d;
+    }
+    return 0;
+  };
+
+  const applyCampaign = (campaign: any) => {
+    const disc = calcDiscount(campaign, sub);
+    setAppliedCampaign(campaign);
+    setCampaignDiscount(disc);
+    setCouponError('');
+    setShowOffers(false);
+  };
+
+  const removeCampaign = () => {
+    setAppliedCampaign(null);
+    setCampaignDiscount(0);
+    setCouponInput('');
+    setCouponError('');
+  };
+
+  const validateCoupon = async () => {
+    if (!couponInput.trim() || !storeId) return;
+    setCouponLoading(true); setCouponError('');
+    try {
+      const res = await campaignApi.validateCode(couponInput.trim(), sub, storeId);
+      const { campaign, discount } = res.data.data;
+      setAppliedCampaign(campaign);
+      setCampaignDiscount(discount);
+      setCouponInput('');
+      setShowOffers(false);
+    } catch (e: any) {
+      setCouponError(e?.response?.data?.error || 'Invalid coupon');
+    } finally { setCouponLoading(false); }
+  };
+
   const deliveryCharge = parseFloat(settings.delivery_charge || '15');
   const freeAbove = parseFloat(settings.free_delivery_above || '150');
   const minOrder = parseFloat(settings.min_order_amount || '50');
   const sub = subtotal();
-  const actualDelivery = sub >= freeAbove ? 0 : deliveryCharge;
-  const total = sub + actualDelivery;
+  const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' ? 0 : (sub >= freeAbove ? 0 : deliveryCharge);
+  const total = Math.max(0, sub + actualDelivery - campaignDiscount);
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const paymentOptions = [
@@ -92,6 +157,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
         paymentMethod, zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
+        campaignId: appliedCampaign?.id || undefined,
+        couponCode: appliedCampaign?.coupon_code || undefined,
       });
       if (resolvedAddress) addAddress({ label: 'Home', address: resolvedAddress, isDefault: true });
       clearCart();
@@ -224,6 +291,74 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
             )}
           </div>
 
+          {/* ── Offers / Coupons ── */}
+          {(eligibleCampaigns.length > 0 || appliedCampaign) && (
+            <div className={card}>
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-violet-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers</span>
+                  </div>
+                  {!appliedCampaign && (
+                    <button type="button" onClick={() => setShowOffers(s => !s)}
+                      className="text-xs font-semibold text-violet-600 dark:text-violet-400">
+                      {showOffers ? 'Hide' : `${eligibleCampaigns.length} available`}
+                    </button>
+                  )}
+                </div>
+
+                {/* Applied campaign */}
+                {appliedCampaign && (
+                  <div className="mt-2 flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2">
+                    <div>
+                      <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                        {appliedCampaign.badge_text || '🎉'} {appliedCampaign.title}
+                      </p>
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                        {campaignDiscount > 0 ? `-₹${campaignDiscount.toFixed(0)} saved` : 'Free delivery applied'}
+                      </p>
+                    </div>
+                    <button type="button" onClick={removeCampaign} className="p-1 text-emerald-600 hover:text-red-500">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Offers list */}
+                {showOffers && !appliedCampaign && (
+                  <div className="mt-3 space-y-2">
+                    {eligibleCampaigns.map((c: any) => (
+                      <div key={c.id} className="flex items-center justify-between border border-gray-100 dark:border-slate-700 rounded-xl px-3 py-2.5">
+                        <div>
+                          <p className="text-xs font-bold text-gray-900 dark:text-white">{c.badge_text} {c.title}</p>
+                          <p className="text-[10px] text-gray-500 dark:text-slate-400">{c.subtitle}</p>
+                          {c.coupon_code && <p className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{c.coupon_code}</p>}
+                        </div>
+                        <button type="button" onClick={() => applyCampaign(c)}
+                          className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors">
+                          Apply
+                        </button>
+                      </div>
+                    ))}
+                    {/* Manual coupon input */}
+                    <div className="flex gap-2 pt-1">
+                      <input type="text" value={couponInput} onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                        placeholder="Enter coupon code"
+                        className="flex-1 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
+                      <button type="button" onClick={validateCoupon} disabled={couponLoading || !couponInput.trim()}
+                        className="px-3 py-2 text-xs font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-xl disabled:opacity-50 flex items-center gap-1">
+                        {couponLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        Apply
+                      </button>
+                    </div>
+                    {couponError && <p className="text-xs text-red-500">{couponError}</p>}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── USP: Delivery time + Note in one card ── */}
           <div className={card}>
             {/* Delivery time */}
@@ -308,6 +443,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
 
           {!canCheckout && sub < minOrder && (
             <p className="text-xs text-red-500 text-center">Minimum order ₹{minOrder}. Add ₹{(minOrder - sub).toFixed(0)} more.</p>
+          )}
+
+          {/* Campaign discount summary */}
+          {campaignDiscount > 0 && (
+            <div className="flex items-center justify-between px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl">
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">🎉 {appliedCampaign?.title}</span>
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">-₹{campaignDiscount.toFixed(0)}</span>
+            </div>
           )}
 
           {/* ── Place Order ── */}

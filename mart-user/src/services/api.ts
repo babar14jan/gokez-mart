@@ -87,6 +87,7 @@ export const storeApi = {
     deliveryPreference?: string; deliveryNote?: string;
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
     paymentMethod: 'cod' | 'upi' | 'phonepay'; notes?: string;
+    campaignId?: string; couponCode?: string;
   }) => api.post('/orders', data),
   trackOrders: () => api.get('/orders/track'),
 };
@@ -95,4 +96,13 @@ export const storeApi = {
 export const feedbackApi = {
   submit: (data: { rating: number; category: string; message?: string; storeId?: string; orderId?: string }) =>
     api.post('/feedback', data),
+};
+
+// ── Campaigns (public) ────────────────────────────────────────────────────────────────────────────────
+export const campaignApi = {
+  getEligible: (cartTotal: number, storeId: string) =>
+    api.get("/campaigns/eligible", { params: { cartTotal, storeId } }),
+  validateCode: (code: string, cartTotal: number, storeId: string) =>
+    api.post("/campaigns/validate", { code, cartTotal, storeId }),
+  getCarousel: () => api.get("/carousel"),
 };
