@@ -51,7 +51,21 @@ export class CampaignService {
         data.validFrom || null, data.validUntil || null, adminId,
       ]
     );
-    return result.rows[0];
+    const campaign = result.rows[0];
+    // Auto-sync to carousel slides if show_in_carousel is true
+    if (data.showInCarousel) {
+      await query(
+        `INSERT INTO mart_carousel_slides (title, subtitle, image_url, gradient, campaign_id, sort_order, is_active, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,true,$7)
+         ON CONFLICT (campaign_id) DO UPDATE SET
+           title = EXCLUDED.title, subtitle = EXCLUDED.subtitle,
+           image_url = EXCLUDED.image_url, gradient = EXCLUDED.gradient, is_active = true`,
+        [data.title, data.subtitle || null, data.carouselImageUrl || null,
+         data.carouselGradient || 'from-emerald-500 via-teal-500 to-cyan-500',
+         campaign.id, data.carouselSortOrder || 0, adminId]
+      ).catch(() => {});
+    }
+    return campaign;
   }
 
   static async update(id: string, data: any): Promise<any> {
@@ -83,7 +97,26 @@ export class CampaignService {
       `UPDATE mart_campaigns SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
       params
     );
-    return result.rows[0];
+    const campaign = result.rows[0];
+    // Sync carousel slide if show_in_carousel changed
+    if (campaign) {
+      if (campaign.show_in_carousel) {
+        await query(
+          `INSERT INTO mart_carousel_slides (title, subtitle, image_url, gradient, campaign_id, sort_order, is_active)
+           VALUES ($1,$2,$3,$4,$5,$6,true)
+           ON CONFLICT (campaign_id) DO UPDATE SET
+             title = EXCLUDED.title, subtitle = EXCLUDED.subtitle,
+             image_url = EXCLUDED.image_url, gradient = EXCLUDED.gradient,
+             is_active = ($7 = 'active')`,
+          [campaign.title, campaign.subtitle || null, campaign.carousel_image_url || null,
+           campaign.carousel_gradient, campaign.id, campaign.carousel_sort_order || 0, campaign.status]
+        ).catch(() => {});
+      } else {
+        // Hide from carousel if show_in_carousel turned off
+        await query(`UPDATE mart_carousel_slides SET is_active = false WHERE campaign_id = $1`, [campaign.id]).catch(() => {});
+      }
+    }
+    return campaign;
   }
 
   static async delete(id: string): Promise<void> {
