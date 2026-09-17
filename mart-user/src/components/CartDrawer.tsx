@@ -13,7 +13,7 @@ interface CartDrawerProps {
 }
 
 export default function CartDrawer({ open, onClose, settings, onCheckout }: CartDrawerProps) {
-  const { items, updateQty, subtotal } = useCartStore();
+  const { items, updateQty, subtotal, appliedCampaign, campaignDiscount } = useCartStore();
   const { address: authAddress, isLoggedIn } = useCustomerAuthStore();
   const { addresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -25,8 +25,8 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
   const freeAbove = parseFloat(settings.free_delivery_above || '150');
   const minOrder = parseFloat(settings.min_order_amount || '50');
   const sub = subtotal();
-  const actualDelivery = sub >= freeAbove ? 0 : deliveryCharge;
-  const total = sub + actualDelivery;
+  const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' ? 0 : (sub >= freeAbove ? 0 : deliveryCharge);
+  const total = Math.max(0, sub + actualDelivery - campaignDiscount);
   const canCheckout = sub >= minOrder;
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
 
@@ -202,6 +202,17 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
           <div className="px-4 py-3 space-y-2 border-b border-gray-100 dark:border-slate-700">
             <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">Bill Summary</p>
             <div className="space-y-1.5">
+              {/* Applied campaign badge */}
+              {appliedCampaign && (
+                <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/10 rounded-xl px-2.5 py-1.5">
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                    🎉 {appliedCampaign.title}
+                  </span>
+                  {campaignDiscount > 0 && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">-₹{campaignDiscount.toFixed(0)}</span>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
                 <span>Items Total</span>
                 <span className="font-semibold text-gray-900 dark:text-white">₹{sub.toFixed(0)}</span>

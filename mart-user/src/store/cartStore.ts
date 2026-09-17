@@ -13,10 +13,13 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
+  appliedCampaign: any | null;
+  campaignDiscount: number;
   addItem: (product: Product, unit?: string, price?: number) => void;
   removeItem: (productId: string, unit: string) => void;
   updateQty: (productId: string, unit: string, qty: number) => void;
   clearCart: () => void;
+  setAppliedCampaign: (campaign: any | null, discount: number) => void;
   totalItems: () => number;
   subtotal: () => number;
 }
@@ -25,6 +28,8 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      appliedCampaign: null,
+      campaignDiscount: 0,
 
       addItem: (product, unit, price) => {
         const u = unit || product.unit;
@@ -48,7 +53,9 @@ export const useCartStore = create<CartState>()(
             : state.items.map(i => i.productId === productId && i.unit === unit ? { ...i, quantity: qty } : i),
         })),
 
-      clearCart: () => set({ items: [] }),
+      clearCart: () => set({ items: [], appliedCampaign: null, campaignDiscount: 0 }),
+
+      setAppliedCampaign: (campaign, discount) => set({ appliedCampaign: campaign, campaignDiscount: discount }),
 
       totalItems: () => get().items.reduce((s, i) => s + i.quantity, 0),
 
