@@ -96,6 +96,10 @@ export default function ProductsPage() {
   const [restockUnit, setRestockUnit] = useState('kg');
   const [restockNote, setRestockNote] = useState('');
   const [restockSaving, setRestockSaving] = useState(false);
+  // Inline stock update in edit modal
+  const [inlineStockQty, setInlineStockQty] = useState('');
+  const [inlineStockNote, setInlineStockNote] = useState('');
+  const [inlineStockSaving, setInlineStockSaving] = useState(false);
 
   // History
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
@@ -268,6 +272,7 @@ export default function ProductsPage() {
     });
     setPhotoFile(null); setPhotoPreview(p.photoUrl);
     setLastRestock(null);
+    setInlineStockQty(''); setInlineStockNote('');
     if (inventoryEnabled) {
       inventoryApi.getHistory(p.id, storeId).then(res => {
         const logs: LogEntry[] = res.data.data || [];
@@ -315,11 +320,7 @@ export default function ProductsPage() {
     await productsApi.update(p.id, { availabilityStatus: status, storeId } as any); await load();
   };
 
-  // ── Restock ───────────────────────────────────────────────────────────────
-  const openRestock = (p: Product) => {
-    setRestocking(p); setRestockQty('');
-    setRestockUnit(p.stockUnit || 'kg'); setRestockNote('');
-  };
+  // ── Restock (standalone sheet — kept for bulk restock from inventory page) ──
   const handleRestock = async () => {
     if (!restocking || !restockQty) return;
     setRestockSaving(true);
@@ -683,19 +684,10 @@ export default function ProductsPage() {
                 </div>
                 {editing && inventoryEnabled && (
                   <div className="flex flex-col gap-2 flex-1">
-                    <div className="flex gap-2">
-                      <button onClick={() => { setShowModal(false); openRestock(editing); }}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors">
-                        <Plus className="w-3.5 h-3.5" /> Restock
-                      </button>
-                      <button onClick={() => { setShowModal(false); openHistory(editing); }}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 hover:bg-gray-200 transition-colors">
-                        <History className="w-3.5 h-3.5" /> Stock Log
-                      </button>
-                    </div>
+                    {/* Current stock display */}
                     <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl px-3 py-2 space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-gray-500 dark:text-slate-400">Stock</span>
+                        <span className="text-[11px] text-gray-500 dark:text-slate-400">Current Stock</span>
                         <span className={`text-[11px] font-bold ${
                           editing.stockQuantity === null ? 'text-gray-400'
                           : editing.stockQuantity <= 0 ? 'text-red-600 dark:text-red-400'
@@ -705,21 +697,64 @@ export default function ProductsPage() {
                           {editing.stockQuantity !== null && editing.stockUnit ? formatStock(editing.stockQuantity, editing.stockUnit) : 'Not tracked'}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-gray-500 dark:text-slate-400">Status</span>
-                        <span className={`text-[11px] font-semibold ${editing.availabilityStatus === 'available' ? 'text-emerald-600 dark:text-emerald-400' : editing.availabilityStatus === 'out_of_stock' ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`}>
-                          {editing.availabilityStatus === 'available' ? '✅ Available' : editing.availabilityStatus === 'out_of_stock' ? '⚠️ Out of Stock' : '👁 Hidden'}
-                        </span>
-                      </div>
                       {lastRestock && (
                         <div className="flex items-center justify-between pt-0.5 border-t border-gray-200 dark:border-slate-600">
-                          <span className="text-[11px] text-gray-500 dark:text-slate-400">Last restock</span>
+                          <span className="text-[11px] text-gray-500 dark:text-slate-400">Last update</span>
                           <span className="text-[11px] text-gray-600 dark:text-slate-300">
-                            +{lastRestock.changeQty} · {new Date(lastRestock.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {lastRestock.changeQty > 0 ? '+' : ''}{lastRestock.changeQty} · {new Date(lastRestock.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
                           </span>
                         </div>
                       )}
                     </div>
+                    {/* Inline stock update — +qty to add, -qty to reduce */}
+                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl p-2.5 space-y-2">
+                      <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Update Stock</p>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text" inputMode="decimal"
+                          value={inlineStockQty}
+                          onChange={e => setInlineStockQty(e.target.value.replace(/[^0-9.\-]/g, '').replace(/(?!^)-/g, ''))}
+                          placeholder="+5 or -2"
+                          className="flex-1 px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!inlineStockQty || isNaN(parseFloat(inlineStockQty)) || parseFloat(inlineStockQty) === 0) return;
+                            setInlineStockSaving(true);
+                            try {
+                              await inventoryApi.restock(editing.id, parseFloat(inlineStockQty), inlineStockNote, storeId, editing.stockUnit || 'kg');
+                              setInlineStockQty(''); setInlineStockNote('');
+                              // Refresh last restock without closing modal
+                              const logs = await inventoryApi.getHistory(editing.id, storeId);
+                              const logData: LogEntry[] = logs.data.data || [];
+                              setLastRestock(logData[0] || null);
+                              await load();
+                            } catch (e: any) { alert(e?.response?.data?.error || 'Failed'); }
+                            finally { setInlineStockSaving(false); }
+                          }}
+                          disabled={inlineStockSaving || !inlineStockQty || isNaN(parseFloat(inlineStockQty)) || parseFloat(inlineStockQty) === 0}
+                          className="px-2.5 py-1.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg disabled:opacity-50 flex items-center gap-1 transition-colors">
+                          {inlineStockSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                          Save
+                        </button>
+                      </div>
+                      <input
+                        type="text" value={inlineStockNote}
+                        onChange={e => setInlineStockNote(e.target.value)}
+                        placeholder="Note (optional)"
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      {inlineStockQty && !isNaN(parseFloat(inlineStockQty)) && parseFloat(inlineStockQty) !== 0 && editing.stockQuantity !== null && (
+                        <p className={`text-[10px] font-semibold ${parseFloat(inlineStockQty) < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          → New total: {formatStock(Math.max(0, editing.stockQuantity + parseFloat(inlineStockQty)), editing.stockUnit || 'kg')}
+                        </p>
+                      )}
+                    </div>
+                    {/* Stock log link */}
+                    <button onClick={() => { setShowModal(false); openHistory(editing); }}
+                      className="flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 transition-colors">
+                      <History className="w-3.5 h-3.5" /> View Stock Log
+                    </button>
                   </div>
                 )}
               </div>

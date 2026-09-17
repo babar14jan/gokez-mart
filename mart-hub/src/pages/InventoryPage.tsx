@@ -40,12 +40,16 @@ function formatStock(qty: number, unit: string): string {
   return `${parseFloat(qty.toFixed(3))} ${unit}`;
 }
 
+const DEFAULT_LOW_THRESHOLD = 5; // used when no threshold is explicitly set
+
 function stockStatus(item: InventoryItem): 'untracked' | 'out' | 'low' | 'ok' {
-  // If manually marked out_of_stock or availability is off, treat as out
+  // If manually marked out_of_stock, treat as out
   if (item.availabilityStatus === 'out_of_stock') return 'out';
   if (item.stockQuantity === null) return 'untracked';
   if (item.stockQuantity <= 0) return 'out';
-  if (item.lowStockThreshold !== null && item.stockQuantity <= item.lowStockThreshold) return 'low';
+  // Use explicit threshold or fall back to default
+  const threshold = item.lowStockThreshold ?? DEFAULT_LOW_THRESHOLD;
+  if (item.stockQuantity <= threshold) return 'low';
   return 'ok';
 }
 
@@ -161,7 +165,7 @@ export default function InventoryPage() {
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-100 dark:border-amber-900/30 px-3 py-2 text-center">
           <p className="text-base font-bold text-amber-600 dark:text-amber-400">{lowCount}</p>
-          <p className="text-[10px] text-gray-500 dark:text-slate-400">Low Stock</p>
+          <p className="text-[10px] text-gray-500 dark:text-slate-400">Low Stock <span className="text-gray-400">(≤{DEFAULT_LOW_THRESHOLD})</span></p>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-red-100 dark:border-red-900/30 px-3 py-2 text-center">
           <p className="text-base font-bold text-red-600 dark:text-red-400">{outCount}</p>
