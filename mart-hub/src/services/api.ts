@@ -70,8 +70,8 @@ export const categoriesApi = {
 export const ordersApi = {
   getAll: (params?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }) =>
     api.get('/admin/orders', { params }),
-  updateStatus: (id: string, status: string, failureReason?: string) =>
-    api.put(`/admin/orders/${id}/status`, { status, failureReason }),
+  updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string) =>
+    api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason }),
   batchDispatch: (orderIds: string[]) =>
     api.post('/admin/orders/batch-dispatch', { orderIds }),
   terminate: (id: string, reason: string, customReason?: string) =>

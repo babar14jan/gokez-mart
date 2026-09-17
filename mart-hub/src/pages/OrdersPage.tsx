@@ -156,6 +156,7 @@ export default function OrdersPage() {
   const [batchSelected, setBatchSelected] = useState<string[]>([]);
   const [batching, setBatching] = useState(false);
   const [terminating, setTerminating] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [dateRange, setDateRange] = useState<DateRange>('today');
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
@@ -477,31 +478,48 @@ export default function OrdersPage() {
                       </select>
                     )}
 
-                    {/* Cancel */}
-                    {canManage && (order.status === 'pending' || order.status === 'confirmed') && (
-                      <button onClick={e => updateStatus(order.id, 'cancelled', e)} disabled={isUpdating}
-                        className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50">
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Cancel</span>
-                      </button>
-                    )}
-
-                    {/* Terminate */}
-                    {canTerminate && !['delivered','cancelled','failed_delivery','terminated'].includes(order.status) && (
-                      <select defaultValue=""
-                        onChange={e => { const r = e.target.value; if (!r) return; e.target.value = ''; handleTerminate(order.id, r); }}
-                        onClick={e => e.stopPropagation()}
-                        disabled={terminating === order.id}
-                        className="text-xs border border-red-200 dark:border-red-800 rounded-xl px-2.5 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 focus:outline-none cursor-pointer font-semibold disabled:opacity-50">
-                        <option value="" disabled>🛑 Terminate?</option>
-                        <option value="outside_area">📍 Outside delivery area</option>
-                        <option value="rider_unavailable">Rider unavailable</option>
-                        <option value="store_closed">Store closed</option>
-                        <option value="out_of_stock">Out of stock</option>
-                        <option value="technical_issue">Technical issue</option>
-                        <option value="other">Other</option>
-                      </select>
-                    )}
+                    {/* Unified Stop Order — smart routing based on stage + role */}
+                    {canManage && !TERMINAL.includes(order.status) && (() => {
+                      const isEarly = ['pending', 'confirmed'].includes(order.status);
+                      const isLate  = !isEarly;
+                      // Late stage: only super_admin + store_owner can stop
+                      if (isLate && !canTerminate) return null;
+                      const isProcessing = cancellingId === order.id || terminating === order.id;
+                      return cancellingId === order.id ? (
+                        <select defaultValue=""
+                          onChange={async e => {
+                            const reason = e.target.value;
+                            if (!reason) return;
+                            e.target.value = '';
+                            setCancellingId(null);
+                            if (isEarly) {
+                              await ordersApi.updateStatus(order.id, 'cancelled', undefined, reason);
+                              await load();
+                            } else {
+                              await handleTerminate(order.id, reason);
+                            }
+                          }}
+                          onClick={e => e.stopPropagation()}
+                          disabled={isProcessing}
+                          className="text-xs border border-red-200 dark:border-red-800 rounded-xl px-2.5 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 focus:outline-none cursor-pointer font-semibold disabled:opacity-50">
+                          <option value="" disabled>🛑 Why stopping?</option>
+                          {isEarly && <option value="customer_request">👤 Customer request</option>}
+                          {isEarly && <option value="duplicate_order">📋 Duplicate order</option>}
+                          <option value="out_of_stock">📦 Out of stock</option>
+                          <option value="store_closed">🏪 Store closed</option>
+                          {!isEarly && <option value="outside_area">📍 Outside delivery area</option>}
+                          {!isEarly && <option value="rider_unavailable">🛵 Rider unavailable</option>}
+                          {!isEarly && <option value="technical_issue">⚙️ Technical issue</option>}
+                          <option value="other">💬 Other</option>
+                        </select>
+                      ) : (
+                        <button onClick={e => { e.stopPropagation(); setCancellingId(order.id); }} disabled={isUpdating}
+                          className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50">
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Stop Order</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 )}
 
