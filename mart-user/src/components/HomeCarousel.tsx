@@ -133,8 +133,8 @@ export default function HomeCarousel() {
           </div>
         )}
 
-        {/* Title overlay for image slides */}
-        {!isCampaignSlide && slide.title && (
+        {/* Title overlay — only for gradient slides with no image */}
+        {!isCampaignSlide && slide.title && !slide.image_url && (
           <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/40 to-transparent z-10">
             <p className="text-xs font-bold text-white drop-shadow">{slide.title}</p>
           </div>
