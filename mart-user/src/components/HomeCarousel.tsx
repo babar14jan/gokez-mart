@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 
 const SLIDES = [
-  { src: '/1.PNG', alt: 'Gokez Mart — Shop local. Support local.' },
-  { src: '/2.PNG', alt: 'Fresh from your neighbourhood' },
-  { src: '/3.PNG', alt: 'Bringing local stores online' },
+  { src: '/1.webp', alt: 'Gokez Mart — Shop local. Support local.' },
+  { src: '/2.webp', alt: 'Fresh from your neighbourhood' },
+  { src: '/3.webp', alt: 'Bringing local stores online' },
 ];
 
 export default function HomeCarousel() {
