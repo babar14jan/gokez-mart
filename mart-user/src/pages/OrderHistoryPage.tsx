@@ -149,6 +149,12 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
               <span>Delivery</span>
               <span>{order.deliveryCharge === 0 ? <span className="text-emerald-600 font-semibold">FREE</span> : `₹${order.deliveryCharge}`}</span>
             </div>
+            {order.campaignDiscount > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                <span>🎉 {order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
+                <span className="font-semibold">-₹{order.campaignDiscount}</span>
+              </div>
+            )}
             <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-slate-600">
               <span>Total Paid</span><span>₹{order.total}</span>
             </div>

@@ -61,7 +61,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
   // Campaign / coupon
   const cartSubtotal = subtotal(); // early calc for useEffect
   const [eligibleCampaigns, setEligibleCampaigns] = useState<any[]>([]);
-  const [appliedCampaign, setAppliedCampaign] = useState<any | null>(null);
+  const [appliedCampaign, setLocalAppliedCampaign] = useState<any | null>(null);
   const [campaignDiscount, setCampaignDiscount] = useState(0);
   const [couponInput, setCouponInput] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
@@ -78,7 +78,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
         const autoApply = campaigns.find((c: any) => !c.coupon_code);
         if (autoApply && !appliedCampaign) {
           const disc = calcDiscount(autoApply, cartSubtotal);
-          setAppliedCampaign(autoApply);
+          setLocalAppliedCampaign(autoApply);
+          useCartStore.getState().setAppliedCampaign(autoApply, disc);
           setCampaignDiscount(disc);
         }
       }).catch(() => {});
@@ -95,17 +96,19 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
 
   const applyCampaign = (campaign: any) => {
     const disc = calcDiscount(campaign, sub);
-    setAppliedCampaign(campaign);
+    setLocalAppliedCampaign(campaign);
     setCampaignDiscount(disc);
-    setCouponError('');
+    useCartStore.getState().setAppliedCampaign(campaign, disc);
+    setCouponError("");
     setShowOffers(false);
   };
 
   const removeCampaign = () => {
-    setAppliedCampaign(null);
+    setLocalAppliedCampaign(null);
     setCampaignDiscount(0);
-    setCouponInput('');
-    setCouponError('');
+    useCartStore.getState().setAppliedCampaign(null, 0);
+    setCouponInput("");
+    setCouponError("");
   };
 
   const validateCoupon = async () => {
@@ -114,7 +117,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
     try {
       const res = await campaignApi.validateCode(couponInput.trim(), sub, storeId);
       const { campaign, discount } = res.data.data;
-      setAppliedCampaign(campaign);
+      setLocalAppliedCampaign(campaign);
       setCampaignDiscount(discount);
       setCouponInput('');
       setShowOffers(false);
