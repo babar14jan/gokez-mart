@@ -20,8 +20,8 @@ export default defineConfig({
   plugins: [react(), versionPlugin()],
   base: '/',
   build: {
-    // Capacitor needs relative paths in the built output
     outDir: 'dist',
+    target: ['es2015', 'safari13'],
   },
   server: {
     port: 5177,
