@@ -385,10 +385,14 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
 });
 
 export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { status, failureReason } = req.body;
+  const { status, failureReason, cancellationReason } = req.body;
   // Save failure reason if provided
   if (status === 'failed_delivery' && failureReason) {
     await query(`UPDATE mart_orders SET failure_reason = $1 WHERE id = $2`, [failureReason, req.params.id]);
+  }
+  // Save cancellation reason if provided
+  if (status === 'cancelled' && cancellationReason) {
+    await query(`UPDATE mart_orders SET cancellation_reason = $1 WHERE id = $2`, [cancellationReason, req.params.id]);
   }
   const order = await OrderService.updateStatus(req.params.id, status);
   if (!order) { res.status(404).json({ success: false, error: 'Order not found' }); return; }
@@ -400,10 +404,19 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
     wrong_address: '😔 We could not locate your address. Please update your address and contact us.',
   };
 
+  const CANCEL_REASON_LABELS: Record<string, string> = {
+    customer_request: 'you requested it',
+    duplicate_order:  'this appears to be a duplicate order',
+    out_of_stock:     'some items became unavailable',
+    store_closed:     'the store had to close unexpectedly',
+    other:            'of an unexpected issue',
+  };
   const STATUS_MESSAGES: Record<string, string> = {
     picked_up:        '🛵 Your order is on the way! Arriving in 10-15 mins.',
     delivered:        '🎉 Order delivered! Enjoy your groceries.',
-    cancelled:        '❌ Your order has been cancelled.',
+    cancelled:        cancellationReason && CANCEL_REASON_LABELS[cancellationReason]
+                        ? `😔 Your order was cancelled because ${CANCEL_REASON_LABELS[cancellationReason]}. You will not be charged.`
+                        : '❌ Your order has been cancelled. You will not be charged.',
     failed_delivery:  failureReason && FAILURE_MESSAGES[failureReason]
                         ? FAILURE_MESSAGES[failureReason]
                         : '😔 We were unable to deliver your order. Please contact us if you need help.',

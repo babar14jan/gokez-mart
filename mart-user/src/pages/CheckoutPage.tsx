@@ -10,6 +10,7 @@ interface CheckoutPageProps {
   settings: PublicSettings;
   zoneName?: string;
   storeId?: string;
+  zoneGpsConfirmed?: boolean;
   onBack: () => void;
   onHome: () => void;
   onSuccess: (orderNumber: string, preference: string, storeName?: string) => void;
@@ -25,7 +26,7 @@ const PREFERENCES = [
 
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
-export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess }: CheckoutPageProps) {
+export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfirmed, onBack, onHome, onSuccess }: CheckoutPageProps) {
   const { items, updateQty, subtotal, clearCart } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn } = useCustomerAuthStore();
@@ -116,6 +117,19 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         <div className="max-w-lg mx-auto px-4 py-4 pb-8 space-y-3">
 
           {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-2xl">{error}</div>}
+
+          {/* Soft warning if zone not GPS confirmed */}
+          {!zoneGpsConfirmed && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3 flex items-start gap-2.5">
+              <span className="text-lg flex-shrink-0">📍</span>
+              <div>
+                <p className="text-xs font-bold text-amber-700 dark:text-amber-400">Confirm your delivery area</p>
+                <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5 leading-relaxed">
+                  We couldn't verify your location. Please make sure your address is within our delivery zone. Orders outside our area may be cancelled.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ── Items ── */}
           <div className={card}>

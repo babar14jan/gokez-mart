@@ -179,6 +179,7 @@ export class OrderService {
               o.total::float, o.payment_method as "paymentMethod",
               o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
               o.termination_reason as "terminationReason",
+              o.cancellation_reason as "cancellationReason",
               o.delivery_by_name as "deliveryByName",
               o.delivery_by_phone as "deliveryByPhone",
               o.delivery_preference as "deliveryPreference",
