@@ -140,6 +140,7 @@ export default function MorePage() {
       { label: 'Categories',         href: '/categories',         icon: Tag },
       { label: 'Catalog',            href: '/catalog',            icon: Package },
       { label: 'Feedback',           href: '/feedback',           icon: MessageSquare },
+      { label: 'Campaigns',          href: '/campaigns',          icon: Tag },
       { label: 'Store Requests', href: '/store-applications', icon: Store },
       { label: 'Stores',             href: '/stores',             icon: LayoutDashboard },
       { label: 'Users',              href: '/users',              icon: Users },
@@ -152,6 +153,7 @@ export default function MorePage() {
       { label: 'Customers',       href: '/customers', icon: Users },
       { label: 'Catalog',         href: '/catalog',   icon: Package },
       { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
+      { label: 'Campaigns',       href: '/campaigns', icon: Tag },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     store_manager: [
@@ -159,6 +161,7 @@ export default function MorePage() {
       { label: 'Customers',       href: '/customers', icon: Users },
       { label: 'Catalog',         href: '/catalog',   icon: Package },
       { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
+      { label: 'Campaigns',       href: '/campaigns', icon: Tag },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     sales_manager: [
@@ -166,6 +169,7 @@ export default function MorePage() {
       { label: 'Customers',       href: '/customers', icon: Users },
       { label: 'Catalog',         href: '/catalog',   icon: Package },
       { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
+      { label: 'Campaigns',       href: '/campaigns', icon: Tag },
       { label: 'Settings',        href: '/settings',  icon: Settings },
     ],
     delivery_staff: [],

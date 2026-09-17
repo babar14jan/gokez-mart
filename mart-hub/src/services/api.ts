@@ -183,3 +183,24 @@ export const feedbackApi = {
   getAll: (params?: { storeId?: string; rating?: number; category?: string; limit?: number; offset?: number }) =>
     api.get('/admin/feedback', { params }),
 };
+
+// ── Campaigns ────────────────────────────────────────────────────────────────────────────────
+export const campaignsApi = {
+  getAll: () => api.get("/admin/campaigns"),
+  create: (data: any) => api.post("/admin/campaigns", data),
+  update: (id: string, data: any) => api.put("/admin/campaigns/" + id, data),
+  delete: (id: string) => api.delete("/admin/campaigns/" + id),
+};
+
+export const carouselApi = {
+  getAll: () => api.get("/admin/carousel"),
+  create: (data: any) => api.post("/admin/carousel", data),
+  update: (id: string, data: any) => api.put("/admin/carousel/" + id, data),
+  delete: (id: string) => api.delete("/admin/carousel/" + id),
+  reorder: (ids: string[]) => api.post("/admin/carousel/reorder", { ids }),
+  uploadImage: (file: File) => {
+    const form = new FormData();
+    form.append("photo", file);
+    return api.post("/admin/upload/photo", form, { headers: { "Content-Type": "multipart/form-data" } });
+  },
+};

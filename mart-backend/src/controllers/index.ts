@@ -16,6 +16,7 @@ import { PushService } from '../services/push.service';
 import { ComplianceService } from '../services/compliance.service';
 import { query } from '../database/db';
 import { InventoryService } from '../services/inventory.service';
+import { CampaignService } from '../services/campaign.service';
 import { config } from '../config';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -59,7 +60,7 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
 });
 
 export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
-  const { guestName, guestPhone, guestAddress, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote } = req.body;
+  const { guestName, guestPhone, guestAddress, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode } = req.body;
   if (!guestName || !guestPhone || !guestAddress || !items?.length || !paymentMethod) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
@@ -73,12 +74,41 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   // Fetch store name for fulfilled_by
   const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
+
+  // Resolve campaign discount
+  let campaignDiscount = 0;
+  let resolvedCampaignId = campaignId || null;
+  let resolvedCouponCode = couponCode || null;
+  const cartTotal = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
+
+  if (resolvedCampaignId) {
+    try {
+      const camp = await query(`SELECT * FROM mart_campaigns WHERE id = $1 AND status = 'active'`, [resolvedCampaignId]);
+      if (camp.rows[0]) campaignDiscount = CampaignService.calculateDiscount(camp.rows[0], cartTotal);
+    } catch {}
+  } else if (resolvedCouponCode) {
+    try {
+      const camp = await CampaignService.validateCode(resolvedCouponCode, null, cartTotal, storeId || SHAPOORJI_ID);
+      resolvedCampaignId = camp.id;
+      campaignDiscount = CampaignService.calculateDiscount(camp, cartTotal);
+    } catch {}
+  }
+
   const result = await OrderService.create({
     guestName, guestPhone, guestAddress, items, paymentMethod, notes,
     storeId: storeId || SHAPOORJI_ID,
     storeName,
     zoneName, deliveryPreference, deliveryNote,
+    campaignId: resolvedCampaignId,
+    campaignDiscount,
+    couponCodeUsed: resolvedCouponCode,
   });
+
+  // Record campaign use (non-blocking)
+  if (resolvedCampaignId && campaignDiscount > 0) {
+    CampaignService.recordUse(resolvedCampaignId, null, result.orderId, campaignDiscount, resolvedCouponCode || undefined).catch(() => {});
+  }
+
   // Notify store admins of new order (non-blocking)
   PushService.notifyStoreAdmins(storeId || SHAPOORJI_ID, {
     title: '🛒 New Order!',
@@ -1130,4 +1160,99 @@ export const adminBulkRestock = asyncHandler(async (req: AdminRequest, res: Resp
   }
   const results = await InventoryService.bulkRestock(storeId, items, note || null, req.admin!.id);
   res.json({ success: true, data: results, message: `${results.length} product(s) restocked` });
+});
+
+// ── Campaign controllers ──────────────────────────────────────────────────────
+
+export const adminGetCampaigns = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const isSuperAdmin = req.admin?.role === 'super_admin';
+  const storeId = resolveStoreId(req);
+  const campaigns = await CampaignService.findAll(storeId, isSuperAdmin);
+  res.json({ success: true, data: campaigns });
+});
+
+export const adminCreateCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const isSuperAdmin = req.admin?.role === 'super_admin';
+  const data = { ...req.body };
+  // Non-super-admin can only create for their own store
+  if (!isSuperAdmin) data.storeId = req.admin?.storeId;
+  const campaign = await CampaignService.create(data, req.admin!.id);
+  res.status(201).json({ success: true, data: campaign });
+});
+
+export const adminUpdateCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const campaign = await CampaignService.update(req.params.id, req.body);
+  if (!campaign) { res.status(404).json({ success: false, error: 'Campaign not found' }); return; }
+  res.json({ success: true, data: campaign });
+});
+
+export const adminDeleteCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try {
+    await CampaignService.delete(req.params.id);
+    res.json({ success: true, message: 'Campaign deleted' });
+  } catch (e: any) {
+    res.status(400).json({ success: false, error: e.message });
+  }
+});
+
+// ── Carousel controllers ──────────────────────────────────────────────────────
+
+export const getCarouselSlides = asyncHandler(async (_req: Request, res: Response) => {
+  const slides = await CampaignService.getCarouselSlides(true);
+  res.json({ success: true, data: slides });
+});
+
+export const adminGetCarouselSlides = asyncHandler(async (_req: AdminRequest, res: Response) => {
+  const slides = await CampaignService.getCarouselSlides(false);
+  res.json({ success: true, data: slides });
+});
+
+export const adminCreateCarouselSlide = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const slide = await CampaignService.createSlide(req.body, req.admin!.id);
+  res.status(201).json({ success: true, data: slide });
+});
+
+export const adminUpdateCarouselSlide = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const slide = await CampaignService.updateSlide(req.params.id, req.body);
+  res.json({ success: true, data: slide });
+});
+
+export const adminDeleteCarouselSlide = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await CampaignService.deleteSlide(req.params.id);
+  res.json({ success: true, message: 'Slide deleted' });
+});
+
+export const adminReorderCarouselSlides = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) { res.status(400).json({ success: false, error: 'ids array required' }); return; }
+  await CampaignService.reorderSlides(ids);
+  res.json({ success: true, message: 'Reordered' });
+});
+
+// ── Public campaign routes ────────────────────────────────────────────────────
+
+export const getEligibleCampaigns = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { cartTotal, storeId } = req.query;
+  const campaigns = await CampaignService.getEligible(
+    req.customer!.id,
+    parseFloat(cartTotal as string) || 0,
+    (storeId as string) || ''
+  );
+  res.json({ success: true, data: campaigns });
+});
+
+export const validateCouponCode = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { code, cartTotal, storeId } = req.body;
+  if (!code) { res.status(400).json({ success: false, error: 'Coupon code required' }); return; }
+  try {
+    const campaign = await CampaignService.validateCode(
+      code, req.customer!.id,
+      parseFloat(cartTotal) || 0,
+      storeId || ''
+    );
+    const discount = CampaignService.calculateDiscount(campaign, parseFloat(cartTotal) || 0);
+    res.json({ success: true, data: { campaign, discount } });
+  } catch (e: any) {
+    res.status(400).json({ success: false, error: e.message });
+  }
 });

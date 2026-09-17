@@ -111,6 +111,24 @@ router.get('/compliance/marketing-consent',    authenticateCustomer, ctrl.custom
 // ── Feedback ────────────────────────────────────────────────────────────────────────────────
 router.post('/feedback',                       authenticateCustomer, ctrl.customerSubmitFeedback);
 router.get('/admin/feedback',                  authenticate, ctrl.adminGetFeedback);
+
+// ── Campaigns ────────────────────────────────────────────────────────────────────────────────
+router.get('/admin/campaigns',                 authenticate, ctrl.adminGetCampaigns);
+router.post('/admin/campaigns',                authenticate, ctrl.adminCreateCampaign);
+router.put('/admin/campaigns/:id',             authenticate, ctrl.adminUpdateCampaign);
+router.delete('/admin/campaigns/:id',          authenticate, requireSuperAdmin, ctrl.adminDeleteCampaign);
+
+// Carousel slides (super_admin only)
+router.get('/admin/carousel',                  authenticate, requireSuperAdmin, ctrl.adminGetCarouselSlides);
+router.post('/admin/carousel',                 authenticate, requireSuperAdmin, ctrl.adminCreateCarouselSlide);
+router.put('/admin/carousel/:id',              authenticate, requireSuperAdmin, ctrl.adminUpdateCarouselSlide);
+router.delete('/admin/carousel/:id',           authenticate, requireSuperAdmin, ctrl.adminDeleteCarouselSlide);
+router.post('/admin/carousel/reorder',         authenticate, requireSuperAdmin, ctrl.adminReorderCarouselSlides);
+
+// Public campaign routes
+router.get('/carousel',                        ctrl.getCarouselSlides);
+router.get('/campaigns/eligible',              authenticateCustomer, ctrl.getEligibleCampaigns);
+router.post('/campaigns/validate',             authenticateCustomer, ctrl.validateCouponCode);
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
 

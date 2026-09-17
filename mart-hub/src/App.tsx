@@ -27,10 +27,11 @@ import TeamPage from './pages/TeamPage';
 import DeliveryPage from './pages/DeliveryPage';
 import InventoryPage from './pages/InventoryPage';
 import FeedbackPage from './pages/FeedbackPage';
+import CampaignsPage from './pages/CampaignsPage';
 
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/profile', '/change-password', '/more'],
-  store_owner:     ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/profile', '/change-password', '/more'],
+  store_owner:     ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   sales_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -97,6 +98,7 @@ export default function App() {
         <Route path="/delivery"          element={<ProtectedRoute path="/delivery"><DeliveryPage /></ProtectedRoute>} />
         <Route path="/inventory"         element={<ProtectedRoute path="/inventory"><InventoryPage /></ProtectedRoute>} />
         <Route path="/feedback"          element={<ProtectedRoute path="/feedback"><FeedbackPage /></ProtectedRoute>} />
+        <Route path="/campaigns"         element={<ProtectedRoute path="/campaigns"><CampaignsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
