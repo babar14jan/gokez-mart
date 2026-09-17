@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import {
   Package, Pencil, Eye, Loader2, Save, X,
   AlertTriangle, CheckCircle, ChevronDown, ChevronUp,
-  History, ArrowDownCircle, Plus,
+  History, ArrowDownCircle, Plus, Search,
 } from 'lucide-react';
 import { inventoryApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
@@ -62,6 +62,7 @@ export default function InventoryPage() {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [sortLowFirst, setSortLowFirst] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // History drawer
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
@@ -89,10 +90,13 @@ export default function InventoryPage() {
   }, []);
 
   const sorted = useMemo(() => {
-    if (!sortLowFirst) return items;
+    let list = searchQuery.trim()
+      ? items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      : [...items];
+    if (!sortLowFirst) return list;
     const order = { out: 0, low: 1, ok: 2, untracked: 3 };
-    return [...items].sort((a, b) => order[stockStatus(a)] - order[stockStatus(b)]);
-  }, [items, sortLowFirst]);
+    return list.sort((a, b) => order[stockStatus(a)] - order[stockStatus(b)]);
+  }, [items, sortLowFirst, searchQuery]);
 
   const tracked  = items.filter(i => i.stockQuantity !== null);
   const outCount = items.filter(i => stockStatus(i) === 'out').length;
@@ -156,6 +160,22 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-4">
+
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <input
+          type="text" value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search inventory..."
+          className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+            <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+          </button>
+        )}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2">
