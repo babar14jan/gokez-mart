@@ -73,6 +73,7 @@ export default function ProductsPage() {
   });
 
   // Filter + Sort (replaces tabs + sortModes)
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [sortMode, setSortMode] = useState<SortMode>(
@@ -184,6 +185,12 @@ export default function ProductsPage() {
   const displayProducts = useMemo(() => {
     let list = [...products];
 
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || ((p as any).localName || '').toLowerCase().includes(q));
+    }
+
     // Category filter
     if (filterCategory !== 'all') {
       if (filterCategory === '__uncat__') list = list.filter(p => !p.categoryId);
@@ -204,7 +211,7 @@ export default function ProductsPage() {
       return list.sort((a, b) => order[stockStatus(a)] - order[stockStatus(b)]);
     }
     return list.sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [products, filterStatus, filterCategory, sortMode]);
+  }, [products, searchQuery, filterStatus, filterCategory, sortMode]);
 
   // ── Reorder ───────────────────────────────────────────────────────────────
   const canReorder = filterStatus === 'all' && filterCategory === 'all' && sortMode === 'manual';
@@ -431,6 +438,22 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-4" onClick={() => { setShowFilterMenu(false); setShowSortMenu(false); }}>
+
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <input
+          type="text" value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search products..."
+          className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+            <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
+          </button>
+        )}
+      </div>
 
       {/* Header: Filter | Sort | Reorder | + Product (desktop) */}
       <div className="flex items-center gap-2">
