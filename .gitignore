@@ -4,3 +4,8 @@ dist/
 *.log
 .DS_Store
 .expo/
+
+# Research/scraping files
+muktifresh_images/
+muktifresh_organic_vegetables.xlsx
+scrape_muktifresh.py
