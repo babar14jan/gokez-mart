@@ -106,9 +106,13 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
         {/* Logo */}
         <div className="flex-shrink-0">
           <img
-            src={isDark ? '/mart_brand_dark.png' : '/mart_brand_new.png'}
+            src="/mart_brand_new.png"
             alt="Gokez Mart"
-            className="h-8 w-32 sm:h-10 sm:w-44 object-contain object-left" />
+            className="h-8 w-32 sm:h-10 sm:w-44 object-contain object-left dark:hidden" />
+          <img
+            src="/mart_brand_dark.png"
+            alt="Gokez Mart"
+            className="h-8 w-32 sm:h-10 sm:w-44 object-contain object-left hidden dark:block" />
         </div>
 
         {/* ── Desktop layout ── */}
