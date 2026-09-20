@@ -103,13 +103,12 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
       {/* Row 1 */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-3">
 
-        {/* Logo + slogan */}
-        <div className="flex flex-col items-start flex-shrink-0">
-          <img src="/mart_web_logo.png?v=2" alt="Gokez Mart"
+        {/* Logo */}
+        <div className="flex-shrink-0">
+          <img
+            src={isDark ? '/mart_brand_dark.png' : '/mart_brand_new.png'}
+            alt="Gokez Mart"
             className="h-8 w-32 sm:h-10 sm:w-44 object-contain object-left" />
-          <p className="text-[9px] sm:text-[10px] font-bold text-gray-900 dark:text-white tracking-wide leading-none mt-0.5">
-            Shop local. Support local.
-          </p>
         </div>
 
         {/* ── Desktop layout ── */}

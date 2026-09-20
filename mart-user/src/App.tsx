@@ -548,7 +548,7 @@ export default function App() {
             </span>
           </div>
           <div className="mt-2 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
-            <img src="/mart_web_logo.png" alt="Gokez Mart" className="h-10 w-auto object-contain mx-auto mb-1" />
+            <img src="/mart_brand_new.png" alt="Gokez Mart" className="h-10 w-auto object-contain mx-auto mb-1" />
             <p className="text-sm font-black text-gray-900 dark:text-white mb-4">Shop local. Support local.</p>
             <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3">Gokez Mart — Hyperlocal Commerce Platform</p>
             <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
