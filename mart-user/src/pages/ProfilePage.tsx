@@ -121,14 +121,16 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
     authApi.getMarketingConsent().then(r => setMarketingConsent(r.data.data.granted)).catch(() => {});
     if (!isLoggedIn) return;
     // Check actual subscription + auto-subscribe if permission granted but no subscription
-    if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then(reg =>
-        reg.pushManager.getSubscription().then(sub => {
-          setNotifSubscribed(!!sub);
-          if (!sub) subscribeToPush().then(ok => setNotifSubscribed(ok)).catch(() => {});
-        })
-      ).catch(() => {});
-    }
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg =>
+          reg.pushManager.getSubscription().then(sub => {
+            setNotifSubscribed(!!sub);
+            if (!sub) subscribeToPush().then(ok => setNotifSubscribed(ok)).catch(() => {});
+          })
+        ).catch(() => {});
+      }
+    } catch {}
   }, []);
 
   const handleLocationToggle = async () => {
