@@ -22,7 +22,7 @@ export function printReceipt(order: any) {
 
       <!-- Header -->
       <div style="text-align:center;margin-bottom:20px;">
-        <img src="/mart_web_logo.png" alt="Gokez Mart" style="height:48px;object-fit:contain;display:block;margin:0 auto;" onerror="this.style.display='none'" />
+        <img src="/mart_brand_new.png" alt="Gokez Mart" style="height:48px;object-fit:contain;display:block;margin:0 auto;" onerror="this.style.display='none'" />
         <div style="font-size:13px;font-weight:700;color:#555;margin-top:6px;letter-spacing:0.3px;">Shop local. Support local.</div>
         <div style="font-size:12px;color:#666;margin-top:4px;font-weight:500;">A product of Gokez Technologies Pvt. Ltd.</div>
       </div>

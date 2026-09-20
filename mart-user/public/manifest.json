@@ -1,12 +1,12 @@
 {
   "name": "Gokez Mart",
   "short_name": "Gokez Mart",
-  "description": "Gokez Mart — Fresh groceries delivered in 10-15 mins across Kolkata",
+  "description": "Shop local, support local. Order fresh groceries from your neighbourhood stores in Kolkata, delivered fast to your door.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f0fdf4",
-  "theme_color": "#f0fdf4",
+  "background_color": "#FED102",
+  "theme_color": "#FED102",
   "orientation": "portrait",
   "icons": [
     { "src": "/icons/icon-72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any" },
