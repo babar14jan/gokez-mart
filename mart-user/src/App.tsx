@@ -62,9 +62,11 @@ export default function App() {
   useEffect(() => {
     useCustomerStore.getState().deduplicateAddresses();
     // Auto-subscribe to push if permission already granted
-    if (Notification.permission === 'granted') {
-      subscribeToPush().catch(() => {});
-    }
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        subscribeToPush().catch(() => {});
+      }
+    } catch {}
   }, []);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);

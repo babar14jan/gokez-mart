@@ -60,7 +60,7 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
       savePhone(customer.phone);
       if (customer.name) setName(customer.name);
       if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
-      if (Notification.permission === 'granted') subscribeToPush().catch(() => {});
+      try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') subscribeToPush().catch(() => {}); } catch {}
       // If returning customer (has name) — check for offers then done
       if (customer.name) {
         // Check for eligible campaigns
