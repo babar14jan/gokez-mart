@@ -208,8 +208,10 @@ export default function App() {
   };
 
   // Expose nav to footer quick links
-  (window as any).__navToOrders = () => handleNavChange('orders');
-  (window as any).__navToAccount = () => handleNavChange('account');
+  useEffect(() => {
+    (window as any).__navToOrders = () => handleNavChange('orders');
+    (window as any).__navToAccount = () => handleNavChange('account');
+  });
 
   const handleCheckout = async () => {
     setPreCheckoutView(view);
