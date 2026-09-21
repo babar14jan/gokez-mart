@@ -1,19 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import { useThemeStore } from '../store/themeStore';
-import {
-  getNotificationPermission, requestNotificationPermission,
-  subscribeToPush, unsubscribeFromPush, getLocationPermission,
-} from '../services/push';
+import { getLocationPermission } from '../services/push';
 
 const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400';
 
 interface AddressFields { flat: string; block: string; street: string; pincode: string; }
 
 const EMPTY_ADDR: AddressFields = { flat: '', block: '', street: '', pincode: '' };
+const LABELS = ['Home', 'Work', 'Other'];
 
 // Serialize structured fields → single string for storage
 const serialize = (a: AddressFields) =>
@@ -40,17 +38,27 @@ interface ProfilePageProps {
 }
 
 
-function AddressModalForm({ stored, onSave, onCancel, saving }: {
+function AddressModalForm({ stored, initialLabel, onSave, onCancel, saving }: {
   stored: string | null;
-  onSave: (val: string) => Promise<void>;
+  initialLabel: string;
+  onSave: (label: string, val: string) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
 }) {
+  const [label, setLabel] = useState(initialLabel);
   const [form, setForm] = useState<AddressFields>(parse(stored));
   const f = (k: keyof AddressFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(p => ({ ...p, [k]: e.target.value }));
   return (
     <div className="space-y-2">
+      <div className="flex gap-2">
+        {LABELS.map(l => (
+          <button key={l} type="button" onClick={() => setLabel(l)}
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition-colors ${label === l ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-[10px] font-medium text-gray-500 mb-1">Flat / House No.</label>
@@ -74,7 +82,7 @@ function AddressModalForm({ stored, onSave, onCancel, saving }: {
           className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl transition-colors">
           Cancel
         </button>
-        <button onClick={() => onSave(serialize(form))} disabled={saving}
+        <button onClick={() => onSave(label, serialize(form))} disabled={saving}
           className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Saving...' : 'Save Address'}
@@ -85,8 +93,8 @@ function AddressModalForm({ stored, onSave, onCancel, saving }: {
 }
 
 export default function ProfilePage({ onBack, supportName, supportPhone, whatsappNumber }: ProfilePageProps) {
-  const { name, phone, address, address2, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
-  const { setName: syncName } = useCustomerStore();
+  const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
+  const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
   const { } = useThemeStore();
 
   const [editingName, setEditingName] = useState(false);
@@ -94,17 +102,26 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
-  const [notifSubscribed, setNotifSubscribed] = useState(false);
   const [locationPermission, setLocationPermission] = useState<string>('prompt');
   const [locationEnabled, setLocationEnabled] = useState(
     localStorage.getItem('mart_location_enabled') !== 'false'
   );
-  const [marketingConsent, setMarketingConsent] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportReady, setExportReady] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<'address' | 'address2' | null>(null);
+  const [editingAddressId, setEditingAddressId] = useState<string | 'new' | null>(null);
+  const [addressSaving, setAddressSaving] = useState(false);
+
+  useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
+
+  const handleSaveAddress = async (label: string, val: string) => {
+    setAddressSaving(true);
+    try {
+      if (editingAddressId && editingAddressId !== 'new') await updateAddress(editingAddressId, label, val);
+      else await addAddress({ label, address: val, isDefault: addresses.length === 0 });
+      setEditingAddressId(null);
+    } finally { setAddressSaving(false); }
+  };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -118,19 +135,6 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
-    authApi.getMarketingConsent().then(r => setMarketingConsent(r.data.data.granted)).catch(() => {});
-    if (!isLoggedIn) return;
-    // Check actual subscription + auto-subscribe if permission granted but no subscription
-    try {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(reg =>
-          reg.pushManager.getSubscription().then(sub => {
-            setNotifSubscribed(!!sub);
-            if (!sub) subscribeToPush().then(ok => setNotifSubscribed(ok)).catch(() => {});
-          })
-        ).catch(() => {});
-      }
-    } catch {}
   }, []);
 
   const handleLocationToggle = async () => {
@@ -160,17 +164,6 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
       syncName(nameVal.trim());
       setSaved('name'); setTimeout(() => setSaved(null), 2000);
       setEditingName(false);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to save');
-    } finally { setSaving(null); }
-  };
-
-  const saveAddress = async (key: 'address' | 'address2', val: string) => {
-    setSaving(key); setError('');
-    try {
-      await authApi.updateProfile({ [key]: val });
-      updateProfile({ [key]: val });
-      setSaved(key); setTimeout(() => setSaved(null), 2000);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to save');
     } finally { setSaving(null); }
@@ -257,115 +250,81 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-3">
 
-        {/* Addresses — now below profile card */}
+        {/* Addresses — full labeled address book */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
             <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Addresses</p>
           </div>
 
-          {/* Default address */}
-          <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700">
-            <div className="flex items-start justify-between gap-2 pt-3">
-              <div className="flex items-start gap-2 flex-1 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">Default</span>
-                  </div>
-                  {saving === 'address' ? (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-medium text-gray-500 mb-1">Flat / House No.</label>
-                          <input type="text" value={parse(address).flat}
-                            onChange={e => { const p = parse(address); p.flat = e.target.value; saveAddress('address', serialize(p)); }}
-                            className={inp} placeholder="e.g. A-204" autoFocus />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-medium text-gray-500 mb-1">Block / Tower</label>
-                          <input type="text" value={parse(address).block}
-                            onChange={e => { const p = parse(address); p.block = e.target.value; saveAddress('address', serialize(p)); }}
-                            className={inp} placeholder="e.g. Block B" />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug">
-                      {address || <span className="text-gray-500 italic text-xs">No default address — tap Edit to add</span>}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <button onClick={() => setEditingAddress('address')}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg border border-gray-200 dark:border-slate-600 transition-colors flex-shrink-0">
-                <Pencil className="w-3 h-3" /> Edit
-              </button>
+          {addresses.length === 0 && (
+            <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
+              <p className="text-xs text-gray-500 dark:text-slate-400 italic mb-2">No saved addresses yet</p>
             </div>
-          </div>
+          )}
 
-          {/* Secondary address */}
-          {(address2 || editingAddress === 'address2') ? (
-            <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700">
-              <div className="flex items-start justify-between gap-2 pt-3">
+          {addresses.map(addr => (
+            <div key={addr.id} className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 flex-1 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-gray-50 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${addr.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
+                    <MapPin className={`w-3.5 h-3.5 ${addr.isDefault ? 'text-emerald-500' : 'text-gray-500'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">Other address</span>
-                    <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug mt-0.5">
-                      {address2 || <span className="text-gray-500 italic text-xs">Tap Edit to add</span>}
-                    </p>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[11px] font-bold text-gray-700 dark:text-slate-300">{addr.label}</span>
+                      {addr.isDefault && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">Default</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug">{addr.address}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {address2 && (
-                    <button
-                      onClick={async () => {
-                        const tmp = address2;
-                        await saveAddress('address', tmp);
-                        await saveAddress('address2', address || '');
-                      }}
+                  {!addr.isDefault && (
+                    <button onClick={() => setDefaultAddress(addr.id)}
                       className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors">
                       ★ Default
                     </button>
                   )}
-                  <button onClick={() => setEditingAddress('address2')}
+                  <button onClick={() => setEditingAddressId(addr.id)}
                     className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg border border-gray-200 dark:border-slate-600 transition-colors">
                     <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                  <button onClick={() => removeAddress(addr.id)}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 transition-colors">
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
-              <button onClick={() => setEditingAddress('address2')}
-                className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
-                <Plus className="w-3.5 h-3.5" /> Add another address
-              </button>
-            </div>
-          )}
+          ))}
+
+          <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
+            <button onClick={() => setEditingAddressId('new')}
+              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+              <Plus className="w-3.5 h-3.5" /> Add new address
+            </button>
+          </div>
         </div>
 
         {/* Address edit modal */}
-        {editingAddress && (
+        {editingAddressId && (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm">
             <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm font-bold text-gray-900 dark:text-white">
-                  {editingAddress === 'address' ? 'Edit Default Address' : 'Edit Other Address'}
+                  {editingAddressId === 'new' ? 'Add New Address' : 'Edit Address'}
                 </p>
-                <button onClick={() => setEditingAddress(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
+                <button onClick={() => setEditingAddressId(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
                   <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
               <AddressModalForm
-                stored={editingAddress === 'address' ? address : address2}
-                onSave={async (val) => { await saveAddress(editingAddress, val); setEditingAddress(null); }}
-                onCancel={() => setEditingAddress(null)}
-                saving={saving === editingAddress}
+                stored={editingAddressId === 'new' ? null : (addresses.find(a => a.id === editingAddressId)?.address ?? null)}
+                initialLabel={editingAddressId === 'new' ? 'Home' : (addresses.find(a => a.id === editingAddressId)?.label ?? 'Home')}
+                onSave={handleSaveAddress}
+                onCancel={() => setEditingAddressId(null)}
+                saving={addressSaving}
               />
             </div>
           </div>
@@ -465,79 +424,22 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
           </div>
 
           {/* Notifications */}
-          <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            onClick={() => { window.history.pushState({}, '', '/account'); window.history.pushState({}, '', '/notification-settings'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
             <Bell className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Order Notifications</span>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">
-                {notifPermission === 'granted' ? (notifSubscribed ? 'On — rider dispatch & delivery alerts' : 'Permission granted — tap to enable') :
-                 notifPermission === 'denied'  ? 'Blocked — enable in browser settings' :
-                 notifPermission === 'unsupported' ? 'Not supported on this browser' :
-                 'Get notified when rider is on the way & delivered'}
-              </p>
+              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Notifications</span>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">Order updates &amp; promotional alerts</p>
             </div>
-            {notifPermission === 'denied' ? (
-              <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">Blocked</span>
-            ) : notifPermission === 'unsupported' ? (
-              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
-            ) : notifPermission === 'granted' ? (
-              <button
-                onClick={async () => {
-                  if (notifSubscribed) {
-                    await unsubscribeFromPush();
-                    setNotifSubscribed(false);
-                  } else {
-                    const ok = await subscribeToPush();
-                    setNotifSubscribed(ok);
-                  }
-                }}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                  notifSubscribed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'
-                }`}>
-                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
-                  notifSubscribed ? 'translate-x-5' : 'translate-x-0'
-                }`} />
-              </button>
-            ) : (
-              <button
-                onClick={async () => {
-                  const p = await requestNotificationPermission();
-                  setNotifPermission(p);
-                  if (p === 'granted') {
-                    const ok = await subscribeToPush();
-                    setNotifSubscribed(ok);
-                  }
-                }}
-                className="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-200 dark:bg-slate-600 transition-colors focus:outline-none">
-                <span className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow translate-x-0 transition duration-200" />
-              </button>
-            )}
-          </div>
+            <ChevronRight className="w-4 h-4 text-gray-300" />
+          </button>
 
         </div>
 
         {/* Data & Privacy */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-4 pt-3 pb-1">Data &amp; Privacy</p>
-
-          {/* Marketing consent */}
-          <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
-            <Bell className="w-4 h-4 text-gray-500 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-700 dark:text-slate-300">Promotional Notifications</p>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">Offers, deals and new arrivals</p>
-            </div>
-            <button onClick={async () => {
-              const next = !marketingConsent;
-              setMarketingConsent(next);
-              try { await authApi.updateMarketingConsent(next); }
-              catch { setMarketingConsent(!next); }
-            }}
-              role="switch" aria-checked={marketingConsent}
-              className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${marketingConsent ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${marketingConsent ? 'translate-x-4' : 'translate-x-0'}`} />
-            </button>
-          </div>
 
           {/* Submit a Grievance */}
           <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">

@@ -165,4 +165,69 @@ export class CustomerAuthService {
     );
     return result.rows[0];
   }
+
+  // ── Address book ─────────────────────────────────────────────────────────────
+  static async getAddresses(customerId: string): Promise<any[]> {
+    const result = await query<any>(
+      `SELECT id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"
+       FROM mart_customer_addresses WHERE customer_id = $1
+       ORDER BY is_default DESC, created_at DESC`,
+      [customerId]
+    );
+    return result.rows;
+  }
+
+  static async addAddress(customerId: string, label: string, addressLine: string, makeDefault: boolean): Promise<any> {
+    const existing = await query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM mart_customer_addresses WHERE customer_id = $1`,
+      [customerId]
+    );
+    const isFirst = parseInt(existing.rows[0].count) === 0;
+    const shouldBeDefault = makeDefault || isFirst;
+    if (shouldBeDefault) {
+      await query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
+    }
+    const result = await query<any>(
+      `INSERT INTO mart_customer_addresses (customer_id, label, address_line, is_default)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"`,
+      [customerId, label.trim() || 'Home', addressLine.trim(), shouldBeDefault]
+    );
+    return result.rows[0];
+  }
+
+  static async updateAddress(customerId: string, addressId: string, label: string, addressLine: string): Promise<any> {
+    const result = await query<any>(
+      `UPDATE mart_customer_addresses SET label = $1, address_line = $2, updated_at = NOW()
+       WHERE id = $3 AND customer_id = $4
+       RETURNING id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"`,
+      [label.trim() || 'Home', addressLine.trim(), addressId, customerId]
+    );
+    if (!result.rows[0]) throw new Error('Address not found');
+    return result.rows[0];
+  }
+
+  static async deleteAddress(customerId: string, addressId: string): Promise<void> {
+    const result = await query(
+      `DELETE FROM mart_customer_addresses WHERE id = $1 AND customer_id = $2 RETURNING is_default`,
+      [addressId, customerId]
+    );
+    if (!result.rows[0]) throw new Error('Address not found');
+    if (result.rows[0].is_default) {
+      await query(
+        `UPDATE mart_customer_addresses SET is_default = true
+         WHERE id = (SELECT id FROM mart_customer_addresses WHERE customer_id = $1 ORDER BY created_at ASC LIMIT 1)`,
+        [customerId]
+      );
+    }
+  }
+
+  static async setDefaultAddress(customerId: string, addressId: string): Promise<void> {
+    await query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
+    const result = await query(
+      `UPDATE mart_customer_addresses SET is_default = true, updated_at = NOW() WHERE id = $1 AND customer_id = $2 RETURNING id`,
+      [addressId, customerId]
+    );
+    if (!result.rows[0]) throw new Error('Address not found');
+  }
 }

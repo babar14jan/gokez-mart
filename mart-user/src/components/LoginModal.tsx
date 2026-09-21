@@ -8,11 +8,12 @@ import { useCustomerStore } from '../store/customerStore';
 interface LoginModalProps {
   onClose: () => void;
   onSuccess?: () => void;
+  pendingCheckout?: boolean;
 }
 
 type Step = 'phone' | 'otp' | 'profile' | 'offer';
 
-export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
+export default function LoginModal({ onClose, onSuccess, pendingCheckout }: LoginModalProps) {
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -21,7 +22,6 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
   const [welcomeOffer, setWelcomeOffer] = useState<any | null>(null);
   const [resendTimer, setResendTimer] = useState(0);
   const [newName, setNewName] = useState('');
-  const [newAddress, setNewAddress] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
 
   const { login } = useCustomerAuthStore();
@@ -101,10 +101,9 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
     if (!newName.trim()) { setError('Please enter your name'); return; }
     setSavingProfile(true); setError('');
     try {
-      await authApi.updateProfile({ name: newName.trim(), address: newAddress.trim() || undefined });
-      useCustomerAuthStore.getState().updateProfile({ name: newName.trim(), address: newAddress.trim() || undefined });
+      await authApi.updateProfile({ name: newName.trim() });
+      useCustomerAuthStore.getState().updateProfile({ name: newName.trim() });
       setName(newName.trim());
-      if (newAddress.trim()) addAddress({ label: 'Home', address: newAddress.trim(), isDefault: true });
       onSuccess?.();
       onClose();
     } catch {
@@ -162,15 +161,11 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
                 placeholder="Your full name *"
                 className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 autoFocus />
-              <textarea value={newAddress} onChange={e => setNewAddress(e.target.value)}
-                placeholder="Delivery address (optional — you can add later)"
-                rows={2}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all resize-none" />
               <button type="submit" disabled={savingProfile || !newName.trim()}
                 className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm">
                 {savingProfile
                   ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <><ArrowRight className="w-4 h-4" /> Continue to Checkout</>
+                  : <><ArrowRight className="w-4 h-4" /> {pendingCheckout ? 'Continue to Checkout' : 'Continue'}</>
                 }
               </button>
               <button type="button" onClick={() => { onSuccess?.(); onClose(); }}

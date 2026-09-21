@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useCustomerStore } from './customerStore';
 
 interface CustomerAuthState {
   token: string | null;
@@ -28,6 +29,8 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
       isLoggedIn: false,
 
       login: (token, customer) => {
+        // Reset any previously-loaded address book — a different customer is now signed in.
+        useCustomerStore.setState({ addresses: [], addressesLoaded: false });
         set({
           token,
           customerId: customer.id,
@@ -47,10 +50,13 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
         photoUrl: data.photoUrl !== undefined ? data.photoUrl : s.photoUrl,
       })),
 
-      logout: () => set({
-        token: null, customerId: null, phone: null,
-        name: null, address: null, photoUrl: null, isLoggedIn: false,
-      }),
+      logout: () => {
+        useCustomerStore.setState({ addresses: [], addressesLoaded: false });
+        set({
+          token: null, customerId: null, phone: null,
+          name: null, address: null, photoUrl: null, isLoggedIn: false,
+        });
+      },
     }),
     { name: 'mart-customer-auth' }
   )

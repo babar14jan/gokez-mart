@@ -181,7 +181,16 @@ export class ComplianceService {
 
     const [profile, orders, grievances, consents] = await Promise.all([
       query(`SELECT id, phone, name, address, address2, order_count, total_spent, created_at FROM mart_customers WHERE id = $1`, [customerId]),
-      query(`SELECT order_number, status, items, total_amount, payment_method, created_at FROM mart_orders WHERE customer_id = $1 ORDER BY created_at DESC`, [customerId]),
+      query(
+        `SELECT o.order_number, o.status, o.total, o.payment_method, o.created_at,
+                COALESCE(
+                  (SELECT json_agg(json_build_object('productName', oi.product_name, 'unit', oi.unit, 'price', oi.price, 'quantity', oi.quantity, 'total', oi.total))
+                   FROM mart_order_items oi WHERE oi.order_id = o.id),
+                  '[]'
+                ) as items
+         FROM mart_orders o WHERE o.customer_id = $1 ORDER BY o.created_at DESC`,
+        [customerId]
+      ),
       query(`SELECT subject, description, status, response, created_at FROM mart_grievances WHERE customer_id = $1`, [customerId]),
       query(`SELECT consent_type, granted, created_at FROM mart_consents WHERE customer_id = $1`, [customerId]),
     ]);
