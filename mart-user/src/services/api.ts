@@ -71,6 +71,20 @@ export const authApi = {
   updateMarketingConsent: (granted: boolean) => api.put('/compliance/marketing-consent', { granted }),
 };
 
+export interface AddressBookEntry {
+  id: string; label: string; addressLine: string; isDefault: boolean; createdAt: string;
+}
+
+export const addressApi = {
+  list:       () => api.get<{ success: boolean; data: AddressBookEntry[] }>('/auth/addresses'),
+  add:        (label: string, addressLine: string, isDefault?: boolean) =>
+    api.post<{ success: boolean; data: AddressBookEntry }>('/auth/addresses', { label, addressLine, isDefault }),
+  update:     (id: string, label: string, addressLine: string) =>
+    api.put<{ success: boolean; data: AddressBookEntry }>(`/auth/addresses/${id}`, { label, addressLine }),
+  remove:     (id: string) => api.delete(`/auth/addresses/${id}`),
+  setDefault: (id: string) => api.put(`/auth/addresses/${id}/default`),
+};
+
 export const storeApi = {
   getCategories: () => api.get<{ success: boolean; data: Category[] }>('/categories'),
   getProducts: (categoryId?: string, storeId?: string) =>

@@ -218,6 +218,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
   const [pastSearch, setPastSearch] = useState('');
   const [pastFilter, setPastFilter] = useState<'all' | 'delivered' | 'cancelled'>('all');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartX = useRef<number | null>(null);
   const { addItem } = useCartStore();
 
   const fetchOrders = async (silent = false) => {
@@ -275,6 +276,17 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
   // Auto-switch to past tab if no active or delivered orders
   const showTab = (activeOrders.length > 0 || deliveredOrders.length > 0) ? activeTab : 'past';
 
+  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(deltaX) > 50) {
+      if (deltaX < 0 && showTab === 'current') setActiveTab('past');
+      else if (deltaX > 0 && showTab === 'past') setActiveTab('current');
+    }
+    touchStartX.current = null;
+  };
+
   if (loading) return (
     <div className="flex justify-center items-center py-24">
       <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -296,7 +308,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
   );
 
   return (
-    <div className="max-w-lg mx-auto px-3 py-4 space-y-4 pb-36">
+    <div className="max-w-lg mx-auto px-3 py-4 space-y-4 pb-36" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
       {/* Reorder toast */}
       {reorderToast && (

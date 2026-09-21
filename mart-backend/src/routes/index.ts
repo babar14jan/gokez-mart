@@ -16,6 +16,11 @@ router.get('/auth/me',           authenticateCustomer, ctrl.customerGetMe);
 router.put('/auth/profile',      authenticateCustomer, ctrl.customerUpdateProfile);
 router.get('/auth/orders',       authenticateCustomer, ctrl.customerGetOrders);
 router.put("/auth/orders/:id/cancel", authenticateCustomer, ctrl.customerCancelOrder);
+router.get('/auth/addresses',           authenticateCustomer, ctrl.customerGetAddresses);
+router.post('/auth/addresses',          authenticateCustomer, ctrl.customerAddAddress);
+router.put('/auth/addresses/:id',       authenticateCustomer, ctrl.customerUpdateAddress);
+router.delete('/auth/addresses/:id',    authenticateCustomer, ctrl.customerDeleteAddress);
+router.put('/auth/addresses/:id/default', authenticateCustomer, ctrl.customerSetDefaultAddress);
 // ── Public ────────────────────────────────────────────────────────────────────
 router.get('/stores',              ctrl.getStores);
 router.get('/zones',               ctrl.getZones);
