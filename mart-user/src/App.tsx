@@ -20,6 +20,7 @@ import TermsPage from './pages/TermsPage';
 import GrievancePage from './pages/GrievancePage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
 import FeedbackPage from './pages/FeedbackPage';
+import NotificationSettingsPage from './pages/NotificationSettingsPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import InstallPrompt from './components/InstallPrompt';
@@ -28,7 +29,7 @@ import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 
-type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
+type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
 
 const DEFAULT_SETTINGS: PublicSettings = {
   store_name: 'Gokez Mart', store_address: 'Kolkata',
@@ -41,12 +42,14 @@ const DEFAULT_SETTINGS: PublicSettings = {
 };
 
 export default function App() {
+  const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
   const [view, setView] = useState<View>(() => {
     const path = window.location.pathname;
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
     if (path === '/grievance') return 'grievance';
     if (path === '/feedback') return 'feedback';
+    if (path === '/notification-settings') return 'notification-settings';
     if (path === '/delete-account') return 'delete-account';
     if (path === '/account') return 'account';
     return 'home';
@@ -58,16 +61,19 @@ export default function App() {
 
   const { isLoggedIn } = useCustomerAuthStore();
 
-  // Deduplicate addresses on app load (fixes existing duplicates)
+  // Load the customer's address book from the backend on login.
+  // (No longer auto-migrates "legacy local" addresses — that path could pick up
+  // whatever was left in the shared local store from a previous session/customer.)
   useEffect(() => {
-    useCustomerStore.getState().deduplicateAddresses();
+    if (!isLoggedIn) return;
+    useCustomerStore.getState().loadAddresses();
     // Auto-subscribe to push if permission already granted
     try {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         subscribeToPush().catch(() => {});
       }
     } catch {}
-  }, []);
+  }, [isLoggedIn]);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
 
@@ -101,6 +107,7 @@ export default function App() {
       else if (path === '/terms') setView('terms');
       else if (path === '/grievance') setView('grievance');
       else if (path === '/feedback') setView('feedback');
+      else if (path === '/notification-settings') setView('notification-settings');
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
       else setView('home');
@@ -282,7 +289,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#f0fdf4] dark:bg-slate-900 font-sans">
 
-      {showLoginModal && <LoginModal onClose={() => { setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
+      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onClose={() => { setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
         setShowLoginModal(false);
         if (pendingCheckout) {
           setPendingCheckout(false);
@@ -300,7 +307,7 @@ export default function App() {
             <div className="text-4xl mb-3">📍</div>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">We&apos;re not in your area yet</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">
-              Gokez Mart currently delivers within <strong>5km of Kolkata</strong>.
+              Gokez Mart currently delivers within <strong>{selectedZone?.radiusKm ?? 5}km of {selectedZone?.name ?? 'your area'}</strong>.
             </p>
             <p className="text-sm text-emerald-600 font-semibold mb-5">🚀 We&apos;re expanding soon — you&apos;ll be next!</p>
             <button onClick={() => setShowOutsideWarning(false)}
@@ -319,7 +326,7 @@ export default function App() {
             <div className="text-4xl mb-3">🛵</div>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">Delivery not available yet</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-2">
-              We deliver within <strong>5km of Kolkata</strong>. Your location is outside our current delivery zone.
+              We deliver within <strong>{selectedZone?.radiusKm ?? 5}km of {selectedZone?.name ?? 'your area'}</strong>. Your location is outside our current delivery zone.
             </p>
             <p className="text-sm text-emerald-600 font-semibold mb-5">We&apos;re coming to your area soon! 🌱</p>
             <button onClick={() => setShowOutsideBlock(false)}
@@ -330,33 +337,35 @@ export default function App() {
         </div>
       )}
 
-      <Navbar
-        zones={zones}
-        selectedZone={selectedZone}
-        onZoneChange={async (zone) => {
-        setSelectedZone(zone);
-        setShowOutsideWarning(false);
-        setShowOutsideBlock(false);
-        setLoading(true);
-        setActiveCategoryId('all');
-        setSearch('');
-        try {
-          const [catRes, prodRes, srRes] = await Promise.all([
-            storeApi.getCategories(),
-            storeApi.getProducts(undefined, zone.storeId),
-            storeApi.getSettings(zone.storeId),
-          ]);
-          setCategories(catRes.data.data || []);
-          setProducts(prodRes.data.data || []);
-          setSettings(srRes.data.data || DEFAULT_SETTINGS);
-        } finally { setLoading(false); }
-      }}
-        activeView={view as 'home' | 'categories' | 'orders' | 'account'}
-        onNavChange={handleNavChange}
-        onCheckout={handleCheckout}
-        search={search}
-        onSearch={setSearch}
-      />
+      {!isEmbed && (
+        <Navbar
+          zones={zones}
+          selectedZone={selectedZone}
+          onZoneChange={async (zone) => {
+          setSelectedZone(zone);
+          setShowOutsideWarning(false);
+          setShowOutsideBlock(false);
+          setLoading(true);
+          setActiveCategoryId('all');
+          setSearch('');
+          try {
+            const [catRes, prodRes, srRes] = await Promise.all([
+              storeApi.getCategories(),
+              storeApi.getProducts(undefined, zone.storeId),
+              storeApi.getSettings(zone.storeId),
+            ]);
+            setCategories(catRes.data.data || []);
+            setProducts(prodRes.data.data || []);
+            setSettings(srRes.data.data || DEFAULT_SETTINGS);
+          } finally { setLoading(false); }
+        }}
+          activeView={view as 'home' | 'categories' | 'orders' | 'account'}
+          onNavChange={handleNavChange}
+          onCheckout={handleCheckout}
+          search={search}
+          onSearch={setSearch}
+        />
+      )}
 
 
       {/* Checkout — overlay on both mobile and desktop */}
@@ -400,12 +409,14 @@ export default function App() {
         <div className={PAGE_BOTTOM}><GrievancePage /></div>
       ) : view === 'feedback' ? (
         <div className={PAGE_BOTTOM}><FeedbackPage storeId={selectedZone?.storeId} /></div>
+      ) : view === 'notification-settings' ? (
+        <div className={PAGE_BOTTOM}><NotificationSettingsPage /></div>
       ) : view === 'delete-account' ? (
         <div className={PAGE_BOTTOM}><DeleteAccountPage /></div>
       ) : view === 'privacy' ? (
-        <div className={PAGE_BOTTOM}><PrivacyPage /></div>
+        <div className={PAGE_BOTTOM}><PrivacyPage embed={isEmbed} /></div>
       ) : view === 'terms' ? (
-        <div className={PAGE_BOTTOM}><TermsPage /></div>
+        <div className={PAGE_BOTTOM}><TermsPage embed={isEmbed} /></div>
       ) : view === 'orders' ? (
         <div className={PAGE_BOTTOM}>
           <OrderHistoryPage onBack={() => setView('home')} />

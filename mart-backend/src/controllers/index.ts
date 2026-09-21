@@ -674,6 +674,37 @@ export const customerUpdateProfile = asyncHandler(async (req: CustomerRequest, r
   res.json({ success: true, data: customer });
 });
 
+// ── Customer address book ─────────────────────────────────────────────────────
+
+export const customerGetAddresses = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const addresses = await CustomerAuthService.getAddresses(req.customer!.id);
+  res.json({ success: true, data: addresses });
+});
+
+export const customerAddAddress = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { label, addressLine, isDefault } = req.body;
+  if (!addressLine || !addressLine.trim()) { res.status(400).json({ success: false, error: 'Address is required' }); return; }
+  const address = await CustomerAuthService.addAddress(req.customer!.id, label ?? 'Home', addressLine, !!isDefault);
+  res.json({ success: true, data: address });
+});
+
+export const customerUpdateAddress = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { label, addressLine } = req.body;
+  if (!addressLine || !addressLine.trim()) { res.status(400).json({ success: false, error: 'Address is required' }); return; }
+  const address = await CustomerAuthService.updateAddress(req.customer!.id, req.params.id, label ?? 'Home', addressLine);
+  res.json({ success: true, data: address });
+});
+
+export const customerDeleteAddress = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  await CustomerAuthService.deleteAddress(req.customer!.id, req.params.id);
+  res.json({ success: true });
+});
+
+export const customerSetDefaultAddress = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  await CustomerAuthService.setDefaultAddress(req.customer!.id, req.params.id);
+  res.json({ success: true });
+});
+
 export const customerGetOrders = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const orders = await OrderService.findAll({ phone: req.customer!.phone, limit: 20 });
   res.json({ success: true, data: orders });
