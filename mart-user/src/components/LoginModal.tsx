@@ -181,8 +181,12 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
           </>
         ) : step === 'phone' ? (
           <>
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-1 text-center">Welcome to Gokez Mart 👋</h2>
-            <p className="text-xs font-bold text-gray-900 dark:text-white text-center mb-4">Shop local. Support local.</p>
+            <div className="flex justify-center mb-5">
+              <img src="/mart_brand_new.png" alt="Gokez Mart"
+                className="h-24 w-auto object-contain dark:hidden" />
+              <img src="/mart_brand_dark.png" alt="Gokez Mart"
+                className="h-24 w-auto object-contain hidden dark:block" />
+            </div>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-5 text-center">
               Enter your mobile number to continue
             </p>
@@ -199,6 +203,15 @@ export default function LoginModal({ onClose, onSuccess }: LoginModalProps) {
                   autoFocus inputMode="numeric"
                 />
               </div>
+              {/* Temporary notice — remove when SMS OTP is live */}
+              <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3.5 py-3">
+                <span className="text-lg flex-shrink-0">📞</span>
+                <div>
+                  <p className="text-sm font-bold text-amber-800 dark:text-amber-400">You will receive OTP via phone call</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">SMS OTP coming soon</p>
+                </div>
+              </div>
+
               <button type="submit" disabled={loading || phone.replace(/\D/g,'').length !== 10}
                 className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm">
                 {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <>Send OTP</>}
