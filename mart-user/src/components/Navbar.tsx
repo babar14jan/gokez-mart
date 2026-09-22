@@ -111,7 +111,7 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
             src="/mart_brand_dark.png"
             alt="Gokez Mart"
             className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left hidden dark:block" />
-          <span className="block -mt-1.5 w-36 sm:w-48 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white">
+          <span className="block -mt-1.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
             Shop Local <span className="align-middle">&bull;</span> Support Local
           </span>
         </div>

@@ -461,7 +461,10 @@ export default function App() {
           <HomeCarousel />
 
           {/* Category pills */}
-          {!loading && categories.length > 0 && (
+          {!loading && categories.length > 0 && (() => {
+            const categoriesWithProducts = categories.filter(cat => products.some(p => p.categoryId === cat.id));
+            if (categoriesWithProducts.length === 0) return null;
+            return (
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-5 mt-1">
               <button onClick={() => setActiveCategoryId('all')}
                 className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
@@ -471,7 +474,7 @@ export default function App() {
                 }`}>
                 All
               </button>
-              {categories.map(cat => (
+              {categoriesWithProducts.map(cat => (
                 <button key={cat.id} onClick={() => setActiveCategoryId(cat.id)}
                   className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                     activeCategoryId === cat.id
@@ -482,7 +485,8 @@ export default function App() {
                 </button>
               ))}
             </div>
-          )}
+            );
+          })()}
 
           {/* Products */}
           {loading ? (
