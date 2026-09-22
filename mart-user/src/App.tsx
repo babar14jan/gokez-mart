@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, X, CheckCircle, Zap, Leaf, Tag, RotateCcw } from 'lucide-react';
+import { Search, X, CheckCircle } from 'lucide-react';
 import { storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -573,29 +573,11 @@ export default function App() {
 
           {/* Feature cards */}
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              { icon: 'Zap',       title: 'Quick',      desc: 'Delivered in 10-15 mins', bg: 'from-amber-400 to-orange-400',   iconColor: 'text-white' },
-              { icon: 'Leaf',      title: 'Farm Fresh', desc: 'Sourced & delivered fresh', bg: 'from-emerald-400 to-green-500', iconColor: 'text-white' },
-              { icon: 'Tag',       title: 'Best Price', desc: 'Great deals every day',     bg: 'from-blue-400 to-indigo-500',   iconColor: 'text-white' },
-              { icon: 'RotateCcw', title: 'Returns',    desc: 'Easy return at doorstep',   bg: 'from-violet-400 to-purple-500', iconColor: 'text-white' },
-            ].map(b => {
-              const icons: Record<string, React.ReactNode> = {
-                Zap:       <Zap       className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
-                Leaf:      <Leaf      className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
-                Tag:       <Tag       className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
-                RotateCcw: <RotateCcw className={`w-6 h-6 sm:w-7 sm:h-7 ${b.iconColor}`} />,
-              };
-              return (
-                <div key={b.title} className={`bg-gradient-to-br ${b.bg} rounded-2xl flex flex-col items-center text-center p-3 sm:p-4 gap-1.5 shadow-md relative overflow-hidden`}>
-                  <div className="absolute inset-0 bg-black/10 rounded-2xl" />
-                  <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/25 flex items-center justify-center">
-                    {icons[b.icon]}
-                  </div>
-                  <p className="relative text-[12px] sm:text-sm font-bold text-white leading-tight drop-shadow-sm">{b.title}</p>
-                  <p className="relative text-[11px] sm:text-xs font-semibold text-white leading-snug drop-shadow-sm">{b.desc}</p>
-                </div>
-              );
-            })}
+            {['/f1.jpg', '/f2.jpg', '/f3.jpg', '/f4.jpg'].map(src => (
+              <div key={src} className="rounded-2xl shadow-md overflow-hidden">
+                <img src={src} alt="" className="w-full h-full object-contain" />
+              </div>
+            ))}
           </div>
 
           {/* Home footer */}
