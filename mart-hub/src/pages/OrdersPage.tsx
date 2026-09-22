@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import {
   ClipboardList, Calendar, ChevronDown, Phone, MapPin,
   Navigation, Package, XCircle, CheckSquare, Square,
-  Truck, Clock, IndianRupee,
+  Truck, Clock, IndianRupee, Search, X,
 } from 'lucide-react';
 import { ordersApi } from '../services/api';
 import { printReceipt } from '../utils/printReceipt';
@@ -158,6 +158,8 @@ export default function OrdersPage() {
   const [terminating, setTerminating] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('today');
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
@@ -222,9 +224,15 @@ export default function OrdersPage() {
       if (start && created < start) return false;
       if (end   && created > end)   return false;
       if (statusFilter && o.status !== statusFilter) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const matchesName  = (o.guestName || '').toLowerCase().includes(q);
+        const matchesOrder = String(o.orderNumber || '').toLowerCase().includes(q) || String(o.id || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesOrder) return false;
+      }
       return true;
     });
-  }, [allOrders, dateRange, customFrom, customTo, statusFilter]);
+  }, [allOrders, dateRange, customFrom, customTo, statusFilter, search]);
 
   const statusCounts = useMemo(() => {
     const base = allOrders.filter(o => {
@@ -255,8 +263,8 @@ export default function OrdersPage() {
           <button key={tab.id} onClick={() => setDateRange(tab.id)}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               dateRange === tab.id
-                ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900 shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-slate-400'
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
             }`}>
             {tab.id === 'custom' && <Calendar className="w-3 h-3" />}
             {tab.label}
@@ -273,26 +281,68 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* Status filter tabs */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-        {STATUS_TABS.map(tab => (
-          <button key={tab.id} onClick={() => setStatusFilter(tab.id)}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-              statusFilter === tab.id
-                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-gray-400'
-            }`}>
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${tab.dot}`} />
-            {tab.label}
-            {(statusCounts[tab.id] || 0) > 0 && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                statusFilter === tab.id ? 'bg-white/20 dark:bg-black/20' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
-              }`}>
-                {statusCounts[tab.id]}
-              </span>
-            )}
-          </button>
-        ))}
+      {/* Status filter dropdown + search */}
+      <div className="flex items-center gap-2">
+        <div className="relative inline-block flex-shrink-0">
+        <button onClick={() => setStatusOpen(o => !o)}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-gray-400 transition-all">
+          {(() => {
+            const active = STATUS_TABS.find(t => t.id === statusFilter) || STATUS_TABS[0];
+            return (
+              <>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${active.dot}`} />
+                {active.label}
+                {(statusCounts[active.id] || 0) > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400">
+                    {statusCounts[active.id]}
+                  </span>
+                )}
+              </>
+            );
+          })()}
+          <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${statusOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {statusOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setStatusOpen(false)} />
+            <div className="absolute top-full mt-1.5 left-0 w-64 max-h-80 overflow-y-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 py-1.5 z-20">
+              {STATUS_TABS.map(tab => (
+                <button key={tab.id} onClick={() => { setStatusFilter(tab.id); setStatusOpen(false); }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold transition-colors ${
+                    statusFilter === tab.id ? 'bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                  }`}>
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${tab.dot}`} />
+                  <span className="flex-1 text-left">{tab.label}</span>
+                  {(statusCounts[tab.id] || 0) > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      statusFilter === tab.id ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
+                    }`}>
+                      {statusCounts[tab.id]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        </div>
+
+        {/* Search box — by customer name or order id */}
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or order id"
+            className="w-full pl-9 pr-8 py-2 text-xs bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+              <X className="w-3.5 h-3.5 text-gray-400" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Order cards */}

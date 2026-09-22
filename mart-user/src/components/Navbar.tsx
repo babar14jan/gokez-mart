@@ -96,7 +96,7 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
   );
 
   return (
-    <header className="sticky top-0 z-40 bg-gray-800 dark:bg-slate-900 shadow-sm">
+    <header className="sticky top-0 z-40 bg-[#0f172a] dark:bg-slate-900 shadow-sm">
 
       {/* Row 1 */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-3">
@@ -111,7 +111,7 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
             src="/mart_brand_dark.png"
             alt="Gokez Mart"
             className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left hidden dark:block" />
-          <span className="block -mt-1.5 w-36 sm:w-48 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white">
+          <span className="block -mt-1.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
             Shop Local <span className="align-middle">&bull;</span> Support Local
           </span>
         </div>

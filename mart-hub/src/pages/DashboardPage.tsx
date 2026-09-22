@@ -1,10 +1,28 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ClipboardList, TrendingUp, Clock, CheckCircle, XCircle, Calendar } from 'lucide-react';
-import { ordersApi } from '../services/api';
+import { ShoppingBag, ClipboardList, TrendingUp, Clock, CheckCircle, XCircle, Calendar, Store } from 'lucide-react';
+import { ordersApi, settingsApi } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 import { getActiveStoreId } from '../utils/store';
 
 type Range = 'today' | '7d' | '30d' | 'all';
+
+const ROLE_MESSAGES: Record<string, string> = {
+  super_admin:    'Here\u2019s the overview across your stores.',
+  store_owner:    'Here\u2019s how your store is performing.',
+  store_manager:  'Here\u2019s the store overview.',
+  sales_manager:  'Here\u2019s the sales overview.',
+  delivery_staff: 'Here\u2019s your delivery summary.',
+  staff:          'Here\u2019s what\u2019s happening.',
+};
+
+function greetingWord(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'Good morning';
+  if (h >= 12 && h < 17) return 'Good afternoon';
+  if (h >= 17 && h < 21) return 'Good evening';
+  return 'Good night';
+}
 
 const STATUS_COLORS: Record<string, string> = {
   pending:          'bg-amber-100 text-amber-700',
@@ -36,6 +54,17 @@ export default function DashboardPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('today');
+  const [storeName, setStoreName] = useState('');
+  const { name, role } = useAuthStore();
+
+  useEffect(() => {
+    settingsApi.getAll(getActiveStoreId())
+      .then(r => {
+        const s = (r.data.data || []).find((x: any) => x.key === 'store_name');
+        if (s?.value) setStoreName(s.value);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500 } as any)
@@ -69,6 +98,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
+
+      {/* Greeting */}
+      <div className="space-y-1">
+        {/* Row 1: greeting word — store badge stays parallel to this */}
+        <div className="flex items-center justify-between gap-3 px-0.5">
+          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 leading-tight">
+            {greetingWord()},
+          </p>
+          {storeName && (
+            <span className="flex-shrink-0 flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-full">
+              <Store className="w-3 h-3" />
+              {storeName}
+            </span>
+          )}
+        </div>
+
+        {/* Row 2: name — full width */}
+        <p className="text-base font-extrabold text-gray-900 dark:text-white leading-tight px-0.5">
+          {name || 'there'}
+        </p>
+
+        {/* Row 3: role subtitle — full width */}
+        <p className="text-xs text-gray-500 dark:text-slate-400 px-0.5 whitespace-nowrap">
+          {ROLE_MESSAGES[role || 'staff'] || ROLE_MESSAGES.staff}
+        </p>
+      </div>
 
       {/* Date range tabs */}
       <div className="flex items-center gap-2 flex-wrap">

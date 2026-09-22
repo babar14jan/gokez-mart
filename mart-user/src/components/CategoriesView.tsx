@@ -10,7 +10,9 @@ interface CategoriesViewProps {
 }
 
 export default function CategoriesView({ categories, products }: CategoriesViewProps) {
-  const [activeCatId, setActiveCatId] = useState<string>(categories[0]?.id || '');
+  // Hide categories with no visible products for this store
+  const visibleCategories = categories.filter(cat => products.some(p => p.categoryId === cat.id));
+  const [activeCatId, setActiveCatId] = useState<string>(visibleCategories[0]?.id || '');
   const [search, setSearch] = useState('');
 
   const filteredProducts = products.filter(p => {
@@ -24,7 +26,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
 
       {/* Left sidebar */}
       <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">
-        {categories.map(cat => (
+        {visibleCategories.map(cat => (
           <button
             key={cat.id}
             onClick={() => setActiveCatId(cat.id)}

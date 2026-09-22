@@ -19,7 +19,7 @@ const NAV_ALL = [
   { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'] },
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
-  { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin'] },
+  { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin', 'store_owner'] },
   { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Feedback',         href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Campaigns',         href: '/campaigns',           icon: Tag,             roles: ['super_admin', 'store_owner'] },
@@ -170,10 +170,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Desktop sidebar ── */}
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
         {/* Logo + slogan */}
-        <div className={`flex flex-col items-start justify-center border-b border-gray-200 dark:border-slate-700 flex-shrink-0 px-4 ${collapsed ? 'py-5' : 'py-4'}`}>
+        <div className={`flex flex-col items-start justify-center border-b border-gray-200 dark:border-slate-700 flex-shrink-0 px-4 bg-[#0f172a] dark:bg-slate-900 ${collapsed ? 'py-5' : 'py-4'}`}>
           <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-11 w-48 object-contain object-left" />
           {!collapsed && (
-            <p className="text-[8px] font-bold uppercase text-gray-900 dark:text-white tracking-wide leading-none -mt-1.5">
+            <p className="text-[8px] font-bold uppercase text-white tracking-wide leading-tight -mt-1.5 whitespace-nowrap">
               Your Store <span className="align-middle">&bull;</span> Now Online
             </p>
           )}
@@ -208,7 +208,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className={`min-h-screen transition-all duration-300 ${collapsed ? 'lg:pl-[90px]' : 'lg:pl-[200px]'}`}>
 
         {/* Sticky header */}
-        <header className="sticky top-0 z-30 bg-gray-800 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
+        <header className="sticky top-0 z-30 bg-[#0f172a] dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
@@ -218,9 +218,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <ChevronLeft className="w-5 h-5 text-slate-300" />
                 </button>
               ) : pathname === '/' ? (
-                <div className="flex flex-col items-start">
+                <div className="flex flex-col items-start flex-shrink-0">
                   <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-9 w-36 object-contain object-left" />
-                  <p className="text-[6px] sm:text-[8px] w-36 font-bold uppercase text-white tracking-wide leading-none -mt-1.5">
+                  <p className="text-[6px] sm:text-[8px] font-bold uppercase text-white tracking-wide leading-tight -mt-1 whitespace-nowrap">
                     Your Store <span className="align-middle">&bull;</span> Now Online
                   </p>
                 </div>

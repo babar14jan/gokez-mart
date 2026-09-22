@@ -32,7 +32,7 @@ import CarouselPage from './pages/CarouselPage';
 
 const ROLE_ROUTES: Record<string, string[]> = {
   super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
-  store_owner:     ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
+  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   sales_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -65,12 +65,11 @@ export default function App() {
     // Update both theme-color meta tags
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta: Element) => {
       const m = meta as HTMLMetaElement;
-      if (m.media?.includes('dark')) m.content = isDark ? '#18191a' : '#18191a';
-      else m.content = isDark ? '#18191a' : '#f9fafb';
+      m.content = '#0f172a';
     });
     // Fallback for single meta tag
     const single = document.querySelector('meta[name="theme-color"]:not([media])');
-    if (single) (single as HTMLMetaElement).content = isDark ? '#0f172a' : '#f9fafb';
+    if (single) (single as HTMLMetaElement).content = '#0f172a';
   }, [isDark]);
 
   return (
