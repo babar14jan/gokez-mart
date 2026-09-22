@@ -171,10 +171,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
         {/* Logo + slogan */}
         <div className={`flex flex-col items-start justify-center border-b border-gray-200 dark:border-slate-700 flex-shrink-0 px-4 ${collapsed ? 'py-5' : 'py-4'}`}>
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-12 w-auto object-contain object-left" />
+          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-11 w-48 object-contain object-left" />
           {!collapsed && (
-            <p className="text-[9px] font-bold text-gray-900 dark:text-white tracking-wide mt-1">
-              Bringing local stores online
+            <p className="text-[8px] font-bold uppercase text-gray-900 dark:text-white tracking-wide leading-none -mt-1.5">
+              Your Store <span className="align-middle">&bull;</span> Now Online
             </p>
           )}
         </div>
@@ -208,31 +208,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className={`min-h-screen transition-all duration-300 ${collapsed ? 'lg:pl-[90px]' : 'lg:pl-[200px]'}`}>
 
         {/* Sticky header */}
-        <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
+        <header className="sticky top-0 z-30 bg-gray-800 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
               {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns', '/carousel'].includes(pathname) ? (
                 <button onClick={() => navigate(-1)}
-                  className="p-2 -ml-1 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-                  <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
+                  className="p-2 -ml-1 rounded-xl hover:bg-white/10 transition-colors">
+                  <ChevronLeft className="w-5 h-5 text-slate-300" />
                 </button>
               ) : pathname === '/' ? (
                 <div className="flex flex-col items-start">
-                  <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-8 object-contain object-left" />
-                  <p className="text-[9px] font-bold text-gray-900 dark:text-white tracking-wide leading-none mt-0.5">
-                    Bringing local stores online
+                  <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-9 w-36 object-contain object-left" />
+                  <p className="text-[6px] sm:text-[8px] w-36 font-bold uppercase text-white tracking-wide leading-none -mt-1.5">
+                    Your Store <span className="align-middle">&bull;</span> Now Online
                   </p>
                 </div>
               ) : (
-                <span className="text-base font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+                <span className="text-base font-bold text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
               )}
             </div>
 
             {/* Desktop header — page title only */}
-            <span className="hidden lg:block text-base font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+            <span className="hidden lg:block text-base font-bold text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
 
             <div className="flex-1" />
+
+            {/* Dark mode quick toggle */}
+            <button onClick={toggle}
+              className="p-2 rounded-xl bg-white/10 text-amber-300 hover:bg-white/20 transition-colors flex-shrink-0">
+              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
 
             {/* Mobile-only header action slot — injected by pages */}
             {onAction && (
@@ -256,7 +262,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* QR button — always rightmost on mobile */}
             {qrUrl && (
               <button onClick={() => setShowQr(true)}
-                className="lg:hidden p-2 rounded-xl text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0">
+                className="lg:hidden p-2 rounded-xl text-slate-300 hover:bg-white/10 transition-colors flex-shrink-0">
                 <QrCode className="w-5 h-5" />
               </button>
             )}
@@ -264,13 +270,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* Desktop user dropdown — hidden on mobile */}
             <div className="hidden lg:block relative">
               <button onClick={() => setUserMenuOpen(o => !o)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 transition-colors">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-[10px] font-bold flex items-center justify-center">
                   {(name || username || 'A').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-semibold text-gray-900 dark:text-white leading-none">{name || username}</p>
-                  <p className="text-[10px] text-gray-500 capitalize leading-none mt-0.5">{role?.replace('_', ' ')}</p>
+                  <p className="text-xs font-semibold text-white leading-none">{name || username}</p>
+                  <p className="text-[10px] text-slate-300 capitalize leading-none mt-0.5">{role?.replace('_', ' ')}</p>
                 </div>
               </button>
 

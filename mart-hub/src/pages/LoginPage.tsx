@@ -56,8 +56,8 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-16 sm:h-20 w-auto object-contain" />
-            <p className="text-xs font-bold text-gray-900 dark:text-white tracking-wide mt-2 text-center">
-              Bringing local stores online
+            <p className="text-xs font-bold uppercase text-gray-900 dark:text-white tracking-wide mt-2 text-center">
+              Your Store <span className="text-sm align-middle">&bull;</span> Now Online
             </p>
           </div>
 
