@@ -234,12 +234,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             <div className="flex-1" />
 
-            {/* Dark mode quick toggle */}
-            <button onClick={toggle}
-              className="p-2 rounded-xl bg-white/10 text-amber-300 hover:bg-white/20 transition-colors flex-shrink-0">
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-
             {/* Mobile-only header action slot — injected by pages */}
             {onAction && (
               <button onClick={onAction}

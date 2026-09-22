@@ -55,7 +55,7 @@ export default function App() {
 
   // Re-subscribe to push only when authenticated and permission already granted
   useEffect(() => {
-    if (isAuthenticated && Notification.permission === 'granted') {
+    if (isAuthenticated && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       subscribeAdminToPush().catch(() => {});
     }
   }, [isAuthenticated]);
