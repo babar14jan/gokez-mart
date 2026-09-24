@@ -1,8 +1,8 @@
 import { useCartStore } from '../store/cartStore';
 
-// Bottom padding values — accounts for bottom nav (80px) + floating cart pill (~56px) + breathing room
-export const PAGE_BOTTOM = 'pb-24';           // no cart — just bottom nav
-export const PAGE_BOTTOM_CART = 'pb-36';      // with cart pill visible
+// Accounts for mobile navigation, its iOS safe area, and the floating cart when visible.
+export const PAGE_BOTTOM = 'pb-[calc(6rem+env(safe-area-inset-bottom,0px))]';
+export const PAGE_BOTTOM_CART = 'pb-[calc(9rem+env(safe-area-inset-bottom,0px))]';
 
 // Hook — returns correct bottom padding class based on cart state
 export function usePageBottom(): string {

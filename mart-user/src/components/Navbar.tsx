@@ -103,14 +103,16 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
 
         {/* Logo + slogan */}
         <div className="flex-shrink-0 flex flex-col items-start justify-center leading-none">
-          <img
-            src="/mart_brand_new.png"
-            alt="Gokez Mart"
-            className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left dark:hidden" />
-          <img
-            src="/mart_brand_dark.png"
-            alt="Gokez Mart"
-            className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left hidden dark:block" />
+          <picture className="dark:hidden">
+            <source srcSet="/mart_brand_new.webp" type="image/webp" />
+            <img src="/mart_brand_new.png" alt="Gokez Mart" width="384" height="256"
+              className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left" />
+          </picture>
+          <picture className="hidden dark:block">
+            <source srcSet="/mart_brand_dark.webp" type="image/webp" />
+            <img src="/mart_brand_dark.png" alt="Gokez Mart" width="384" height="256"
+              className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left" />
+          </picture>
           <span className="block -mt-1.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
             Shop Local <span className="align-middle">&bull;</span> Support Local
           </span>

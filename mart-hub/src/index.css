@@ -27,6 +27,12 @@ body { background-color: #ffffff; color: #111827; }
 }
 #root { overflow-x: clip; width: 100%; }
 
+/* Keep fixed mobile navigation above the iOS home indicator while scrolling. */
+.mobile-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateZ(0);
+}
+
 @layer components {
   .sidebar-link {
     @apply flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium

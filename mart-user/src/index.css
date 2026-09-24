@@ -37,7 +37,10 @@ body { background-color: #ffffff; color: #111827; }
   }
 }
 
-/* Safe area support for iOS home indicator */
-.safe-area-pb {
+/* Keep fixed mobile navigation above the iOS home indicator while scrolling. */
+.mobile-bottom-nav {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateZ(0);
 }
+
+.safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }

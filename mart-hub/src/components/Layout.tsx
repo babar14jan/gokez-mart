@@ -171,7 +171,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
         {/* Logo + slogan */}
         <div className={`flex flex-col items-start justify-center border-b border-gray-100 dark:border-slate-800 flex-shrink-0 px-4 bg-[#0f172a] dark:bg-slate-900 ${collapsed ? 'py-5' : 'py-4'}`}>
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-11 w-48 object-contain object-left" />
+          <picture>
+            <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
+            <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" width="384" height="256" className="h-11 w-48 object-contain object-left" />
+          </picture>
           {!collapsed && (
             <p className="text-[8px] font-bold uppercase text-white tracking-wide leading-tight -mt-1.5 whitespace-nowrap">
               Your Store <span className="align-middle">&bull;</span> Now Online
@@ -219,7 +222,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               ) : pathname === '/' ? (
                 <div className="flex flex-col items-start flex-shrink-0">
-                  <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-9 w-36 object-contain object-left" />
+                  <picture>
+                    <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
+                    <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" width="384" height="256" className="h-9 w-36 object-contain object-left" />
+                  </picture>
                   <p className="text-[6px] sm:text-[8px] font-bold uppercase text-white tracking-wide leading-tight -mt-1 whitespace-nowrap">
                     Your Store <span className="align-middle">&bull;</span> Now Online
                   </p>
@@ -317,13 +323,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 dark:text-slate-100">
+        <main className="p-4 sm:p-6 lg:p-8 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] lg:pb-8 dark:text-slate-100">
           {children}
         </main>
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700">
+      <nav className="mobile-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700">
         <div className="flex items-stretch h-20 max-w-lg mx-auto">
           {bottomTabs.map(({ label, href, icon: Icon }) => {
             const active = pathname === href;
