@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gokez_mart_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - gokez_mart_dev_data:/var/lib/postgresql/data
+      - ./mart-backend/docker/init-local.sql:/docker-entrypoint-initdb.d/init-local.sql:ro
+
+volumes:
+  gokez_mart_dev_data:

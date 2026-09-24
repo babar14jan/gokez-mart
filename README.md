@@ -37,6 +37,21 @@ npm run dev:web
 npm run dev:admin
 ```
 
+### Local database safety
+
+Local development uses a separate PostgreSQL database and never reads `mart-backend/.env`.
+
+```bash
+docker compose -f docker-compose.local.yml up -d
+cp mart-backend/.env.example mart-backend/.env.local
+npm run db:migrate --workspace=mart-backend
+npm run dev:api
+```
+
+The backend only permits a local database host during development. It refuses remote database URLs unless `ALLOW_REMOTE_DATABASE=true` is deliberately set for a temporary, non-production environment.
+
+Railway production runs with `NODE_ENV=production` and uses only the variables configured in Railway. Do not add a local `.env.local` file to Railway.
+
 ## Build & Deploy
 
 ```bash
