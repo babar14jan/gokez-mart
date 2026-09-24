@@ -63,14 +63,15 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
-    // Update both theme-color meta tags
+    const themeColor = isDark ? '#18191a' : '#0f172a';
+    // Update both theme-color meta tags to match the active app shell.
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta: Element) => {
       const m = meta as HTMLMetaElement;
-      m.content = '#0f172a';
+      m.content = themeColor;
     });
     // Fallback for single meta tag
     const single = document.querySelector('meta[name="theme-color"]:not([media])');
-    if (single) (single as HTMLMetaElement).content = '#0f172a';
+    if (single) (single as HTMLMetaElement).content = themeColor;
   }, [isDark]);
 
   return (

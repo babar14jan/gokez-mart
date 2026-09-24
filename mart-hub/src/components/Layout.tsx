@@ -170,7 +170,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Desktop sidebar ── */}
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
         {/* Logo + slogan */}
-        <div className={`flex flex-col items-start justify-center border-b border-gray-100 dark:border-slate-800 flex-shrink-0 px-4 bg-[#0f172a] dark:bg-slate-900 ${collapsed ? 'py-5' : 'py-4'}`}>
+        <div className={`flex flex-col items-start justify-center border-b border-gray-100 dark:border-slate-800 flex-shrink-0 px-4 bg-[#0f172a] dark:bg-[#18191a] ${collapsed ? 'py-5' : 'py-4'}`}>
           <picture>
             <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
             <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" width="384" height="256" className="h-11 w-48 object-contain object-left" />
@@ -211,7 +211,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className={`min-h-screen transition-all duration-300 ${collapsed ? 'lg:pl-[90px]' : 'lg:pl-[200px]'}`}>
 
         {/* Sticky header */}
-        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-[#0f172a] dark:bg-[#0f172a] border-b border-gray-100 dark:border-slate-800 shadow-sm">
+        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-[#0f172a] dark:bg-[#18191a] border-b border-gray-100 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
