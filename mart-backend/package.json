@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc && cp -r src/database/migrations dist/database/migrations",

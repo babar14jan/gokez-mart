@@ -2,6 +2,9 @@
   "name": "gokez-mart",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "workspaces": [
     "mart-backend",
     "mart-user",
