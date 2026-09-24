@@ -119,7 +119,7 @@ function OrderProgress({ status }: { status: string }) {
           return (
             <div key={step.status} className="flex items-center flex-1 min-w-0">
               {/* Node */}
-              <div className="flex flex-col items-center flex-shrink-0">
+              <div className="w-12 flex flex-col items-center flex-shrink-0">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-all ${
                   active ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 dark:shadow-emerald-900 scale-110' :
                   done   ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
@@ -127,7 +127,7 @@ function OrderProgress({ status }: { status: string }) {
                 }`}>
                   {done ? '✓' : step.emoji}
                 </div>
-                <span className={`text-[9px] font-semibold mt-0.5 text-center leading-tight ${
+                <span className={`w-full px-0.5 text-[9px] font-semibold mt-0.5 text-center leading-tight break-words ${
                   active ? 'text-emerald-600 dark:text-emerald-400' :
                   done   ? 'text-gray-500 dark:text-slate-400' :
                            'text-gray-500 dark:text-slate-400'
@@ -168,6 +168,7 @@ export default function OrdersPage() {
   const [deliveryHandlers, setDeliveryHandlers] = useState<any[]>([]);
   const [assigningOrder, setAssigningOrder] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState('');
+  const [detailsOrder, setDetailsOrder] = useState<any | null>(null);
 
   const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
@@ -470,10 +471,18 @@ export default function OrdersPage() {
                         </button>
                       </div>
                     ) : order.status === 'delivered' ? (
-                      <button onClick={e => { e.stopPropagation(); printReceipt(order); }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 transition-colors flex-shrink-0">
-                        <IndianRupee className="w-3 h-3" /> Receipt
-                      </button>
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                        <button onClick={e => { e.stopPropagation(); printReceipt(order); }}
+                          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 transition-colors">
+                          <IndianRupee className="w-3 h-3" /> Receipt
+                        </button>
+                        {['store_owner', 'store_manager'].includes(role || '') && (
+                          <button onClick={e => { e.stopPropagation(); setDetailsOrder(order); }}
+                            className="px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600 transition-colors">
+                            View details
+                          </button>
+                        )}
+                      </div>
                     ) : null}
                   </div>
 
@@ -522,9 +531,9 @@ export default function OrdersPage() {
 
                 {/* Progress bar — active orders only */}
                 {isActive && <OrderProgress status={order.status} />}
-                {['store_owner', 'store_manager'].includes(role || '') && order.statusEvents?.length > 0 && (
-                  <p className="px-4 pb-2 text-[10px] text-gray-500 dark:text-slate-400">
-                    {order.statusEvents[order.statusEvents.length - 1].toStatus.replaceAll('_', ' ')} by {order.statusEvents[order.statusEvents.length - 1].actorName}
+                {['store_owner', 'store_manager'].includes(role || '') && order.status !== 'pending' && order.statusEvents?.length > 0 && (
+                  <p className="px-4 pb-2 text-[10px] text-gray-500 dark:text-slate-400 break-words">
+                    Current state set by {order.statusEvents[order.statusEvents.length - 1].actorName}
                   </p>
                 )}
 
@@ -719,6 +728,51 @@ export default function OrdersPage() {
               {batching ? <div className="w-3.5 h-3.5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
               🛵 Dispatch
             </button>
+          </div>
+        </div>
+      )}
+
+      {detailsOrder && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4" onClick={() => setDetailsOrder(null)}>
+          <div className="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white dark:bg-slate-800 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 flex items-start justify-between gap-3 border-b border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4">
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">Order #{detailsOrder.orderNumber}</p>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400 break-words">Status history and activity</p>
+              </div>
+              <button onClick={() => setDetailsOrder(null)} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700" aria-label="Close order details">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 px-4 py-5">
+              <div className="rounded-xl bg-gray-50 p-3 dark:bg-slate-700/50">
+                <p className="text-xs font-semibold text-gray-900 dark:text-white break-words">{detailsOrder.guestName}</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400 break-words">Delivered order total: ₹{detailsOrder.total}</p>
+              </div>
+              <div className="space-y-0">
+                <div className="relative flex gap-3 pb-4">
+                  <div className="flex w-5 justify-center"><span className="mt-1 h-2.5 w-2.5 rounded-full bg-gray-400" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white">Order placed</p>
+                    <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">Customer · {new Date(detailsOrder.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</p>
+                  </div>
+                </div>
+                {(detailsOrder.statusEvents || []).map((event: any, index: number) => (
+                  <div key={`${event.createdAt}-${index}`} className="relative flex gap-3 pb-4 last:pb-0">
+                    {index < detailsOrder.statusEvents.length - 1 && <span className="absolute left-[9px] top-4 h-full w-px bg-gray-200 dark:bg-slate-600" />}
+                    <div className="z-10 flex w-5 justify-center"><span className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500" /></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold capitalize text-gray-900 dark:text-white break-words">
+                        {event.toStatus.replaceAll('_', ' ')}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400 break-words">
+                        {event.actorName} · {new Date(event.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
