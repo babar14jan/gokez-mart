@@ -174,6 +174,7 @@ export class CampaignService {
       `SELECT * FROM mart_campaigns
        WHERE status IN ('active', 'scheduled')
          AND (status = 'active' OR (valid_from IS NOT NULL AND valid_from <= $2))
+         AND coupon_code IS NULL
          AND (store_id = $1 OR store_id IS NULL)
          AND (valid_from IS NULL OR valid_from <= $2)
          AND (valid_until IS NULL OR valid_until >= $2)

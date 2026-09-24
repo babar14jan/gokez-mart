@@ -88,12 +88,19 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
   const cartSubtotal = subtotal(); // early calc for useEffect
   const [eligibleCampaigns, setEligibleCampaigns] = useState<any[]>([]);
   const [appliedCampaign, setLocalAppliedCampaign] = useState<any | null>(null);
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
   const [campaignDiscount, setCampaignDiscount] = useState(0);
   const [couponInput, setCouponInput] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
-  const [showOffers, setShowOffers] = useState(false);
+  const [couponSuccess, setCouponSuccess] = useState('');
+  const [showCouponField, setShowCouponField] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
+
+  useEffect(() => {
+    // Offers are explicitly selected for each checkout; never restore an old cart selection.
+    useCartStore.getState().setAppliedCampaign(null, 0);
+  }, []);
 
   useEffect(() => {
     if (!storeId) return;
@@ -101,16 +108,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
       .then(r => {
         const campaigns = r.data.data || [];
         setEligibleCampaigns(campaigns);
-        // Auto-apply first eligible auto-apply campaign
-        const autoApply = campaigns.find((c: any) => !c.coupon_code);
-        if (autoApply && !appliedCampaign) {
-          const disc = calcDiscount(autoApply, cartSubtotal);
-          setLocalAppliedCampaign(autoApply);
-          useCartStore.getState().setAppliedCampaign(autoApply, disc);
-          setCampaignDiscount(disc);
+        if (appliedCampaign && !appliedCouponCode && !campaigns.some((campaign: any) => campaign.id === appliedCampaign.id)) {
+          removeCampaign();
         }
       }).catch(() => {});
-  }, [storeId, cartSubtotal]);
+  }, [storeId, cartSubtotal, appliedCampaign, appliedCouponCode]);
 
   const calcDiscount = (campaign: any, cartTotal: number): number => {
     if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), cartTotal);
@@ -121,21 +123,22 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
     return 0;
   };
 
-  const applyCampaign = (campaign: any) => {
+  const applyCampaign = (campaign: any, couponCode: string | null = null) => {
     const disc = calcDiscount(campaign, sub);
     setLocalAppliedCampaign(campaign);
+    setAppliedCouponCode(couponCode);
     setCampaignDiscount(disc);
     useCartStore.getState().setAppliedCampaign(campaign, disc);
-    setCouponError("");
-    setShowOffers(false);
+    setCouponError('');
   };
 
   const removeCampaign = () => {
     setLocalAppliedCampaign(null);
+    setAppliedCouponCode(null);
     setCampaignDiscount(0);
     useCartStore.getState().setAppliedCampaign(null, 0);
-    setCouponInput("");
-    setCouponError("");
+    setCouponError('');
+    setCouponSuccess('');
   };
 
   const validateCoupon = async () => {
@@ -143,12 +146,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
     setCouponLoading(true); setCouponError('');
     try {
       const res = await campaignApi.validateCode(couponInput.trim(), sub, storeId);
-      const { campaign, discount } = res.data.data;
-      setLocalAppliedCampaign(campaign);
-      setCampaignDiscount(discount);
-      setCouponInput('');
-      setShowOffers(false);
+      const { campaign } = res.data.data;
+      applyCampaign(campaign, couponInput.trim().toUpperCase());
+      setCouponSuccess('Coupon applied');
     } catch (e: any) {
+      setCouponSuccess('');
       setCouponError(e?.response?.data?.error || 'Invalid coupon');
     } finally { setCouponLoading(false); }
   };
@@ -182,8 +184,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
         paymentMethod, zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
-        campaignId: appliedCampaign?.id || undefined,
-        couponCode: appliedCampaign?.coupon_code || undefined,
+        campaignId: appliedCouponCode ? undefined : appliedCampaign?.id || undefined,
+        couponCode: appliedCouponCode || undefined,
       }, orderRequestKey.current);
       if (resolvedAddress) addAddress({ label: 'Home', address: resolvedAddress, isDefault: true });
       clearCart();
@@ -359,72 +361,62 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
           )}
 
           {/* ── Offers / Coupons ── */}
-          {(eligibleCampaigns.length > 0 || appliedCampaign) && (
-            <div className={card}>
-              <div className="px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-violet-500" />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers</span>
-                  </div>
-                  {!appliedCampaign && (
-                    <button type="button" onClick={() => setShowOffers(s => !s)}
-                      className="text-xs font-semibold text-violet-600 dark:text-violet-400">
-                      {showOffers ? 'Hide' : `${eligibleCampaigns.length} available`}
-                    </button>
-                  )}
+          <div className={card}>
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-violet-500" />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers & Coupons</span>
                 </div>
-
-                {/* Applied campaign */}
-                {appliedCampaign && (
-                  <div className="mt-2 flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2">
-                    <div>
-                      <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
-                        {appliedCampaign.badge_text || '🎉'} {appliedCampaign.title}
-                      </p>
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                        {campaignDiscount > 0 ? `-₹${campaignDiscount.toFixed(0)} saved` : 'Free delivery applied'}
-                      </p>
-                    </div>
-                    <button type="button" onClick={removeCampaign} className="p-1 text-emerald-600 hover:text-red-500">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Offers list */}
-                {showOffers && !appliedCampaign && (
-                  <div className="mt-3 space-y-2">
-                    {eligibleCampaigns.map((c: any) => (
-                      <div key={c.id} className="flex items-center justify-between border border-gray-100 dark:border-slate-700 rounded-xl px-3 py-2.5">
-                        <div>
-                          <p className="text-xs font-bold text-gray-900 dark:text-white">{c.badge_text} {c.title}</p>
-                          <p className="text-[10px] text-gray-500 dark:text-slate-400">{c.subtitle}</p>
-                          {c.coupon_code && <p className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{c.coupon_code}</p>}
-                        </div>
-                        <button type="button" onClick={() => applyCampaign(c)}
-                          className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors">
-                          Apply
-                        </button>
-                      </div>
-                    ))}
-                    {/* Manual coupon input */}
-                    <div className="flex gap-2 pt-1">
-                      <input type="text" value={couponInput} onChange={e => setCouponInput(e.target.value.toUpperCase())}
-                        placeholder="Enter coupon code"
-                        className="flex-1 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
-                      <button type="button" onClick={validateCoupon} disabled={couponLoading || !couponInput.trim()}
-                        className="px-3 py-2 text-xs font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-xl disabled:opacity-50 flex items-center gap-1">
-                        {couponLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                        Apply
-                      </button>
-                    </div>
-                    {couponError && <p className="text-xs text-red-500">{couponError}</p>}
-                  </div>
-                )}
+                <button type="button" onClick={() => setShowCouponField(value => !value)} className="text-xs font-semibold text-violet-600 dark:text-violet-400 whitespace-nowrap">
+                  {showCouponField ? 'Hide coupon' : 'Have a coupon?'}
+                </button>
               </div>
+
+              <div className="mt-3 space-y-2">
+                <p className="text-[11px] leading-tight text-gray-500 dark:text-slate-400">Choose one offer. Coupon codes cannot be combined with another offer.</p>
+                <label className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${!appliedCampaign ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'}`}>
+                  <input type="radio" name="checkout-offer" checked={!appliedCampaign} onChange={removeCampaign} className="mt-0.5 accent-emerald-500" />
+                  <span className="text-xs text-gray-700 dark:text-slate-300">No offer</span>
+                </label>
+                {eligibleCampaigns.map((campaign: any) => {
+                  const isSelected = appliedCampaign?.id === campaign.id && !appliedCouponCode;
+                  const amount = campaign.discount_type === 'flat' ? `₹${campaign.discount_value} off` : campaign.discount_type === 'percent' ? `${campaign.discount_value}% off` : 'Free delivery';
+                  const description = campaign.description || campaign.subtitle || `${amount}${campaign.min_order_amount > 0 ? ` on orders above ₹${campaign.min_order_amount}` : ''}`;
+                  return (
+                    <label key={campaign.id} className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'}`}>
+                      <input type="radio" name="checkout-offer" checked={isSelected} onChange={() => applyCampaign(campaign)} className="mt-0.5 accent-emerald-500" />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-bold text-gray-900 dark:text-white break-words">{campaign.badge_text ? `${campaign.badge_text} ` : ''}{campaign.title}</span>
+                        <span className="block mt-0.5 text-[11px] leading-tight text-gray-500 dark:text-slate-400 break-words">{description}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+                {eligibleCampaigns.length === 0 && <p className="text-xs text-gray-500 dark:text-slate-400">No eligible offers for this order.</p>}
+              </div>
+
+              {showCouponField && <div className="mt-3 border-t border-gray-100 dark:border-slate-700 pt-3">
+                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Coupon code</label>
+                <div className="flex gap-2">
+                  <input type="text" value={couponInput} onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError(''); setCouponSuccess(''); }} placeholder="Enter coupon code" className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
+                  <button type="button" onClick={validateCoupon} disabled={couponLoading || !couponInput.trim()} className="px-3 py-2 text-xs font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap">
+                    {couponLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Apply
+                  </button>
+                </div>
+                {couponSuccess && <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">{couponSuccess}</p>}
+                {couponError && <p className="mt-1.5 text-xs text-red-500">{couponError}</p>}
+              </div>}
+
+              {appliedCampaign && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 break-words">{appliedCampaign.title}</p>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-500">{campaignDiscount > 0 ? `-₹${campaignDiscount.toFixed(0)} saved` : 'Free delivery applied'}</p>
+                </div>
+                <button type="button" onClick={removeCampaign} className="p-1 text-emerald-600 hover:text-red-500 flex-shrink-0" aria-label="Remove offer"><X className="w-3.5 h-3.5" /></button>
+              </div>}
             </div>
-          )}
+          </div>
 
           {/* ── USP: Delivery time + Note in one card ── */}
           <div className={card}>

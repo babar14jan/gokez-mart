@@ -99,6 +99,9 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   if (!idempotencyKey || idempotencyKey.length > 128) {
     res.status(400).json({ success: false, error: 'A valid Idempotency-Key is required' }); return;
   }
+  if (campaignId && couponCode) {
+    res.status(400).json({ success: false, error: 'Select either an offer or a coupon code, not both' }); return;
+  }
   // Fetch store name for fulfilled_by
   const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';

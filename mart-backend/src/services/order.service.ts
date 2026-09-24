@@ -42,6 +42,9 @@ export class OrderService {
   }
 
   static async create(data: CreateOrderDto) {
+    if (data.campaignId && data.couponCodeUsed) {
+      throw new Error('Select either an offer or a coupon code, not both');
+    }
     const settings = await SettingsService.getPublic(data.storeId);
     const deliveryCharge = parseFloat(settings.delivery_charge || '15');
     const freeAbove = parseFloat(settings.free_delivery_above || '150');
