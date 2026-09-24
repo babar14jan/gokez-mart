@@ -208,7 +208,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className={`min-h-screen transition-all duration-300 ${collapsed ? 'lg:pl-[90px]' : 'lg:pl-[200px]'}`}>
 
         {/* Sticky header */}
-        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-[#0f172a] dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-sm">
+        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-[#0f172a] dark:bg-[#0f172a] border-b border-gray-100 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
