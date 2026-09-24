@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Tag, ToggleLeft, ToggleRight, Copy, Check } from 'lucide-react';
-import { campaignsApi, productsApi } from '../services/api';
+import { campaignsApi, customersApi, productsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
@@ -26,12 +26,14 @@ const STATUS_COLORS: Record<string, string> = {
   draft:     'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400',
   scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   expired:   'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+  paused:    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  archived:  'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
 };
 
 const EMPTY_FORM = {
   title: '', subtitle: '', description: '', badgeText: '',
   discountType: 'flat', discountValue: '', maxDiscount: '', minOrderAmount: '0',
-  couponCode: '', newCustomersOnly: false, perCustomerLimit: '1', usageLimit: '',
+  couponCode: '', eligibilityType: 'all', inactiveDays: '30', targetCustomerIds: [] as string[], perCustomerLimit: '1', usageLimit: '', priority: '0',
   showInCarousel: false, carouselGradient: GRADIENTS[0],
   status: 'active', validFrom: '', validUntil: '',
 };
@@ -41,6 +43,7 @@ export default function CampaignsPage() {
   const isSuperAdmin = role === 'super_admin';
 
   const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -59,7 +62,10 @@ export default function CampaignsPage() {
     } catch {} finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    if (isSuperAdmin) customersApi.getAll().then(res => setCustomers(res.data.data || [])).catch(() => {});
+  }, [isSuperAdmin]);
 
   const openCreate = () => {
     setEditing(null);
@@ -75,7 +81,10 @@ export default function CampaignsPage() {
       badgeText: c.badge_text || '', discountType: c.discount_type || 'flat',
       discountValue: String(c.discount_value || ''), maxDiscount: String(c.max_discount || ''),
       minOrderAmount: String(c.min_order_amount || '0'),
-      couponCode: c.coupon_code || '', newCustomersOnly: c.new_customers_only || false,
+      couponCode: c.coupon_code || '', eligibilityType: c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all'),
+      inactiveDays: String(c.inactive_days || '30'),
+      targetCustomerIds: c.targetCustomerIds || [],
+      priority: String(c.priority || '0'),
       perCustomerLimit: String(c.per_customer_limit || '1'), usageLimit: String(c.usage_limit || ''),
       showInCarousel: c.show_in_carousel || false,
       carouselGradient: c.carousel_gradient || GRADIENTS[0],
@@ -89,6 +98,9 @@ export default function CampaignsPage() {
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
+    if (form.eligibilityType === 'targeted_customers' && form.targetCustomerIds.length === 0) {
+      alert('Select at least one target customer'); return;
+    }
     setSaving(true);
     try {
       let carouselImageUrl = editing?.carousel_image_url || undefined;
@@ -105,9 +117,12 @@ export default function CampaignsPage() {
         maxDiscount: form.maxDiscount ? parseFloat(form.maxDiscount) : undefined,
         minOrderAmount: parseFloat(form.minOrderAmount) || 0,
         couponCode: form.couponCode.trim().toUpperCase() || undefined,
-        newCustomersOnly: form.newCustomersOnly,
+        eligibilityType: form.eligibilityType,
+        inactiveDays: form.eligibilityType === 'inactive_customers' ? parseInt(form.inactiveDays) || 30 : undefined,
+        targetCustomerIds: form.eligibilityType === 'targeted_customers' ? form.targetCustomerIds : undefined,
         perCustomerLimit: parseInt(form.perCustomerLimit) || 1,
         usageLimit: form.usageLimit ? parseInt(form.usageLimit) : undefined,
+        priority: parseInt(form.priority) || 0,
         showInCarousel: form.showInCarousel, carouselGradient: form.carouselGradient,
         carouselImageUrl,
         status: form.status,
@@ -158,9 +173,9 @@ export default function CampaignsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500 dark:text-slate-400">{campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''}</p>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
+        {isSuperAdmin && <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
           <Plus className="w-3.5 h-3.5" /> New Campaign
-        </button>
+        </button>}
       </div>
 
       {campaigns.length === 0 ? (
@@ -184,7 +199,9 @@ export default function CampaignsPage() {
                       {c.badge_text && <span className="text-[10px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded-full">{c.badge_text}</span>}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[c.status] || STATUS_COLORS.draft}`}>{c.status}</span>
                       {c.show_in_carousel && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">📱 Carousel</span>}
-                      {c.new_customers_only && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">New users only</span>}
+                      {c.eligibility_type === 'first_order' && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">First order</span>}
+                      {c.eligibility_type === 'inactive_customers' && <span className="text-[10px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">Inactive {c.inactive_days} days</span>}
+                      {c.eligibility_type === 'targeted_customers' && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">Targeted customers</span>}
                     </div>
                     <p className="text-sm font-bold text-gray-900 dark:text-white">{c.title}</p>
                     {c.subtitle && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{c.subtitle}</p>}
@@ -207,7 +224,7 @@ export default function CampaignsPage() {
                       {c.valid_until && <span className="text-[10px] text-gray-400">Expires: {new Date(c.valid_until).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {isSuperAdmin && <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button onClick={() => toggleStatus(c)} title={c.status === 'active' ? 'Deactivate' : 'Activate'}>
                       {c.status === 'active'
                         ? <ToggleRight className="w-6 h-6 text-emerald-500" />
@@ -217,12 +234,11 @@ export default function CampaignsPage() {
                     <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
                       <Pencil className="w-4 h-4" />
                     </button>
-                    {isSuperAdmin && (
-                      <button onClick={() => setConfirmDelete(c)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button onClick={() => setConfirmDelete(c)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
+                  }
                 </div>
               </div>
             </div>
@@ -286,11 +302,23 @@ export default function CampaignsPage() {
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Total Usage Limit</label>
                     <input type="number" value={form.usageLimit} onChange={e => setForm(f => ({ ...f, usageLimit: e.target.value }))} className={inp} placeholder="Unlimited" min="1" /></div>
                 </div>
-                <label className="flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all border-gray-100 dark:border-slate-700 hover:border-amber-300">
-                  <input type="checkbox" checked={form.newCustomersOnly} onChange={e => setForm(f => ({ ...f, newCustomersOnly: e.target.checked }))} className="accent-emerald-500" />
-                  <div><p className="text-sm font-semibold text-gray-900 dark:text-white">New customers only</p>
-                    <p className="text-xs text-gray-500">Only customers with 0 previous orders</p></div>
-                </label>
+                <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Eligible Customers</label>
+                  <select value={form.eligibilityType} onChange={e => setForm(f => ({ ...f, eligibilityType: e.target.value }))} className={inp}>
+                    <option value="all">All customers</option>
+                    <option value="first_order">First successful order only</option>
+                    <option value="inactive_customers">Customers inactive for a period</option>
+                    <option value="targeted_customers">Selected customers only</option>
+                  </select>
+                </div>
+                {form.eligibilityType === 'inactive_customers' && <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Inactive for at least days</label>
+                  <input type="number" value={form.inactiveDays} onChange={e => setForm(f => ({ ...f, inactiveDays: e.target.value }))} className={inp} min="1" placeholder="30" />
+                </div>}
+                {form.eligibilityType === 'targeted_customers' && <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Target customers</label>
+                  <select multiple value={form.targetCustomerIds} onChange={e => setForm(f => ({ ...f, targetCustomerIds: Array.from(e.target.selectedOptions, option => option.value) }))} className={`${inp} h-32`}>
+                    {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.name || 'Customer'} · {customer.phone}</option>)}
+                  </select>
+                  <p className="mt-1 text-[10px] text-gray-500">Use Command or Control to select multiple customers.</p>
+                </div>}
               </div>
 
               {/* Validity */}
@@ -307,6 +335,7 @@ export default function CampaignsPage() {
                     <option value="active">Active</option>
                     <option value="draft">Draft</option>
                     <option value="scheduled">Scheduled</option>
+                    <option value="paused">Paused</option>
                   </select></div>
               </div>
 

@@ -118,8 +118,8 @@ router.get('/admin/feedback',                  authenticate, ctrl.adminGetFeedba
 
 // ── Campaigns ────────────────────────────────────────────────────────────────────────────────
 router.get('/admin/campaigns',                 authenticate, ctrl.adminGetCampaigns);
-router.post('/admin/campaigns',                authenticate, ctrl.adminCreateCampaign);
-router.put('/admin/campaigns/:id',             authenticate, ctrl.adminUpdateCampaign);
+router.post('/admin/campaigns',                authenticate, requireSuperAdmin, ctrl.adminCreateCampaign);
+router.put('/admin/campaigns/:id',             authenticate, requireSuperAdmin, ctrl.adminUpdateCampaign);
 router.delete('/admin/campaigns/:id',          authenticate, requireSuperAdmin, ctrl.adminDeleteCampaign);
 
 // Carousel slides (super_admin only)

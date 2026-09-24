@@ -17,8 +17,9 @@ export class CampaignService {
       `SELECT c.*,
               a.name as "createdByName",
               s.name as "storeName",
-              (SELECT COUNT(*) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id)::int as "useCount",
-              (SELECT COALESCE(SUM(cu.discount_applied),0) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id)::float as "totalDiscount"
+              COALESCE((SELECT json_agg(ct.customer_id) FROM mart_campaign_targets ct WHERE ct.campaign_id = c.id), '[]'::json) as "targetCustomerIds",
+              (SELECT COUNT(*) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id AND cu.reversed_at IS NULL)::int as "useCount",
+              (SELECT COALESCE(SUM(cu.discount_applied),0) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id AND cu.reversed_at IS NULL)::float as "totalDiscount"
        FROM mart_campaigns c
        LEFT JOIN mart_admins a ON a.id = c.created_by
        LEFT JOIN mart_stores s ON s.id = c.store_id
@@ -30,28 +31,44 @@ export class CampaignService {
   }
 
   static async create(data: any, adminId: string): Promise<any> {
+    if (data.eligibilityType === 'inactive_customers' && (!Number.isInteger(Number(data.inactiveDays)) || Number(data.inactiveDays) < 1)) {
+      throw new Error('Inactive customer campaigns require a positive inactivity period');
+    }
+    if (data.eligibilityType === 'targeted_customers' && (!Array.isArray(data.targetCustomerIds) || data.targetCustomerIds.length === 0)) {
+      throw new Error('Select at least one target customer');
+    }
     const result = await query(
       `INSERT INTO mart_campaigns (
         title, subtitle, description, badge_text,
         discount_type, discount_value, max_discount, min_order_amount,
         coupon_code, new_customers_only, per_customer_limit, usage_limit,
         store_id, show_in_carousel, carousel_image_url, carousel_gradient, carousel_sort_order,
-        status, valid_from, valid_until, created_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+        status, valid_from, valid_until, eligibility_type, inactive_days, priority, created_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
       RETURNING *`,
       [
         data.title, data.subtitle || null, data.description || null, data.badgeText || null,
         data.discountType || 'flat', data.discountValue || 0, data.maxDiscount || null, data.minOrderAmount || 0,
-        data.couponCode?.toUpperCase() || null, data.newCustomersOnly || false,
+        data.couponCode?.trim().toUpperCase() || null, data.eligibilityType === 'first_order',
         data.perCustomerLimit || 1, data.usageLimit || null,
         data.storeId || null, data.showInCarousel || false,
         data.carouselImageUrl || null, data.carouselGradient || 'from-emerald-500 via-teal-500 to-cyan-500',
         data.carouselSortOrder || 0,
         data.status || 'draft',
-        data.validFrom || null, data.validUntil || null, adminId,
+        data.validFrom || null, data.validUntil || null,
+        data.eligibilityType || 'all', data.eligibilityType === 'inactive_customers' ? Number(data.inactiveDays) : null,
+        Number(data.priority) || 0, adminId,
       ]
     );
     const campaign = result.rows[0];
+    if (campaign.eligibility_type === 'targeted_customers' && Array.isArray(data.targetCustomerIds)) {
+      for (const customerId of [...new Set(data.targetCustomerIds)]) {
+        await query(
+          `INSERT INTO mart_campaign_targets (campaign_id, customer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [campaign.id, customerId]
+        );
+      }
+    }
     // Auto-sync to carousel slides if show_in_carousel is true
     if (data.showInCarousel) {
       await query(
@@ -69,6 +86,12 @@ export class CampaignService {
   }
 
   static async update(id: string, data: any): Promise<any> {
+    if (data.eligibilityType === 'inactive_customers' && (!Number.isInteger(Number(data.inactiveDays)) || Number(data.inactiveDays) < 1)) {
+      throw new Error('Inactive customer campaigns require a positive inactivity period');
+    }
+    if (data.eligibilityType === 'targeted_customers' && (!Array.isArray(data.targetCustomerIds) || data.targetCustomerIds.length === 0)) {
+      throw new Error('Select at least one target customer');
+    }
     const fields: string[] = [];
     const params: unknown[] = [];
     let i = 1;
@@ -82,6 +105,7 @@ export class CampaignService {
       carouselImageUrl: 'carousel_image_url', carouselGradient: 'carousel_gradient',
       carouselSortOrder: 'carousel_sort_order', status: 'status',
       validFrom: 'valid_from', validUntil: 'valid_until',
+      eligibilityType: 'eligibility_type', inactiveDays: 'inactive_days', priority: 'priority',
     };
     for (const [key, col] of Object.entries(map)) {
       if (data[key] !== undefined) {
@@ -89,6 +113,10 @@ export class CampaignService {
         fields.push(`${col} = $${i++}`);
         params.push(val);
       }
+    }
+    if (data.eligibilityType !== undefined && data.eligibilityType !== 'inactive_customers' && data.inactiveDays === undefined) {
+      fields.push(`inactive_days = $${i++}`);
+      params.push(null);
     }
     if (!fields.length) throw new Error('Nothing to update');
     fields.push(`updated_at = NOW()`);
@@ -98,6 +126,17 @@ export class CampaignService {
       params
     );
     const campaign = result.rows[0];
+    if (campaign && Array.isArray(data.targetCustomerIds)) {
+      await query(`DELETE FROM mart_campaign_targets WHERE campaign_id = $1`, [id]);
+      if (campaign.eligibility_type === 'targeted_customers') {
+        for (const customerId of [...new Set(data.targetCustomerIds)]) {
+          await query(
+            `INSERT INTO mart_campaign_targets (campaign_id, customer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [id, customerId]
+          );
+        }
+      }
+    }
     // Sync carousel slide if show_in_carousel changed
     if (campaign) {
       if (campaign.show_in_carousel) {
@@ -133,13 +172,14 @@ export class CampaignService {
     // Get all active campaigns for this store
     const result = await query(
       `SELECT * FROM mart_campaigns
-       WHERE status = 'active'
+       WHERE status IN ('active', 'scheduled')
+         AND (status = 'active' OR (valid_from IS NOT NULL AND valid_from <= $2))
          AND (store_id = $1 OR store_id IS NULL)
          AND (valid_from IS NULL OR valid_from <= $2)
          AND (valid_until IS NULL OR valid_until >= $2)
          AND (usage_limit IS NULL OR usage_count < usage_limit)
          AND min_order_amount <= $3
-       ORDER BY discount_value DESC`,
+      ORDER BY priority DESC, discount_value DESC`,
       [storeId, now, cartTotal]
     );
 
@@ -149,8 +189,8 @@ export class CampaignService {
     // Filter by customer eligibility
     const eligible: any[] = [];
     for (const c of campaigns) {
-      // Check new_customers_only
-      if (c.new_customers_only) {
+      const eligibilityType = c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all');
+      if (eligibilityType === 'first_order') {
         const orderCount = await query(
           `SELECT COUNT(*) as cnt FROM mart_orders WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
           [customerId]
@@ -158,8 +198,21 @@ export class CampaignService {
         if (parseInt(orderCount.rows[0].cnt) > 0) continue; // not a new customer
       }
       // Check per_customer_limit
+      if (eligibilityType === 'inactive_customers') {
+        const lastDelivery = await query(
+          `SELECT MAX(updated_at) AS last_order_at FROM mart_orders WHERE customer_id = $1 AND status = 'delivered'`,
+          [customerId]
+        );
+        const lastOrderAt = lastDelivery.rows[0]?.last_order_at;
+        const cutoff = Date.now() - Number(c.inactive_days) * 24 * 60 * 60 * 1000;
+        if (!lastOrderAt || new Date(lastOrderAt).getTime() > cutoff) continue;
+      }
+      if (eligibilityType === 'targeted_customers') {
+        const target = await query(`SELECT 1 FROM mart_campaign_targets WHERE campaign_id = $1 AND customer_id = $2`, [c.id, customerId]);
+        if (!target.rows[0]) continue;
+      }
       const uses = await query(
-        `SELECT COUNT(*) as cnt FROM mart_campaign_uses WHERE campaign_id = $1 AND customer_id = $2`,
+        `SELECT COUNT(*) as cnt FROM mart_campaign_uses WHERE campaign_id = $1 AND customer_id = $2 AND reversed_at IS NULL`,
         [c.id, customerId]
       );
       if (parseInt(uses.rows[0].cnt) >= c.per_customer_limit) continue;
@@ -170,7 +223,10 @@ export class CampaignService {
 
   static async validateCode(code: string, customerId: string | null, cartTotal: number, storeId: string): Promise<any> {
     const result = await query(
-      `SELECT * FROM mart_campaigns WHERE coupon_code = $1 AND status = 'active'`,
+      `SELECT * FROM mart_campaigns
+       WHERE coupon_code = $1
+         AND status IN ('active', 'scheduled')
+         AND (status = 'active' OR (valid_from IS NOT NULL AND valid_from <= NOW()))`,
       [code.toUpperCase()]
     );
     if (!result.rows[0]) throw new Error('Invalid or expired coupon code');
@@ -194,7 +250,8 @@ export class CampaignService {
 
     if (customerId) {
       // Check new customers only
-      if (campaign.new_customers_only) {
+      const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
+      if (eligibilityType === 'first_order') {
         const orderCount = await query(
           `SELECT COUNT(*) as cnt FROM mart_orders WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
           [customerId]
@@ -202,8 +259,19 @@ export class CampaignService {
         if (parseInt(orderCount.rows[0].cnt) > 0) throw new Error('This offer is for new customers only');
       }
       // Check per customer limit
+      if (eligibilityType === 'inactive_customers') {
+        const lastDelivery = await query(`SELECT MAX(updated_at) AS last_order_at FROM mart_orders WHERE customer_id = $1 AND status = 'delivered'`, [customerId]);
+        const cutoff = Date.now() - Number(campaign.inactive_days) * 24 * 60 * 60 * 1000;
+        if (!lastDelivery.rows[0]?.last_order_at || new Date(lastDelivery.rows[0].last_order_at).getTime() > cutoff) {
+          throw new Error(`This offer is for customers inactive for ${campaign.inactive_days} days`);
+        }
+      }
+      if (eligibilityType === 'targeted_customers') {
+        const target = await query(`SELECT 1 FROM mart_campaign_targets WHERE campaign_id = $1 AND customer_id = $2`, [campaign.id, customerId]);
+        if (!target.rows[0]) throw new Error('This offer is not available for this customer');
+      }
       const uses = await query(
-        `SELECT COUNT(*) as cnt FROM mart_campaign_uses WHERE campaign_id = $1 AND customer_id = $2`,
+        `SELECT COUNT(*) as cnt FROM mart_campaign_uses WHERE campaign_id = $1 AND customer_id = $2 AND reversed_at IS NULL`,
         [campaign.id, customerId]
       );
       if (parseInt(uses.rows[0].cnt) >= campaign.per_customer_limit) throw new Error('You have already used this coupon');

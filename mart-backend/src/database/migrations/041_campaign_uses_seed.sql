@@ -1,4 +1,4 @@
--- Migration 041: Campaign Uses + WELCOME50 Seed
+-- Migration 041: Campaign Uses
 
 CREATE TABLE IF NOT EXISTS mart_campaign_uses (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -19,24 +19,4 @@ ALTER TABLE mart_orders ADD COLUMN IF NOT EXISTS campaign_id      UUID REFERENCE
 ALTER TABLE mart_orders ADD COLUMN IF NOT EXISTS campaign_discount NUMERIC(10,2) NOT NULL DEFAULT 0;
 ALTER TABLE mart_orders ADD COLUMN IF NOT EXISTS coupon_code_used  TEXT;
 
--- Seed WELCOME50 campaign
-INSERT INTO mart_campaigns (
-  title, subtitle, description, badge_text,
-  discount_type, discount_value, min_order_amount,
-  coupon_code, new_customers_only, per_customer_limit,
-  show_in_carousel, carousel_gradient,
-  status, valid_from
-) VALUES (
-  'Welcome Offer',
-  '₹50 off your first order',
-  'Welcome to Gokez Mart! Enjoy ₹50 off on your very first order. No minimum order required.',
-  '🎉 New User',
-  'flat', 50, 0,
-  NULL,   -- auto-applied, no code needed
-  true,   -- new customers only
-  1,
-  true,
-  'from-violet-500 via-purple-600 to-indigo-600',
-  'active',
-  NOW()
-) ON CONFLICT DO NOTHING;
+-- Campaign definitions are created and managed through the Super Admin Hub UI.

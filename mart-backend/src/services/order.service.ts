@@ -47,9 +47,6 @@ export class OrderService {
     const freeAbove = parseFloat(settings.free_delivery_above || '150');
 
     const subtotal = data.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const actualDelivery = subtotal >= freeAbove ? 0 : deliveryCharge;
-    const campaignDiscount = data.campaignDiscount || 0;
-    const total = Math.max(0, subtotal + actualDelivery - campaignDiscount);
     // Retry on order number collision (extremely rare but safe)
     let orderNumber = this.generateOrderNumber();
     const existing = await query(`SELECT 1 FROM mart_orders WHERE order_number = $1`, [orderNumber]);
@@ -66,17 +63,16 @@ export class OrderService {
         return { ...prior.rows[0], orderId: prior.rows[0].id, storeName: data.storeName || 'Gokez Mart', duplicate: true };
       }
 
-      // Upsert customer by phone
+      // The customer and campaign are resolved within this transaction. The
+      // client may name a campaign, but it never supplies the final discount.
       await client.query(
         `INSERT INTO mart_customers (id, phone, name, address, order_count, total_spent)
-         VALUES (gen_random_uuid(), $1, $2, $3, 1, $4)
+         VALUES (gen_random_uuid(), $1, $2, $3, 0, 0)
          ON CONFLICT (phone) DO UPDATE SET
            name = COALESCE(EXCLUDED.name, mart_customers.name),
            address = COALESCE(EXCLUDED.address, mart_customers.address),
-           order_count = mart_customers.order_count + 1,
-           total_spent = mart_customers.total_spent + $4,
            updated_at = NOW()`,
-        [data.guestPhone, data.guestName, data.guestAddress, total]
+        [data.guestPhone, data.guestName, data.guestAddress]
       );
 
       const customerResult = await client.query(
@@ -84,13 +80,18 @@ export class OrderService {
       );
       const customerId = customerResult.rows[0]?.id || null;
 
-      if (data.campaignId && campaignDiscount > 0) {
+      let campaign: any = null;
+      if (data.campaignId || data.couponCodeUsed) {
         const campaignResult = await client.query(
-          `SELECT * FROM mart_campaigns WHERE id = $1 FOR UPDATE`, [data.campaignId]
+          data.campaignId
+            ? `SELECT * FROM mart_campaigns WHERE id = $1 FOR UPDATE`
+            : `SELECT * FROM mart_campaigns WHERE coupon_code = $1 FOR UPDATE`,
+          [data.campaignId || data.couponCodeUsed!.trim().toUpperCase()]
         );
-        const campaign = campaignResult.rows[0];
+        campaign = campaignResult.rows[0];
         const now = new Date();
-        if (!campaign || campaign.status !== 'active' ||
+        if (!campaign || !['active', 'scheduled'].includes(campaign.status) ||
+          (campaign.status === 'scheduled' && (!campaign.valid_from || new Date(campaign.valid_from) > now)) ||
             (campaign.store_id && campaign.store_id !== data.storeId) ||
             (campaign.valid_from && new Date(campaign.valid_from) > now) ||
             (campaign.valid_until && new Date(campaign.valid_until) < now) ||
@@ -98,14 +99,54 @@ export class OrderService {
             subtotal < Number(campaign.min_order_amount)) {
           throw new Error('Campaign is no longer eligible for this order');
         }
+
+        const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
+        if (eligibilityType === 'first_order') {
+          const priorOrders = await client.query(
+            `SELECT COUNT(*)::int AS count FROM mart_orders
+             WHERE guest_phone = $1 AND status NOT IN ('cancelled', 'terminated', 'failed_delivery')`,
+            [data.guestPhone]
+          );
+          if (priorOrders.rows[0].count > 0) throw new Error('This offer is only for first-time customers');
+        }
+        if (eligibilityType === 'inactive_customers') {
+          const priorDelivery = await client.query(
+            `SELECT MAX(updated_at) AS last_order_at FROM mart_orders
+             WHERE customer_id = $1 AND status = 'delivered'`,
+            [customerId]
+          );
+          const lastOrderAt = priorDelivery.rows[0]?.last_order_at;
+          const cutoff = new Date(now.getTime() - Number(campaign.inactive_days) * 24 * 60 * 60 * 1000);
+          if (!lastOrderAt || new Date(lastOrderAt) > cutoff) {
+            throw new Error(`This offer is for customers inactive for ${campaign.inactive_days} days`);
+          }
+        }
+        if (eligibilityType === 'targeted_customers') {
+          const target = await client.query(
+            `SELECT 1 FROM mart_campaign_targets WHERE campaign_id = $1 AND customer_id = $2`,
+            [campaign.id, customerId]
+          );
+          if (!target.rows[0]) throw new Error('This offer is not available for this customer');
+        }
         const useCount = await client.query(
-          `SELECT COUNT(*)::int as count FROM mart_campaign_uses WHERE campaign_id = $1 AND customer_id = $2`,
-          [data.campaignId, customerId]
+          `SELECT COUNT(*)::int as count FROM mart_campaign_uses
+           WHERE campaign_id = $1 AND customer_id = $2 AND reversed_at IS NULL`,
+          [campaign.id, customerId]
         );
         if (useCount.rows[0].count >= campaign.per_customer_limit) {
           throw new Error('Campaign use limit reached for this customer');
         }
       }
+
+      const campaignDiscount = campaign
+        ? campaign.discount_type === 'flat'
+          ? Math.min(Number(campaign.discount_value), subtotal)
+          : campaign.discount_type === 'percent'
+            ? Math.min((subtotal * Number(campaign.discount_value)) / 100, campaign.max_discount ? Number(campaign.max_discount) : Number.MAX_SAFE_INTEGER)
+            : 0
+        : 0;
+      const actualDelivery = campaign?.discount_type === 'free_delivery' || subtotal >= freeAbove ? 0 : deliveryCharge;
+      const total = Math.max(0, subtotal + actualDelivery - campaignDiscount);
 
       // Create order
       const orderId = uuidv4();
@@ -122,7 +163,14 @@ export class OrderService {
          data.deliveryPreference || 'within_15',
          data.deliveryNote || 'Ring the bell',
          data.storeName || null,
-        data.campaignId || null, campaignDiscount, data.couponCodeUsed || null, data.idempotencyKey]
+        campaign?.id || null, campaignDiscount, campaign?.coupon_code || null, data.idempotencyKey]
+      );
+
+      await client.query(
+        `UPDATE mart_customers
+         SET order_count = order_count + 1, total_spent = total_spent + $2, updated_at = NOW()
+         WHERE id = $1`,
+        [customerId, total]
       );
 
       // Create order items
@@ -136,13 +184,13 @@ export class OrderService {
         );
       }
 
-      if (data.campaignId && campaignDiscount > 0) {
+      if (campaign) {
         await client.query(
           `INSERT INTO mart_campaign_uses (campaign_id, customer_id, order_id, discount_applied, coupon_code_used)
            VALUES ($1,$2,$3,$4,$5)`,
-          [data.campaignId, customerId, orderId, campaignDiscount, data.couponCodeUsed || null]
+          [campaign.id, customerId, orderId, campaignDiscount, campaign.coupon_code || null]
         );
-        await client.query(`UPDATE mart_campaigns SET usage_count = usage_count + 1 WHERE id = $1`, [data.campaignId]);
+        await client.query(`UPDATE mart_campaigns SET usage_count = usage_count + 1 WHERE id = $1`, [campaign.id]);
       }
 
       // Mark whatsapp_sent = true (frontend opens WhatsApp)
@@ -207,6 +255,26 @@ export class OrderService {
       `*Total: ₹${data.total.toFixed(0)}*\n\n` +
       `💳 *Payment:* ${paymentLine}\n` +
       `🕐 *Ordered:* ${timeStr}, ${dateStr}`;
+  }
+
+  static async reverseCampaignRedemption(orderId: string, reason: string, client?: any): Promise<void> {
+    const reverse = async (db: any) => {
+      const reversed = await db.query(
+        `UPDATE mart_campaign_uses
+         SET reversed_at = NOW(), reversal_reason = $2
+         WHERE order_id = $1 AND reversed_at IS NULL
+         RETURNING campaign_id`,
+        [orderId, reason]
+      );
+      for (const use of reversed.rows) {
+        await db.query(
+          `UPDATE mart_campaigns SET usage_count = GREATEST(usage_count - 1, 0), updated_at = NOW() WHERE id = $1`,
+          [use.campaign_id]
+        );
+      }
+    };
+    if (client) return reverse(client);
+    await transaction(reverse);
   }
 
   static async findAll(filters?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }) {
@@ -379,6 +447,9 @@ export class OrderService {
           parseFloat(settings.low_stock_threshold ?? '5'),
           client
         );
+      }
+      if (['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
+        await this.reverseCampaignRedemption(id, status, client);
       }
       await client.query(
         `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_id, actor_name)

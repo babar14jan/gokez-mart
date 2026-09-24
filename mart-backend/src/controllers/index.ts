@@ -15,7 +15,7 @@ import { CustomerAuthService } from '../services/customerAuth.service';
 import { CustomerRequest } from '../middleware';
 import { PushService } from '../services/push.service';
 import { ComplianceService } from '../services/compliance.service';
-import { query } from '../database/db';
+import { query, transaction } from '../database/db';
 import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
 import { config } from '../config';
@@ -103,33 +103,13 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
 
-  // Resolve campaign discount
-  let campaignDiscount = 0;
-  let resolvedCampaignId = campaignId || null;
-  let resolvedCouponCode = couponCode || null;
-  const cartTotal = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
-
-  if (resolvedCampaignId) {
-    try {
-      const camp = await query(`SELECT * FROM mart_campaigns WHERE id = $1 AND status = 'active'`, [resolvedCampaignId]);
-      if (camp.rows[0]) campaignDiscount = CampaignService.calculateDiscount(camp.rows[0], cartTotal);
-    } catch {}
-  } else if (resolvedCouponCode) {
-    try {
-      const camp = await CampaignService.validateCode(resolvedCouponCode, null, cartTotal, storeId || SHAPOORJI_ID);
-      resolvedCampaignId = camp.id;
-      campaignDiscount = CampaignService.calculateDiscount(camp, cartTotal);
-    } catch {}
-  }
-
   const result = await OrderService.create({
     guestName, guestPhone, guestAddress, items, paymentMethod, notes,
     storeId: storeId || SHAPOORJI_ID,
     storeName,
     zoneName, deliveryPreference, deliveryNote,
-    campaignId: resolvedCampaignId,
-    campaignDiscount,
-    couponCodeUsed: resolvedCouponCode,
+    campaignId: campaignId || null,
+    couponCodeUsed: couponCode || null,
     idempotencyKey,
   });
 
@@ -508,10 +488,13 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
   if (['delivered','cancelled','failed_delivery','terminated'].includes(ord.status)) {
     res.status(400).json({ success: false, error: 'Order is already closed' }); return;
   }
-  await query(
-    `UPDATE mart_orders SET status='terminated', termination_reason=$1, terminated_by=$2, terminated_at=NOW(), updated_at=NOW() WHERE id=$3`,
-    [finalReason, req.admin!.id, req.params.id]
-  );
+  await transaction(async client => {
+    await client.query(
+      `UPDATE mart_orders SET status='terminated', termination_reason=$1, terminated_by=$2, terminated_at=NOW(), updated_at=NOW() WHERE id=$3`,
+      [finalReason, req.admin!.id, req.params.id]
+    );
+    await OrderService.reverseCampaignRedemption(req.params.id, 'terminated', client);
+  });
   const MSGS: Record<string,string> = {
     rider_unavailable: '😔 Sorry — your order could not be completed due to a delivery issue. You will not be charged. Please reorder.',
     store_closed:      '😔 Sorry — our store had to close unexpectedly. You will not be charged. Please reorder.',
@@ -725,7 +708,10 @@ export const customerCancelOrder = asyncHandler(async (req: CustomerRequest, res
   if (!['pending', 'confirmed'].includes(order.status)) {
     res.status(400).json({ success: false, error: 'Order cannot be cancelled at this stage' }); return;
   }
-  await query(`UPDATE mart_orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [id]);
+  await transaction(async client => {
+    await client.query(`UPDATE mart_orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [id]);
+    await OrderService.reverseCampaignRedemption(id, 'cancelled', client);
+  });
   // Notify store admins
   if (order.store_id) {
     PushService.notifyStoreAdmins(order.store_id, {
@@ -1224,15 +1210,17 @@ export const adminGetCampaigns = asyncHandler(async (req: AdminRequest, res: Res
 });
 
 export const adminCreateCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const isSuperAdmin = req.admin?.role === 'super_admin';
-  const data = { ...req.body };
-  // Non-super-admin can only create for their own store
-  if (!isSuperAdmin) data.storeId = req.admin?.storeId;
-  const campaign = await CampaignService.create(data, req.admin!.id);
+  if (req.admin?.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Only Super Admin can manage campaigns' }); return;
+  }
+  const campaign = await CampaignService.create(req.body, req.admin.id);
   res.status(201).json({ success: true, data: campaign });
 });
 
 export const adminUpdateCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (req.admin?.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Only Super Admin can manage campaigns' }); return;
+  }
   const campaign = await CampaignService.update(req.params.id, req.body);
   if (!campaign) { res.status(404).json({ success: false, error: 'Campaign not found' }); return; }
   res.json({ success: true, data: campaign });
