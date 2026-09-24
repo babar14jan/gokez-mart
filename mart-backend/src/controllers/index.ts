@@ -1229,9 +1229,13 @@ export const adminUpdateCampaign = asyncHandler(async (req: AdminRequest, res: R
   if (req.admin?.role !== 'super_admin') {
     res.status(403).json({ success: false, error: 'Only Super Admin can manage campaigns' }); return;
   }
-  const campaign = await CampaignService.update(req.params.id, req.body);
-  if (!campaign) { res.status(404).json({ success: false, error: 'Campaign not found' }); return; }
-  res.json({ success: true, data: campaign });
+  try {
+    const campaign = await CampaignService.update(req.params.id, req.body);
+    if (!campaign) { res.status(404).json({ success: false, error: 'Campaign not found' }); return; }
+    res.json({ success: true, data: campaign });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message || 'Campaign could not be updated' });
+  }
 });
 
 export const adminDeleteCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {

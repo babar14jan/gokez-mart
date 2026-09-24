@@ -89,12 +89,41 @@ export class CampaignService {
   }
 
   static async update(id: string, data: any): Promise<any> {
+    const existingResult = await query(`SELECT * FROM mart_campaigns WHERE id = $1`, [id]);
+    const existing = existingResult.rows[0];
+    if (!existing) return null;
+
     const financialFields = new Set([
       'discountType', 'discountValue', 'maxDiscount', 'minOrderAmount', 'couponCode',
       'perCustomerLimit', 'usageLimit', 'storeId', 'eligibilityType', 'inactiveDays',
       'newCustomersOnly', 'targetCustomerIds',
     ]);
-    if (Object.keys(data).some(key => financialFields.has(key))) {
+    const normalizedCouponCode = (value: unknown) => value ? String(value).trim().toUpperCase() : null;
+    const numberChanged = (value: unknown, stored: unknown) => value !== undefined && Number(value) !== Number(stored);
+    const financialRulesChanged =
+      (data.discountType !== undefined && data.discountType !== existing.discount_type) ||
+      numberChanged(data.discountValue, existing.discount_value) ||
+      numberChanged(data.maxDiscount, existing.max_discount) ||
+      numberChanged(data.minOrderAmount, existing.min_order_amount) ||
+      (data.couponCode !== undefined && normalizedCouponCode(data.couponCode) !== existing.coupon_code) ||
+      numberChanged(data.perCustomerLimit, existing.per_customer_limit) ||
+      numberChanged(data.usageLimit, existing.usage_limit) ||
+      (data.storeId !== undefined && data.storeId !== existing.store_id) ||
+      (data.eligibilityType !== undefined && data.eligibilityType !== existing.eligibility_type) ||
+      numberChanged(data.inactiveDays, existing.inactive_days) ||
+      (data.newCustomersOnly !== undefined && data.newCustomersOnly !== existing.new_customers_only);
+    let targetCustomersChanged = false;
+    if (Array.isArray(data.targetCustomerIds)) {
+      const targetResult = await query<{ customer_id: string }>(
+        `SELECT customer_id FROM mart_campaign_targets WHERE campaign_id = $1 ORDER BY customer_id`, [id]
+      );
+      const existingTargets = targetResult.rows.map(target => target.customer_id);
+      const submittedTargets = [...new Set(data.targetCustomerIds)].sort();
+      targetCustomersChanged = existingTargets.length !== submittedTargets.length ||
+        existingTargets.some((customerId, index) => customerId !== submittedTargets[index]);
+    }
+
+    if (financialRulesChanged || targetCustomersChanged) {
       const uses = await query(`SELECT 1 FROM mart_campaign_uses WHERE campaign_id = $1 LIMIT 1`, [id]);
       if (uses.rows.length) {
         throw new Error('Financial rules and audience cannot be changed after a campaign has been redeemed');
