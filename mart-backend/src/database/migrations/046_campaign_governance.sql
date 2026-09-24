@@ -37,9 +37,3 @@ CREATE INDEX IF NOT EXISTS idx_campaign_targets_customer
   ON mart_campaign_targets(customer_id, campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_uses_active_customer
   ON mart_campaign_uses(campaign_id, customer_id) WHERE reversed_at IS NULL;
-
--- Retire the old code-seeded offer. Preserve it and all historical redemptions for audit.
-UPDATE mart_campaigns
-SET status = 'archived', updated_at = NOW()
-WHERE title = 'Welcome Offer'
-  AND description = 'Welcome to Gokez Mart! Enjoy ₹50 off on your very first order. No minimum order required.';
