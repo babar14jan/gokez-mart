@@ -1214,6 +1214,7 @@ export const adminGetCampaigns = asyncHandler(async (req: AdminRequest, res: Res
   const isSuperAdmin = req.admin?.role === 'super_admin';
   const storeId = resolveStoreId(req);
   const campaigns = await CampaignService.findAll(storeId, isSuperAdmin);
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.json({ success: true, data: campaigns });
 });
 
