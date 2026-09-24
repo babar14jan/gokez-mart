@@ -188,8 +188,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
       if (resolvedAddress) addAddress({ label: 'Home', address: resolvedAddress, isDefault: true });
       clearCart();
       onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined);
-    } catch {
-      setError('Failed to place order. Please try again.');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to place order. Please try again.');
     } finally { setLoading(false); }
   };
 
