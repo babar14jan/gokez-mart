@@ -50,10 +50,12 @@ npm run build --workspace=mart-backend
 ### mart-user (Customer App)
 - Build command: `npm ci && npm run build --workspace=mart-user`
 - Build output: `mart-user/dist`
+- Build variable: `VITE_API_URL=https://<Railway public domain>/api/v1`
 
 ### mart-hub (Gokez Hub)
 - Build command: `npm ci && npm run build --workspace=mart-hub`
 - Build output: `mart-hub/dist`
+- Build variable: `VITE_API_URL=https://<Railway public domain>/api/v1`
 
 ## Architecture
 

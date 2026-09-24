@@ -16,5 +16,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_inventory_order_deduction
 CREATE UNIQUE INDEX IF NOT EXISTS uq_campaign_uses_order ON mart_campaign_uses(order_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_pending_deletion_request
   ON mart_deletion_requests(customer_id) WHERE status = 'pending';
+
+DELETE FROM mart_consents
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+           ROW_NUMBER() OVER (
+             PARTITION BY customer_id, consent_type
+             ORDER BY created_at DESC, id DESC
+           ) AS duplicate_rank
+    FROM mart_consents
+    WHERE consent_type = 'personal_data'
+  ) duplicate_consents
+  WHERE duplicate_rank > 1
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personal_data_consent
   ON mart_consents(customer_id, consent_type) WHERE consent_type = 'personal_data';

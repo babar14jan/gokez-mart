@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Search, X, CheckCircle } from 'lucide-react';
-import { storeApi } from './services/api';
+import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
@@ -22,6 +22,16 @@ import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
+
+const SHAPOORJI_ZONE: MartZone = {
+  id: 'shapoorji-default',
+  storeId: '00000000-0000-0000-0000-000000000001',
+  name: 'Shapoorji',
+  lat: 22.565717182227967,
+  lng: 88.51426843552692,
+  radiusKm: 5,
+  isActive: true,
+};
 
 const OrderHistoryPage = lazy(() => import('./pages/OrderHistoryPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
@@ -89,11 +99,13 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<PublicSettings>(DEFAULT_SETTINGS);
   const [zones, setZones] = useState<MartZone[]>([]);
-  const [selectedZone, setSelectedZone] = useState<MartZone | null>(null);
+  const [selectedZone, setSelectedZone] = useState<MartZone | null>(SHAPOORJI_ZONE);
   const [zoneGpsConfirmed, setZoneGpsConfirmed] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogRequest, setCatalogRequest] = useState(0);
 
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
@@ -122,10 +134,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isApiConfigured) {
+      setCatalogError('Store service is not configured. Please try again later.');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setCatalogError(null);
     Promise.all([
       storeApi.getCategories(),
-      storeApi.getProducts(),
-      storeApi.getSettings(),
+      storeApi.getProducts(undefined, SHAPOORJI_ZONE.storeId),
+      storeApi.getSettings(SHAPOORJI_ZONE.storeId),
       storeApi.getZones(),
     ]).then(([catRes, prodRes, settingsRes, zonesRes]) => {
       setCategories(catRes.data.data || []);
@@ -134,9 +153,7 @@ export default function App() {
       const fetchedZones = zonesRes.data.data || [];
       setZones(fetchedZones);
       // Default to first zone (Shapoorji) so UI matches what's loaded
-      if (fetchedZones.length > 0) {
-        setSelectedZone(fetchedZones[0]);
-      }
+      if (fetchedZones.length > 0) setSelectedZone(fetchedZones.find(zone => zone.storeId === SHAPOORJI_ZONE.storeId) || fetchedZones[0]);
       if (fetchedZones.length > 0) {
         // Ask location on first visit, respect app-level preference after that
         const locationEnabled = localStorage.getItem('mart_location_enabled') !== 'false';
@@ -182,8 +199,10 @@ export default function App() {
           }
         }
       }
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    }).catch(() => {
+      setCatalogError('Shapoorji store is temporarily unavailable. Check your connection and try again.');
+    }).finally(() => setLoading(false));
+  }, [catalogRequest]);
 
   // Silent refresh — products + settings for current store every 3 mins + on tab focus
   useEffect(() => {
@@ -505,6 +524,15 @@ export default function App() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : catalogError ? (
+            <div className="max-w-md mx-auto text-center py-16 px-5">
+              <p className="text-base font-semibold text-gray-900 dark:text-white mb-2">Store temporarily unavailable</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">{catalogError}</p>
+              <button onClick={() => setCatalogRequest(request => request + 1)}
+                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors">
+                Try Again
+              </button>
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="text-center py-16">
