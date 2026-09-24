@@ -26,6 +26,7 @@ export interface CreateOrderDto {
   campaignId?: string | null;
   campaignDiscount?: number;
   couponCodeUsed?: string | null;
+  customerId?: string | null;
   idempotencyKey: string;
 }
 
@@ -49,7 +50,6 @@ export class OrderService {
     const deliveryCharge = parseFloat(settings.delivery_charge || '15');
     const freeAbove = parseFloat(settings.free_delivery_above || '150');
 
-    const subtotal = data.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     // Retry on order number collision (extremely rare but safe)
     let orderNumber = this.generateOrderNumber();
     const existing = await query(`SELECT 1 FROM mart_orders WHERE order_number = $1`, [orderNumber]);
@@ -57,6 +57,7 @@ export class OrderService {
 
     return transaction(async (client) => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [data.idempotencyKey]);
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-order:${data.guestPhone}`]);
       const prior = await client.query(
         `SELECT id, order_number as "orderNumber", subtotal::float, delivery_charge::float as "deliveryCharge", total::float
          FROM mart_orders WHERE idempotency_key = $1`,
@@ -82,6 +83,37 @@ export class OrderService {
         `SELECT id FROM mart_customers WHERE phone = $1`, [data.guestPhone]
       );
       const customerId = customerResult.rows[0]?.id || null;
+      if ((data.campaignId || data.couponCodeUsed) && data.customerId !== customerId) {
+        throw new Error('Sign in with the ordering phone number to redeem an offer');
+      }
+
+      const productIds = new Set<string>();
+      const resolvedItems: OrderItem[] = [];
+      for (const item of data.items) {
+        if (productIds.has(item.productId)) throw new Error('Each product can only be included once per order');
+        productIds.add(item.productId);
+        const product = await client.query(
+          `SELECT p.name, sp.price::float AS price, sp.unit
+           FROM mart_store_products sp
+           JOIN mart_products p ON p.id = sp.product_id
+           WHERE sp.store_id = $1 AND sp.product_id = $2
+             AND sp.is_available = true AND sp.availability_status = 'available'
+           FOR SHARE`,
+          [data.storeId, item.productId]
+        );
+        const catalogItem = product.rows[0] as { name: string; price: number; unit: string } | undefined;
+        if (!catalogItem || catalogItem.unit !== item.unit) {
+          throw new Error('One or more products are unavailable or have changed');
+        }
+        resolvedItems.push({
+          productId: item.productId,
+          productName: catalogItem.name,
+          unit: catalogItem.unit,
+          price: catalogItem.price,
+          quantity: item.quantity,
+        });
+      }
+      const subtotal = resolvedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
       let campaign: any = null;
       if (data.campaignId || data.couponCodeUsed) {
@@ -101,6 +133,9 @@ export class OrderService {
             (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) ||
             subtotal < Number(campaign.min_order_amount)) {
           throw new Error('Campaign is no longer eligible for this order');
+        }
+        if (data.campaignId && campaign.coupon_code) {
+          throw new Error('Enter the coupon code to redeem this campaign');
         }
 
         const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
@@ -177,7 +212,7 @@ export class OrderService {
       );
 
       // Create order items
-      for (const item of data.items) {
+      for (const item of resolvedItems) {
         await client.query(
           `INSERT INTO mart_order_items
              (id, order_id, product_id, product_name, unit, price, quantity, total)
@@ -211,7 +246,7 @@ export class OrderService {
         whatsappMessage: this.buildWhatsAppMessage({
           orderNumber, guestName: data.guestName,
           guestPhone: data.guestPhone, guestAddress: data.guestAddress,
-          items: data.items, subtotal, deliveryCharge: actualDelivery,
+          items: resolvedItems, subtotal, deliveryCharge: actualDelivery,
           total, paymentMethod: data.paymentMethod,
           storeName: settings.store_name || 'Gokez Mart',
           upiPhone: settings.upi_phone || '',

@@ -13,11 +13,14 @@ export class CampaignService {
       params.push(storeId);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const targetCustomerIds = superAdmin
+      ? `COALESCE((SELECT json_agg(ct.customer_id) FROM mart_campaign_targets ct WHERE ct.campaign_id = c.id), '[]'::json)`
+      : `'[]'::json`;
     const result = await query(
       `SELECT c.*,
               a.name as "createdByName",
               s.name as "storeName",
-              COALESCE((SELECT json_agg(ct.customer_id) FROM mart_campaign_targets ct WHERE ct.campaign_id = c.id), '[]'::json) as "targetCustomerIds",
+              ${targetCustomerIds} as "targetCustomerIds",
               (SELECT COUNT(*) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id AND cu.reversed_at IS NULL)::int as "useCount",
               (SELECT COALESCE(SUM(cu.discount_applied),0) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id AND cu.reversed_at IS NULL)::float as "totalDiscount"
        FROM mart_campaigns c
@@ -86,6 +89,17 @@ export class CampaignService {
   }
 
   static async update(id: string, data: any): Promise<any> {
+    const financialFields = new Set([
+      'discountType', 'discountValue', 'maxDiscount', 'minOrderAmount', 'couponCode',
+      'perCustomerLimit', 'usageLimit', 'storeId', 'eligibilityType', 'inactiveDays',
+      'newCustomersOnly', 'targetCustomerIds',
+    ]);
+    if (Object.keys(data).some(key => financialFields.has(key))) {
+      const uses = await query(`SELECT 1 FROM mart_campaign_uses WHERE campaign_id = $1 LIMIT 1`, [id]);
+      if (uses.rows.length) {
+        throw new Error('Financial rules and audience cannot be changed after a campaign has been redeemed');
+      }
+    }
     if (data.eligibilityType === 'inactive_customers' && (!Number.isInteger(Number(data.inactiveDays)) || Number(data.inactiveDays) < 1)) {
       throw new Error('Inactive customer campaigns require a positive inactivity period');
     }

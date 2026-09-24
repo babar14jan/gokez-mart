@@ -353,7 +353,7 @@ export default function CampaignsPage() {
                       <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Carousel Image <span className="text-gray-400 font-normal">(optional)</span></label>
                       <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 dark:border-slate-600 rounded-xl cursor-pointer hover:border-emerald-400 transition-colors">
                         {uploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-500" /> : <Plus className="w-4 h-4 text-gray-400" />}
-                        <span className="text-xs text-gray-500">{carouselImageFile ? carouselImageFile.name : 'Upload image (replaces gradient)'}</span>
+                        <span className="text-xs text-gray-500">{carouselImageFile ? carouselImageFile.name : 'Upload image (stored as WebP)'}</span>
                         <input type="file" accept="image/*" className="hidden" onChange={e => setCarouselImageFile(e.target.files?.[0] || null)} />
                       </label>
                     </div>

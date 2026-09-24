@@ -19,12 +19,15 @@ export const useThemeStore = create<ThemeState>()(
   )
 );
 
-// Apply on load — default light unless user explicitly chose dark
+// Apply the persisted color before React renders so installed PWAs do not flash
+// a light or navy status area when reopening in dark mode.
 const stored = localStorage.getItem('mart-theme');
 if (stored) {
   try {
     const { state } = JSON.parse(stored);
-    document.documentElement.classList.toggle('dark', state?.isDark === true);
+    const isDark = state?.isDark === true;
+    document.documentElement.classList.toggle('dark', isDark);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#18191a' : '#0f172a');
   } catch { document.documentElement.classList.remove('dark'); }
 } else {
   document.documentElement.classList.remove('dark');

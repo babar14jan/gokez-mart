@@ -33,14 +33,12 @@ async function prepareImage(buffer: Buffer, maxDimension: number): Promise<Prepa
   });
   const metadata = await image.metadata();
 
-  if (metadata.format === 'jpeg') {
-    return { buffer: await image.jpeg({ quality: 82, mozjpeg: true }).toBuffer(), extension: 'jpg', mimeType: 'image/jpeg' };
-  }
-  if (metadata.format === 'png') {
-    return { buffer: await image.png({ compressionLevel: 9 }).toBuffer(), extension: 'png', mimeType: 'image/png' };
-  }
-  if (metadata.format === 'webp') {
-    return { buffer: await image.webp({ quality: 82, effort: 4 }).toBuffer(), extension: 'webp', mimeType: 'image/webp' };
+  if (metadata.format === 'jpeg' || metadata.format === 'png' || metadata.format === 'webp') {
+    return {
+      buffer: await image.webp({ quality: 82, effort: 4 }).toBuffer(),
+      extension: 'webp',
+      mimeType: 'image/webp',
+    };
   }
   throw new Error('Only JPEG, PNG, and WebP images are supported');
 }
@@ -83,7 +81,7 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   res.json({ success: true, data: settings });
 });
 
-export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
+export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const { guestName, guestPhone, guestAddress, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode } = req.body;
   if (!guestName || !guestPhone || !guestAddress || !items?.length || !paymentMethod) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
@@ -92,7 +90,7 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   const cleanPhone = String(guestPhone).replace(/\D/g, '');
   if (cleanPhone.length !== 10) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
   if (!['cod', 'upi', 'phonepay'].includes(paymentMethod)) { res.status(400).json({ success: false, error: 'Invalid payment method' }); return; }
-  if (!Array.isArray(items) || !items.every((i: any) => i.productId && i.price > 0 && Number.isInteger(i.quantity) && i.quantity > 0)) {
+  if (!Array.isArray(items) || !items.every((i: any) => i.productId && i.unit && Number.isInteger(i.quantity) && i.quantity > 0)) {
     res.status(400).json({ success: false, error: 'Invalid items' }); return;
   }
   const idempotencyKey = req.header('Idempotency-Key');
@@ -101,6 +99,9 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   }
   if (campaignId && couponCode) {
     res.status(400).json({ success: false, error: 'Select either an offer or a coupon code, not both' }); return;
+  }
+  if ((campaignId || couponCode) && (!req.customer || req.customer.phone !== cleanPhone)) {
+    res.status(401).json({ success: false, error: 'Sign in with the ordering phone number to redeem an offer' }); return;
   }
   // Fetch store name for fulfilled_by
   const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
@@ -113,6 +114,7 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
     zoneName, deliveryPreference, deliveryNote,
     campaignId: campaignId || null,
     couponCodeUsed: couponCode || null,
+    customerId: req.customer?.id || null,
     idempotencyKey,
   });
 
@@ -1206,6 +1208,9 @@ export const adminBulkRestock = asyncHandler(async (req: AdminRequest, res: Resp
 // ── Campaign controllers ──────────────────────────────────────────────────────
 
 export const adminGetCampaigns = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (!req.admin || !['super_admin', 'store_owner', 'store_manager'].includes(req.admin.role)) {
+    res.status(403).json({ success: false, error: 'Access denied' }); return;
+  }
   const isSuperAdmin = req.admin?.role === 'super_admin';
   const storeId = resolveStoreId(req);
   const campaigns = await CampaignService.findAll(storeId, isSuperAdmin);

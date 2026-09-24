@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticate, requireSuperAdmin, requireRole, authenticateCustomer } from '../middleware';
+import { authenticate, requireSuperAdmin, requireRole, authenticateCustomer, authenticateCustomerIfPresent } from '../middleware';
 import * as ctrl from '../controllers';
 
 const router = Router();
@@ -28,7 +28,7 @@ router.get('/categories',          ctrl.getCategories);
 router.get('/products',            ctrl.getProducts);        // ?storeId=
 router.get('/products/:id',        ctrl.getProduct);         // ?storeId=
 router.get('/settings/public',     ctrl.getPublicSettings);  // ?storeId=
-router.post('/orders',             ctrl.placeOrder);
+router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────

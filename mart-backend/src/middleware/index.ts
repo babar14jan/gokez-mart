@@ -70,6 +70,13 @@ export const authenticateCustomer = async (req: CustomerRequest, res: Response, 
   }
 };
 
+// Guest checkout remains available, but financial benefits require a verified
+// customer identity. Invalid supplied tokens are rejected rather than ignored.
+export const authenticateCustomerIfPresent = async (req: CustomerRequest, res: Response, next: NextFunction): Promise<void> => {
+  if (!req.headers.authorization) { next(); return; }
+  await authenticateCustomer(req, res, next);
+};
+
 export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) =>
   (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);

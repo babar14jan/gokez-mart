@@ -176,11 +176,14 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
           </>
         ) : step === 'phone' ? (
           <>
-            <div className="flex justify-center mb-5">
+            <div className="flex flex-col items-center mb-5">
               <img src="/mart_brand_new.png" alt="Gokez Mart"
                 className="h-24 w-auto object-contain dark:hidden" />
               <img src="/mart_brand_dark.png" alt="Gokez Mart"
                 className="h-24 w-auto object-contain hidden dark:block" />
+              <p className="-mt-2 text-[11px] font-black uppercase tracking-wide text-black dark:text-slate-200">
+                Shop Local <span className="align-middle">&bull;</span> Support Local
+              </p>
             </div>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-5 text-center">
               Enter your mobile number to continue
