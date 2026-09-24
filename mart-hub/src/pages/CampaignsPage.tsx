@@ -128,6 +128,29 @@ export default function CampaignsPage() {
         status: form.status,
         validFrom: form.validFrom || undefined, validUntil: form.validUntil || undefined,
       };
+      if (editing) {
+        const sameNumber = (value: unknown, stored: unknown) =>
+          value === undefined ? stored == null : Number(value) === Number(stored);
+        const sameCode = (value: unknown, stored: unknown) =>
+          (value ? String(value).trim().toUpperCase() : null) === (stored || null);
+        const sameTargets = (value: string[] | undefined, stored: string[] | undefined) => {
+          if (!value) return true;
+          const selected = [...new Set(value)].sort();
+          const existing = [...new Set(stored || [])].sort();
+          return selected.length === existing.length && selected.every((customerId, index) => customerId === existing[index]);
+        };
+
+        if (data.discountType === editing.discount_type) delete (data as any).discountType;
+        if (sameNumber(data.discountValue, editing.discount_value)) delete (data as any).discountValue;
+        if (sameNumber(data.maxDiscount, editing.max_discount)) delete (data as any).maxDiscount;
+        if (sameNumber(data.minOrderAmount, editing.min_order_amount)) delete (data as any).minOrderAmount;
+        if (sameCode(data.couponCode, editing.coupon_code)) delete (data as any).couponCode;
+        if (sameNumber(data.perCustomerLimit, editing.per_customer_limit)) delete (data as any).perCustomerLimit;
+        if (sameNumber(data.usageLimit, editing.usage_limit)) delete (data as any).usageLimit;
+        if (data.eligibilityType === editing.eligibility_type) delete (data as any).eligibilityType;
+        if (sameNumber(data.inactiveDays, editing.inactive_days)) delete (data as any).inactiveDays;
+        if (sameTargets(data.targetCustomerIds, editing.targetCustomerIds)) delete (data as any).targetCustomerIds;
+      }
       if (editing) await campaignsApi.update(editing.id, data);
       else await campaignsApi.create(data);
       setShowModal(false);
