@@ -123,7 +123,7 @@ export default function InventoryPage() {
 
     setSaving(true);
     try {
-      await inventoryApi.bulkRestock(toSave, note, storeId);
+      await inventoryApi.bulkRestock(toSave, note, storeId, crypto.randomUUID());
       setEditMode(false);
       setEditRows({});
       setNote('');

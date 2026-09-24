@@ -81,7 +81,6 @@ router.delete('/admin/users/:id', authenticate, requireSuperAdmin, ctrl.adminDel
 // ── Admin orders ──────────────────────────────────────────────────────────────
 router.get('/admin/orders',            authenticate, ctrl.adminGetOrders);       // ?storeId=
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
-router.post("/admin/orders/batch-dispatch", authenticate, ctrl.adminBatchDispatch);
 router.put("/admin/orders/:id/terminate", authenticate, ctrl.adminTerminateOrder);// ── Admin customers ───────────────────────────────────────────────────────────
 router.get('/admin/customers',         authenticate, ctrl.adminGetCustomers);
 

@@ -63,7 +63,7 @@ export const authApi = {
   cancelOrder: (orderId: string) => api.put(`/auth/orders/${orderId}/cancel`),
   requestDeletion: (reason?: string) => api.post('/compliance/deletion', { reason }),
   getDeletionStatus: () => api.get('/compliance/deletion'),
-  submitGrievance: (subject: string, description: string) => api.post('/compliance/grievances', { subject, description }),
+  submitGrievance: (subject: string, description: string, idempotencyKey: string) => api.post('/compliance/grievances', { subject, description }, { headers: { 'Idempotency-Key': idempotencyKey } }),
   getGrievances: () => api.get('/compliance/grievances'),
   requestDataExport: () => api.post('/compliance/data-export'),
   getDataExport: () => api.get('/compliance/data-export'),
@@ -102,14 +102,14 @@ export const storeApi = {
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
     paymentMethod: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;
-  }) => api.post('/orders', data),
+  }, idempotencyKey: string) => api.post('/orders', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
   trackOrders: () => api.get('/orders/track'),
 };
 
 // ── Feedback ────────────────────────────────────────────────────────────────────────────────
 export const feedbackApi = {
-  submit: (data: { rating: number; category: string; message?: string; storeId?: string; orderId?: string }) =>
-    api.post('/feedback', data),
+  submit: (data: { rating: number; category: string; message?: string; storeId?: string; orderId?: string }, idempotencyKey: string) =>
+    api.post('/feedback', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
 };
 
 // ── Campaigns (public) ────────────────────────────────────────────────────────────────────────────────

@@ -129,7 +129,14 @@ app.use('/api/v1/orders', rateLimit({
 }));
 
 // ── Compression & logging ─────────────────────────────────────────────────────
-app.use(compression());
+app.use(compression({
+  threshold: 1024,
+  level: 6,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+}));
 if (config.env !== 'test') {
   app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));
 }

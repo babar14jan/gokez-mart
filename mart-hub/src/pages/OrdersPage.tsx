@@ -4,7 +4,7 @@ import {
   Navigation, Package, XCircle, CheckSquare, Square,
   Truck, Clock, IndianRupee, Search, X,
 } from 'lucide-react';
-import { ordersApi } from '../services/api';
+import { ordersApi, teamApi } from '../services/api';
 import { printReceipt } from '../utils/printReceipt';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
@@ -56,9 +56,9 @@ const NEXT_ACTION: Record<string, { label: string; status: string; color: string
   pending:          { label: 'Confirm Order',     status: 'confirmed',        color: 'bg-blue-500 hover:bg-blue-600 text-white' },
   confirmed:        { label: 'Start Preparing',   status: 'preparing',        color: 'bg-indigo-500 hover:bg-indigo-600 text-white' },
   preparing:        { label: 'Ready to Pickup',   status: 'ready_to_pickup',  color: 'bg-orange-500 hover:bg-orange-600 text-white' },
-  ready_to_pickup:  { label: 'Out for Delivery',  status: 'out_for_delivery', color: 'bg-violet-500 hover:bg-violet-600 text-white' },
-  out_for_delivery: { label: 'Picked Up',         status: 'picked_up',        color: 'bg-amber-500 hover:bg-amber-600 text-white' },
-  picked_up:        { label: 'Mark Delivered',    status: 'delivered',        color: 'bg-emerald-500 hover:bg-emerald-600 text-white' },
+  ready_to_pickup:  null,
+  out_for_delivery: null,
+  picked_up:        null,
   delivered: null, cancelled: null, failed_delivery: null,
 };
 
@@ -157,6 +157,7 @@ export default function OrdersPage() {
   const [batching, setBatching] = useState(false);
   const [terminating, setTerminating] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancellationReason, setCancellationReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [statusOpen, setStatusOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -164,11 +165,15 @@ export default function OrdersPage() {
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [deliveryHandlers, setDeliveryHandlers] = useState<any[]>([]);
+  const [assigningOrder, setAssigningOrder] = useState<string | null>(null);
+  const [assigneeId, setAssigneeId] = useState('');
 
-  const { role } = useAuthStore();
+  const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
   const canManage    = ['super_admin', 'store_owner', 'sales_manager', 'store_manager'].includes(role || '');
-  const canDispatch  = ['super_admin', 'store_owner', 'sales_manager', 'store_manager'].includes(role || '');
+  const canDispatch = false;
+  const canAssignDelivery = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
 
   const load = () =>
     ordersApi.getAll({ limit: 500, storeId: getActiveStoreId() } as any)
@@ -176,6 +181,11 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    teamApi.getStoreTeam(getActiveStoreId())
+      .then(r => setDeliveryHandlers((r.data.data || []).filter((member: any) => member.assignmentActive && ['store_owner', 'store_manager', 'staff', 'delivery_staff'].includes(member.role))))
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') load(); };
     document.addEventListener('visibilitychange', onVisible);
@@ -195,6 +205,23 @@ export default function OrdersPage() {
     finally { setTerminating(null); }
   };
 
+  const handleStopOrder = async (order: any, isEarly: boolean) => {
+    if (!cancellationReason) return;
+    if (isEarly) {
+      setUpdating(order.id);
+      try {
+        await ordersApi.updateStatus(order.id, 'cancelled', undefined, cancellationReason);
+        await load();
+      } finally {
+        setUpdating(null);
+      }
+    } else {
+      await handleTerminate(order.id, cancellationReason);
+    }
+    setCancellingId(null);
+    setCancellationReason('');
+  };
+
   const handleBatchDispatch = async () => {
     if (batchSelected.length === 0) return;
     setBatching(true);
@@ -207,6 +234,15 @@ export default function OrdersPage() {
     setUpdating(id);
     try { await ordersApi.updateStatus(id, status, failureReason); await load(); }
     finally { setUpdating(null); }
+  };
+
+  const assignForDelivery = async (orderId: string) => {
+    if (!assigneeId) return;
+    setUpdating(orderId);
+    try {
+      await ordersApi.updateStatus(orderId, 'ready_to_pickup', undefined, undefined, assigneeId);
+      setAssigningOrder(null); setAssigneeId(''); await load();
+    } finally { setUpdating(null); }
   };
 
   const filteredOrders = useMemo(() => {
@@ -478,6 +514,11 @@ export default function OrdersPage() {
 
                 {/* Progress bar — active orders only */}
                 {isActive && <OrderProgress status={order.status} />}
+                {['store_owner', 'store_manager'].includes(role || '') && order.statusEvents?.length > 0 && (
+                  <p className="px-4 pb-2 text-[10px] text-gray-500 dark:text-slate-400">
+                    {order.statusEvents[order.statusEvents.length - 1].toStatus.replaceAll('_', ' ')} by {order.statusEvents[order.statusEvents.length - 1].actorName}
+                  </p>
+                )}
 
                 {/* Action bar */}
                 {order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'terminated' && (
@@ -498,7 +539,7 @@ export default function OrdersPage() {
                     )}
 
                     {/* Primary next action */}
-                    {nextAction && (
+                    {nextAction && order.status !== 'preparing' && (
                       <button
                         onClick={e => updateStatus(order.id, nextAction.status, e)}
                         disabled={isUpdating}
@@ -507,6 +548,28 @@ export default function OrdersPage() {
                           ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           : nextAction.label}
                       </button>
+                    )}
+
+                    {order.status === 'preparing' && canAssignDelivery && (
+                      assigningOrder === order.id ? (
+                        <div className="flex flex-1 items-center gap-2">
+                          <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
+                            className="flex-1 min-w-0 px-2.5 py-2.5 text-xs border border-orange-200 dark:border-orange-800 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none">
+                            <option value="">Select delivery handler</option>
+                            {currentUserId && <option value={currentUserId}>Myself ({name || username})</option>}
+                            {deliveryHandlers.filter(member => member.adminId !== currentUserId).map(member => (
+                              <option key={member.adminId} value={member.adminId}>{member.name || member.username}</option>
+                            ))}
+                          </select>
+                          <button onClick={() => assignForDelivery(order.id)} disabled={!assigneeId || isUpdating}
+                            className="px-3 py-2.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl disabled:opacity-50">Ready</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setAssigningOrder(order.id); setAssigneeId(currentUserId || ''); }}
+                          className="flex-1 py-2.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors">
+                          Assign &amp; Ready for Pickup
+                        </button>
+                      )
                     )}
 
                     {/* Delivery failed dropdown */}
@@ -534,36 +597,35 @@ export default function OrdersPage() {
                       const isLate  = !isEarly;
                       // Late stage: only super_admin + store_owner can stop
                       if (isLate && !canTerminate) return null;
-                      const isProcessing = cancellingId === order.id || terminating === order.id;
+                      const isProcessing = updating === order.id || terminating === order.id;
                       return cancellingId === order.id ? (
-                        <select defaultValue=""
-                          onChange={async e => {
-                            const reason = e.target.value;
-                            if (!reason) return;
-                            e.target.value = '';
-                            setCancellingId(null);
-                            if (isEarly) {
-                              await ordersApi.updateStatus(order.id, 'cancelled', undefined, reason);
-                              await load();
-                            } else {
-                              await handleTerminate(order.id, reason);
-                            }
-                          }}
-                          onClick={e => e.stopPropagation()}
-                          disabled={isProcessing}
-                          className="text-xs border border-red-200 dark:border-red-800 rounded-xl px-2.5 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 focus:outline-none cursor-pointer font-semibold disabled:opacity-50">
-                          <option value="" disabled>🛑 Why stopping?</option>
-                          {isEarly && <option value="customer_request">👤 Customer request</option>}
-                          {isEarly && <option value="duplicate_order">📋 Duplicate order</option>}
-                          <option value="out_of_stock">📦 Out of stock</option>
-                          <option value="store_closed">🏪 Store closed</option>
-                          {!isEarly && <option value="outside_area">📍 Outside delivery area</option>}
-                          {!isEarly && <option value="rider_unavailable">🛵 Rider unavailable</option>}
-                          {!isEarly && <option value="technical_issue">⚙️ Technical issue</option>}
-                          <option value="other">💬 Other</option>
-                        </select>
+                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <select value={cancellationReason}
+                            onChange={e => setCancellationReason(e.target.value)}
+                            disabled={isProcessing}
+                            className="text-xs border border-red-200 dark:border-red-800 rounded-xl px-2.5 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 focus:outline-none cursor-pointer font-semibold disabled:opacity-50">
+                            <option value="" disabled>Why stopping?</option>
+                            {isEarly && <option value="customer_request">Customer request</option>}
+                            {isEarly && <option value="duplicate_order">Duplicate order</option>}
+                            <option value="out_of_stock">Out of stock</option>
+                            <option value="store_closed">Store closed</option>
+                            {!isEarly && <option value="outside_area">Outside delivery area</option>}
+                            {!isEarly && <option value="rider_unavailable">Rider unavailable</option>}
+                            {!isEarly && <option value="technical_issue">Technical issue</option>}
+                            <option value="other">Other</option>
+                          </select>
+                          <button onClick={() => handleStopOrder(order, isEarly)} disabled={!cancellationReason || isProcessing}
+                            className="px-3 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl disabled:opacity-50">
+                            Confirm
+                          </button>
+                          <button onClick={() => { setCancellingId(null); setCancellationReason(''); }} disabled={isProcessing}
+                            className="p-2 text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700 rounded-xl disabled:opacity-50"
+                            aria-label="Go back without stopping this order" title="Back">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       ) : (
-                        <button onClick={e => { e.stopPropagation(); setCancellingId(order.id); }} disabled={isUpdating}
+                        <button onClick={e => { e.stopPropagation(); setCancellationReason(''); setCancellingId(order.id); }} disabled={isUpdating}
                           className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50">
                           <XCircle className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Stop Order</span>

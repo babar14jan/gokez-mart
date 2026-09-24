@@ -15,6 +15,7 @@ export interface PushPayload {
   body: string;
   icon?: string;
   url?: string;
+  tag?: string;
 }
 
 export class PushService {
@@ -48,6 +49,14 @@ export class PushService {
     const result = await query<{ endpoint: string; p256dh: string; auth: string }>(
       `SELECT endpoint, p256dh, auth FROM mart_push_subscriptions WHERE customer_id = $1`,
       [customerId]
+    );
+    await this.sendToSubscriptions(result.rows, payload);
+  }
+
+  static async notifyAdmin(adminId: string, payload: PushPayload): Promise<void> {
+    const result = await query<{ endpoint: string; p256dh: string; auth: string }>(
+      `SELECT endpoint, p256dh, auth FROM mart_push_subscriptions WHERE admin_id = $1`,
+      [adminId]
     );
     await this.sendToSubscriptions(result.rows, payload);
   }

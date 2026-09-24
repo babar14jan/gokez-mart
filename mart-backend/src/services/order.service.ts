@@ -26,6 +26,7 @@ export interface CreateOrderDto {
   campaignId?: string | null;
   campaignDiscount?: number;
   couponCodeUsed?: string | null;
+  idempotencyKey: string;
 }
 
 export class OrderService {
@@ -55,6 +56,16 @@ export class OrderService {
     if (existing.rows.length > 0) orderNumber = this.generateOrderNumber();
 
     return transaction(async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [data.idempotencyKey]);
+      const prior = await client.query(
+        `SELECT id, order_number as "orderNumber", subtotal::float, delivery_charge::float as "deliveryCharge", total::float
+         FROM mart_orders WHERE idempotency_key = $1`,
+        [data.idempotencyKey]
+      );
+      if (prior.rows[0]) {
+        return { ...prior.rows[0], orderId: prior.rows[0].id, storeName: data.storeName || 'Gokez Mart', duplicate: true };
+      }
+
       // Upsert customer by phone
       await client.query(
         `INSERT INTO mart_customers (id, phone, name, address, order_count, total_spent)
@@ -73,6 +84,29 @@ export class OrderService {
       );
       const customerId = customerResult.rows[0]?.id || null;
 
+      if (data.campaignId && campaignDiscount > 0) {
+        const campaignResult = await client.query(
+          `SELECT * FROM mart_campaigns WHERE id = $1 FOR UPDATE`, [data.campaignId]
+        );
+        const campaign = campaignResult.rows[0];
+        const now = new Date();
+        if (!campaign || campaign.status !== 'active' ||
+            (campaign.store_id && campaign.store_id !== data.storeId) ||
+            (campaign.valid_from && new Date(campaign.valid_from) > now) ||
+            (campaign.valid_until && new Date(campaign.valid_until) < now) ||
+            (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) ||
+            subtotal < Number(campaign.min_order_amount)) {
+          throw new Error('Campaign is no longer eligible for this order');
+        }
+        const useCount = await client.query(
+          `SELECT COUNT(*)::int as count FROM mart_campaign_uses WHERE campaign_id = $1 AND customer_id = $2`,
+          [data.campaignId, customerId]
+        );
+        if (useCount.rows[0].count >= campaign.per_customer_limit) {
+          throw new Error('Campaign use limit reached for this customer');
+        }
+      }
+
       // Create order
       const orderId = uuidv4();
       await client.query(
@@ -80,15 +114,15 @@ export class OrderService {
            (id, order_number, store_id, customer_id, guest_name, guest_phone, guest_address,
             subtotal, delivery_charge, total, payment_method, notes,
             delivery_preference, delivery_note, fulfilled_by,
-            campaign_id, campaign_discount, coupon_code_used)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+            campaign_id, campaign_discount, coupon_code_used, idempotency_key)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
         [orderId, orderNumber, data.storeId, customerId, data.guestName, data.guestPhone,
          data.guestAddress, subtotal, actualDelivery, total,
          data.paymentMethod, data.notes || null,
          data.deliveryPreference || 'within_15',
          data.deliveryNote || 'Ring the bell',
          data.storeName || null,
-         data.campaignId || null, campaignDiscount, data.couponCodeUsed || null]
+        data.campaignId || null, campaignDiscount, data.couponCodeUsed || null, data.idempotencyKey]
       );
 
       // Create order items
@@ -100,6 +134,15 @@ export class OrderService {
           [orderId, item.productId, item.productName, item.unit,
            item.price, item.quantity, item.price * item.quantity]
         );
+      }
+
+      if (data.campaignId && campaignDiscount > 0) {
+        await client.query(
+          `INSERT INTO mart_campaign_uses (campaign_id, customer_id, order_id, discount_applied, coupon_code_used)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [data.campaignId, customerId, orderId, campaignDiscount, data.couponCodeUsed || null]
+        );
+        await client.query(`UPDATE mart_campaigns SET usage_count = usage_count + 1 WHERE id = $1`, [data.campaignId]);
       }
 
       // Mark whatsapp_sent = true (frontend opens WhatsApp)
@@ -124,6 +167,7 @@ export class OrderService {
           upiId: settings.upi_id || '',
         }),
         whatsappNumber: settings.whatsapp_number || '918777376280',
+        duplicate: false,
       };
     });
   }
@@ -191,11 +235,21 @@ export class OrderService {
               o.coupon_code_used as "couponCodeUsed",
               o.delivery_by_name as "deliveryByName",
               o.delivery_by_phone as "deliveryByPhone",
+              o.delivery_by as "deliveryById",
               o.delivery_preference as "deliveryPreference",
               o.delivery_note as "deliveryNote",
               o.delivery_sequence as "deliverySequence",
               o.batch_id as "batchId",
               o.fulfilled_by as "fulfilledBy",
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                  'fromStatus', e.from_status,
+                  'toStatus', e.to_status,
+                  'actorName', e.actor_name,
+                  'createdAt', e.created_at
+                ) ORDER BY e.created_at ASC)
+                FROM mart_order_status_events e WHERE e.order_id = o.id
+              ), '[]') as "statusEvents",
               json_agg(json_build_object(
                 'productId', oi.product_id,
                 'productName', oi.product_name,
@@ -245,6 +299,94 @@ export class OrderService {
         );
       } catch { /* non-blocking — don't fail order status update */ }
     }
+
+    return order;
+  }
+
+  static async transitionStatus(
+    id: string,
+    status: string,
+    actor: { id: string; username: string; role: string; storeId: string | null },
+    deliveryAssigneeId?: string
+  ) {
+    const order = await transaction(async client => {
+      const current = await client.query(
+        `SELECT o.id, o.status, o.store_id as "storeId", o.customer_id as "customerId",
+                o.order_number as "orderNumber", o.delivery_by as "deliveryById"
+         FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
+        [id]
+      );
+      const existing = current.rows[0];
+      if (!existing) throw Object.assign(new Error('Order not found'), { status: 404 });
+      const settings = await SettingsService.getPublic(existing.storeId);
+      if (actor.role !== 'super_admin' && actor.storeId !== existing.storeId) {
+        throw Object.assign(new Error('Access denied'), { status: 403 });
+      }
+      const actorResult = await client.query(
+        `SELECT COALESCE(name, username) as name FROM mart_admins WHERE id = $1`, [actor.id]
+      );
+      const actorName = actorResult.rows[0]?.name || actor.username;
+
+      const processingRoles = ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'];
+      const assignmentRoles = ['super_admin', 'store_owner', 'store_manager'];
+      const isAssignedHandler = existing.deliveryById === actor.id;
+      const allowed =
+        (status === 'confirmed' && existing.status === 'pending' && processingRoles.includes(actor.role)) ||
+        (status === 'preparing' && existing.status === 'confirmed' && processingRoles.includes(actor.role)) ||
+        (status === 'ready_to_pickup' && existing.status === 'preparing' && assignmentRoles.includes(actor.role) && !!deliveryAssigneeId) ||
+        (status === 'out_for_delivery' && existing.status === 'ready_to_pickup' && isAssignedHandler) ||
+        (status === 'delivered' && ['out_for_delivery', 'picked_up'].includes(existing.status) && isAssignedHandler) ||
+        (status === 'cancelled' && ['pending', 'confirmed'].includes(existing.status) && processingRoles.includes(actor.role)) ||
+        (status === 'failed_delivery' && ['out_for_delivery', 'picked_up'].includes(existing.status) && (isAssignedHandler || assignmentRoles.includes(actor.role)));
+
+      if (!allowed) throw Object.assign(new Error('This status change is not allowed'), { status: 403 });
+
+      let handler: { id: string; name: string; phone: string | null } | null = null;
+      if (status === 'ready_to_pickup') {
+        const assignee = await client.query(
+          `SELECT a.id, COALESCE(a.name, a.username) as name, a.phone
+           FROM mart_admins a
+           LEFT JOIN mart_admin_store_assignments asa ON asa.admin_id = a.id AND asa.store_id = $2 AND asa.is_active = true
+           WHERE a.id = $1 AND a.is_active = true AND (a.store_id = $2 OR asa.admin_id IS NOT NULL)
+             AND a.role IN ('super_admin', 'store_owner', 'store_manager', 'staff', 'delivery_staff')`,
+          [deliveryAssigneeId, existing.storeId]
+        );
+        handler = assignee.rows[0] || null;
+        if (!handler) throw Object.assign(new Error('Select an active delivery handler for this store'), { status: 400 });
+      }
+
+      const updated = await client.query(
+        `UPDATE mart_orders SET status = $1, updated_at = NOW(),
+           delivery_by = CASE WHEN $1 = 'ready_to_pickup' THEN $2 ELSE delivery_by END,
+           delivery_by_name = CASE WHEN $1 = 'ready_to_pickup' THEN $3 ELSE delivery_by_name END,
+           delivery_by_phone = CASE WHEN $1 = 'ready_to_pickup' THEN $4 ELSE delivery_by_phone END
+         WHERE id = $5
+         RETURNING id, order_number as "orderNumber", status, store_id as "storeId", customer_id as "customerId",
+                   delivery_by_name as "deliveryByName"`,
+        [status, handler?.id || null, handler?.name || null, handler?.phone || null, id]
+      );
+      if (status === 'delivered') {
+        const items = await client.query(
+          `SELECT product_id, quantity, unit FROM mart_order_items WHERE order_id = $1`, [id]
+        );
+        await InventoryService.deductForOrder(
+          id,
+          existing.storeId,
+          items.rows.map((item: { product_id: string; quantity: number; unit: string }) => ({
+            productId: item.product_id, quantity: item.quantity, sellingUnit: item.unit,
+          })),
+          (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
+          parseFloat(settings.low_stock_threshold ?? '5'),
+          client
+        );
+      }
+      await client.query(
+        `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_id, actor_name)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, existing.status, status, actor.id, actorName]
+      );
+      return updated.rows[0];
+    });
 
     return order;
   }

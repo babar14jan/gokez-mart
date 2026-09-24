@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { ShoppingBag, RefreshCw, X, Phone, MapPin, RotateCcw, IndianRupee } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, Phone, MapPin, RotateCcw, IndianRupee, MessageCircle } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { printReceipt } from '../utils/printReceipt';
 
 const STEPS = ['pending', 'preparing', 'out_for_delivery', 'delivered'];
@@ -204,9 +205,9 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-interface Props { onBack?: () => void; }
+interface Props { onBack?: () => void; whatsappNumber?: string; }
 
-export default function OrderHistoryPage({ onBack: _onBack }: Props) {
+export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Props) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -220,6 +221,7 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartX = useRef<number | null>(null);
   const { addItem } = useCartStore();
+  const { name: customerName, phone: customerPhone } = useCustomerAuthStore();
 
   const fetchOrders = async (silent = false) => {
     if (!silent) setRefreshing(true);
@@ -491,8 +493,25 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
             </div>
 
             {/* Cancel */}
-            {canCancel && (
-              <div className="px-4 pb-4">
+            {(canCancel || whatsappNumber) && (
+              <div className="px-4 pb-4 flex items-center justify-between gap-3">
+                {whatsappNumber && (() => {
+                  const name = order.guestName || customerName || 'Customer';
+                  const phone = order.guestPhone || customerPhone || 'Not provided';
+                  const message = `Need help regarding Order #${order.orderNumber} placed at ${formatDateTime(order.createdAt)}. Customer: ${name}. Phone: ${phone}.`;
+                  return (
+                    <a
+                      href={`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" /> Need Help
+                    </a>
+                  );
+                })()}
+                {canCancel && (
+                  <div className={whatsappNumber ? 'ml-auto' : ''}>
                 {confirmCancel === order.id ? (
                   <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 rounded-2xl px-3 py-2.5">
                     <p className="text-xs text-red-600 flex-1">Cancel this order?</p>
@@ -508,6 +527,8 @@ export default function OrderHistoryPage({ onBack: _onBack }: Props) {
                     className="flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-500 transition-colors">
                     <X className="w-3.5 h-3.5" /> Cancel Order
                   </button>
+                )}
+                  </div>
                 )}
               </div>
             )}

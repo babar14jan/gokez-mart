@@ -27,6 +27,7 @@ const PREFERENCES = [
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
 export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfirmed, onBack, onHome, onSuccess }: CheckoutPageProps) {
+  const orderRequestKey = useRef(crypto.randomUUID());
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn } = useCustomerAuthStore();
@@ -183,7 +184,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
         campaignId: appliedCampaign?.id || undefined,
         couponCode: appliedCampaign?.coupon_code || undefined,
-      });
+      }, orderRequestKey.current);
       if (resolvedAddress) addAddress({ label: 'Home', address: resolvedAddress, isDefault: true });
       clearCart();
       onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined);
@@ -287,14 +288,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
 
           {/* Soft warning if zone not GPS confirmed */}
           {!zoneGpsConfirmed && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3 flex items-start gap-2.5">
-              <span className="text-lg flex-shrink-0">📍</span>
-              <div>
-                <p className="text-xs font-bold text-amber-700 dark:text-amber-400">Confirm your delivery area</p>
-                <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5 leading-relaxed">
-                  We couldn't verify your location. Please make sure your address is within our delivery zone. Orders outside our area may be cancelled.
-                </p>
-              </div>
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5">
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                Delivery area not verified. Please confirm your address is within our delivery zone.
+              </p>
             </div>
           )}
 

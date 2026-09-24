@@ -1,4 +1,4 @@
-import { query } from '../database/db';
+import { query, transaction } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 
 export class ComplianceService {
@@ -7,7 +7,8 @@ export class ComplianceService {
   static async recordConsent(customerId: string, ipAddress?: string, userAgent?: string): Promise<void> {
     await query(
       `INSERT INTO mart_consents (id, customer_id, consent_type, granted, ip_address, user_agent)
-       VALUES (gen_random_uuid(), $1, 'personal_data', true, $2, $3)`,
+       VALUES (gen_random_uuid(), $1, 'personal_data', true, $2, $3)
+       ON CONFLICT DO NOTHING`,
       [customerId, ipAddress || null, userAgent || null]
     );
   }
@@ -34,19 +35,19 @@ export class ComplianceService {
 
   // ── Account deletion ──────────────────────────────────────────────────────────
   static async requestDeletion(customerId: string, reason?: string): Promise<any> {
-    const existing = await query(
-      `SELECT id, status FROM mart_deletion_requests WHERE customer_id = $1 AND status = 'pending'`,
-      [customerId]
-    );
-    if (existing.rows.length) return existing.rows[0];
-
-    const result = await query(
-      `INSERT INTO mart_deletion_requests (id, customer_id, reason)
-       VALUES (gen_random_uuid(), $1, $2)
-       RETURNING id, status, created_at as "createdAt"`,
-      [customerId, reason || null]
-    );
-    return result.rows[0];
+    return transaction(async client => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`deletion:${customerId}`]);
+      const existing = await client.query(
+        `SELECT id, status FROM mart_deletion_requests WHERE customer_id = $1 AND status = 'pending'`, [customerId]
+      );
+      if (existing.rows.length) return existing.rows[0];
+      const result = await client.query(
+        `INSERT INTO mart_deletion_requests (id, customer_id, reason)
+         VALUES (gen_random_uuid(), $1, $2)
+         RETURNING id, status, created_at as "createdAt"`, [customerId, reason || null]
+      );
+      return result.rows[0];
+    });
   }
 
   static async getDeletionRequest(customerId: string): Promise<any> {
@@ -92,14 +93,19 @@ export class ComplianceService {
   }
 
   // ── Grievances ────────────────────────────────────────────────────────────────
-  static async submitGrievance(customerId: string, subject: string, description: string): Promise<any> {
+  static async submitGrievance(customerId: string, subject: string, description: string, idempotencyKey: string): Promise<any> {
     const result = await query(
-      `INSERT INTO mart_grievances (id, customer_id, subject, description)
-       VALUES (gen_random_uuid(), $1, $2, $3)
+      `INSERT INTO mart_grievances (id, customer_id, subject, description, idempotency_key)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4)
+       ON CONFLICT DO NOTHING
        RETURNING id, status, created_at as "createdAt"`,
-      [customerId, subject, description]
+      [customerId, subject, description, idempotencyKey]
     );
-    return result.rows[0];
+    if (result.rows[0]) return result.rows[0];
+    const existing = await query(
+      `SELECT id, status, created_at as "createdAt" FROM mart_grievances WHERE idempotency_key = $1`, [idempotencyKey]
+    );
+    return existing.rows[0];
   }
 
   static async getMyGrievances(customerId: string): Promise<any[]> {
@@ -171,17 +177,18 @@ export class ComplianceService {
 
   // ── Data export (Right to Portability) ───────────────────────────────────────
   static async requestDataExport(customerId: string): Promise<any> {
-    const existing = await query(
-      `SELECT id, status, created_at FROM mart_data_exports
-       WHERE customer_id = $1 AND created_at > NOW() - INTERVAL '24 hours'
-       ORDER BY created_at DESC LIMIT 1`,
-      [customerId]
-    );
-    if (existing.rows.length) return existing.rows[0];
+    return transaction(async client => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`export:${customerId}`]);
+      const existing = await client.query(
+        `SELECT id, status, created_at FROM mart_data_exports
+         WHERE customer_id = $1 AND created_at > NOW() - INTERVAL '24 hours'
+         ORDER BY created_at DESC LIMIT 1`, [customerId]
+      );
+      if (existing.rows.length) return existing.rows[0];
 
-    const [profile, orders, grievances, consents] = await Promise.all([
-      query(`SELECT id, phone, name, address, address2, order_count, total_spent, created_at FROM mart_customers WHERE id = $1`, [customerId]),
-      query(
+      const [profile, orders, grievances, consents] = await Promise.all([
+        client.query(`SELECT id, phone, name, address, address2, order_count, total_spent, created_at FROM mart_customers WHERE id = $1`, [customerId]),
+        client.query(
         `SELECT o.order_number, o.status, o.total, o.payment_method, o.created_at,
                 COALESCE(
                   (SELECT json_agg(json_build_object('productName', oi.product_name, 'unit', oi.unit, 'price', oi.price, 'quantity', oi.quantity, 'total', oi.total))
@@ -190,10 +197,10 @@ export class ComplianceService {
                 ) as items
          FROM mart_orders o WHERE o.customer_id = $1 ORDER BY o.created_at DESC`,
         [customerId]
-      ),
-      query(`SELECT subject, description, status, response, created_at FROM mart_grievances WHERE customer_id = $1`, [customerId]),
-      query(`SELECT consent_type, granted, created_at FROM mart_consents WHERE customer_id = $1`, [customerId]),
-    ]);
+        ),
+        client.query(`SELECT subject, description, status, response, created_at FROM mart_grievances WHERE customer_id = $1`, [customerId]),
+        client.query(`SELECT consent_type, granted, created_at FROM mart_consents WHERE customer_id = $1`, [customerId]),
+      ]);
 
     const exportData = {
       exportedAt: new Date().toISOString(),
@@ -203,13 +210,14 @@ export class ComplianceService {
       consents: consents.rows,
     };
 
-    const result = await query(
-      `INSERT INTO mart_data_exports (customer_id, status, data, ready_at)
-       VALUES ($1, 'ready', $2, NOW())
-       RETURNING id, status, created_at as "createdAt", ready_at as "readyAt"`,
-      [customerId, JSON.stringify(exportData)]
-    );
-    return result.rows[0];
+      const result = await client.query(
+        `INSERT INTO mart_data_exports (customer_id, status, data, ready_at)
+         VALUES ($1, 'ready', $2, NOW())
+         RETURNING id, status, created_at as "createdAt", ready_at as "readyAt"`,
+        [customerId, JSON.stringify(exportData)]
+      );
+      return result.rows[0];
+    });
   }
 
   static async getDataExport(customerId: string): Promise<any> {

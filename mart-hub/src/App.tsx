@@ -1,34 +1,35 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { subscribeAdminToPush } from './services/push';
 import Layout from './components/Layout';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import ProductsPage from './pages/ProductsPage';
-import CategoriesPage from './pages/CategoriesPage';
-import OrdersPage from './pages/OrdersPage';
-import CustomersPage from './pages/CustomersPage';
-import SettingsPage from './pages/SettingsPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import ProfilePage from './pages/ProfilePage';
-import ChangePasswordPage from './pages/ChangePasswordPage';
-import StoresPage from './pages/StoresPage';
-import UsersPage from './pages/UsersPage';
-import CompliancePage from './pages/CompliancePage';
-import MorePage from './pages/MorePage';
-import ApplyPage from './pages/ApplyPage';
-import LandingPage from './pages/LandingPage';
-import StoreApplicationsPage from './pages/StoreApplicationsPage';
-import CatalogPage from './pages/CatalogPage';
-import TeamPage from './pages/TeamPage';
-import DeliveryPage from './pages/DeliveryPage';
-import InventoryPage from './pages/InventoryPage';
-import FeedbackPage from './pages/FeedbackPage';
-import CampaignsPage from './pages/CampaignsPage';
-import CarouselPage from './pages/CarouselPage';
+
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ProductsPage = lazy(() => import('./pages/ProductsPage'));
+const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
+const OrdersPage = lazy(() => import('./pages/OrdersPage'));
+const CustomersPage = lazy(() => import('./pages/CustomersPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
+const StoresPage = lazy(() => import('./pages/StoresPage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const CompliancePage = lazy(() => import('./pages/CompliancePage'));
+const MorePage = lazy(() => import('./pages/MorePage'));
+const ApplyPage = lazy(() => import('./pages/ApplyPage'));
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const StoreApplicationsPage = lazy(() => import('./pages/StoreApplicationsPage'));
+const CatalogPage = lazy(() => import('./pages/CatalogPage'));
+const TeamPage = lazy(() => import('./pages/TeamPage'));
+const DeliveryPage = lazy(() => import('./pages/DeliveryPage'));
+const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
+const CarouselPage = lazy(() => import('./pages/CarouselPage'));
 
 const ROLE_ROUTES: Record<string, string[]> = {
   super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
@@ -74,6 +75,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Suspense fallback={<div className="min-h-screen bg-white dark:bg-slate-900" />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/"                element={<ProtectedRoute path="/"><DashboardPage /></ProtectedRoute>} />
@@ -102,6 +104,7 @@ export default function App() {
         <Route path="/carousel"          element={<ProtectedRoute path="/carousel"><CarouselPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

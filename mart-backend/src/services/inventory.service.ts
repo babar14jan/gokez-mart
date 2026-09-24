@@ -1,4 +1,4 @@
-import { query } from '../database/db';
+import { query, transaction } from '../database/db';
 import { parseSellingUnit } from '../utils/unitConversion';
 
 export class InventoryService {
@@ -35,13 +35,20 @@ export class InventoryService {
     qty: number,
     stockUnit: string,
     note: string | null,
-    createdBy: string
+    createdBy: string,
+    idempotencyKey?: string
   ) {
-    const cur = await query<{
+    return transaction(async (client) => {
+    if (idempotencyKey) {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+      const prior = await client.query(`SELECT 1 FROM mart_inventory_log WHERE idempotency_key = $1`, [idempotencyKey]);
+      if (prior.rows.length) return { productId, storeId, duplicate: true };
+    }
+    const cur: { rows: Array<{
       stock_quantity: number | null;
       stock_unit: string | null;
       availability_status: string;
-    }>(
+    }> } = await client.query(
       `SELECT stock_quantity::float, stock_unit, availability_status
        FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
       [productId, storeId]
@@ -62,7 +69,7 @@ export class InventoryService {
       newStatus = 'out_of_stock'; // reduced to zero — mark out of stock
     }
 
-    await query(
+    await client.query(
       `UPDATE mart_store_products
        SET stock_quantity = $1, stock_unit = $2, availability_status = $3,
            is_available = $4, updated_at = NOW()
@@ -70,14 +77,15 @@ export class InventoryService {
       [newQty, effectiveStockUnit, newStatus, newStatus === 'available', productId, storeId]
     );
 
-    await query(
+    await client.query(
       `INSERT INTO mart_inventory_log
-         (product_id, store_id, change_qty, reason, note, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [productId, storeId, qty, qty < 0 ? 'manual_correction' : 'restock', note || null, createdBy]
+         (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [productId, storeId, qty, qty < 0 ? 'manual_correction' : 'restock', note || null, createdBy, idempotencyKey || null]
     );
 
     return { productId, storeId, previousQty: current, newQty, stockUnit };
+    });
   }
 
   static async deductForOrder(
@@ -85,19 +93,26 @@ export class InventoryService {
     storeId: string,
     items: Array<{ productId: string; quantity: number; sellingUnit: string }>,
     autoOutOfStock: boolean,
-    lowStockThreshold: number
+    lowStockThreshold: number,
+    transactionClient?: any
   ) {
+    const deduct = async (client: any) => {
     const results = [];
 
     for (const item of items) {
-      const cur = await query<{
+      const alreadyDeducted = await client.query(
+        `SELECT 1 FROM mart_inventory_log WHERE product_id = $1 AND store_id = $2 AND reference_id = $3 AND reason = 'order_deducted'`,
+        [item.productId, storeId, orderId]
+      );
+      if (alreadyDeducted.rows.length) continue;
+      const cur: { rows: Array<{
         stock_quantity: number | null;
         stock_unit: string | null;
         low_stock_threshold: number | null;
         availability_status: string;
-      }>(
+      }> } = await client.query(
         `SELECT stock_quantity::float, stock_unit, low_stock_threshold::float, availability_status
-         FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
+         FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
         [item.productId, storeId]
       );
       const row = cur.rows[0];
@@ -116,14 +131,14 @@ export class InventoryService {
       const isLow = newQty > 0 && newQty <= threshold;
       const newStatus = wentOutOfStock ? 'out_of_stock' : row.availability_status;
 
-      await query(
+      await client.query(
         `UPDATE mart_store_products
          SET stock_quantity = $1, availability_status = $2, is_available = $3, updated_at = NOW()
          WHERE product_id = $4 AND store_id = $5`,
         [newQty, newStatus, newStatus === 'available', item.productId, storeId]
       );
 
-      await query(
+      await client.query(
         `INSERT INTO mart_inventory_log
            (product_id, store_id, change_qty, reason, reference_id)
          VALUES ($1, $2, $3, 'order_deducted', $4)`,
@@ -134,6 +149,8 @@ export class InventoryService {
     }
 
     return results;
+    };
+    return transactionClient ? deduct(transactionClient) : transaction(deduct);
   }
 
   static async getHistory(productId: string, storeId: string) {
@@ -160,12 +177,13 @@ export class InventoryService {
     storeId: string,
     items: Array<{ productId: string; qty: number; stockUnit: string }>,
     note: string | null,
-    createdBy: string
+    createdBy: string,
+    idempotencyKey?: string
   ) {
     const results = [];
     for (const item of items) {
       if (!item.qty || item.qty === 0 || isNaN(item.qty)) continue;
-      const result = await this.restock(item.productId, storeId, item.qty, item.stockUnit, note, createdBy);
+      const result = await this.restock(item.productId, storeId, item.qty, item.stockUnit, note, createdBy, idempotencyKey ? `${idempotencyKey}:${item.productId}` : undefined);
       results.push(result);
     }
     return results;
@@ -176,29 +194,37 @@ export class InventoryService {
     storeId: string,
     qty: number,
     stockUnit: string,
-    createdBy: string
+    createdBy: string,
+    idempotencyKey?: string
   ) {
-    const cur = await query<{ stock_quantity: number | null }>(
+    return transaction(async (client) => {
+    if (idempotencyKey) {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+      const prior = await client.query(`SELECT 1 FROM mart_inventory_log WHERE idempotency_key = $1`, [idempotencyKey]);
+      if (prior.rows.length) return { productId, storeId, duplicate: true };
+    }
+    const cur = await client.query(
       `SELECT stock_quantity::float FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
       [productId, storeId]
     );
     const previous = cur.rows[0]?.stock_quantity ?? null;
     const diff = qty - (previous ?? 0);
 
-    await query(
+    await client.query(
       `UPDATE mart_store_products
        SET stock_quantity = $1, stock_unit = $2, updated_at = NOW()
        WHERE product_id = $3 AND store_id = $4`,
       [qty, stockUnit, productId, storeId]
     );
 
-    await query(
+    await client.query(
       `INSERT INTO mart_inventory_log
-         (product_id, store_id, change_qty, reason, note, created_by)
-       VALUES ($1, $2, $3, 'manual_correction', 'Stock set manually', $4)`,
-      [productId, storeId, diff, createdBy]
+         (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)
+       VALUES ($1, $2, $3, 'manual_correction', 'Stock set manually', $4, $5)`,
+      [productId, storeId, diff, createdBy, idempotencyKey || null]
     );
 
     return { productId, storeId, previousQty: previous, newQty: qty, stockUnit };
+    });
   }
 }

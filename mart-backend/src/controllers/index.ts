@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
+import sharp from 'sharp';
 import { asyncHandler, AdminRequest } from '../middleware';
 import { ProductService } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
@@ -20,6 +21,29 @@ import { CampaignService } from '../services/campaign.service';
 import { config } from '../config';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
+
+type PreparedImage = { buffer: Buffer; extension: string; mimeType: string };
+
+async function prepareImage(buffer: Buffer, maxDimension: number): Promise<PreparedImage> {
+  const image = sharp(buffer, { failOn: 'error' }).rotate().resize({
+    width: maxDimension,
+    height: maxDimension,
+    fit: 'inside',
+    withoutEnlargement: true,
+  });
+  const metadata = await image.metadata();
+
+  if (metadata.format === 'jpeg') {
+    return { buffer: await image.jpeg({ quality: 82, mozjpeg: true }).toBuffer(), extension: 'jpg', mimeType: 'image/jpeg' };
+  }
+  if (metadata.format === 'png') {
+    return { buffer: await image.png({ compressionLevel: 9 }).toBuffer(), extension: 'png', mimeType: 'image/png' };
+  }
+  if (metadata.format === 'webp') {
+    return { buffer: await image.webp({ quality: 82, effort: 4 }).toBuffer(), extension: 'webp', mimeType: 'image/webp' };
+  }
+  throw new Error('Only JPEG, PNG, and WebP images are supported');
+}
 
 // Helper: resolve storeId from request (admin JWT or query param storeId)
 function resolveStoreId(req: AdminRequest): string {
@@ -71,6 +95,10 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   if (!Array.isArray(items) || !items.every((i: any) => i.productId && i.price > 0 && Number.isInteger(i.quantity) && i.quantity > 0)) {
     res.status(400).json({ success: false, error: 'Invalid items' }); return;
   }
+  const idempotencyKey = req.header('Idempotency-Key');
+  if (!idempotencyKey || idempotencyKey.length > 128) {
+    res.status(400).json({ success: false, error: 'A valid Idempotency-Key is required' }); return;
+  }
   // Fetch store name for fulfilled_by
   const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
@@ -102,19 +130,24 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
     campaignId: resolvedCampaignId,
     campaignDiscount,
     couponCodeUsed: resolvedCouponCode,
+    idempotencyKey,
   });
 
-  // Record campaign use (non-blocking)
-  if (resolvedCampaignId && campaignDiscount > 0) {
-    CampaignService.recordUse(resolvedCampaignId, null, result.orderId, campaignDiscount, resolvedCouponCode || undefined).catch(() => {});
-  }
-
-  // Notify store admins of new order (non-blocking)
-  PushService.notifyStoreAdmins(storeId || SHAPOORJI_ID, {
-    title: '🛒 New Order!',
+  if (!result.duplicate) PushService.notifyStoreAdmins(storeId || SHAPOORJI_ID, {
+    title: `New Order #${result.orderNumber}`,
     body: `${guestName} placed an order for ₹${result.total}`,
     url: '/orders',
+    tag: `order-${result.orderId}`,
   }).catch(() => {});
+  const customer = await query<{ customer_id: string | null }>(`SELECT customer_id FROM mart_orders WHERE id = $1`, [result.orderId]);
+  if (!result.duplicate && customer.rows[0]?.customer_id) {
+    PushService.notifyCustomer(customer.rows[0].customer_id, {
+      title: `${storeName} order placed`,
+      body: `Order #${result.orderNumber} has been received.`,
+      url: '/orders',
+      tag: `order-${result.orderId}`,
+    }).catch(() => {});
+  }
   res.status(201).json({ success: true, data: result });
 });
 
@@ -175,6 +208,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
   );
   res.json({ success: true, data: {
     token,
+    id: admin.id,
     username: admin.username,
     name: admin.name || admin.username,
     email: admin.email,
@@ -415,75 +449,44 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
 });
 
 export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { status, failureReason, cancellationReason } = req.body;
-  // Save failure reason if provided
-  if (status === 'failed_delivery' && failureReason) {
-    await query(`UPDATE mart_orders SET failure_reason = $1 WHERE id = $2`, [failureReason, req.params.id]);
+  const { status, failureReason, cancellationReason, deliveryAssigneeId } = req.body;
+  const order = await OrderService.transitionStatus(req.params.id, status, req.admin!, deliveryAssigneeId);
+  if (status === 'failed_delivery' && failureReason) await query(`UPDATE mart_orders SET failure_reason = $1 WHERE id = $2`, [failureReason, req.params.id]);
+  if (status === 'cancelled' && cancellationReason) await query(`UPDATE mart_orders SET cancellation_reason = $1 WHERE id = $2`, [cancellationReason, req.params.id]);
+
+  const details = await query<{ customer_id: string | null; guest_name: string; store_name: string; delivery_by: string | null }>(
+    `SELECT o.customer_id, o.guest_name, COALESCE(s.name, 'Gokez Mart') as store_name, o.delivery_by
+     FROM mart_orders o LEFT JOIN mart_stores s ON s.id = o.store_id WHERE o.id = $1`, [req.params.id]
+  );
+  const detail = details.rows[0];
+  const messages: Record<string, string> = {
+    confirmed: 'Your order has been confirmed.',
+    preparing: 'Your order is being prepared.',
+    out_for_delivery: `Order picked up by ${order.deliveryByName || req.admin!.username} and on the way to you.`,
+    delivered: 'Your order has been delivered.',
+    cancelled: 'Your order has been cancelled. You will not be charged.',
+    failed_delivery: 'We could not complete delivery. Please contact support if you need help.',
+  };
+  const tag = `order-${order.id}`;
+  if (status === 'ready_to_pickup' && detail?.delivery_by) {
+    PushService.notifyAdmin(detail.delivery_by, {
+      title: `Order #${order.orderNumber} ready for pickup`,
+      body: `${detail.guest_name} · ready to collect and deliver`,
+      url: '/delivery', tag,
+    }).catch(() => {});
   }
-  // Save cancellation reason if provided
-  if (status === 'cancelled' && cancellationReason) {
-    await query(`UPDATE mart_orders SET cancellation_reason = $1 WHERE id = $2`, [cancellationReason, req.params.id]);
+  if (detail?.customer_id && messages[status]) {
+    PushService.notifyCustomer(detail.customer_id, {
+      title: `${detail.store_name} · Order #${order.orderNumber}`,
+      body: messages[status], url: '/orders', tag,
+    }).catch(() => {});
   }
-  const order = await OrderService.updateStatus(req.params.id, status);
-  if (!order) { res.status(404).json({ success: false, error: 'Order not found' }); return; }
-
-  const FAILURE_MESSAGES: Record<string, string> = {
-    refused:       '😔 Your order could not be delivered as it was refused at the door.',
-    no_answer:     '😔 We tried to deliver but no one was available. Please contact us to reschedule.',
-    phone_off:     '😔 We could not reach you for delivery. Please contact us to reschedule.',
-    wrong_address: '😔 We could not locate your address. Please update your address and contact us.',
-  };
-
-  const CANCEL_REASON_LABELS: Record<string, string> = {
-    customer_request: 'you requested it',
-    duplicate_order:  'this appears to be a duplicate order',
-    out_of_stock:     'some items became unavailable',
-    store_closed:     'the store had to close unexpectedly',
-    other:            'of an unexpected issue',
-  };
-  const STATUS_MESSAGES: Record<string, string> = {
-    picked_up:        '🛵 Your order is on the way! Arriving in 10-15 mins.',
-    delivered:        '🎉 Order delivered! Enjoy your groceries.',
-    cancelled:        cancellationReason && CANCEL_REASON_LABELS[cancellationReason]
-                        ? `😔 Your order was cancelled because ${CANCEL_REASON_LABELS[cancellationReason]}. You will not be charged.`
-                        : '❌ Your order has been cancelled. You will not be charged.',
-    failed_delivery:  failureReason && FAILURE_MESSAGES[failureReason]
-                        ? FAILURE_MESSAGES[failureReason]
-                        : '😔 We were unable to deliver your order. Please contact us if you need help.',
-  };
-
-  if (STATUS_MESSAGES[status]) {
-    const custResult = await query<{ customer_id: string | null; store_id: string | null; order_number: string }>(
-      `SELECT customer_id, store_id, order_number FROM mart_orders WHERE id = $1`, [req.params.id]
-    );
-    const { customer_id, store_id, order_number } = custResult.rows[0] || {};
-
-    // Notify delivery staff when order is ready to pickup
-    if (status === 'ready_to_pickup' && store_id) {
-      PushService.notifyStoreAdmins(store_id, {
-        title: '📦 Order Ready for Pickup',
-        body: `${order_number} is packed and ready — come collect from store`,
-        url: '/delivery',
-      }, ['delivery_staff', 'staff']).catch(() => {});
-    }
-    if (customer_id) {
-      PushService.notifyCustomer(customer_id, {
-        title: 'Gokez Mart 🛒',
-        body: STATUS_MESSAGES[status],
-        url: '/orders',
-      }).catch(() => {});
-    }
-    if (status === 'failed_delivery' && store_id) {
-      const reasonLabel: Record<string, string> = {
-        refused: 'Customer refused', no_answer: 'No answer',
-        phone_off: 'Phone not reachable', wrong_address: 'Wrong address',
-      };
-      PushService.notifyStoreAdmins(store_id, {
-        title: '⚠️ Delivery Failed',
-        body: `${order_number} — ${reasonLabel[failureReason] || 'Delivery failed'}`,
-        url: '/orders',
-      }).catch(() => {});
-    }
+  if (status === 'failed_delivery') {
+    PushService.notifyStoreAdmins(order.storeId, {
+      title: `Delivery failed · Order #${order.orderNumber}`,
+      body: `${detail?.guest_name || 'Customer'} · ${failureReason || 'Delivery failed'}`,
+      url: '/orders', tag,
+    }).catch(() => {});
   }
   res.json({ success: true, data: order });
 });
@@ -497,8 +500,8 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
   if (!['super_admin', 'store_owner'].includes(req.admin!.role)) {
     res.status(403).json({ success: false, error: 'Not authorised to terminate orders' }); return;
   }
-  const existing = await query<{ status: string; customer_id: string | null; store_id: string | null; order_number: string }>(
-    `SELECT status, customer_id, store_id, order_number FROM mart_orders WHERE id = $1`, [req.params.id]
+  const existing = await query<{ status: string; customer_id: string | null; store_id: string | null; order_number: string; guest_name: string }>(
+    `SELECT status, customer_id, store_id, order_number, guest_name FROM mart_orders WHERE id = $1`, [req.params.id]
   );
   const ord = existing.rows[0];
   if (!ord) { res.status(404).json({ success: false, error: 'Order not found' }); return; }
@@ -518,7 +521,7 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
     other:             '😔 Sorry — your order had to be cancelled by our team. You will not be charged. Please reorder.',
   };
   if (ord.customer_id) {
-    PushService.notifyCustomer(ord.customer_id, { title: 'Gokez Mart 🛒', body: MSGS[reason] || MSGS.other, url: '/orders' }).catch(() => {});
+    PushService.notifyCustomer(ord.customer_id, { title: `Order #${ord.order_number}`, body: MSGS[reason] || MSGS.other, url: '/orders', tag: `order-${req.params.id}` }).catch(() => {});
   }
   res.json({ success: true, message: 'Order terminated', orderNumber: ord.order_number });
 });
@@ -713,8 +716,8 @@ export const customerGetOrders = asyncHandler(async (req: CustomerRequest, res: 
 export const customerCancelOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const { id } = req.params;
   // Verify order belongs to this customer and is cancellable
-  const result = await query<{ status: string; customer_id: string | null; store_id: string | null }>(
-    `SELECT status, customer_id, store_id FROM mart_orders WHERE id = $1`, [id]
+  const result = await query<{ status: string; customer_id: string | null; store_id: string | null; order_number: string; guest_name: string }>(
+    `SELECT status, customer_id, store_id, order_number, guest_name FROM mart_orders WHERE id = $1`, [id]
   );
   const order = result.rows[0];
   if (!order) { res.status(404).json({ success: false, error: 'Order not found' }); return; }
@@ -726,9 +729,10 @@ export const customerCancelOrder = asyncHandler(async (req: CustomerRequest, res
   // Notify store admins
   if (order.store_id) {
     PushService.notifyStoreAdmins(order.store_id, {
-      title: '❌ Order Cancelled',
-      body: `Customer cancelled order`,
+      title: `Order #${order.order_number} cancelled`,
+      body: `${order.guest_name} cancelled the order`,
       url: '/orders',
+      tag: `order-${id}`,
     }).catch(() => {});
   }
   res.json({ success: true, message: 'Order cancelled' });
@@ -866,7 +870,9 @@ export const customerSubmitGrievance = asyncHandler(async (req: CustomerRequest,
   if (!subject?.trim() || !description?.trim()) {
     res.status(400).json({ success: false, error: 'Subject and description are required' }); return;
   }
-  const result = await ComplianceService.submitGrievance(req.customer!.id, subject.trim(), description.trim());
+  const idempotencyKey = req.header('Idempotency-Key');
+  if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
+  const result = await ComplianceService.submitGrievance(req.customer!.id, subject.trim(), description.trim(), idempotencyKey);
   res.status(201).json({ success: true, data: result, message: 'Grievance submitted. We will respond within 30 days.' });
 });
 
@@ -962,17 +968,18 @@ export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequ
 export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
   const bucket = config.supabase.bucket;
-  const filename = `customers/${req.customer!.id}-${Date.now()}.${req.file.mimetype.split('/')[1] || 'jpg'}`;
+  const image = await prepareImage(req.file.buffer, 512);
+  const filename = `customers/${req.customer!.id}-${Date.now()}.${image.extension}`;
   const uploadUrl = `${config.supabase.url}/storage/v1/object/${bucket}/${filename}`;
   const uploadRes = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${config.supabase.serviceRoleKey}`,
-      'Content-Type': req.file.mimetype,
+      'Content-Type': image.mimeType,
       'x-upsert': 'true',
       'cache-control': 'max-age=31536000',
     },
-    body: req.file.buffer,
+    body: image.buffer,
   });
   if (!uploadRes.ok) { res.status(500).json({ success: false, error: 'Upload failed' }); return; }
   const publicUrl = `${config.supabase.url}/storage/v1/object/public/${bucket}/${filename}`;
@@ -986,6 +993,8 @@ export const customerSubmitFeedback = asyncHandler(async (req: CustomerRequest, 
   const { rating, category, message, storeId, orderId } = req.body;
   if (!rating || rating < 1 || rating > 5) { res.status(400).json({ success: false, error: 'Rating 1-5 required' }); return; }
   if (!category) { res.status(400).json({ success: false, error: 'Category required' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key');
+  if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
 
   // Fetch customer details
   const custRes = await query<{ name: string | null; phone: string }>(
@@ -1001,13 +1010,17 @@ export const customerSubmitFeedback = asyncHandler(async (req: CustomerRequest, 
   }
 
   const result = await query(
-    `INSERT INTO mart_feedback (customer_id, store_id, order_id, rating, category, message, customer_name, customer_phone, store_name)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `INSERT INTO mart_feedback (customer_id, store_id, order_id, rating, category, message, customer_name, customer_phone, store_name, idempotency_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ON CONFLICT DO NOTHING
      RETURNING id, rating, category, created_at as "createdAt"`,
     [req.customer!.id, storeId || null, orderId || null, rating, category,
-     message?.trim() || null, customer?.name || null, customer?.phone || null, storeName]
+     message?.trim() || null, customer?.name || null, customer?.phone || null, storeName, idempotencyKey]
   );
-  res.status(201).json({ success: true, data: result.rows[0], message: 'Thank you for your feedback!' });
+  const feedback = result.rows[0] || (await query(
+    `SELECT id, rating, category, created_at as "createdAt" FROM mart_feedback WHERE idempotency_key = $1`, [idempotencyKey]
+  )).rows[0];
+  res.status(201).json({ success: true, data: feedback, message: 'Thank you for your feedback!' });
 });
 
 export const adminGetFeedback = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -1061,18 +1074,20 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
 
   const bucket = config.supabase.bucket;
-  const filename = `${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '-')}`;
+  const image = await prepareImage(req.file.buffer, 1600);
+  const baseName = req.file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+  const filename = `${Date.now()}-${baseName || 'image'}.${image.extension}`;
   const uploadUrl = `${config.supabase.url}/storage/v1/object/${bucket}/${filename}`;
 
   const uploadRes = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${config.supabase.serviceRoleKey}`,
-      'Content-Type': req.file.mimetype,
+      'Content-Type': image.mimeType,
       'x-upsert': 'false',
       'cache-control': 'max-age=31536000',
     },
-    body: req.file.buffer,
+    body: image.buffer,
   });
 
   if (!uploadRes.ok) {
@@ -1148,6 +1163,8 @@ export const adminGetInventory = asyncHandler(async (req: AdminRequest, res: Res
 });
 
 export const adminRestockProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const idempotencyKey = req.header('Idempotency-Key');
+  if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
   const storeId = resolveStoreId(req);
   const { qty, stockUnit, note } = req.body;
   if (!qty || isNaN(parseFloat(qty)) || parseFloat(qty) <= 0) {
@@ -1157,7 +1174,7 @@ export const adminRestockProduct = asyncHandler(async (req: AdminRequest, res: R
     res.status(400).json({ success: false, error: 'stockUnit is required' }); return;
   }
   const result = await InventoryService.restock(
-    req.params.productId, storeId, parseFloat(qty), stockUnit, note || null, req.admin!.id
+    req.params.productId, storeId, parseFloat(qty), stockUnit, note || null, req.admin!.id, idempotencyKey
   );
   res.json({ success: true, data: result });
 });
@@ -1169,6 +1186,8 @@ export const adminGetInventoryHistory = asyncHandler(async (req: AdminRequest, r
 });
 
 export const adminSetProductStock = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const idempotencyKey = req.header('Idempotency-Key');
+  if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
   const storeId = resolveStoreId(req);
   const { qty, stockUnit } = req.body;
   if (qty === undefined || isNaN(parseFloat(qty)) || parseFloat(qty) < 0) {
@@ -1178,18 +1197,20 @@ export const adminSetProductStock = asyncHandler(async (req: AdminRequest, res: 
     res.status(400).json({ success: false, error: 'stockUnit is required' }); return;
   }
   const result = await InventoryService.setStock(
-    req.params.productId, storeId, parseFloat(qty), stockUnit, req.admin!.id
+    req.params.productId, storeId, parseFloat(qty), stockUnit, req.admin!.id, idempotencyKey
   );
   res.json({ success: true, data: result });
 });
 
 export const adminBulkRestock = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const idempotencyKey = req.header('Idempotency-Key');
+  if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
   const storeId = resolveStoreId(req);
   const { items, note } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     res.status(400).json({ success: false, error: 'items array required' }); return;
   }
-  const results = await InventoryService.bulkRestock(storeId, items, note || null, req.admin!.id);
+  const results = await InventoryService.bulkRestock(storeId, items, note || null, req.admin!.id, idempotencyKey);
   res.json({ success: true, data: results, message: `${results.length} product(s) restocked` });
 });
 

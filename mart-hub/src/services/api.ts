@@ -70,8 +70,8 @@ export const categoriesApi = {
 export const ordersApi = {
   getAll: (params?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }) =>
     api.get('/admin/orders', { params }),
-  updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string) =>
-    api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason }),
+  updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string) =>
+    api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId }),
   batchDispatch: (orderIds: string[]) =>
     api.post('/admin/orders/batch-dispatch', { orderIds }),
   terminate: (id: string, reason: string, customReason?: string) =>
@@ -148,12 +148,12 @@ export const catalogApi = {
 // ── Inventory ────────────────────────────────────────────────────────────────
 export const inventoryApi = {
   getAll:     (storeId?: string) => api.get('/admin/inventory', { params: storeId ? { storeId } : {} }),
-  bulkRestock: (items: Array<{ productId: string; qty: number; stockUnit: string }>, note: string, storeId?: string) =>
-    api.post('/admin/inventory/bulk-restock', { items, note }, { params: storeId ? { storeId } : {} }),
-  restock:    (productId: string, qty: number, note: string, storeId?: string, stockUnit?: string) =>
-    api.post(`/admin/inventory/${productId}/restock`, { qty, note, stockUnit }, { params: storeId ? { storeId } : {} }),
-  setStock:   (productId: string, qty: number, storeId?: string) =>
-    api.put(`/admin/inventory/${productId}/stock`, { qty }, { params: storeId ? { storeId } : {} }),
+  bulkRestock: (items: Array<{ productId: string; qty: number; stockUnit: string }>, note: string, storeId?: string, idempotencyKey?: string) =>
+    api.post('/admin/inventory/bulk-restock', { items, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  restock:    (productId: string, qty: number, note: string, storeId?: string, stockUnit?: string, idempotencyKey?: string) =>
+    api.post(`/admin/inventory/${productId}/restock`, { qty, note, stockUnit }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  setStock:   (productId: string, qty: number, storeId?: string, idempotencyKey?: string) =>
+    api.put(`/admin/inventory/${productId}/stock`, { qty }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
   getHistory: (productId: string, storeId?: string) =>
     api.get(`/admin/inventory/${productId}/history`, { params: storeId ? { storeId } : {} }),
 };

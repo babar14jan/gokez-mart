@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { authApi } from '../services/api';
 
@@ -12,6 +12,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function GrievancePage() {
+  const requestKey = useRef(crypto.randomUUID());
   const [grievances, setGrievances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [subject, setSubject] = useState('');
@@ -29,7 +30,8 @@ export default function GrievancePage() {
     if (!subject.trim() || !description.trim()) return;
     setSubmitting(true); setError('');
     try {
-      await authApi.submitGrievance(subject.trim(), description.trim());
+      await authApi.submitGrievance(subject.trim(), description.trim(), requestKey.current);
+      requestKey.current = crypto.randomUUID();
       setSubmitted(true); setSubject(''); setDescription('');
       const r = await authApi.getGrievances();
       setGrievances(r.data.data || []);

@@ -12,7 +12,7 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
-body { background-color: #f0fdf4; color: #111827; }
+body { background-color: #ffffff; color: #111827; }
 .dark body { background-color: #18191a; color: #e4e6eb; }
 
 /* Facebook-style dark mode custom properties */

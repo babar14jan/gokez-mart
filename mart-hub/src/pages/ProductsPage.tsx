@@ -332,7 +332,7 @@ export default function ProductsPage() {
     if (!restocking || !restockQty) return;
     setRestockSaving(true);
     try {
-      await inventoryApi.restock(restocking.id, parseFloat(restockQty), restockNote, storeId, restockUnit);
+      await inventoryApi.restock(restocking.id, parseFloat(restockQty), restockNote, storeId, restockUnit, crypto.randomUUID());
       setRestocking(null); await load();
     } catch (e: any) { alert(e?.response?.data?.error || 'Failed to restock'); }
     finally { setRestockSaving(false); }
@@ -745,7 +745,7 @@ export default function ProductsPage() {
                             if (!inlineStockQty || isNaN(parseFloat(inlineStockQty)) || parseFloat(inlineStockQty) === 0) return;
                             setInlineStockSaving(true);
                             try {
-                              await inventoryApi.restock(editing.id, parseFloat(inlineStockQty), inlineStockNote, storeId, editing.stockUnit || 'kg');
+                              await inventoryApi.restock(editing.id, parseFloat(inlineStockQty), inlineStockNote, storeId, editing.stockUnit || 'kg', crypto.randomUUID());
                               setInlineStockQty(''); setInlineStockNote('');
                               // Refresh last restock without closing modal
                               const logs = await inventoryApi.getHistory(editing.id, storeId);

@@ -1,11 +1,21 @@
 // Cache version — controlled by /cache-version.json
 let CACHE_NAME = 'gokez-mart-v1';
+let IMAGE_CACHE_NAME = 'gokez-mart-images-v1';
+const MAX_IMAGE_ENTRIES = 60;
+
+async function cacheImage(request, response) {
+  if (!response.ok && response.type !== 'opaque') return;
+  const cache = await caches.open(IMAGE_CACHE_NAME);
+  await cache.put(request, response.clone());
+  const keys = await cache.keys();
+  await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_IMAGE_ENTRIES)).map(key => cache.delete(key)));
+}
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
     fetch('/cache-version.json?t=' + Date.now(), { cache: 'no-store' })
       .then(r => r.json())
-      .then(({ v }) => { CACHE_NAME = `gokez-mart-v${v}`; })
+      .then(({ v }) => { CACHE_NAME = `gokez-mart-v${v}`; IMAGE_CACHE_NAME = `gokez-mart-images-v${v}`; })
       .catch(() => {})
       .then(() =>
         caches.open(CACHE_NAME).then(c =>
@@ -27,12 +37,12 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     fetch('/cache-version.json?t=' + Date.now(), { cache: 'no-store' })
       .then(r => r.json())
-      .then(({ v }) => { CACHE_NAME = `gokez-mart-v${v}`; })
+      .then(({ v }) => { CACHE_NAME = `gokez-mart-v${v}`; IMAGE_CACHE_NAME = `gokez-mart-images-v${v}`; })
       .catch(() => {})
       .then(() =>
         caches.keys()
           .then(keys => Promise.all(
-            keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+            keys.filter(k => k !== CACHE_NAME && k !== IMAGE_CACHE_NAME).map(k => caches.delete(k))
           ))
       )
       .then(() => self.clients.claim())
@@ -69,7 +79,19 @@ self.addEventListener('fetch', (e) => {
   }
 
   // For static assets — cache first, network fallback
-  if (e.request.destination === 'image' || e.request.destination === 'style' || e.request.destination === 'script') {
+  if (e.request.destination === 'image') {
+    e.respondWith(
+      caches.open(IMAGE_CACHE_NAME).then(cache =>
+        cache.match(e.request).then(cached => cached || fetch(e.request).then(response => {
+          e.waitUntil(cacheImage(e.request, response));
+          return response;
+        }).catch(() => new Response('', { status: 404 }))
+      )
+    );
+    return;
+  }
+
+  if (e.request.destination === 'style' || e.request.destination === 'script') {
     e.respondWith(
       caches.match(e.request).then(cached => {
         if (cached) return cached;
@@ -97,7 +119,7 @@ self.addEventListener('push', (e) => {
       image: '/mart_web_logo.png',
       data: { url: payload.url || '/' },
       vibrate: [200, 100, 200],
-      tag: 'gokez-mart',
+      tag: payload.tag || 'gokez-mart',
       renotify: true,
     })
   );

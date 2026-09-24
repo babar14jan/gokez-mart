@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Search, X, CheckCircle } from 'lucide-react';
 import { storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
@@ -12,15 +12,7 @@ import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import LoginModal from './components/LoginModal';
-import OrderHistoryPage from './pages/OrderHistoryPage';
-import ProfilePage from './pages/ProfilePage';
 import CheckoutPage from './pages/CheckoutPage';
-import PrivacyPage from './pages/PrivacyPage';
-import TermsPage from './pages/TermsPage';
-import GrievancePage from './pages/GrievancePage';
-import DeleteAccountPage from './pages/DeleteAccountPage';
-import FeedbackPage from './pages/FeedbackPage';
-import NotificationSettingsPage from './pages/NotificationSettingsPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import InstallPrompt from './components/InstallPrompt';
@@ -30,6 +22,19 @@ import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
+
+const OrderHistoryPage = lazy(() => import('./pages/OrderHistoryPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const GrievancePage = lazy(() => import('./pages/GrievancePage'));
+const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage'));
+const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
+const NotificationSettingsPage = lazy(() => import('./pages/NotificationSettingsPage'));
+
+function DeferredPage({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<div className="min-h-[12rem]" />}>{children}</Suspense>;
+}
 
 const DEFAULT_SETTINGS: PublicSettings = {
   store_name: 'Gokez Mart', store_address: 'Kolkata',
@@ -97,8 +102,8 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#18191a' : '#f0fdf4');
-  }, [isDark]);
+    if (meta) meta.setAttribute('content', isDark ? '#18191a' : (view === 'home' || view === 'categories' ? '#f0fdf4' : '#ffffff'));
+  }, [isDark, view]);
 
   useEffect(() => {
     const handlePop = () => {
@@ -245,7 +250,7 @@ export default function App() {
   // Success screen
   if (successData) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center px-4">
         <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl p-8 max-w-sm w-full text-center">
           <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-emerald-500" />
@@ -287,7 +292,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f0fdf4] dark:bg-slate-900 font-sans">
+    <div className={`min-h-screen ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onClose={() => { setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
         setShowLoginModal(false);
@@ -374,7 +379,7 @@ export default function App() {
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
             onClick={() => { setCheckoutActive(false); setView(preCheckoutView); }} />
           {/* Mobile — full screen slide up */}
-          <div className="sm:hidden absolute inset-0 bg-gray-50 dark:bg-slate-900 overflow-y-auto">
+          <div className="sm:hidden absolute inset-0 bg-white dark:bg-slate-900 overflow-y-auto">
             <CheckoutPage
               settings={settings}
               zoneName={selectedZone?.name}
@@ -406,30 +411,30 @@ export default function App() {
           <CategoriesView categories={categories} products={products} />
         </div>
       ) : view === 'grievance' ? (
-        <div className={PAGE_BOTTOM}><GrievancePage /></div>
+        <div className={PAGE_BOTTOM}><DeferredPage><GrievancePage /></DeferredPage></div>
       ) : view === 'feedback' ? (
-        <div className={PAGE_BOTTOM}><FeedbackPage storeId={selectedZone?.storeId} /></div>
+        <div className={PAGE_BOTTOM}><DeferredPage><FeedbackPage storeId={selectedZone?.storeId} /></DeferredPage></div>
       ) : view === 'notification-settings' ? (
-        <div className={PAGE_BOTTOM}><NotificationSettingsPage /></div>
+        <div className={PAGE_BOTTOM}><DeferredPage><NotificationSettingsPage /></DeferredPage></div>
       ) : view === 'delete-account' ? (
-        <div className={PAGE_BOTTOM}><DeleteAccountPage /></div>
+        <div className={PAGE_BOTTOM}><DeferredPage><DeleteAccountPage /></DeferredPage></div>
       ) : view === 'privacy' ? (
-        <div className={PAGE_BOTTOM}><PrivacyPage embed={isEmbed} /></div>
+        <div className={PAGE_BOTTOM}><DeferredPage><PrivacyPage embed={isEmbed} /></DeferredPage></div>
       ) : view === 'terms' ? (
-        <div className={PAGE_BOTTOM}><TermsPage embed={isEmbed} /></div>
+        <div className={PAGE_BOTTOM}><DeferredPage><TermsPage embed={isEmbed} /></DeferredPage></div>
       ) : view === 'orders' ? (
         <div className={PAGE_BOTTOM}>
-          <OrderHistoryPage onBack={() => setView('home')} />
+          <DeferredPage><OrderHistoryPage onBack={() => setView('home')} whatsappNumber={settings.whatsapp_number} /></DeferredPage>
         </div>
       ) : view === 'account' ? (
         <div className={PAGE_BOTTOM}>
-          <ProfilePage
+          <DeferredPage><ProfilePage
             onBack={() => setView('home')}
             supportName={settings.support_name}
             supportPhone={settings.support_phone}
             whatsappNumber={settings.whatsapp_number}
             onNavigate={(v) => setView(v as 'home' | 'orders' | 'account' | 'privacy' | 'terms')}
-          />
+          /></DeferredPage>
         </div>
       ) : (
         /* Home */

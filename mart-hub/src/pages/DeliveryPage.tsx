@@ -60,10 +60,7 @@ export default function DeliveryPage() {
       const r = await ordersApi.getAll({ limit: 50 });
       const all = r.data.data || [];
       // Only show orders assigned to me
-      const mine = all.filter((o: any) =>
-        o.deliveryById === myId ||
-        ['out_for_delivery', 'picked_up'].includes(o.status)
-      );
+      const mine = all.filter((o: any) => o.deliveryById === myId);
       setOrders(mine);
     } catch {} finally { setRefreshing(false); setLoading(false); }
   };
@@ -88,7 +85,7 @@ export default function DeliveryPage() {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
   };
 
-  const active = orders.filter(o => ['ready_to_pickup', 'out_for_delivery', 'picked_up'].includes(o.status));
+  const active = orders.filter(o => ['ready_to_pickup', 'out_for_delivery'].includes(o.status));
   const done = orders.filter(o => o.status === 'delivered').slice(0, 5);
 
   if (loading) return (
@@ -136,7 +133,7 @@ export default function DeliveryPage() {
                     : <Navigation className="w-4 h-4 text-white" />
                   }
                   <span className="text-white text-sm font-bold">
-                    {order.status === 'out_for_delivery' ? 'Go to Store — Pick Up' : 'On the Way to Customer'}
+                    {order.status === 'ready_to_pickup' ? 'Ready to Pick Up' : 'On the Way to Customer'}
                   </span>
                 </div>
                 <span className="text-white/80 text-xs">Order #{order.orderNumber}</span>
@@ -178,19 +175,19 @@ export default function DeliveryPage() {
 
                 {/* Action buttons */}
                 <div className="flex gap-2 pt-1">
-                  {order.status === 'out_for_delivery' && (
+                  {order.status === 'ready_to_pickup' && (
                     <button
-                      onClick={() => updateStatus(order.id, 'picked_up')}
+                      onClick={() => updateStatus(order.id, 'out_for_delivery')}
                       disabled={updating === order.id}
                       className="flex-1 flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors">
                       {updating === order.id
                         ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         : <Package className="w-4 h-4" />
                       }
-                      Picked Up from Store
+                      Start Delivery
                     </button>
                   )}
-                  {order.status === 'picked_up' && (
+                  {order.status === 'out_for_delivery' && (
                     <button
                       onClick={() => updateStatus(order.id, 'delivered')}
                       disabled={updating === order.id}

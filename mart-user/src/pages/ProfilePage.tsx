@@ -172,33 +172,26 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900 font-sans">
 
-      {/* Profile cover — full width, Facebook style */}
+      {/* Profile header */}
       {(() => {
         const initial = name
           ? name.trim().split(/\s+/).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
           : (phone || '?')[0].toUpperCase();
-        const gradient = 'from-slate-800 via-purple-900 to-slate-900';
         return (
-          <div className={`relative bg-gradient-to-br ${gradient} dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 w-full`} style={{ minHeight: '160px' }}>
-            {/* Decorative circles */}
-            <div className="absolute -right-8 -top-8 w-56 h-56 rounded-full bg-white/10 pointer-events-none" />
-            <div className="absolute right-8 -bottom-12 w-40 h-40 rounded-full bg-white/10 pointer-events-none" />
-            <div className="absolute left-1/3 top-4 w-24 h-24 rounded-full bg-white/5 pointer-events-none" />
-
-            {/* Content pinned to bottom */}
-            <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-4 pt-8 flex items-end gap-4">
+          <div className="w-full bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center gap-4">
               {/* Avatar */}
               <div className="relative flex-shrink-0">
-                <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm border-3 border-white/40 flex items-center justify-center shadow-xl overflow-hidden" style={{ border: '3px solid rgba(255,255,255,0.4)' }}>
+                <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border-2 border-emerald-200 dark:border-emerald-800 flex items-center justify-center overflow-hidden">
                   {photoUrl
                     ? <img src={photoUrl} alt={name || ''} className="w-full h-full object-cover" />
-                    : <span className="text-3xl font-black text-white drop-shadow tracking-tight">{initial}</span>
+                    : <span className="text-3xl font-black text-emerald-700 dark:text-emerald-400 tracking-tight">{initial}</span>
                   }
                 </div>
                 <label className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer hover:bg-gray-100 transition-colors">
                   {photoUploading
-                    ? <Loader2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />
-                    : <Camera className="w-3.5 h-3.5 text-purple-600" />
+                    ? <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+                    : <Camera className="w-3.5 h-3.5 text-emerald-600" />
                   }
                   <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
                 </label>
@@ -209,39 +202,39 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                 {editingName ? (
                   <div className="flex items-center gap-2">
                     <input autoFocus type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
-                      className="flex-1 px-3 py-1.5 text-sm bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-white placeholder:text-white/60 focus:outline-none focus:border-white/60" placeholder="Your full name" />
+                      className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500" placeholder="Your full name" />
                     <button onClick={saveName} disabled={saving === 'name'}
-                      className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg flex-shrink-0 border border-white/30">
+                      className="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg flex-shrink-0">
                       {saving === 'name' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     </button>
                     <button onClick={() => { setEditingName(false); setNameVal(name || ''); }}
-                      className="p-1.5 text-white/70 hover:bg-white/20 rounded-lg flex-shrink-0">
+                      className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg flex-shrink-0">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <p className="text-xl font-black text-white drop-shadow truncate">
-                      {name || <span className="font-normal text-white/70 text-base">Add your name</span>}
+                    <p className="text-xl font-black text-gray-900 dark:text-white truncate">
+                      {name || <span className="font-normal text-gray-500 dark:text-slate-400 text-base">Add your name</span>}
                     </p>
                     <button onClick={() => setEditingName(true)}
-                      className="absolute top-3 right-3 p-2 bg-white/20 hover:bg-white/30 text-white rounded-xl border border-white/30 transition-colors">
+                      className="p-2 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}
                 <div className="flex items-center gap-2 mt-1">
                   <div className="flex items-center gap-1.5">
-                    <Phone className="w-3 h-3 text-white/70" />
-                    <span className="text-sm font-semibold text-white">+91 {phone}</span>
+                    <Phone className="w-3 h-3 text-gray-500 dark:text-slate-400" />
+                    <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">+91 {phone}</span>
                   </div>
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
                     <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     Verified
                   </span>
                 </div>
-                {saved === 'name' && <p className="text-xs text-white/90 mt-1 font-semibold">Name saved ✓</p>}
-                {error && <p className="text-xs text-red-200 mt-1">{error}</p>}
+                {saved === 'name' && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">Name saved ✓</p>}
+                {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
               </div>
             </div>
           </div>

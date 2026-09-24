@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(username, password);
       const d = res.data.data;
-      login(d.token, { username: d.username, name: d.name || d.username, email: d.email, phone: d.phone, role: d.role, storeId: d.storeId });
+      login(d.token, { id: d.id, username: d.username, name: d.name || d.username, email: d.email, phone: d.phone, role: d.role, storeId: d.storeId });
       subscribeAdminToPush().catch(() => {});
       navigate('/');
     } catch (err: any) {

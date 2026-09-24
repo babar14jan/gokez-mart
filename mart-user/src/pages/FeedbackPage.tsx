@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Loader2, Star } from 'lucide-react';
 import { feedbackApi } from '../services/api';
 
@@ -17,6 +17,7 @@ const STAR_LABELS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
 interface Props { storeId?: string; orderId?: string; }
 
 export default function FeedbackPage({ storeId, orderId }: Props) {
+  const requestKey = useRef(crypto.randomUUID());
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [category, setCategory] = useState('');
@@ -29,7 +30,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
     if (!rating || !category) return;
     setSubmitting(true); setError('');
     try {
-      await feedbackApi.submit({ rating, category, message: message.trim() || undefined, storeId, orderId });
+      await feedbackApi.submit({ rating, category, message: message.trim() || undefined, storeId, orderId }, requestKey.current);
       setDone(true);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Failed to submit. Please try again.');
