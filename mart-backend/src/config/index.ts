@@ -16,7 +16,7 @@ export const config = {
       }
       return process.env.MART_JWT_SECRET;
     })(),
-    expiresIn: process.env.MART_JWT_EXPIRES_IN || '30d',
+    expiresIn: process.env.MART_JWT_EXPIRES_IN || '90d',
   },
   supabase: {
     url: process.env.SUPABASE_URL || '',

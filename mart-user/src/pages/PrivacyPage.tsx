@@ -105,7 +105,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">9. Security</h2>
-            <p>All data is encrypted in transit (HTTPS/TLS). OTPs expire in 10 minutes. JWT tokens expire in 30 days. We use Supabase (SOC 2 compliant) for database storage.</p>
+            <p>All data is encrypted in transit (HTTPS/TLS). OTPs expire in 10 minutes. JWT tokens expire in 90 days. We use Supabase (SOC 2 compliant) for database storage.</p>
           </section>
 
           <section>
