@@ -399,6 +399,14 @@ export default function OrdersPage() {
             const staleMin = getStaleMinutes(order);
             const isActive = !TERMINAL.includes(order.status);
             const timeStr = new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+            const isAssignedDeliveryHandler = order.deliveryById === currentUserId;
+            const deliveryAction = isAssignedDeliveryHandler && (
+              order.status === 'ready_to_pickup' || order.status === 'picked_up'
+                ? { label: 'Start Delivery', status: 'out_for_delivery', color: 'bg-violet-500 hover:bg-violet-600 text-white' }
+                : order.status === 'out_for_delivery'
+                  ? { label: 'Mark Delivered', status: 'delivered', color: 'bg-emerald-500 hover:bg-emerald-600 text-white' }
+                  : null
+            );
 
             return (
               <div key={order.id}
@@ -501,7 +509,7 @@ export default function OrdersPage() {
                   {(order.status === 'out_for_delivery' || order.status === 'picked_up') && order.deliveryByName && (
                     <div className="flex items-center gap-2 mt-2 bg-violet-50 dark:bg-violet-900/20 rounded-xl px-3 py-2">
                       <span className="text-xs">🛵</span>
-                      <span className="text-xs font-semibold text-violet-700 dark:text-violet-400">{order.deliveryByName}</span>
+                      <span className="flex-1 min-w-0 text-xs font-semibold text-violet-700 dark:text-violet-400 break-words">{order.deliveryByName}</span>
                       {order.deliveryByPhone && (
                         <button onClick={e => { e.stopPropagation(); window.open(`tel:${order.deliveryByPhone}`); }}
                           className="ml-auto text-[10px] text-violet-600 dark:text-violet-400 font-semibold hover:underline">
@@ -570,6 +578,17 @@ export default function OrdersPage() {
                           Assign &amp; Ready for Pickup
                         </button>
                       )
+                    )}
+
+                    {deliveryAction && (
+                      <button
+                        onClick={e => updateStatus(order.id, deliveryAction.status, e)}
+                        disabled={isUpdating}
+                        className={`flex-1 min-w-[132px] flex items-center justify-center gap-1.5 px-3 py-2.5 text-center text-xs font-bold leading-tight whitespace-normal rounded-xl transition-all disabled:opacity-50 ${deliveryAction.color}`}>
+                        {isUpdating
+                          ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          : deliveryAction.label}
+                      </button>
                     )}
 
                     {/* Delivery failed dropdown */}
@@ -655,7 +674,7 @@ export default function OrdersPage() {
                             <img src={item.photoUrl} alt={item.productName}
                               className="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-gray-100 dark:border-slate-600" />
                           )}
-                          <span className="text-xs text-gray-700 dark:text-slate-300 truncate">
+                          <span className="text-xs text-gray-700 dark:text-slate-300 break-words">
                             {item.productName} <span className="text-gray-500 dark:text-slate-400">({item.unit})</span> × {item.quantity}
                           </span>
                         </div>

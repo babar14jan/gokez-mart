@@ -5,8 +5,8 @@ import { useAuthStore } from '../store/authStore';
 
 const RIDER_STEPS = [
   { status: 'ready_to_pickup',  label: 'Ready to Pickup', emoji: '📦' },
-  { status: 'out_for_delivery', label: 'Out for Delivery', emoji: '🛵' },
   { status: 'picked_up',        label: 'Picked Up',        emoji: '🤝' },
+  { status: 'out_for_delivery', label: 'Out for Delivery', emoji: '🛵' },
   { status: 'delivered',        label: 'Delivered',        emoji: '🎉' },
 ];
 
@@ -85,7 +85,7 @@ export default function DeliveryPage() {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
   };
 
-  const active = orders.filter(o => ['ready_to_pickup', 'out_for_delivery'].includes(o.status));
+  const active = orders.filter(o => ['ready_to_pickup', 'picked_up', 'out_for_delivery'].includes(o.status));
   const done = orders.filter(o => o.status === 'delivered').slice(0, 5);
 
   if (loading) return (
@@ -133,7 +133,7 @@ export default function DeliveryPage() {
                     : <Navigation className="w-4 h-4 text-white" />
                   }
                   <span className="text-white text-sm font-bold">
-                    {order.status === 'ready_to_pickup' ? 'Ready to Pick Up' : 'On the Way to Customer'}
+                    {order.status === 'ready_to_pickup' ? 'Ready to Pick Up' : order.status === 'picked_up' ? 'Picked Up - Start Delivery' : 'On the Way to Customer'}
                   </span>
                 </div>
                 <span className="text-white/80 text-xs">Order #{order.orderNumber}</span>
@@ -175,11 +175,11 @@ export default function DeliveryPage() {
 
                 {/* Action buttons */}
                 <div className="flex gap-2 pt-1">
-                  {order.status === 'ready_to_pickup' && (
+                  {(order.status === 'ready_to_pickup' || order.status === 'picked_up') && (
                     <button
                       onClick={() => updateStatus(order.id, 'out_for_delivery')}
                       disabled={updating === order.id}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors">
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-3 text-center leading-tight whitespace-normal bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors">
                       {updating === order.id
                         ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         : <Package className="w-4 h-4" />
@@ -191,7 +191,7 @@ export default function DeliveryPage() {
                     <button
                       onClick={() => updateStatus(order.id, 'delivered')}
                       disabled={updating === order.id}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors">
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-3 text-center leading-tight whitespace-normal bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors">
                       {updating === order.id
                         ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         : <CheckCircle className="w-4 h-4" />
@@ -218,7 +218,7 @@ export default function DeliveryPage() {
                 <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{order.guestName}</p>
-                  <p className="text-xs text-gray-500 truncate">{order.guestAddress}</p>
+                  <p className="text-xs text-gray-500 break-words">{order.guestAddress}</p>
                 </div>
                 <span className="text-xs font-bold text-gray-500 dark:text-slate-400">₹{order.total}</span>
               </div>

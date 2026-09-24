@@ -142,7 +142,7 @@ export const placeOrder = asyncHandler(async (req: Request, res: Response) => {
   const customer = await query<{ customer_id: string | null }>(`SELECT customer_id FROM mart_orders WHERE id = $1`, [result.orderId]);
   if (!result.duplicate && customer.rows[0]?.customer_id) {
     PushService.notifyCustomer(customer.rows[0].customer_id, {
-      title: `${storeName} order placed`,
+      title: `Order #${result.orderNumber} received`,
       body: `Order #${result.orderNumber} has been received.`,
       url: '/orders',
       tag: `order-${result.orderId}`,
@@ -432,14 +432,14 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
       [req.admin!.id, admin?.name || req.admin!.username, admin?.phone || null, i + 1, batchId, orderIds[i]]
     );
     // Notify each customer
-    const custResult = await query<{ customer_id: string | null; delivery_preference: string }>(  
+    const custResult = await query<{ customer_id: string | null; delivery_preference: string }>(
       `SELECT customer_id, delivery_preference FROM mart_orders WHERE id = $1`, [orderIds[i]]
     );
     const { customer_id, delivery_preference } = custResult.rows[0] || {};
     const etaLabel = delivery_preference === 'within_30' ? '30 mins' : delivery_preference === 'within_60' ? '1 hour' : '10-15 mins';
     if (customer_id) {
       PushService.notifyCustomer(customer_id, {
-        title: 'Gokez Mart 🛒',
+        title: 'Rider is on the way',
         body: `🛵 Rider is on the way! Should reach you within ${etaLabel}`,
         url: '/orders',
       }).catch(() => {});
@@ -477,7 +477,7 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
   }
   if (detail?.customer_id && messages[status]) {
     PushService.notifyCustomer(detail.customer_id, {
-      title: `${detail.store_name} · Order #${order.orderNumber}`,
+      title: `Order #${order.orderNumber} update`,
       body: messages[status], url: '/orders', tag,
     }).catch(() => {});
   }

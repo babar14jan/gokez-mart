@@ -109,10 +109,10 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   if (!e.data) return;
   let payload;
-  try { payload = e.data.json(); } catch { payload = { title: 'Gokez Mart', body: e.data.text() }; }
+  try { payload = e.data.json(); } catch { payload = { title: 'Order update', body: e.data.text() }; }
 
   e.waitUntil(
-    self.registration.showNotification(payload.title || 'Gokez Mart 🛒', {
+    self.registration.showNotification(payload.title || 'Order update', {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-96.png',

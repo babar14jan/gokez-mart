@@ -334,7 +334,7 @@ export class OrderService {
         (status === 'confirmed' && existing.status === 'pending' && processingRoles.includes(actor.role)) ||
         (status === 'preparing' && existing.status === 'confirmed' && processingRoles.includes(actor.role)) ||
         (status === 'ready_to_pickup' && existing.status === 'preparing' && assignmentRoles.includes(actor.role) && !!deliveryAssigneeId) ||
-        (status === 'out_for_delivery' && existing.status === 'ready_to_pickup' && isAssignedHandler) ||
+        (status === 'out_for_delivery' && ['ready_to_pickup', 'picked_up'].includes(existing.status) && isAssignedHandler) ||
         (status === 'delivered' && ['out_for_delivery', 'picked_up'].includes(existing.status) && isAssignedHandler) ||
         (status === 'cancelled' && ['pending', 'confirmed'].includes(existing.status) && processingRoles.includes(actor.role)) ||
         (status === 'failed_delivery' && ['out_for_delivery', 'picked_up'].includes(existing.status) && (isAssignedHandler || assignmentRoles.includes(actor.role)));
