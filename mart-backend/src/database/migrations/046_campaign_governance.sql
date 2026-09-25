@@ -16,6 +16,9 @@ ALTER TABLE mart_campaigns
   CHECK (status IN ('draft', 'scheduled', 'active', 'paused', 'expired', 'archived'));
 
 ALTER TABLE mart_campaigns
+  DROP CONSTRAINT IF EXISTS mart_campaigns_inactive_days_check;
+
+ALTER TABLE mart_campaigns
   ADD CONSTRAINT mart_campaigns_inactive_days_check
   CHECK (
     (eligibility_type = 'inactive_customers' AND inactive_days IS NOT NULL AND inactive_days > 0)

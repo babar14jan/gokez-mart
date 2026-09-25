@@ -455,7 +455,7 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
   const tag = `order-${order.id}`;
   if (status === 'ready_to_pickup' && detail?.delivery_by) {
     PushService.notifyAdmin(detail.delivery_by, {
-      title: `Order #${order.orderNumber} ready for pickup`,
+      title: `Gokez Mart · Order #${order.orderNumber} ready for pickup`,
       body: `${detail.guest_name} · ready to collect and deliver`,
       url: '/delivery', tag,
     }).catch(() => {});
@@ -468,7 +468,7 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
   }
   if (status === 'failed_delivery') {
     PushService.notifyStoreAdmins(order.storeId, {
-      title: `Delivery failed · Order #${order.orderNumber}`,
+      title: `Gokez Mart · Delivery failed · Order #${order.orderNumber}`,
       body: `${detail?.guest_name || 'Customer'} · ${failureReason || 'Delivery failed'}`,
       url: '/orders', tag,
     }).catch(() => {});

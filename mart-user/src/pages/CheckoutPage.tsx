@@ -364,16 +364,16 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
           <div className={card}>
             <div className="px-4 py-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
+                {eligibleCampaigns.length > 0 && <div className="flex items-center gap-2">
                   <Tag className="w-4 h-4 text-violet-500" />
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers & Coupons</span>
-                </div>
-                <button type="button" onClick={() => setShowCouponField(value => !value)} className="text-xs font-semibold text-violet-600 dark:text-violet-400 whitespace-nowrap">
-                  {showCouponField ? 'Hide coupon' : 'Have a coupon?'}
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Available offers</span>
+                </div>}
+                <button type="button" onClick={() => setShowCouponField(true)} className={`${eligibleCampaigns.length > 0 ? '' : 'w-full text-left'} text-xs font-semibold text-violet-600 dark:text-violet-400 whitespace-nowrap`}>
+                  Have coupon code?
                 </button>
               </div>
 
-              <div className="mt-3 space-y-2">
+              {eligibleCampaigns.length > 0 && <div className="mt-3 space-y-2">
                 <p className="text-[11px] leading-tight text-gray-500 dark:text-slate-400">Choose one offer. Coupon codes cannot be combined with another offer.</p>
                 <label className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${!appliedCampaign ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'}`}>
                   <input type="radio" name="checkout-offer" checked={!appliedCampaign} onChange={removeCampaign} className="mt-0.5 accent-emerald-500" />
@@ -393,8 +393,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
                     </label>
                   );
                 })}
-                {eligibleCampaigns.length === 0 && <p className="text-xs text-gray-500 dark:text-slate-400">No eligible offers for this order.</p>}
-              </div>
+              </div>}
 
               {showCouponField && <div className="mt-3 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Coupon code</label>

@@ -103,10 +103,10 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   if (!e.data) return;
   let payload;
-  try { payload = e.data.json(); } catch { payload = { title: 'Gokez Hub', body: e.data.text() }; }
+  try { payload = e.data.json(); } catch { payload = { title: 'Gokez Mart', body: e.data.text() }; }
 
   e.waitUntil(
-    self.registration.showNotification(payload.title || 'Gokez Hub', {
+    self.registration.showNotification(payload.title || 'Gokez Mart', {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-96.png',

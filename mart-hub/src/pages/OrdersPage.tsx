@@ -158,6 +158,9 @@ export default function OrdersPage() {
   const [terminating, setTerminating] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [resolutionType, setResolutionType] = useState<'failed_delivery' | 'terminated'>('failed_delivery');
+  const [resolutionReason, setResolutionReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [statusOpen, setStatusOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -221,6 +224,24 @@ export default function OrdersPage() {
     }
     setCancellingId(null);
     setCancellationReason('');
+  };
+
+  const handleDeliveryResolution = async (order: any) => {
+    if (!resolutionReason) return;
+    try {
+      if (resolutionType === 'failed_delivery') {
+        setUpdating(order.id);
+        await ordersApi.updateStatus(order.id, 'failed_delivery', resolutionReason);
+        await load();
+      } else {
+        await handleTerminate(order.id, resolutionReason);
+      }
+    } finally {
+      setUpdating(null);
+      setResolvingId(null);
+      setResolutionType('failed_delivery');
+      setResolutionReason('');
+    }
   };
 
   const handleBatchDispatch = async () => {
@@ -401,6 +422,8 @@ export default function OrdersPage() {
             const isActive = !TERMINAL.includes(order.status);
             const timeStr = new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
             const isAssignedDeliveryHandler = order.deliveryById === currentUserId;
+            const canReportDeliveryIssue = isAssignedDeliveryHandler || ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
+            const canResolveDelivery = order.status === 'out_for_delivery' && (canReportDeliveryIssue || canTerminate);
             const deliveryAction = isAssignedDeliveryHandler && (
               order.status === 'ready_to_pickup' || order.status === 'picked_up'
                 ? { label: 'Start Delivery', status: 'out_for_delivery', color: 'bg-violet-500 hover:bg-violet-600 text-white' }
@@ -600,27 +623,60 @@ export default function OrdersPage() {
                       </button>
                     )}
 
-                    {/* Delivery failed dropdown */}
-                    {order.status === 'out_for_delivery' && (
-                      <select defaultValue=""
-                        onChange={async e => {
-                          const reason = e.target.value;
-                          if (!reason) return;
-                          e.target.value = '';
-                          await updateStatus(order.id, 'failed_delivery', undefined, reason);
-                        }}
-                        onClick={e => e.stopPropagation()}
-                        className="text-xs border border-orange-200 dark:border-orange-800 rounded-xl px-2.5 py-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 focus:outline-none cursor-pointer font-semibold">
-                        <option value="" disabled>⚠️ Failed?</option>
-                        <option value="refused">Customer refused</option>
-                        <option value="no_answer">No answer</option>
-                        <option value="phone_off">Phone off</option>
-                        <option value="wrong_address">Wrong address</option>
-                      </select>
-                    )}
+                    {/* One delivery-resolution flow keeps failure and termination auditable. */}
+                    {canResolveDelivery && (resolvingId === order.id ? (() => {
+                      const isProcessing = updating === order.id || terminating === order.id;
+                      const canTerminateThisOrder = canTerminate;
+                      const terminationSelected = resolutionType === 'terminated';
+                      return (
+                        <div className="flex flex-1 items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                          <select value={resolutionType}
+                            onChange={e => { setResolutionType(e.target.value as 'failed_delivery' | 'terminated'); setResolutionReason(''); }}
+                            disabled={isProcessing}
+                            className="min-w-[148px] flex-1 text-xs border border-orange-200 dark:border-orange-800 rounded-xl px-2.5 py-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 focus:outline-none cursor-pointer font-semibold disabled:opacity-50">
+                            <option value="failed_delivery">Unable to deliver</option>
+                            {canTerminateThisOrder && <option value="terminated">Terminate order</option>}
+                          </select>
+                          <select value={resolutionReason}
+                            onChange={e => setResolutionReason(e.target.value)}
+                            disabled={isProcessing}
+                            className="min-w-[148px] flex-1 text-xs border border-orange-200 dark:border-orange-800 rounded-xl px-2.5 py-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 focus:outline-none cursor-pointer font-semibold disabled:opacity-50">
+                            <option value="" disabled>{terminationSelected ? 'Why terminate?' : 'Why unable to deliver?'}</option>
+                            {terminationSelected ? <>
+                              <option value="out_of_stock">Out of stock</option>
+                              <option value="store_closed">Store closed</option>
+                              <option value="outside_area">Outside delivery area</option>
+                              <option value="rider_unavailable">Rider unavailable</option>
+                              <option value="technical_issue">Technical issue</option>
+                            </> : <>
+                              <option value="refused">Customer refused</option>
+                              <option value="no_answer">Customer unavailable</option>
+                              <option value="phone_off">Phone switched off</option>
+                              <option value="wrong_address">Wrong or unreachable address</option>
+                            </>}
+                            <option value="other">Other</option>
+                          </select>
+                          <button onClick={() => handleDeliveryResolution(order)} disabled={!resolutionReason || isProcessing}
+                            className="px-3 py-2 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl disabled:opacity-50">
+                            Confirm
+                          </button>
+                          <button onClick={() => { setResolvingId(null); setResolutionType('failed_delivery'); setResolutionReason(''); }} disabled={isProcessing}
+                            className="p-2 text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700 rounded-xl disabled:opacity-50"
+                            aria-label="Close delivery resolution" title="Back">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })() : (
+                      <button onClick={e => { e.stopPropagation(); setResolutionType('failed_delivery'); setResolutionReason(''); setResolvingId(order.id); }} disabled={isUpdating}
+                        className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors disabled:opacity-50">
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Resolve Delivery</span>
+                      </button>
+                    ))}
 
-                    {/* Unified Stop Order — smart routing based on stage + role */}
-                    {canManage && !TERMINAL.includes(order.status) && (() => {
+                    {/* Early order cancellation and late-stage termination remain distinct from delivery resolution. */}
+                    {canManage && !TERMINAL.includes(order.status) && order.status !== 'out_for_delivery' && (() => {
                       const isEarly = ['pending', 'confirmed'].includes(order.status);
                       const isLate  = !isEarly;
                       // Late stage: only super_admin + store_owner can stop

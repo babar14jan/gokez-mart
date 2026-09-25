@@ -225,7 +225,10 @@ export class CampaignService {
     );
 
     const campaigns = result.rows;
-    if (!customerId || campaigns.length === 0) return campaigns;
+    if (campaigns.length === 0) return campaigns;
+    // Automatic offers can have first-order, inactive, targeted, or per-customer
+    // limits, so only expose them once the customer identity is verified.
+    if (!customerId) return [];
 
     // Filter by customer eligibility
     const eligible: any[] = [];
