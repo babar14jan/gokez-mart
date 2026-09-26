@@ -4,6 +4,7 @@ import { useCartStore } from '../store/cartStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import type { PublicSettings } from '../services/api';
+import AddressForm from './AddressForm';
 
 interface CartDrawerProps {
   open: boolean;
@@ -19,7 +20,7 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
   const sheetRef = useRef<HTMLDivElement>(null);
   const [showAddressList, setShowAddressList] = useState(false);
   const [addingNew, setAddingNew] = useState(false);
-  const [newAddress, setNewAddress] = useState('');
+  const [addressSaving, setAddressSaving] = useState(false);
 
   const deliveryCharge = parseFloat(settings.delivery_charge || '15');
   const freeAbove = parseFloat(settings.free_delivery_above || '150');
@@ -32,7 +33,7 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
 
   // Resolve delivery address
   const defaultAddr = getDefaultAddress();
-  const deliveryAddress = isLoggedIn ? authAddress : defaultAddr?.address;
+  const deliveryAddress = defaultAddr?.address || (isLoggedIn ? authAddress : null);
   const hasMultipleAddresses = addresses.length >= 1;
 
   useEffect(() => {
@@ -160,31 +161,16 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
                       <span className="text-xs font-semibold">Add new address</span>
                     </button>
                   ) : (
-                    <div className="px-3 py-2.5 space-y-2">
-                      <textarea
-                        value={newAddress}
-                        onChange={e => setNewAddress(e.target.value)}
-                        placeholder="Enter new delivery address..."
-                        rows={2}
-                        className="w-full text-xs px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 resize-none"
-                        autoFocus
-                      />
-                      <div className="flex gap-2">
-                        <button onClick={() => { setAddingNew(false); setNewAddress(''); }}
-                          className="flex-1 py-1.5 text-xs font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 rounded-xl">
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!newAddress.trim()) return;
-                            addAddress({ label: 'Home', address: newAddress.trim(), isDefault: true });
-                            setAddingNew(false); setNewAddress(''); setShowAddressList(false);
-                          }}
-                          disabled={!newAddress.trim()}
-                          className="flex-1 py-1.5 text-xs font-semibold text-white bg-emerald-500 rounded-xl disabled:opacity-50">
-                          Save
-                        </button>
-                      </div>
+                    <div className="px-3 py-3">
+                      <AddressForm saving={addressSaving} onCancel={() => setAddingNew(false)}
+                        onSave={async (label, address) => {
+                          setAddressSaving(true);
+                          try {
+                            await addAddress({ label, address, isDefault: addresses.length === 0 });
+                            setAddingNew(false);
+                            setShowAddressList(false);
+                          } finally { setAddressSaving(false); }
+                        }} />
                     </div>
                   )}
                 </div>

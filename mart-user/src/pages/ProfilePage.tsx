@@ -5,29 +5,7 @@ import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import { useThemeStore } from '../store/themeStore';
 import { getLocationPermission } from '../services/push';
-
-const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400';
-
-interface AddressFields { flat: string; block: string; street: string; pincode: string; }
-
-const EMPTY_ADDR: AddressFields = { flat: '', block: '', street: '', pincode: '' };
-const LABELS = ['Home', 'Work', 'Other'];
-
-// Serialize structured fields → single string for storage
-const serialize = (a: AddressFields) =>
-  [a.flat, a.block, a.street, a.pincode].filter(Boolean).join(', ');
-
-// Parse stored string back into fields (best-effort)
-const parse = (s: string | null): AddressFields => {
-  if (!s) return EMPTY_ADDR;
-  const parts = s.split(',').map(p => p.trim());
-  return {
-    flat:    parts[0] || '',
-    block:   parts[1] || '',
-    street:  parts[2] || '',
-    pincode: parts[3] || '',
-  };
-};
+import AddressForm from '../components/AddressForm';
 
 interface ProfilePageProps {
   onBack?: () => void;
@@ -35,61 +13,6 @@ interface ProfilePageProps {
   supportPhone?: string;
   whatsappNumber?: string;
   onNavigate?: (view: string) => void;
-}
-
-
-function AddressModalForm({ stored, initialLabel, onSave, onCancel, saving }: {
-  stored: string | null;
-  initialLabel: string;
-  onSave: (label: string, val: string) => Promise<void>;
-  onCancel: () => void;
-  saving: boolean;
-}) {
-  const [label, setLabel] = useState(initialLabel);
-  const [form, setForm] = useState<AddressFields>(parse(stored));
-  const f = (k: keyof AddressFields) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(p => ({ ...p, [k]: e.target.value }));
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        {LABELS.map(l => (
-          <button key={l} type="button" onClick={() => setLabel(l)}
-            className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition-colors ${label === l ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400'}`}>
-            {l}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="block text-[10px] font-medium text-gray-500 mb-1">Flat / House No.</label>
-          <input type="text" value={form.flat} onChange={f('flat')} className={inp} placeholder="e.g. A-204" autoFocus />
-        </div>
-        <div>
-          <label className="block text-[10px] font-medium text-gray-500 mb-1">Block / Tower</label>
-          <input type="text" value={form.block} onChange={f('block')} className={inp} placeholder="e.g. Block B" />
-        </div>
-      </div>
-      <div>
-        <label className="block text-[10px] font-medium text-gray-500 mb-1">Street / Area</label>
-        <input type="text" value={form.street} onChange={f('street')} className={inp} placeholder="e.g. Kolkata" />
-      </div>
-      <div>
-        <label className="block text-[10px] font-medium text-gray-500 mb-1">Pincode</label>
-        <input type="tel" inputMode="numeric" maxLength={6} value={form.pincode} onChange={f('pincode')} className={inp} placeholder="700102" />
-      </div>
-      <div className="flex gap-2 pt-2">
-        <button onClick={onCancel}
-          className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl transition-colors">
-          Cancel
-        </button>
-        <button onClick={() => onSave(label, serialize(form))} disabled={saving}
-          className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? 'Saving...' : 'Save Address'}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 export default function ProfilePage({ onBack, supportName, supportPhone, whatsappNumber }: ProfilePageProps) {
@@ -312,7 +235,7 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                   <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
-              <AddressModalForm
+              <AddressForm
                 stored={editingAddressId === 'new' ? null : (addresses.find(a => a.id === editingAddressId)?.address ?? null)}
                 initialLabel={editingAddressId === 'new' ? 'Home' : (addresses.find(a => a.id === editingAddressId)?.label ?? 'Home')}
                 onSave={handleSaveAddress}

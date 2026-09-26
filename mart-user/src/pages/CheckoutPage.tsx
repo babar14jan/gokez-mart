@@ -5,6 +5,7 @@ import { storeApi, campaignApi } from '../services/api';
 import type { PublicSettings, Product } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
+import AddressForm from '../components/AddressForm';
 
 interface CheckoutPageProps {
   settings: PublicSettings;
@@ -52,21 +53,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
 
   // Address
   const [showAddressList, setShowAddressList] = useState(false);
-  const [addingNew, setAddingNew] = useState(!deliveryAddress);
-  const [newAddress, setNewAddress] = useState('');
-
-  // Smart address prompt — if the customer has no saved address at all, open the sheet proactively
-  // instead of silently blocking them at the final "Place Order" step.
-  const addressPromptShown = useRef(false);
-  useEffect(() => {
-    if (addressPromptShown.current) return;
-    if (!isLoggedIn) return;
-    if (addresses.length === 0 && !deliveryAddress) {
-      addressPromptShown.current = true;
-      setAddingNew(true);
-      setShowAddressList(true);
-    }
-  }, [isLoggedIn, addresses, deliveryAddress]);
+  const [addingNew, setAddingNew] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
 
   // Delivery preference
   const [deliveryPreference, setDeliveryPreference] = useState<'within_15' | 'within_30' | 'within_60'>('within_15');
@@ -163,7 +151,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
   const total = Math.max(0, sub + actualDelivery - campaignDiscount);
   const canCheckout = sub >= minOrder && items.length > 0;
 
-  const resolvedAddress = deliveryAddress || newAddress.trim();
+  const resolvedAddress = deliveryAddress;
   const selectedLabel = addresses.find(a => a.address === deliveryAddress)?.label ?? 'Address';
   const selectedPref = PREFERENCES.find(p => p.value === deliveryPreference)!;
   const currentNote = showCustomNote ? (customNote || '✏️ Custom note') : deliveryNote;
@@ -187,7 +175,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
         campaignId: appliedCouponCode ? undefined : appliedCampaign?.id || undefined,
         couponCode: appliedCouponCode || undefined,
       }, orderRequestKey.current);
-      if (resolvedAddress) addAddress({ label: 'Home', address: resolvedAddress, isDefault: true });
       clearCart();
       onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined);
     } catch (err: any) {
@@ -338,22 +325,16 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
                     </button>
                   </>
                 ) : (
-                  <div className="px-5 py-4 space-y-3">
-                    <textarea value={newAddress} onChange={e => setNewAddress(e.target.value)}
-                      className={`${inp} resize-none`} rows={3}
-                      placeholder="Flat/House no, Building, Street, Area..." autoFocus />
-                    <div className="flex gap-2">
-                      {addresses.length > 0 && (
-                        <button type="button" onClick={() => setAddingNew(false)}
-                          className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl transition-colors">
-                          ← Use saved address
-                        </button>
-                      )}
-                      <button type="button" onClick={() => setShowAddressList(false)} disabled={!newAddress.trim()}
-                        className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50 transition-colors">
-                        Done
-                      </button>
-                    </div>
+                  <div className="px-5 py-4">
+                    <AddressForm saving={addressSaving} onCancel={() => setAddingNew(false)}
+                      onSave={async (label, address) => {
+                        setAddressSaving(true);
+                        try {
+                          await addAddress({ label, address, isDefault: addresses.length === 0 });
+                          setAddingNew(false);
+                          setShowAddressList(false);
+                        } finally { setAddressSaving(false); }
+                      }} />
                   </div>
                 )}
               </div>
