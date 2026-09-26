@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   TextInput, ActivityIndicator, Alert, FlatList, Modal,
-  KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,26 +59,14 @@ export default function CheckoutScreen() {
   const [showOffers,    setShowOffers]    = useState(false);
   const [billExpanded,  setBillExpanded]  = useState(false);
 
-  // Address sheet
-  const [showAddrSheet, setShowAddrSheet] = useState(false);
-  const [addingNew,     setAddingNew]     = useState(false);
-  const [newFlat,       setNewFlat]       = useState('');
-  const [newBlock,      setNewBlock]      = useState('');
-  const [newStreet,     setNewStreet]     = useState('');
-  const [newPincode,    setNewPincode]    = useState('');
-  const [savingAddr,    setSavingAddr]    = useState(false);
-
-  const loadAddresses = () => addressApi.list().then(r => {
+  const loadAddresses = useCallback(() => addressApi.list().then(r => {
     const list = r.data.data ?? [];
     setAddresses(list);
-    if (!address) {
-      const def = list.find(a => a.isDefault) ?? list[0];
-      if (def) setAddress(def.addressLine);
-      else { setAddingNew(true); setShowAddrSheet(true); }
-    }
-  }).catch(() => {});
+    const def = list.find(a => a.isDefault) ?? list[0];
+    setAddress(def?.addressLine ?? '');
+  }).catch(() => {}), []);
 
-  useEffect(() => { loadAddresses(); }, []);
+  useFocusEffect(useCallback(() => { loadAddresses(); }, [loadAddresses]));
 
   const selectedLabel = addresses.find(a => a.addressLine === address)?.label ?? 'Delivery Address';
 
@@ -136,26 +123,20 @@ export default function CheckoutScreen() {
     } finally { setCouponLoading(false); }
   };
 
-  const saveNewAddress = async () => {
-    const val = [newFlat, newBlock, newStreet, newPincode].filter(Boolean).join(', ');
-    if (!val.trim()) return;
-    setSavingAddr(true);
-    try {
-      const label = addresses.length === 0 ? 'Home' : 'Other';
-      const res = await addressApi.add(label, val);
-      setAddress(res.data.data.addressLine);
-      await loadAddresses();
-      setNewFlat(''); setNewBlock(''); setNewStreet(''); setNewPincode('');
-      setAddingNew(false);
-      setShowAddrSheet(false);
-    } catch { Alert.alert('Error', 'Failed to save address.'); }
-    finally { setSavingAddr(false); }
-  };
-
   const handlePlace = async () => {
-    if (!address.trim()) { Alert.alert('Add delivery address', 'Please add a delivery address to continue.'); setShowAddrSheet(true); return; }
     if (!customer) { router.push('/(auth)/login'); return; }
     if (sub < minOrder) { Alert.alert('Minimum order', `Add ₹${Math.ceil(minOrder - sub)} more to place order.`); return; }
+    if (!address.trim()) {
+      Alert.alert(
+        'Add delivery address',
+        'We need your address to deliver this order.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Add address', onPress: () => router.push({ pathname: '/address-form', params: { returnToCheckout: 'true' } }) },
+        ]
+      );
+      return;
+    }
     setPlacing(true);
     try {
       const res = await storeApi.placeOrder({
@@ -178,10 +159,18 @@ export default function CheckoutScreen() {
     } finally { setPlacing(false); }
   };
 
-  const canPlace = items.length > 0 && sub >= minOrder && address.trim().length > 0;
+  const canPlace = items.length > 0 && sub >= minOrder;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
+      <View style={{ height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.gray100 }}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Close checkout"
+          style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.gray100 }}>
+          <Ionicons name="close" size={20} color={colors.gray700} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 17, fontFamily: 'Inter-SemiBold', color: colors.gray900 }}>Checkout</Text>
+        <View style={{ width: 36 }} />
+      </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 12, paddingBottom: 140 }}>
 
         {/* Items */}
@@ -412,8 +401,11 @@ export default function CheckoutScreen() {
       {/* Sticky bottom — address + pay */}
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.gray100 }}>
 
-        {/* Address row — tappable, expands sheet */}
-        <TouchableOpacity onPress={() => setShowAddrSheet(true)}
+        {/* Address row */}
+        <TouchableOpacity onPress={() => router.push(address
+          ? { pathname: '/addresses', params: { selectForCheckout: 'true' } }
+          : { pathname: '/address-form', params: { returnToCheckout: 'true' } }
+        )}
           style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 }}>
           <Ionicons name="chevron-up" size={18} color={colors.primary} />
           <View style={{ flex: 1 }}>
@@ -425,10 +417,10 @@ export default function CheckoutScreen() {
             </View>
             {address
               ? <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }} numberOfLines={1}>{address}</Text>
-              : <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.red500, marginTop: 2 }}>Add delivery address</Text>
+              : <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }}>Add a delivery address to continue</Text>
             }
           </View>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.primary }}>Change</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.primary }}>{address ? 'Change' : 'Add address'}</Text>
         </TouchableOpacity>
 
         <View style={{ paddingHorizontal: 16, paddingBottom: 28 }}>
@@ -457,73 +449,6 @@ export default function CheckoutScreen() {
           </View>
         </View>
       </View>
-
-      {/* Address sheet */}
-      {/* Address bottom sheet — same as profile */}
-      <Modal visible={showAddrSheet} transparent animationType="slide" onRequestClose={() => { setShowAddrSheet(false); setAddingNew(false); }}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} activeOpacity={1} onPress={() => { setShowAddrSheet(false); setAddingNew(false); }} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 36 }}>
-            <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 4 }}>
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.gray200 }} />
-            </View>
-            <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: colors.gray900, paddingHorizontal: 20, paddingVertical: 14 }}>Manage Address</Text>
-
-            {!addingNew ? (
-              <>
-                {addresses.map(a => (
-                  <TouchableOpacity key={a.id} onPress={() => { setAddress(a.addressLine); setShowAddrSheet(false); }}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.gray100 }}>
-                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: address === a.addressLine ? colors.primaryLight : colors.gray50, alignItems: 'center', justifyContent: 'center' }}>
-                      <Ionicons name={a.label.toLowerCase() === 'home' ? 'home-outline' : a.label.toLowerCase() === 'work' ? 'briefcase-outline' : 'location-outline'}
-                        size={20} color={address === a.addressLine ? colors.primary : colors.gray500} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontFamily: 'Inter-SemiBold', color: colors.gray900 }}>{a.label}</Text>
-                      <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }} numberOfLines={1}>{a.addressLine}</Text>
-                    </View>
-                    {address === a.addressLine && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity onPress={() => setAddingNew(true)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: colors.gray100 }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.gray50, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="add-circle-outline" size={20} color={colors.gray600} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontFamily: 'Inter-SemiBold', color: colors.gray900 }}>Add new address</Text>
-                    <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }}>Save a new delivery location</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.gray300} />
-                </TouchableOpacity>
-              </>
-            ) : (
-              <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-                  <TextInput style={{ flex: 1, borderWidth: 1, borderColor: colors.gray200, borderRadius: 10, padding: 12, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
-                    value={newFlat} onChangeText={setNewFlat} placeholder="Flat / House No." placeholderTextColor={colors.gray400} autoFocus />
-                  <TextInput style={{ flex: 1, borderWidth: 1, borderColor: colors.gray200, borderRadius: 10, padding: 12, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
-                    value={newBlock} onChangeText={setNewBlock} placeholder="Block / Tower" placeholderTextColor={colors.gray400} />
-                </View>
-                <TextInput style={{ borderWidth: 1, borderColor: colors.gray200, borderRadius: 10, padding: 12, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50, marginBottom: 10 }}
-                  value={newStreet} onChangeText={setNewStreet} placeholder="Street / Area" placeholderTextColor={colors.gray400} />
-                <TextInput style={{ borderWidth: 1, borderColor: colors.gray200, borderRadius: 10, padding: 12, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50, marginBottom: 12 }}
-                  value={newPincode} onChangeText={setNewPincode} placeholder="Pincode" placeholderTextColor={colors.gray400} keyboardType="number-pad" maxLength={6} />
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity onPress={() => { setAddingNew(false); setNewFlat(''); setNewBlock(''); setNewStreet(''); setNewPincode(''); }}
-                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: colors.gray100, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 14, fontFamily: 'Inter-SemiBold', color: colors.gray700 }}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={saveNewAddress} disabled={savingAddr || !(newFlat || newStreet)}
-                    style={{ flex: 1, height: 44, borderRadius: 10, backgroundColor: (newFlat || newStreet) ? colors.primary : colors.gray200, alignItems: 'center', justifyContent: 'center' }}>
-                    {savingAddr ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: '#fff' }}>Save & Use</Text>}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
     </SafeAreaView>
   );

@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
-import { query } from '../database/db';
+import { query, transaction } from '../database/db';
 import { config } from '../config';
 import { ComplianceService } from './compliance.service';
 
@@ -178,22 +178,25 @@ export class CustomerAuthService {
   }
 
   static async addAddress(customerId: string, label: string, addressLine: string, makeDefault: boolean): Promise<any> {
-    const existing = await query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM mart_customer_addresses WHERE customer_id = $1`,
-      [customerId]
-    );
-    const isFirst = parseInt(existing.rows[0].count) === 0;
-    const shouldBeDefault = makeDefault || isFirst;
-    if (shouldBeDefault) {
-      await query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
-    }
-    const result = await query<any>(
-      `INSERT INTO mart_customer_addresses (customer_id, label, address_line, is_default)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"`,
-      [customerId, label.trim() || 'Home', addressLine.trim(), shouldBeDefault]
-    );
-    return result.rows[0];
+    return transaction(async client => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-address:${customerId}`]);
+      const existing = await client.query(
+        `SELECT COUNT(*) as count FROM mart_customer_addresses WHERE customer_id = $1`,
+        [customerId]
+      );
+      const isFirst = parseInt(existing.rows[0].count) === 0;
+      const shouldBeDefault = makeDefault || isFirst;
+      if (shouldBeDefault) {
+        await client.query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
+      }
+      const result = await client.query(
+        `INSERT INTO mart_customer_addresses (customer_id, label, address_line, is_default)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"`,
+        [customerId, label.trim() || 'Home', addressLine.trim(), shouldBeDefault]
+      );
+      return result.rows[0];
+    });
   }
 
   static async updateAddress(customerId: string, addressId: string, label: string, addressLine: string): Promise<any> {
@@ -223,11 +226,18 @@ export class CustomerAuthService {
   }
 
   static async setDefaultAddress(customerId: string, addressId: string): Promise<void> {
-    await query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
-    const result = await query(
-      `UPDATE mart_customer_addresses SET is_default = true, updated_at = NOW() WHERE id = $1 AND customer_id = $2 RETURNING id`,
-      [addressId, customerId]
-    );
-    if (!result.rows[0]) throw new Error('Address not found');
+    await transaction(async client => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-address:${customerId}`]);
+      const target = await client.query(
+        `SELECT id FROM mart_customer_addresses WHERE id = $1 AND customer_id = $2 FOR UPDATE`,
+        [addressId, customerId]
+      );
+      if (!target.rows[0]) throw new Error('Address not found');
+      await client.query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
+      await client.query(
+        `UPDATE mart_customer_addresses SET is_default = true, updated_at = NOW() WHERE id = $1 AND customer_id = $2`,
+        [addressId, customerId]
+      );
+    });
   }
 }

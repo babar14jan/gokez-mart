@@ -8,12 +8,14 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { authApi } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useThemeStore } from '@/store/themeStore';
 import { useThemeColors } from '@/constants/theme';
 
 type Step = 'phone' | 'otp' | 'profile';
 
 export default function LoginScreen() {
   const colors = useThemeColors();
+  const isDark = useThemeStore(s => s.isDark);
   const { login, updateProfile } = useAuthStore();
 
   const [step,        setStep]        = useState<Step>('phone');
@@ -101,14 +103,16 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Close button */}
-        <TouchableOpacity
-          className="absolute top-12 right-6 w-9 h-9 rounded-xl items-center justify-center"
-          style={{ backgroundColor: colors.gray100 }}
-          onPress={() => router.back()}
-        >
-          <Text className="text-lg" style={{ color: colors.gray500 }}>✕</Text>
-        </TouchableOpacity>
+        {/* A new customer must finish their name before leaving onboarding. */}
+        {step !== 'profile' && (
+          <TouchableOpacity
+            className="absolute top-12 right-6 w-9 h-9 rounded-xl items-center justify-center"
+            style={{ backgroundColor: colors.gray100 }}
+            onPress={() => router.back()}
+          >
+            <Text className="text-lg" style={{ color: colors.gray500 }}>✕</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Brand logo — same as web app */}
         <View className="items-center mb-8">
@@ -150,19 +154,6 @@ export default function LoginScreen() {
               />
             </View>
 
-            {/* OTP via call notice — same as web app */}
-            <View className="flex-row items-start gap-2 rounded-xl px-3.5 py-3 mb-4" style={{ backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.gray200 }}>
-              <Text style={{ fontSize: 18 }}>📞</Text>
-              <View className="flex-1 ml-2">
-                <Text className="text-sm font-bold" style={{ fontFamily: 'Inter-Bold', color: colors.primaryDark }}>
-                  You will receive OTP via phone call
-                </Text>
-                <Text className="text-xs mt-0.5" style={{ fontFamily: 'Inter-Regular', color: colors.primaryDark }}>
-                  SMS OTP coming soon
-                </Text>
-              </View>
-            </View>
-
             <TouchableOpacity
               className="h-14 rounded-2xl items-center justify-center mb-4"
               style={{ backgroundColor: phone.length === 10 && !loading ? colors.primary : colors.gray200 }}
@@ -188,6 +179,13 @@ export default function LoginScreen() {
               <TouchableOpacity onPress={() => { setStep('phone'); setOtp(''); setError(''); }} className="ml-2">
                 <Text className="text-xs font-semibold" style={{ color: colors.primary, fontFamily: 'Inter-SemiBold' }}>Change</Text>
               </TouchableOpacity>
+            </View>
+
+            <View className="flex-row items-start gap-2 rounded-xl px-3 py-2.5 mb-4" style={{ backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.gray200 }}>
+              <Text style={{ fontSize: 15 }}>📞</Text>
+              <Text className="flex-1 text-xs leading-5" style={{ fontFamily: 'Inter-Regular', color: colors.primaryDark }}>
+                We will call this number with your 6-digit verification code. It may take a few seconds. Do not share the code with anyone.
+              </Text>
             </View>
 
             {error !== '' && (
@@ -273,9 +271,6 @@ export default function LoginScreen() {
               }
             </TouchableOpacity>
 
-            <TouchableOpacity className="items-center py-2" onPress={() => router.back()}>
-              <Text className="text-sm" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>Skip for now</Text>
-            </TouchableOpacity>
           </>
         )}
 

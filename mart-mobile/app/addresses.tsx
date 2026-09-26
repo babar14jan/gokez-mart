@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, FlatList } from 'react-native';
-import { useFocusEffect, router } from 'expo-router';
+import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { addressApi, type Address } from '@/services/api';
 import { useThemeColors } from '@/constants/theme';
 
 export default function AddressesScreen() {
   const colors = useThemeColors();
+  const { selectForCheckout } = useLocalSearchParams<{ selectForCheckout?: string }>();
+  const isSelecting = selectForCheckout === 'true';
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [busyId,    setBusyId]    = useState<string | null>(null);
@@ -39,6 +41,15 @@ export default function AddressesScreen() {
     ]);
   };
 
+  const handleSelect = async (id: string) => {
+    setBusyId(id);
+    try {
+      await addressApi.setDefault(id);
+      router.back();
+    } catch { Alert.alert('Error', 'Failed to select delivery address.'); }
+    finally { setBusyId(null); }
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
@@ -60,7 +71,9 @@ export default function AddressesScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={{ backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.gray100, padding: 14, marginBottom: 10 }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: item.isDefault && isSelecting ? colors.primary : colors.gray100, marginBottom: 10, overflow: 'hidden' }}>
+            <TouchableOpacity disabled={!isSelecting || busyId === item.id} onPress={() => handleSelect(item.id)}
+              style={{ padding: 14 }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
               <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: item.isDefault ? colors.primaryLight : colors.gray50, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
                 <Ionicons name={item.label.toLowerCase() === 'home' ? 'home-outline' : item.label.toLowerCase() === 'work' ? 'briefcase-outline' : 'location-outline'}
@@ -78,7 +91,17 @@ export default function AddressesScreen() {
                 <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray700, lineHeight: 18 }}>{item.addressLine}</Text>
               </View>
             </View>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            {isSelecting && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: item.isDefault ? colors.primaryLight : colors.gray50 }}>
+                  <Ionicons name={item.isDefault ? 'checkmark-circle' : 'location-outline'} size={13} color={item.isDefault ? colors.primary : colors.gray600} />
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: item.isDefault ? colors.primary : colors.gray600 }}>{item.isDefault ? 'Selected' : 'Select this address'}</Text>
+                </View>
+              </View>
+            )}
+            </TouchableOpacity>
+            {!isSelecting && (
+              <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 14, marginTop: -2, marginBottom: 14 }}>
               {!item.isDefault && (
                 <TouchableOpacity onPress={() => handleSetDefault(item.id)} disabled={busyId === item.id}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.gray200 }}>
@@ -96,13 +119,14 @@ export default function AddressesScreen() {
                 <Ionicons name="trash-outline" size={13} color={colors.red500} />
                 <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.red500 }}>Delete</Text>
               </TouchableOpacity>
-            </View>
+              </View>
+            )}
           </View>
         )}
       />
 
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.gray100, padding: 16, paddingBottom: 28 }}>
-        <TouchableOpacity onPress={() => router.push('/address-form')}
+        <TouchableOpacity onPress={() => router.push({ pathname: '/address-form', params: isSelecting ? { selectForCheckout: 'true' } : {} })}
           style={{ height: 52, borderRadius: 14, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <Ionicons name="add" size={18} color="#fff" />
           <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: '#fff' }}>Add New Address</Text>

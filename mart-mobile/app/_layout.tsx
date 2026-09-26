@@ -64,7 +64,7 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)"  options={{ headerShown: false, title: '' }} />
 
           {/* Sub-pages — native header with back arrow */}
-          <Stack.Screen name="checkout"          options={screenOpts('Checkout')} />
+          <Stack.Screen name="checkout"          options={{ ...screenOpts('Checkout'), headerShown: false }} />
           <Stack.Screen name="addresses"         options={screenOpts('Saved Addresses')} />
           <Stack.Screen name="address-form"      options={screenOpts('Address')} />
           <Stack.Screen name="feedback"          options={screenOpts('Share Feedback')} />

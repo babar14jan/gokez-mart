@@ -9,20 +9,29 @@ const LABELS = ['Home', 'Work', 'Other'];
 
 export default function AddressFormScreen() {
   const colors = useThemeColors();
-  const { id, label: paramLabel, addressLine: paramAddressLine } = useLocalSearchParams<{ id?: string; label?: string; addressLine?: string }>();
+  const { id, label: paramLabel, addressLine: paramAddressLine, returnToCheckout } = useLocalSearchParams<{ id?: string; label?: string; addressLine?: string; returnToCheckout?: string }>();
   const isEditing = !!id;
 
-  const [label,       setLabel]       = useState(paramLabel ?? 'Home');
-  const [addressLine, setAddressLine] = useState(paramAddressLine ?? '');
-  const [saving,      setSaving]      = useState(false);
+  const [label,    setLabel]    = useState(paramLabel ?? 'Home');
+  const [house,    setHouse]    = useState('');
+  const [building, setBuilding] = useState('');
+  const [locality, setLocality] = useState(paramAddressLine ?? '');
+  const [landmark, setLandmark] = useState('');
+  const [city,     setCity]     = useState('');
+  const [pincode,  setPincode]  = useState('');
+  const [saving,   setSaving]   = useState(false);
+
+  const canSave = house.trim() && locality.trim() && city.trim() && /^\d{6}$/.test(pincode);
 
   const handleSave = async () => {
-    if (!addressLine.trim()) { Alert.alert('Required', 'Please enter the full address.'); return; }
+    if (!canSave) { Alert.alert('Complete address', 'Enter house or flat number, locality, city, and a valid 6-digit pincode.'); return; }
+    const addressLine = [house.trim(), building.trim(), locality.trim(), landmark.trim(), city.trim(), pincode].filter(Boolean).join(', ');
     setSaving(true);
     try {
-      if (isEditing) await addressApi.update(id!, label, addressLine.trim());
-      else await addressApi.add(label, addressLine.trim());
-      router.back();
+      if (isEditing) await addressApi.update(id!, label, addressLine);
+      else await addressApi.add(label, addressLine);
+      if (returnToCheckout === 'true' && !isEditing) router.replace('/checkout');
+      else router.back();
     } catch {
       Alert.alert('Error', 'Failed to save address. Try again.');
     } finally { setSaving(false); }
@@ -45,16 +54,15 @@ export default function AddressFormScreen() {
           })}
         </View>
 
-        <Text style={{ fontSize: 12, fontFamily: 'Inter-Bold', color: colors.gray500, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Full Address</Text>
-        <TextInput
-          style={{ backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontFamily: 'Inter-Regular', color: colors.gray900, minHeight: 110, textAlignVertical: 'top', marginBottom: 20 }}
-          value={addressLine} onChangeText={setAddressLine}
-          placeholder="Flat / House No., Street, Area, City, Pincode" placeholderTextColor={colors.gray400}
-          multiline autoFocus={!isEditing}
-        />
+        <Field label="Flat / House Number" value={house} onChangeText={setHouse} placeholder="e.g. Flat 204 or House 12" required autoFocus={!isEditing} colors={colors} />
+        <Field label="Building / Tower" value={building} onChangeText={setBuilding} placeholder="e.g. Orchid Tower" colors={colors} />
+        <Field label="Street / Locality" value={locality} onChangeText={setLocality} placeholder="e.g. New Town, Action Area" required colors={colors} />
+        <Field label="Landmark" value={landmark} onChangeText={setLandmark} placeholder="Optional, helps your rider" colors={colors} />
+        <Field label="City" value={city} onChangeText={setCity} placeholder="e.g. Kolkata" required colors={colors} />
+        <Field label="Pincode" value={pincode} onChangeText={value => setPincode(value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit pincode" required colors={colors} keyboardType="number-pad" />
 
-        <TouchableOpacity onPress={handleSave} disabled={saving || !addressLine.trim()}
-          style={{ height: 54, borderRadius: 16, backgroundColor: saving || !addressLine.trim() ? colors.gray200 : colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity onPress={handleSave} disabled={saving || !canSave}
+          style={{ height: 54, borderRadius: 16, backgroundColor: saving || !canSave ? colors.gray200 : colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}>
           {saving
             ? <ActivityIndicator color="#fff" />
             : <>
@@ -65,5 +73,23 @@ export default function AddressFormScreen() {
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function Field({ label, value, onChangeText, placeholder, required = false, colors, keyboardType, autoFocus = false }: {
+  label: string; value: string; onChangeText: (value: string) => void; placeholder: string;
+  required?: boolean; colors: ReturnType<typeof useThemeColors>; keyboardType?: 'default' | 'number-pad'; autoFocus?: boolean;
+}) {
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 12, fontFamily: 'Inter-Bold', color: colors.gray500, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+        {label}{required ? ' *' : ''}
+      </Text>
+      <TextInput
+        style={{ backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 14, height: 52, fontSize: 15, fontFamily: 'Inter-Regular', color: colors.gray900 }}
+        value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.gray400}
+        keyboardType={keyboardType} autoFocus={autoFocus}
+      />
+    </View>
   );
 }
