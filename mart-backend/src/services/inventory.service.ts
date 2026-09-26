@@ -5,7 +5,7 @@ export class InventoryService {
 
   static async getStoreInventory(storeId: string) {
     const result = await query(
-      `SELECT p.id as "productId", p.name, p.photo_url as "photoUrl",
+      `SELECT p.id as "productId", p.name, p.local_name as "localName", p.photo_url as "photoUrl",
               sp.unit as "sellingUnit",
               sp.stock_unit as "stockUnit",
               sp.price::float, sp.availability_status as "availabilityStatus",

@@ -10,6 +10,7 @@ import { getActiveStoreId } from '../utils/store';
 interface InventoryItem {
   productId: string;
   name: string;
+  localName: string | null;
   photoUrl: string | null;
   sellingUnit: string;
   stockUnit: string | null;
@@ -91,7 +92,7 @@ export default function InventoryPage() {
 
   const sorted = useMemo(() => {
     let list = searchQuery.trim()
-      ? items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      ? items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()) || (i.localName || '').toLowerCase().includes(searchQuery.toLowerCase()))
       : [...items];
     if (!sortLowFirst) return list;
     const order = { out: 0, low: 1, ok: 2, untracked: 3 };
@@ -284,6 +285,7 @@ export default function InventoryPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.name}</p>
+                    {item.localName && <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{item.localName}</p>}
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       <span className="text-xs text-gray-500 dark:text-slate-400">{item.sellingUnit}</span>
                       {item.categoryName && (

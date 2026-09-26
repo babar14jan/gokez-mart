@@ -19,6 +19,7 @@ function formatStock(qty: number, unit: string): string {
 
 interface Product {
   id: string; name: string; categoryId: string | null; categoryName: string;
+  localName: string | null;
   price: number; unit: string; discountPercent: number;
   isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
@@ -188,7 +189,7 @@ export default function ProductsPage() {
     // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(p => p.name.toLowerCase().includes(q) || ((p as any).localName || '').toLowerCase().includes(q));
+      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.localName || '').toLowerCase().includes(q));
     }
 
     // Category filter
@@ -271,7 +272,7 @@ export default function ProductsPage() {
   const openEdit = (p: Product) => {
     setEditing(p);
     setForm({
-      name: p.name, localName: (p as any).localName || '', categoryId: p.categoryId || '', price: String(p.price),
+      name: p.name, localName: p.localName || '', categoryId: p.categoryId || '', price: String(p.price),
       unit: p.unit, discountPercent: String(p.discountPercent),
       description: p.description || '',
       availabilityStatus: p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock'),
@@ -388,6 +389,7 @@ export default function ProductsPage() {
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{p.name}</p>
+          {p.localName && <p className="text-xs text-gray-500 dark:text-slate-400 break-words">{p.localName}</p>}
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
             <span className="text-xs text-gray-500 dark:text-slate-400">{p.unit} · ₹{p.price}</span>
             {p.discountPercent > 0 && (
