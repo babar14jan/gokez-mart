@@ -163,10 +163,10 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
                   ) : (
                     <div className="px-3 py-3">
                       <AddressForm saving={addressSaving} onCancel={() => setAddingNew(false)}
-                        onSave={async (label, address) => {
+                        onSave={async (label, address, coordinates) => {
                           setAddressSaving(true);
                           try {
-                            await addAddress({ label, address, isDefault: addresses.length === 0 });
+                            await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
                             setAddingNew(false);
                             setShowAddressList(false);
                           } finally { setAddressSaving(false); }

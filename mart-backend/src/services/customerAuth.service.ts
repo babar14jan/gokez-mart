@@ -169,7 +169,8 @@ export class CustomerAuthService {
   // ── Address book ─────────────────────────────────────────────────────────────
   static async getAddresses(customerId: string): Promise<any[]> {
     const result = await query<any>(
-      `SELECT id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"
+      `SELECT id, label, address_line as "addressLine", latitude::float, longitude::float,
+              is_default as "isDefault", created_at as "createdAt"
        FROM mart_customer_addresses WHERE customer_id = $1
        ORDER BY is_default DESC, created_at DESC`,
       [customerId]
@@ -177,7 +178,7 @@ export class CustomerAuthService {
     return result.rows;
   }
 
-  static async addAddress(customerId: string, label: string, addressLine: string, makeDefault: boolean): Promise<any> {
+  static async addAddress(customerId: string, label: string, addressLine: string, makeDefault: boolean, latitude?: number | null, longitude?: number | null): Promise<any> {
     return transaction(async client => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-address:${customerId}`]);
       const existing = await client.query(
@@ -190,21 +191,23 @@ export class CustomerAuthService {
         await client.query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
       }
       const result = await client.query(
-        `INSERT INTO mart_customer_addresses (customer_id, label, address_line, is_default)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"`,
-        [customerId, label.trim() || 'Home', addressLine.trim(), shouldBeDefault]
+        `INSERT INTO mart_customer_addresses (customer_id, label, address_line, latitude, longitude, is_default)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, label, address_line as "addressLine", latitude::float, longitude::float,
+             is_default as "isDefault", created_at as "createdAt"`,
+        [customerId, label.trim() || 'Home', addressLine.trim(), latitude ?? null, longitude ?? null, shouldBeDefault]
       );
       return result.rows[0];
     });
   }
 
-  static async updateAddress(customerId: string, addressId: string, label: string, addressLine: string): Promise<any> {
+  static async updateAddress(customerId: string, addressId: string, label: string, addressLine: string, latitude?: number | null, longitude?: number | null): Promise<any> {
     const result = await query<any>(
-      `UPDATE mart_customer_addresses SET label = $1, address_line = $2, updated_at = NOW()
-       WHERE id = $3 AND customer_id = $4
-       RETURNING id, label, address_line as "addressLine", is_default as "isDefault", created_at as "createdAt"`,
-      [label.trim() || 'Home', addressLine.trim(), addressId, customerId]
+      `UPDATE mart_customer_addresses SET label = $1, address_line = $2, latitude = $3, longitude = $4, updated_at = NOW()
+       WHERE id = $5 AND customer_id = $6
+       RETURNING id, label, address_line as "addressLine", latitude::float, longitude::float,
+                 is_default as "isDefault", created_at as "createdAt"`,
+      [label.trim() || 'Home', addressLine.trim(), latitude ?? null, longitude ?? null, addressId, customerId]
     );
     if (!result.rows[0]) throw new Error('Address not found');
     return result.rows[0];

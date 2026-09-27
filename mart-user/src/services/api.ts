@@ -76,15 +76,16 @@ export const authApi = {
 };
 
 export interface AddressBookEntry {
-  id: string; label: string; addressLine: string; isDefault: boolean; createdAt: string;
+  id: string; label: string; addressLine: string; latitude: number | null; longitude: number | null;
+  isDefault: boolean; createdAt: string;
 }
 
 export const addressApi = {
   list:       () => api.get<{ success: boolean; data: AddressBookEntry[] }>('/auth/addresses'),
-  add:        (label: string, addressLine: string, isDefault?: boolean) =>
-    api.post<{ success: boolean; data: AddressBookEntry }>('/auth/addresses', { label, addressLine, isDefault }),
-  update:     (id: string, label: string, addressLine: string) =>
-    api.put<{ success: boolean; data: AddressBookEntry }>(`/auth/addresses/${id}`, { label, addressLine }),
+  add:        (label: string, addressLine: string, isDefault?: boolean, latitude?: number | null, longitude?: number | null) =>
+    api.post<{ success: boolean; data: AddressBookEntry }>('/auth/addresses', { label, addressLine, isDefault, latitude, longitude }),
+  update:     (id: string, label: string, addressLine: string, latitude?: number | null, longitude?: number | null) =>
+    api.put<{ success: boolean; data: AddressBookEntry }>(`/auth/addresses/${id}`, { label, addressLine, latitude, longitude }),
   remove:     (id: string) => api.delete(`/auth/addresses/${id}`),
   setDefault: (id: string) => api.put(`/auth/addresses/${id}/default`),
 };
@@ -99,8 +100,11 @@ export const storeApi = {
     params: storeId ? { storeId } : {},
   }),
   getZones: () => api.get<{ success: boolean; data: MartZone[] }>('/zones'),
+  reverseGeocode: (latitude: number, longitude: number) =>
+    api.post<{ success: boolean; data: { house: string; building: string; locality: string; city: string; pincode: string } }>('/geocode/reverse', { latitude, longitude }),
   placeOrder: (data: {
     guestName: string; guestPhone: string; guestAddress: string;
+    latitude?: number | null; longitude?: number | null;
     zoneName?: string; storeId?: string;
     deliveryPreference?: string; deliveryNote?: string;
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, LocateFixed, Save } from 'lucide-react';
+import { storeApi } from '../services/api';
 
 interface AddressFields {
   house: string;
@@ -8,6 +9,11 @@ interface AddressFields {
   landmark: string;
   city: string;
   pincode: string;
+}
+
+export interface AddressCoordinates {
+  latitude: number;
+  longitude: number;
 }
 
 const LABELS = ['Home', 'Work', 'Other'];
@@ -39,19 +45,60 @@ function serializeAddress(fields: AddressFields): string {
 interface AddressFormProps {
   stored?: string | null;
   initialLabel?: string;
+  initialCoordinates?: AddressCoordinates | null;
   saving: boolean;
-  onSave: (label: string, address: string) => Promise<void>;
+  onSave: (label: string, address: string, coordinates: AddressCoordinates | null) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function AddressForm({ stored = null, initialLabel = 'Home', saving, onSave, onCancel }: AddressFormProps) {
+export default function AddressForm({ stored = null, initialLabel = 'Home', initialCoordinates = null, saving, onSave, onCancel }: AddressFormProps) {
   const [label, setLabel] = useState(initialLabel);
   const [fields, setFields] = useState<AddressFields>(() => parseAddress(stored));
+  const [coordinates, setCoordinates] = useState<AddressCoordinates | null>(initialCoordinates);
+  const [locating, setLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState('');
   const update = (key: keyof AddressFields) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = key === 'pincode' ? event.target.value.replace(/\D/g, '').slice(0, 6) : event.target.value;
+    setCoordinates(null);
     setFields(current => ({ ...current, [key]: value }));
   };
   const complete = Boolean(fields.house.trim() && fields.locality.trim() && fields.city.trim() && /^\d{6}$/.test(fields.pincode));
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationMessage('Location is not supported here. Please enter your address manually.');
+      return;
+    }
+    setLocating(true);
+    setLocationMessage('');
+    navigator.geolocation.getCurrentPosition(
+      async position => {
+        try {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          const response = await storeApi.reverseGeocode(latitude, longitude);
+          const address = response.data.data;
+          setFields(current => ({
+            house: address.house || current.house,
+            building: address.building || current.building,
+            locality: address.locality || current.locality,
+            landmark: current.landmark,
+            city: address.city || current.city,
+            pincode: address.pincode.match(/\d{6}/)?.[0] || current.pincode,
+          }));
+          setCoordinates({ latitude, longitude });
+          setLocationMessage('Location details added. Please review your address.');
+        } catch {
+          setLocationMessage('Could not look up your location. Please enter your address manually.');
+        } finally { setLocating(false); }
+      },
+      () => {
+        setLocating(false);
+        setLocationMessage('Could not get your location. Please enter your address manually.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
 
   return (
     <div className="space-y-3">
@@ -63,6 +110,12 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', savi
           </button>
         ))}
       </div>
+      <button type="button" onClick={useCurrentLocation} disabled={locating}
+        className="w-full py-2.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+        <LocateFixed className={`w-4 h-4 ${locating ? 'animate-spin' : ''}`} />
+        {locating ? 'Finding location...' : 'Use current location'}
+      </button>
+      {locationMessage && <p className="text-xs text-gray-500 dark:text-slate-400">{locationMessage}</p>}
       <div className="grid grid-cols-2 gap-2">
         <Field label="Flat / House No." required value={fields.house} onChange={update('house')} placeholder="e.g. A-204" autoFocus />
         <Field label="Building / Tower" value={fields.building} onChange={update('building')} placeholder="e.g. Block B" />
@@ -78,7 +131,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', savi
           className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl transition-colors">
           Cancel
         </button>
-        <button type="button" onClick={() => onSave(label, serializeAddress(fields))} disabled={saving || !complete}
+        <button type="button" onClick={() => onSave(label, serializeAddress(fields), coordinates)} disabled={saving || !complete}
           className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Saving...' : 'Save Address'}

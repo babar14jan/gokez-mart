@@ -35,4 +35,8 @@ export const config = {
   sentry: {
     dsn: process.env.SENTRY_DSN || '',
   },
+  geocoding: {
+    baseUrl: process.env.NOMINATIM_BASE_URL || 'https://nominatim.openstreetmap.org',
+    userAgent: process.env.NOMINATIM_USER_AGENT || 'GokezMart/1.0 (support@gokez.com)',
+  },
 };

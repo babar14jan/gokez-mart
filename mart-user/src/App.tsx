@@ -100,7 +100,6 @@ export default function App() {
   const [settings, setSettings] = useState<PublicSettings>(DEFAULT_SETTINGS);
   const [zones, setZones] = useState<MartZone[]>([]);
   const [selectedZone, setSelectedZone] = useState<MartZone | null>(SHAPOORJI_ZONE);
-  const [zoneGpsConfirmed, setZoneGpsConfirmed] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -167,7 +166,6 @@ export default function App() {
                   const match = findMatchingZone(loc.lat, loc.lng, fetchedZones);
                   if (match) {
                     setSelectedZone(match.zone);
-                    setZoneGpsConfirmed(true);
                     const [pr, sr] = await Promise.all([
                       storeApi.getProducts(undefined, match.zone.storeId),
                       storeApi.getSettings(match.zone.storeId),
@@ -185,7 +183,6 @@ export default function App() {
                   const match = findMatchingZone(loc.lat, loc.lng, fetchedZones);
                   if (match) {
                     setSelectedZone(match.zone);
-                    setZoneGpsConfirmed(true);
                     const [pr, sr] = await Promise.all([
                       storeApi.getProducts(undefined, match.zone.storeId),
                       storeApi.getSettings(match.zone.storeId),
@@ -252,7 +249,7 @@ export default function App() {
       const loc = await getUserLocation();
       if (loc) {
         const match = findMatchingZone(loc.lat, loc.lng, zones);
-        if (match) { setSelectedZone(match.zone); setZoneGpsConfirmed(true); }
+        if (match) setSelectedZone(match.zone);
         else { setShowOutsideBlock(true); return; }
       } else { setShowOutsideBlock(true); return; }
     }
@@ -403,7 +400,6 @@ export default function App() {
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
-              zoneGpsConfirmed={zoneGpsConfirmed}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
@@ -415,7 +411,6 @@ export default function App() {
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
-              zoneGpsConfirmed={zoneGpsConfirmed}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}

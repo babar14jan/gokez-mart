@@ -128,6 +128,15 @@ app.use('/api/v1/orders', rateLimit({
   skip: (req) => req.method !== 'POST',
 }));
 
+// 6. Reverse geocoding — keep optional address prefill from exhausting the provider
+app.use('/api/v1/geocode/reverse', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 20 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many location lookups. Please enter your address manually.' },
+}));
+
 // ── Compression & logging ─────────────────────────────────────────────────────
 app.use(compression({
   threshold: 1024,

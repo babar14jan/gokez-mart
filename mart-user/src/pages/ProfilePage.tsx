@@ -37,11 +37,11 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
-  const handleSaveAddress = async (label: string, val: string) => {
+  const handleSaveAddress = async (label: string, val: string, coordinates: { latitude: number; longitude: number } | null) => {
     setAddressSaving(true);
     try {
-      if (editingAddressId && editingAddressId !== 'new') await updateAddress(editingAddressId, label, val);
-      else await addAddress({ label, address: val, isDefault: addresses.length === 0 });
+      if (editingAddressId && editingAddressId !== 'new') await updateAddress(editingAddressId, label, val, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
+      else await addAddress({ label, address: val, isDefault: addresses.length === 0, ...coordinates });
       setEditingAddressId(null);
     } finally { setAddressSaving(false); }
   };
@@ -238,6 +238,12 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
               <AddressForm
                 stored={editingAddressId === 'new' ? null : (addresses.find(a => a.id === editingAddressId)?.address ?? null)}
                 initialLabel={editingAddressId === 'new' ? 'Home' : (addresses.find(a => a.id === editingAddressId)?.label ?? 'Home')}
+                initialCoordinates={(() => {
+                  const address = addresses.find(a => a.id === editingAddressId);
+                  return address?.latitude != null && address.longitude != null
+                    ? { latitude: address.latitude, longitude: address.longitude }
+                    : null;
+                })()}
                 onSave={handleSaveAddress}
                 onCancel={() => setEditingAddressId(null)}
                 saving={addressSaving}

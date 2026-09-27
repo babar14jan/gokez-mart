@@ -24,6 +24,13 @@ const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
 
 type PreparedImage = { buffer: Buffer; extension: string; mimeType: string };
 
+function hasValidCoordinates(latitude: unknown, longitude: unknown): boolean {
+  if (latitude == null && longitude == null) return true;
+  return typeof latitude === 'number' && typeof longitude === 'number' &&
+    Number.isFinite(latitude) && Number.isFinite(longitude) &&
+    latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+}
+
 async function prepareImage(buffer: Buffer, maxDimension: number): Promise<PreparedImage> {
   const image = sharp(buffer, { failOn: 'error' }).rotate().resize({
     width: maxDimension,
@@ -81,8 +88,44 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   res.json({ success: true, data: settings });
 });
 
+export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {
+  const { latitude, longitude } = req.body;
+  if (typeof latitude !== 'number' || typeof longitude !== 'number' ||
+      !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    res.status(400).json({ success: false, error: 'Valid latitude and longitude are required' }); return;
+  }
+
+  const url = new URL('/reverse', config.geocoding.baseUrl);
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('lat', String(latitude));
+  url.searchParams.set('lon', String(longitude));
+  url.searchParams.set('addressdetails', '1');
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers: { 'User-Agent': config.geocoding.userAgent, Accept: 'application/json', 'Accept-Language': 'en' },
+    });
+    if (!response.ok) throw new Error(`Reverse geocoding failed: ${response.status}`);
+    const result: any = await response.json();
+    const address = result.address || {};
+    res.json({
+      success: true,
+      data: {
+        house: address.house_number || '',
+        building: address.building || '',
+        locality: address.road || address.neighbourhood || address.suburb || address.village || '',
+        city: address.city || address.town || address.village || address.county || '',
+        pincode: address.postcode || '',
+      },
+    });
+  } catch {
+    res.status(503).json({ success: false, error: 'Could not look up this location. Please enter your address manually.' });
+  }
+});
+
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { guestName, guestPhone, guestAddress, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode } = req.body;
+  const { guestName, guestPhone, guestAddress, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
   if (!guestName || !guestPhone || !guestAddress || !items?.length || !paymentMethod) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
@@ -92,6 +135,10 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   if (!['cod', 'upi', 'phonepay'].includes(paymentMethod)) { res.status(400).json({ success: false, error: 'Invalid payment method' }); return; }
   if (!Array.isArray(items) || !items.every((i: any) => i.productId && i.unit && Number.isInteger(i.quantity) && i.quantity > 0)) {
     res.status(400).json({ success: false, error: 'Invalid items' }); return;
+  }
+  const hasCoordinates = latitude != null || longitude != null;
+  if (!hasValidCoordinates(latitude, longitude)) {
+    res.status(400).json({ success: false, error: 'Invalid delivery coordinates' }); return;
   }
   const idempotencyKey = req.header('Idempotency-Key');
   if (!idempotencyKey || idempotencyKey.length > 128) {
@@ -112,6 +159,8 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     storeId: storeId || SHAPOORJI_ID,
     storeName,
     zoneName, deliveryPreference, deliveryNote,
+    latitude: hasCoordinates ? latitude : null,
+    longitude: hasCoordinates ? longitude : null,
     campaignId: campaignId || null,
     couponCodeUsed: couponCode || null,
     customerId: req.customer?.id || null,
@@ -435,7 +484,7 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
 
 export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { status, failureReason, cancellationReason, deliveryAssigneeId } = req.body;
-  const order = await OrderService.transitionStatus(req.params.id, status, req.admin!, deliveryAssigneeId);
+  const order = await OrderService.transitionStatus(req.params.id, status, req.admin!, deliveryAssigneeId, cancellationReason);
   if (status === 'failed_delivery' && failureReason) await query(`UPDATE mart_orders SET failure_reason = $1 WHERE id = $2`, [failureReason, req.params.id]);
   if (status === 'cancelled' && cancellationReason) await query(`UPDATE mart_orders SET cancellation_reason = $1 WHERE id = $2`, [cancellationReason, req.params.id]);
 
@@ -449,7 +498,9 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
     preparing: 'Your order is being prepared.',
     out_for_delivery: `Order picked up by ${order.deliveryByName || req.admin!.username} and on the way to you.`,
     delivered: 'Your order has been delivered.',
-    cancelled: 'Your order has been cancelled. You will not be charged.',
+    cancelled: cancellationReason === 'outside_area'
+      ? 'We are sorry, but your delivery address is currently outside our service area. You will not be charged. We are expanding soon and hope to serve your area very soon.'
+      : 'Your order has been cancelled. You will not be charged.',
     failed_delivery: 'We could not complete delivery. Please contact support if you need help.',
   };
   const tag = `order-${order.id}`;
@@ -481,15 +532,16 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
 export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { reason, customReason } = req.body;
   if (!reason) { res.status(400).json({ success: false, error: 'Termination reason required' }); return; }
+  if (reason === 'outside_area') { res.status(400).json({ success: false, error: 'Outside delivery area can only be selected before confirming an order' }); return; }
   const finalReason = reason === 'other' ? (customReason?.trim() || 'Other') : reason;
-  if (!['super_admin', 'store_owner'].includes(req.admin!.role)) {
-    res.status(403).json({ success: false, error: 'Not authorised to terminate orders' }); return;
-  }
   const existing = await query<{ status: string; customer_id: string | null; store_id: string | null; order_number: string; guest_name: string }>(
     `SELECT status, customer_id, store_id, order_number, guest_name FROM mart_orders WHERE id = $1`, [req.params.id]
   );
   const ord = existing.rows[0];
   if (!ord) { res.status(404).json({ success: false, error: 'Order not found' }); return; }
+  if (!['super_admin', 'store_owner'].includes(req.admin!.role)) {
+    res.status(403).json({ success: false, error: 'Not authorised to terminate orders' }); return;
+  }
   if (['delivered','cancelled','failed_delivery','terminated'].includes(ord.status)) {
     res.status(400).json({ success: false, error: 'Order is already closed' }); return;
   }
@@ -505,7 +557,6 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
     store_closed:      '😔 Sorry — our store had to close unexpectedly. You will not be charged. Please reorder.',
     out_of_stock:      '😔 Sorry — an item became unavailable after dispatch. You will not be charged. Please reorder.',
     technical_issue:   '😔 Sorry — a technical issue prevented delivery. You will not be charged. Please reorder.',
-    outside_area:      '😔 Sorry — your delivery address is currently outside our delivery zone. You will not be charged. We are expanding soon and will be in your area! 🌱',
     other:             '😔 Sorry — your order had to be cancelled by our team. You will not be charged. Please reorder.',
   };
   if (ord.customer_id) {
@@ -673,16 +724,18 @@ export const customerGetAddresses = asyncHandler(async (req: CustomerRequest, re
 });
 
 export const customerAddAddress = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { label, addressLine, isDefault } = req.body;
+  const { label, addressLine, isDefault, latitude, longitude } = req.body;
   if (!addressLine || !addressLine.trim()) { res.status(400).json({ success: false, error: 'Address is required' }); return; }
-  const address = await CustomerAuthService.addAddress(req.customer!.id, label ?? 'Home', addressLine, !!isDefault);
+  if (!hasValidCoordinates(latitude, longitude)) { res.status(400).json({ success: false, error: 'Invalid address coordinates' }); return; }
+  const address = await CustomerAuthService.addAddress(req.customer!.id, label ?? 'Home', addressLine, !!isDefault, latitude, longitude);
   res.json({ success: true, data: address });
 });
 
 export const customerUpdateAddress = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { label, addressLine } = req.body;
+  const { label, addressLine, latitude, longitude } = req.body;
   if (!addressLine || !addressLine.trim()) { res.status(400).json({ success: false, error: 'Address is required' }); return; }
-  const address = await CustomerAuthService.updateAddress(req.customer!.id, req.params.id, label ?? 'Home', addressLine);
+  if (!hasValidCoordinates(latitude, longitude)) { res.status(400).json({ success: false, error: 'Invalid address coordinates' }); return; }
+  const address = await CustomerAuthService.updateAddress(req.customer!.id, req.params.id, label ?? 'Home', addressLine, latitude, longitude);
   res.json({ success: true, data: address });
 });
 

@@ -6,6 +6,8 @@ export interface SavedAddress {
   id: string;
   label: string; // 'Home', 'Work', or custom
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
   isDefault: boolean;
 }
 
@@ -20,7 +22,7 @@ export interface CustomerState {
   setName: (name: string) => void;
   loadAddresses: () => Promise<void>;
   addAddress: (address: Omit<SavedAddress, 'id'>) => Promise<void>;
-  updateAddress: (id: string, label: string, address: string) => Promise<void>;
+  updateAddress: (id: string, label: string, address: string, latitude?: number | null, longitude?: number | null) => Promise<void>;
   removeAddress: (id: string) => Promise<void>;
   setDefaultAddress: (id: string) => Promise<void>;
   getDefaultAddress: () => SavedAddress | null;
@@ -29,8 +31,8 @@ export interface CustomerState {
   clear: () => void;
 }
 
-const fromBackend = (a: { id: string; label: string; addressLine: string; isDefault: boolean }): SavedAddress =>
-  ({ id: a.id, label: a.label, address: a.addressLine, isDefault: a.isDefault });
+const fromBackend = (a: { id: string; label: string; addressLine: string; latitude: number | null; longitude: number | null; isDefault: boolean }): SavedAddress =>
+  ({ id: a.id, label: a.label, address: a.addressLine, latitude: a.latitude, longitude: a.longitude, isDefault: a.isDefault });
 
 export const useCustomerStore = create<CustomerState>()(
   persist(
@@ -55,14 +57,14 @@ export const useCustomerStore = create<CustomerState>()(
         const trimmed = addr.address.trim().toLowerCase();
         if (get().addresses.some(a => a.address.trim().toLowerCase() === trimmed)) return;
         try {
-          await addressApi.add(addr.label, addr.address, addr.isDefault);
+          await addressApi.add(addr.label, addr.address, addr.isDefault, addr.latitude, addr.longitude);
           await get().loadAddresses();
         } catch { /* silent — best effort */ }
       },
 
-      updateAddress: async (id, label, address) => {
+      updateAddress: async (id, label, address, latitude, longitude) => {
         try {
-          await addressApi.update(id, label, address);
+          await addressApi.update(id, label, address, latitude, longitude);
           await get().loadAddresses();
         } catch { /* silent */ }
       },

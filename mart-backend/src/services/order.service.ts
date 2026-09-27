@@ -15,6 +15,8 @@ export interface CreateOrderDto {
   guestName: string;
   guestPhone: string;
   guestAddress: string;
+  latitude?: number | null;
+  longitude?: number | null;
   storeId: string;
   storeName?: string;
   zoneName?: string;
@@ -190,13 +192,13 @@ export class OrderService {
       const orderId = uuidv4();
       await client.query(
         `INSERT INTO mart_orders
-           (id, order_number, store_id, customer_id, guest_name, guest_phone, guest_address,
+           (id, order_number, store_id, customer_id, guest_name, guest_phone, guest_address, delivery_latitude, delivery_longitude,
             subtotal, delivery_charge, total, payment_method, notes,
             delivery_preference, delivery_note, fulfilled_by,
             campaign_id, campaign_discount, coupon_code_used, idempotency_key)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
         [orderId, orderNumber, data.storeId, customerId, data.guestName, data.guestPhone,
-         data.guestAddress, subtotal, actualDelivery, total,
+         data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod, data.notes || null,
          data.deliveryPreference || 'within_15',
          data.deliveryNote || 'Ring the bell',
@@ -334,6 +336,7 @@ export class OrderService {
               o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
               o.total::float, o.payment_method as "paymentMethod",
               o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
+              o.delivery_latitude::float as "deliveryLatitude", o.delivery_longitude::float as "deliveryLongitude",
               o.termination_reason as "terminationReason",
               o.cancellation_reason as "cancellationReason",
               o.campaign_id as "campaignId",
@@ -413,7 +416,8 @@ export class OrderService {
     id: string,
     status: string,
     actor: { id: string; username: string; role: string; storeId: string | null },
-    deliveryAssigneeId?: string
+    deliveryAssigneeId?: string,
+    cancellationReason?: string
   ) {
     const order = await transaction(async client => {
       const current = await client.query(
@@ -435,14 +439,17 @@ export class OrderService {
 
       const processingRoles = ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'];
       const assignmentRoles = ['super_admin', 'store_owner', 'store_manager'];
+      const outsideAreaRoles = ['super_admin', 'store_owner', 'store_manager'];
       const isAssignedHandler = existing.deliveryById === actor.id;
+      const canCancelOutsideArea = cancellationReason !== 'outside_area' ||
+        (status === 'cancelled' && existing.status === 'pending' && outsideAreaRoles.includes(actor.role));
       const allowed =
         (status === 'confirmed' && existing.status === 'pending' && processingRoles.includes(actor.role)) ||
         (status === 'preparing' && existing.status === 'confirmed' && processingRoles.includes(actor.role)) ||
         (status === 'ready_to_pickup' && existing.status === 'preparing' && assignmentRoles.includes(actor.role) && !!deliveryAssigneeId) ||
         (status === 'out_for_delivery' && ['ready_to_pickup', 'picked_up'].includes(existing.status) && isAssignedHandler) ||
         (status === 'delivered' && ['out_for_delivery', 'picked_up'].includes(existing.status) && isAssignedHandler) ||
-        (status === 'cancelled' && ['pending', 'confirmed'].includes(existing.status) && processingRoles.includes(actor.role)) ||
+        (status === 'cancelled' && ['pending', 'confirmed'].includes(existing.status) && processingRoles.includes(actor.role) && canCancelOutsideArea) ||
         (status === 'failed_delivery' && ['out_for_delivery', 'picked_up'].includes(existing.status) && (isAssignedHandler || assignmentRoles.includes(actor.role)));
 
       if (!allowed) throw Object.assign(new Error('This status change is not allowed'), { status: 403 });

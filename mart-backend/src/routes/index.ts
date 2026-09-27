@@ -28,6 +28,7 @@ router.get('/categories',          ctrl.getCategories);
 router.get('/products',            ctrl.getProducts);        // ?storeId=
 router.get('/products/:id',        ctrl.getProduct);         // ?storeId=
 router.get('/settings/public',     ctrl.getPublicSettings);  // ?storeId=
+router.post('/geocode/reverse',    ctrl.reverseGeocode);
 router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 

@@ -11,7 +11,6 @@ interface CheckoutPageProps {
   settings: PublicSettings;
   zoneName?: string;
   storeId?: string;
-  zoneGpsConfirmed?: boolean;
   onBack: () => void;
   onHome: () => void;
   onSuccess: (orderNumber: string, preference: string, storeName?: string, savedAmount?: number) => void;
@@ -27,7 +26,7 @@ const PREFERENCES = [
 
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
-export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfirmed, onBack, onHome, onSuccess }: CheckoutPageProps) {
+export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess }: CheckoutPageProps) {
   const orderRequestKey = useRef(crypto.randomUUID());
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
@@ -152,7 +151,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
-  const selectedLabel = addresses.find(a => a.address === deliveryAddress)?.label ?? 'Address';
+  const selectedAddress = addresses.find(a => a.address === deliveryAddress);
+  const selectedLabel = selectedAddress?.label ?? 'Address';
   const selectedPref = PREFERENCES.find(p => p.value === deliveryPreference)!;
   const currentNote = showCustomNote ? (customNote || '✏️ Custom note') : deliveryNote;
 
@@ -168,6 +168,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
       const res = await storeApi.placeOrder({
         guestName: name, guestPhone: phone.replace(/\D/g, ''),
         guestAddress: resolvedAddress,
+        latitude: selectedAddress?.latitude ?? null,
+        longitude: selectedAddress?.longitude ?? null,
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
         paymentMethod, zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
@@ -275,15 +277,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
             </div>
           )}
 
-          {/* Soft warning if zone not GPS confirmed */}
-          {!zoneGpsConfirmed && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5">
-              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                Delivery area not verified. Please confirm your address is within our delivery zone.
-              </p>
-            </div>
-          )}
-
           {/* Address bottom sheet */}
           {showAddressList && (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
@@ -327,10 +320,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, zoneGpsConfi
                 ) : (
                   <div className="px-5 py-4">
                     <AddressForm saving={addressSaving} onCancel={() => setAddingNew(false)}
-                      onSave={async (label, address) => {
+                      onSave={async (label, address, coordinates) => {
                         setAddressSaving(true);
                         try {
-                          await addAddress({ label, address, isDefault: addresses.length === 0 });
+                          await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
                           setAddingNew(false);
                           setShowAddressList(false);
                         } finally { setAddressSaving(false); }

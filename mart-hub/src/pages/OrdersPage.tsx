@@ -93,8 +93,9 @@ const STALE_MINS: Record<string, number> = {
   pending: 15, confirmed: 20, preparing: 30, out_for_delivery: 45,
 };
 
-function openGoogleMaps(address: string) {
-  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
+function openGoogleMaps(address: string, latitude?: number | null, longitude?: number | null) {
+  const query = latitude != null && longitude != null ? `${latitude},${longitude}` : address;
+  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, '_blank');
 }
 
 // Progress bar component
@@ -175,6 +176,7 @@ export default function OrdersPage() {
 
   const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
+  const canCancelOutsideArea = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
   const canManage    = ['super_admin', 'store_owner', 'sales_manager', 'store_manager'].includes(role || '');
   const canDispatch = false;
   const canAssignDelivery = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
@@ -516,7 +518,7 @@ export default function OrdersPage() {
                         <MapPin className="w-3.5 h-3.5 text-gray-500 dark:text-slate-400 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-gray-600 dark:text-slate-300 leading-relaxed flex-1">{order.guestAddress}</p>
                         {!["delivered","cancelled","failed_delivery","terminated"].includes(order.status) && (
-                          <button onClick={e => { e.stopPropagation(); openGoogleMaps(order.guestAddress); }}
+                          <button onClick={e => { e.stopPropagation(); openGoogleMaps(order.guestAddress, order.deliveryLatitude, order.deliveryLongitude); }}
                             className="flex-shrink-0 p-1 rounded-lg text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                             <Navigation className="w-3.5 h-3.5" />
                           </button>
@@ -645,7 +647,6 @@ export default function OrdersPage() {
                             {terminationSelected ? <>
                               <option value="out_of_stock">Out of stock</option>
                               <option value="store_closed">Store closed</option>
-                              <option value="outside_area">Outside delivery area</option>
                               <option value="rider_unavailable">Rider unavailable</option>
                               <option value="technical_issue">Technical issue</option>
                             </> : <>
@@ -679,7 +680,6 @@ export default function OrdersPage() {
                     {canManage && !TERMINAL.includes(order.status) && order.status !== 'out_for_delivery' && (() => {
                       const isEarly = ['pending', 'confirmed'].includes(order.status);
                       const isLate  = !isEarly;
-                      // Late stage: only super_admin + store_owner can stop
                       if (isLate && !canTerminate) return null;
                       const isProcessing = updating === order.id || terminating === order.id;
                       return cancellingId === order.id ? (
@@ -691,12 +691,12 @@ export default function OrdersPage() {
                             <option value="" disabled>Why stopping?</option>
                             {isEarly && <option value="customer_request">Customer request</option>}
                             {isEarly && <option value="duplicate_order">Duplicate order</option>}
-                            <option value="out_of_stock">Out of stock</option>
-                            <option value="store_closed">Store closed</option>
-                            {!isEarly && <option value="outside_area">Outside delivery area</option>}
-                            {!isEarly && <option value="rider_unavailable">Rider unavailable</option>}
-                            {!isEarly && <option value="technical_issue">Technical issue</option>}
-                            <option value="other">Other</option>
+                            {(isEarly || canTerminate) && <option value="out_of_stock">Out of stock</option>}
+                            {(isEarly || canTerminate) && <option value="store_closed">Store closed</option>}
+                            {order.status === 'pending' && canCancelOutsideArea && <option value="outside_area">Outside delivery area</option>}
+                            {!isEarly && canTerminate && <option value="rider_unavailable">Rider unavailable</option>}
+                            {!isEarly && canTerminate && <option value="technical_issue">Technical issue</option>}
+                            {(isEarly || canTerminate) && <option value="other">Other</option>}
                           </select>
                           <button onClick={() => handleStopOrder(order, isEarly)} disabled={!cancellationReason || isProcessing}
                             className="px-3 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl disabled:opacity-50">
