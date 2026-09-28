@@ -18,6 +18,7 @@ const NAV_ALL = [
   { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'] },
   { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'] },
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Customer Leads',     href: '/customer-leads',      icon: Users,           roles: ['super_admin'] },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin', 'store_owner'] },
   { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },

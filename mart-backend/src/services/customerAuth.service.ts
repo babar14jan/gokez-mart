@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 import { query, transaction } from '../database/db';
 import { config } from '../config';
 import { ComplianceService } from './compliance.service';
+import { CustomerLeadService } from './customerLead.service';
 
 const TWO_FACTOR_BASE = 'https://2factor.in/API/V1';
 const OTP_EXPIRY_MINUTES = 10;
@@ -14,6 +15,9 @@ export class CustomerAuthService {
   static async sendOtp(phone: string): Promise<{ message: string }> {
     const cleaned = phone.replace(/\D/g, '');
     if (cleaned.length !== 10) throw new Error('Invalid phone number');
+
+    // Capture the expressed sign-in intent independently of OTP delivery or verification.
+    await CustomerLeadService.recordOtpRequest(cleaned);
 
     // Delete expired OTPs first so they don't count toward rate limit
     await query(`DELETE FROM mart_otps WHERE phone = $1 OR expires_at < NOW()`, [cleaned]);
@@ -119,6 +123,8 @@ export class CustomerAuthService {
       [cleaned]
     );
     const customer = customerRes.rows[0];
+
+    await CustomerLeadService.markVerified(cleaned, customer.id);
 
     // Record consent on first login (DPDP Act 2023)
     await ComplianceService.recordConsent(customer.id).catch(() => {});

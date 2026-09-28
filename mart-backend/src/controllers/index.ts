@@ -18,6 +18,7 @@ import { ComplianceService } from '../services/compliance.service';
 import { query, transaction } from '../database/db';
 import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
+import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
 import { config } from '../config';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -579,6 +580,45 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
      LIMIT 200`
   );
   res.json({ success: true, data: result.rows });
+});
+
+export const adminGetCustomerLeads = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const status = req.query.status === 'unverified' || req.query.status === 'verified'
+    ? req.query.status
+    : 'all';
+  const [leads, counts] = await Promise.all([
+    CustomerLeadService.findAll(status as LeadStatus),
+    CustomerLeadService.getCounts(),
+  ]);
+  res.json({ success: true, data: leads, counts });
+});
+
+function csvCell(value: string | null | undefined): string {
+  return `"${String(value || '').replace(/"/g, '""')}"`;
+}
+
+export const adminExportMarketingLeads = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const leads = await CustomerLeadService.getMarketingExport();
+  const csv = [
+    'Name,Mobile Number,Last Successful Login',
+    ...leads.map(lead => [
+      csvCell(lead.name),
+      csvCell(lead.phone),
+      csvCell(lead.last_successful_login_at.toISOString()),
+    ].join(',')),
+  ].join('\n');
+  ComplianceService.logAudit({
+    adminId: req.admin!.id,
+    username: req.admin!.username,
+    role: req.admin!.role,
+    action: 'export_marketing_leads',
+    detail: `Exported ${leads.length} verified marketing-consented customer lead(s)`,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+  }).catch(() => {});
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="gokez-marketing-leads.csv"');
+  res.send(`\uFEFF${csv}`);
 });
 
 // ── Admin settings controllers ────────────────────────────────────────────────

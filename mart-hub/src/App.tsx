@@ -12,6 +12,7 @@ const ProductsPage = lazy(() => import('./pages/ProductsPage'));
 const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
 const OrdersPage = lazy(() => import('./pages/OrdersPage'));
 const CustomersPage = lazy(() => import('./pages/CustomersPage'));
+const CustomerLeadsPage = lazy(() => import('./pages/CustomerLeadsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
@@ -32,7 +33,7 @@ const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazy(() => import('./pages/CarouselPage'));
 
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   sales_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="/products"        element={<ProtectedRoute path="/products"><ProductsPage /></ProtectedRoute>} />
         <Route path="/categories"      element={<ProtectedRoute path="/categories"><CategoriesPage /></ProtectedRoute>} />
         <Route path="/customers"       element={<ProtectedRoute path="/customers"><CustomersPage /></ProtectedRoute>} />
+        <Route path="/customer-leads"   element={<ProtectedRoute path="/customer-leads"><CustomerLeadsPage /></ProtectedRoute>} />
         <Route path="/analytics"       element={<ProtectedRoute path="/analytics"><AnalyticsPage /></ProtectedRoute>} />
         <Route path="/settings"        element={<ProtectedRoute path="/settings"><SettingsPage /></ProtectedRoute>} />
         <Route path="/stores"          element={<ProtectedRoute path="/stores"><StoresPage /></ProtectedRoute>} />

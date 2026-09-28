@@ -83,6 +83,11 @@ export const customersApi = {
   getAll: () => api.get('/admin/customers'),
 };
 
+export const customerLeadsApi = {
+  getAll: (status: 'all' | 'unverified' | 'verified') => api.get('/admin/customer-leads', { params: { status } }),
+  downloadMarketingCsv: () => api.get('/admin/customer-leads/export', { responseType: 'blob' }),
+};
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 export const settingsApi = {
   getAll: (storeId?: string) => api.get('/admin/settings', { params: storeId ? { storeId } : {} }),

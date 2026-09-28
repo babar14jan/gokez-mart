@@ -137,6 +137,7 @@ export default function MorePage() {
     super_admin: [
       { label: 'Analytics',          href: '/analytics',          icon: BarChart3 },
       { label: 'Customers',          href: '/customers',          icon: Users },
+      { label: 'Customer Leads',     href: '/customer-leads',     icon: Users },
       { label: 'Categories',         href: '/categories',         icon: Tag },
       { label: 'Catalog',            href: '/catalog',            icon: Package },
       { label: 'Feedback',           href: '/feedback',           icon: MessageSquare },

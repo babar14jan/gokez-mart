@@ -84,6 +84,8 @@ router.get('/admin/orders',            authenticate, ctrl.adminGetOrders);      
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
 router.put("/admin/orders/:id/terminate", authenticate, ctrl.adminTerminateOrder);// ── Admin customers ───────────────────────────────────────────────────────────
 router.get('/admin/customers',         authenticate, ctrl.adminGetCustomers);
+router.get('/admin/customer-leads',        authenticate, requireSuperAdmin, ctrl.adminGetCustomerLeads);
+router.get('/admin/customer-leads/export', authenticate, requireSuperAdmin, ctrl.adminExportMarketingLeads);
 
 // ── Admin settings ────────────────────────────────────────────────────────────
 router.get('/admin/settings',          authenticate, ctrl.adminGetSettings);     // ?storeId=
