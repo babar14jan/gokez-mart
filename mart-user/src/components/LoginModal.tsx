@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, RefreshCw, ShieldCheck, ArrowRight, Tag } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { subscribeToPush } from '../services/push';
 import { useCustomerStore } from '../store/customerStore';
+import { useLoginFlowStore } from '../store/loginFlowStore';
 
 interface LoginModalProps {
   onClose: () => void;
@@ -14,24 +15,43 @@ interface LoginModalProps {
 type Step = 'phone' | 'otp' | 'profile' | 'offer';
 
 export default function LoginModal({ onClose, onSuccess, pendingCheckout }: LoginModalProps) {
-  const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const restoredFlow = useLoginFlowStore.getState().getActiveOtpFlow();
+  const [step, setStep] = useState<Step>(() => restoredFlow ? 'otp' : 'phone');
+  const [phone, setPhone] = useState(() => restoredFlow?.phone || '');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [welcomeOffer, setWelcomeOffer] = useState<any | null>(null);
-  const [resendTimer, setResendTimer] = useState(0);
+  const [resendTimer, setResendTimer] = useState(() => restoredFlow ? Math.max(0, Math.ceil((restoredFlow.resendAvailableAt - Date.now()) / 1000)) : 0);
   const [newName, setNewName] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
 
   const { login } = useCustomerAuthStore();
   const { setPhone: savePhone, setName, addAddress } = useCustomerStore();
+  const loginFlow = useLoginFlowStore();
 
-  const startResendTimer = () => {
-    setResendTimer(30);
-    const t = setInterval(() => {
-      setResendTimer(s => { if (s <= 1) { clearInterval(t); return 0; } return s - 1; });
-    }, 1000);
+  useEffect(() => {
+    if (step !== 'otp') return;
+    const updateTimer = () => {
+      const activeFlow = useLoginFlowStore.getState().getActiveOtpFlow();
+      if (!activeFlow) {
+        setStep('phone');
+        setOtp('');
+        setResendTimer(0);
+        setError('Your OTP has expired. Please request a new one.');
+        return;
+      }
+      setResendTimer(Math.max(0, Math.ceil((activeFlow.resendAvailableAt - Date.now()) / 1000)));
+    };
+    updateTimer();
+    const interval = window.setInterval(updateTimer, 1000);
+    return () => window.clearInterval(interval);
+  }, [step]);
+
+  const handleClose = () => {
+    if (step === 'otp' && !window.confirm('Cancel login? You will need to request a new OTP.')) return;
+    loginFlow.clear();
+    onClose();
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -41,8 +61,10 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
     setLoading(true); setError('');
     try {
       await authApi.sendOtp(cleaned);
+      loginFlow.beginOtp(cleaned, !!pendingCheckout);
+      setPhone(cleaned);
       setStep('otp');
-      startResendTimer();
+      setResendTimer(30);
     } catch (err: any) {
       if (!err?.response) setError('No internet connection. Please try again.');
       else setError(err?.response?.data?.error || 'Failed to send OTP. Try again.');
@@ -56,6 +78,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
     try {
       const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp);
       const { token, customer } = res.data.data;
+      loginFlow.clear();
       login(token, customer);
       savePhone(customer.phone);
       if (customer.name) setName(customer.name);
@@ -89,7 +112,8 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
     setLoading(true); setError(''); setOtp('');
     try {
       await authApi.sendOtp(phone.replace(/\D/g, ''));
-      startResendTimer();
+      loginFlow.markOtpResent();
+      setResendTimer(30);
     } catch (err: any) {
       if (!err?.response) setError('No internet connection. Please try again.');
       else setError(err?.response?.data?.error || 'Failed to resend OTP.');
@@ -116,7 +140,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
       <div className="bg-white dark:bg-slate-800 w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-6">
 
         <div className="flex items-center justify-end mb-5">
-          <button onClick={onClose} className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
+          <button onClick={handleClose} aria-label={step === 'otp' ? 'Cancel login' : 'Close login'} className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -221,7 +245,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Enter OTP</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">
               Sent to <span className="font-semibold text-gray-700 dark:text-slate-300">+91 {phone}</span>
-              <button onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+              <button onClick={() => { loginFlow.clear(); setStep('phone'); setOtp(''); setError(''); }}
                 className="ml-2 text-emerald-600 text-xs font-semibold hover:underline">Change</button>
             </p>
             {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-3 py-2 rounded-xl mb-4">{error}</div>}

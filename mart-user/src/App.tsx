@@ -20,6 +20,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
+import { useLoginFlowStore } from './store/loginFlowStore';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
 
@@ -72,7 +73,7 @@ export default function App() {
   const [checkoutActive, setCheckoutActive] = useState(false);
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
   const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number } | null>(null);
-  const [pendingCheckout, setPendingCheckout] = useState(false);
+  const [pendingCheckout, setPendingCheckout] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()?.pendingCheckout));
 
   const { isLoggedIn } = useCustomerAuthStore();
 
@@ -89,7 +90,7 @@ export default function App() {
       }
     } catch {}
   }, [isLoggedIn]);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()));
   const [showNamePrompt, setShowNamePrompt] = useState(false);
 
   const [showOutsideWarning, setShowOutsideWarning] = useState(false);
@@ -233,7 +234,7 @@ export default function App() {
 
   // Account tab — show login modal if not logged in, but still navigate
   const handleNavChange = (v: View) => {
-    if (v === 'account' && !isLoggedIn) { setShowLoginModal(true); return; }
+    if (v === 'account' && !isLoggedIn) { setPendingCheckout(false); setShowLoginModal(true); return; }
     setView(v);
   };
 
@@ -255,9 +256,9 @@ export default function App() {
     }
     // Require login before checkout
     if (!isLoggedIn) {
-      setShowLoginModal(true);
       // After login, proceed to checkout
       setPendingCheckout(true);
+      setShowLoginModal(true);
       return;
     }
     setCheckoutActive(true);
@@ -310,7 +311,7 @@ export default function App() {
   return (
     <div className={`min-h-screen ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
-      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onClose={() => { setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
+      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onClose={() => { useLoginFlowStore.getState().clear(); setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
         setShowLoginModal(false);
         if (pendingCheckout) {
           setPendingCheckout(false);
