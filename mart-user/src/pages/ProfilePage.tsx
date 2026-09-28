@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -34,6 +34,9 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
   const [photoUploading, setPhotoUploading] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | 'new' | null>(null);
   const [addressSaving, setAddressSaving] = useState(false);
+  const [addressMenuId, setAddressMenuId] = useState<string | null>(null);
+  const [addressPendingDelete, setAddressPendingDelete] = useState<string | null>(null);
+  const [addressDeleting, setAddressDeleting] = useState(false);
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
@@ -44,6 +47,15 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
       else await addAddress({ label, address: val, isDefault: addresses.length === 0, ...coordinates });
       setEditingAddressId(null);
     } finally { setAddressSaving(false); }
+  };
+
+  const handleDeleteAddress = async () => {
+    if (!addressPendingDelete) return;
+    setAddressDeleting(true);
+    try {
+      await removeAddress(addressPendingDelete);
+      setAddressPendingDelete(null);
+    } finally { setAddressDeleting(false); }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,8 +180,12 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
 
         {/* Addresses — full labeled address book */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
             <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Addresses</p>
+            <button onClick={() => setEditingAddressId('new')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600">
+              <Plus className="w-3.5 h-3.5" /> Add address
+            </button>
           </div>
 
           {addresses.length === 0 && (
@@ -195,33 +211,66 @@ export default function ProfilePage({ onBack, supportName, supportPhone, whatsap
                     <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug">{addr.address}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {!addr.isDefault && (
-                    <button onClick={() => setDefaultAddress(addr.id)}
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 transition-colors">
-                      ★ Default
-                    </button>
-                  )}
-                  <button onClick={() => setEditingAddressId(addr.id)}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg border border-gray-200 dark:border-slate-600 transition-colors">
-                    <Pencil className="w-3 h-3" /> Edit
-                  </button>
-                  <button onClick={() => removeAddress(addr.id)}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 transition-colors">
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+                <button onClick={() => setAddressMenuId(addr.id)} aria-label={`Manage ${addr.label} address`} title="Manage address"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700">
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
               </div>
             </div>
           ))}
-
-          <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
-            <button onClick={() => setEditingAddressId('new')}
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
-              <Plus className="w-3.5 h-3.5" /> Add new address
-            </button>
-          </div>
         </div>
+
+        {/* Address actions */}
+        {addressMenuId && (() => {
+          const address = addresses.find(item => item.id === addressMenuId);
+          if (!address) return null;
+          return (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 sm:p-4">
+              <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl bg-white dark:bg-slate-800 shadow-2xl p-5">
+                <div className="mb-4">
+                  <p className="text-base font-bold text-gray-900 dark:text-white">Manage {address.label} address</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-400 line-clamp-2">{address.address}</p>
+                </div>
+                <div className="space-y-2">
+                  <button onClick={() => { setAddressMenuId(null); setEditingAddressId(address.id); }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-700">
+                    <Pencil className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> Edit address
+                  </button>
+                  {!address.isDefault && (
+                    <button onClick={() => { setDefaultAddress(address.id); setAddressMenuId(null); }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-700">
+                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> Set as default
+                    </button>
+                  )}
+                  <button onClick={() => { setAddressMenuId(null); setAddressPendingDelete(address.id); }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
+                    <Trash2 className="w-4 h-4" /> Delete address
+                  </button>
+                </div>
+                <button onClick={() => setAddressMenuId(null)} className="mt-3 w-full rounded-xl bg-gray-100 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Cancel</button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Destructive address deletion confirmation */}
+        {addressPendingDelete && (() => {
+          const address = addresses.find(item => item.id === addressPendingDelete);
+          if (!address) return null;
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4">
+              <div role="alertdialog" aria-modal="true" aria-labelledby="delete-address-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20"><Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" /></div>
+                <h2 id="delete-address-title" className="mt-3 text-base font-bold text-gray-900 dark:text-white">Delete this address?</h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">This will remove your {address.label.toLowerCase()} address from saved addresses.</p>
+                <div className="mt-5 flex gap-2">
+                  <button onClick={() => setAddressPendingDelete(null)} disabled={addressDeleting} className="flex-1 rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Keep address</button>
+                  <button onClick={handleDeleteAddress} disabled={addressDeleting} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">{addressDeleting ? 'Deleting...' : 'Delete address'}</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Address edit modal */}
         {editingAddressId && (
