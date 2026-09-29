@@ -20,6 +20,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
+import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
@@ -116,6 +117,14 @@ export default function App() {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', isDark ? '#18191a' : '#0f172a');
   }, [isDark, view]);
+
+  // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
+  // title, description, canonical and robots correct as the view changes, and
+  // marks private/transactional views noindex. Runs on first mount too, so a deep
+  // link like /terms is correct before the user interacts with anything.
+  useEffect(() => {
+    applySeo(view, { checkoutActive });
+  }, [view, checkoutActive]);
 
   useEffect(() => {
     const handlePop = () => {
@@ -651,9 +660,13 @@ export default function App() {
             {/* Copyright */}
             <p className="text-center text-[11px] text-gray-500 dark:text-slate-400">
               A product of{' '}
-              <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
-                Gokez Technologies Pvt. Ltd.
-              </span>
+              {/* Single external link to the parent company. gokez.com stays a
+                  separate site with its own identity; this is a reference to the
+                  company behind the product, not a claim that MART is part of it. */}
+              <a href="https://gokez.com/" target="_blank" rel="noopener noreferrer"
+                className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent hover:underline">
+                Gokez Technologies
+              </a>
               {' '}&copy; {new Date().getFullYear()}
             </p>
           </div>

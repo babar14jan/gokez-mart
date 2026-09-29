@@ -1,7 +1,7 @@
 {
-  "name": "Gokez Mart",
-  "short_name": "Gokez Mart",
-  "description": "Shop local, support local. Order fresh groceries from your neighbourhood stores in Kolkata, delivered fast to your door.",
+  "name": "Gokez MART",
+  "short_name": "Gokez MART",
+  "description": "Shop Local. Support Local. Gokez MART connects you with nearby local stores, letting you shop from neighbourhood vendors and support local businesses.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

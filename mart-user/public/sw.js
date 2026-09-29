@@ -116,7 +116,10 @@ self.addEventListener('push', (e) => {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-96.png',
-      image: '/mart_web_logo.png',
+      // Was '/mart_web_logo.png', which does not exist in public/ — a dead
+      // reference. Corrected to a real current MART asset. The rest of the
+      // notification behaviour is unchanged.
+      image: '/icons/icon-512.png',
       data: { url: payload.url || '/' },
       vibrate: [200, 100, 200],
       tag: payload.tag || 'gokez-mart',

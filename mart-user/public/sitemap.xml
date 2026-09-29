@@ -1,6 +1,43 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="UTF-8"?>
+<!--
+  Public, indexable pages of mart.gokez.com only.
+
+  These are the five routes that are real documents: they render without a login
+  and each has its own title, meta description and canonical (see src/utils/seo.ts,
+  which is the source of truth for indexable routes).
+
+  Deliberately absent: /account, /orders, /notification-settings,
+  /delete-account, /checkout and the in-app cart / categories views. Those are
+  authenticated or transactional surfaces. They are additionally marked noindex
+  in the rendered head, because robots.txt prevents crawling but does not
+  un-index a URL that has already been discovered.
+
+  Do not add the hub, admin or API URLs here.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://mart.gokez.com/</loc></url>
-  <url><loc>https://mart.gokez.com/privacy</loc></url>
-  <url><loc>https://mart.gokez.com/terms</loc></url>
+  <url>
+    <loc>https://mart.gokez.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://mart.gokez.com/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://mart.gokez.com/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://mart.gokez.com/grievance</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://mart.gokez.com/feedback</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
 </urlset>

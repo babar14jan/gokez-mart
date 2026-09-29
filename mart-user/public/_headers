@@ -9,3 +9,31 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Favicons and PWA icons are deliberately NOT immutable.
+#
+# /assets/* is safe to mark immutable because Vite content-hashes those files, so
+# a changed file always gets a new URL. The icons below are copied verbatim out
+# of public/ under stable paths, so an immutable policy would pin the old artwork
+# in browsers and at the Cloudflare edge indefinitely and the new favicon could
+# never reach returning visitors. One day balances that against PWA install cost.
+#
+# favicon.ico also gets an explicit Content-Type so it can never be served as
+# text/html by the SPA fallback.
+#
+# This is targeted: the immutable /assets/* rule above is left untouched.
+/favicon.ico
+  Content-Type: image/x-icon
+  Cache-Control: public, max-age=86400
+
+/favicon-16.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+
+/favicon-32.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+
+/icons/*
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400

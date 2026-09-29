@@ -113,9 +113,20 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
             <img src="/mart_brand_dark.png" alt="Gokez Mart" width="384" height="256"
               className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left" />
           </picture>
-          <span className="block -mt-1.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
-            Shop Local <span className="align-middle">&bull;</span> Support Local
-          </span>
+          {/* Slogan. This is the page's <h1> on the home view only — it is the
+              existing brand lockup, promoted to a heading rather than adding a
+              second brand line. The other views (privacy, terms, grievance,
+              feedback, cart, profile, notifications) each render their own <h1>,
+              so emitting one here too would put two on the page. */}
+          {activeView === 'home' ? (
+            <h1 className="block -mt-1.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
+              Shop Local <span className="align-middle">&bull;</span> Support Local
+            </h1>
+          ) : (
+            <p className="block -mt-1.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
+              Shop Local <span className="align-middle">&bull;</span> Support Local
+            </p>
+          )}
         </div>
 
         {/* ── Desktop layout ── */}

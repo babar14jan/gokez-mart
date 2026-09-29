@@ -1,0 +1,27 @@
+# Cloudflare Pages redirect rules for mart.gokez.com.
+#
+# Intentionally EMPTY of rules. Do not add the usual SPA catch-all:
+#
+#     /*    /index.html    200
+#
+# Cloudflare Pages already provides SPA fallback natively. From the Pages
+# "Serving Pages" documentation: "If your project does not include a top-level
+# 404.html file, Pages assumes that you are deploying a single-page application...
+# matches all incoming paths to the root (/), allowing you to capture URLs like
+# /about or /help and respond to them from within your SPA."
+#
+# This project ships no 404.html (do not add one — adding it disables the native
+# fallback above and would break every deep link, including /terms and /grievance,
+# which are in sitemap.xml).
+#
+# A catch-all rewrite would be actively harmful here. The Pages redirects
+# documentation states that "Redirects are always followed, regardless of whether
+# or not an asset matches the incoming request." A `/*` rule would therefore
+# shadow real files and serve index.html in place of:
+#   robots.txt, sitemap.xml, manifest.json, sw.js, version.json,
+#   cache-version.json, /icons/*, /assets/*, /qr-sizes/*, and the brand images.
+# Those failures are silent — a crawler would receive HTML where it expects XML,
+# and the PWA would fail to install.
+#
+# This file exists only to record that decision so the catch-all is not added
+# back without re-reading the above.
