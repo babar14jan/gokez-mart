@@ -199,3 +199,15 @@ export const publicPaths = (): string[] => [...PUBLIC_PATHS].sort();
 
 /** Exposed so the guard can assert the homepage keeps its trailing slash. */
 export const canonicalFor = absoluteUrl;
+
+/**
+ * The canonical a view actually renders, resolved through the same ROUTES lookup
+ * `applySeo` performs. The guard asserts on this rather than on `absoluteUrl`
+ * directly: asking the builder for "/" is a hardcoded argument and would stay
+ * green even if a route's own `path` lost its leading slash, which is the exact
+ * regression that would desync the rendered canonical from index.html.
+ */
+export const canonicalForView = (view: SeoView): string => {
+  const route = ROUTES[view] ?? ROUTES.home;
+  return absoluteUrl(route.path ?? '/');
+};

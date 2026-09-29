@@ -1,7 +1,14 @@
 /**
  * SEO-3 build gate — zero new dependencies (Node built-ins only).
  *
- *   npm run seo:check        # verify source + build output
+ *   npm run seo:check         # verify source + build output (also runs in build)
+ *   npm run seo:check:full    # additionally executes src/utils/seo.ts (needs tsx)
+ *
+ * `seo:check` is deliberately pure Node so it can run as the last step of
+ * `npm run build` on Cloudflare Pages without depending on any other workspace's
+ * devDependencies. Only `seo:check:full` loads a TS loader, and that one is for
+ * local/CI use. The trailing-slash regression is still caught by `seo:check`
+ * through a source assertion, so neither mode can pass a drifted canonical.
  *
  * This exists to make the two SEO-3 deployment risks impossible to ship
  * silently. Both are silent failures: nothing in `vite build` complains, the
@@ -132,17 +139,62 @@ if (!locs.includes(htmlCanonical)) {
 }
 ok(`index.html canonical ${htmlCanonical} matches the sitemap homepage`);
 
+// This runs inside `npm run build` on Cloudflare, so a missing TS loader must
+// never be able to fail a deploy. The import is a bonus depth check; the
+// contract that actually matters for the deployed bytes is verified above and by
+// the source assertions below, both of which use only Node built-ins.
 let seo = null;
 try {
   seo = await import('../src/utils/seo.ts');
-} catch (err) {
-  fail(`could not import src/utils/seo.ts (run with: node --import tsx): ${err.message}`);
+} catch {
+  seo = null;
+}
+if (!seo) {
+  const src = read(join(ROOT, 'src/utils/seo.ts'));
+  // Strictly match the whole declaration so a trailing mutation (e.g.
+  // `.replace('https://','')`) cannot smuggle a wrong runtime origin past a
+  // check that only inspects the string literal.
+  const decl = (src.match(/const SITE_ORIGIN\s*=\s*'([^']*)'\s*;/) || [])[0] || '';
+  if (decl !== `const SITE_ORIGIN = '${ORIGIN}';`) {
+    fail(`src/utils/seo.ts SITE_ORIGIN declaration is "${decl}", expected "const SITE_ORIGIN = '${ORIGIN}';"`);
+  }
+  // Two structural facts together guarantee the homepage canonical is
+  // `${ORIGIN}/`: the builder joins SITE_ORIGIN with the route path, and the
+  // home route's path is "/". Note the builder must NOT need a "/" special case
+  // — every route path already carries its own leading slash, so a canonical
+  // that drops it can only come from the home path losing its slash.
+  if (!/const absoluteUrl[\s\S]*?SITE_ORIGIN/.test(src)) {
+    fail('src/utils/seo.ts absoluteUrl() no longer builds the canonical from SITE_ORIGIN');
+  }
+  const homePath = (src.match(/\bhome:\s*\{[\s\S]*?path:\s*'([^']*)'/) || [])[1];
+  if (homePath !== '/') {
+    fail(`src/utils/seo.ts home route path is "${homePath}", expected "/" — the runtime homepage canonical would not match index.html and sitemap.xml`);
+  }
+  // Every canonical path must be root-absolute, not just the homepage: "privacy"
+  // would build a relative canonical that disagrees with the sitemap.
+  const routePaths = [...src.matchAll(/path:\s*'([^']*)'/g)].map(m => m[1]);
+  const relative = routePaths.filter(p => !p.startsWith('/'));
+  if (!routePaths.length) {
+    fail('src/utils/seo.ts exposes no route paths — the ROUTES table could not be read');
+  } else if (relative.length) {
+    fail(`src/utils/seo.ts has ${relative.length} route path(s) without a leading slash: ${relative.map(p => `"${p}"`).join(', ')} — those would render a canonical that disagrees with sitemap.xml`);
+  } else if (homePath === '/') {
+    ok(`src/utils/seo.ts: SITE_ORIGIN correct, canonical built from it, all ${routePaths.length} route paths root-absolute (TS import skipped — \`npm run seo:check:full\` executes the real functions)`);
+  }
 }
 if (seo) {
-  const runtimeHome = seo.canonicalFor('/');
-  if (runtimeHome !== htmlCanonical) {
-    fail(`seo.ts canonical for "/" is "${runtimeHome}" but index.html/sitemap use "${htmlCanonical}" — Google would see two canonicals depending on whether it reads raw HTML or the rendered DOM`);
-  } else ok(`seo.ts canonical for "/" agrees with index.html (${runtimeHome})`);
+  // Assert on every public view resolved through ROUTES, the same way applySeo
+  // does, so a route whose own `path` drifts cannot hide behind a correct
+  // absoluteUrl(). This is what catches the homepage trailing-slash regression.
+  for (const expectedUrl of expected) {
+    const path = expectedUrl.replace(`${ORIGIN}`, '');
+    const view = path === '/' ? 'home' : path.replace(/^\//, '');
+    const rendered = seo.canonicalForView(view);
+    if (rendered !== expectedUrl) {
+      fail(`seo.ts canonicalForView('${view}') is "${rendered}" but index.html/sitemap use "${expectedUrl}" — the rendered DOM would hand Google a different canonical than the raw HTML`);
+    }
+  }
+  ok(`seo.ts canonical for all ${expected.length} public views agrees with index.html and sitemap.xml`);
 
   const seoPaths = seo.publicPaths();
   const expectedPaths = expected.map(u => u.replace(`${ORIGIN}`, '') || '/');
