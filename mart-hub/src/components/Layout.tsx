@@ -7,11 +7,15 @@ import {
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare,
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { useHeaderAction } from '../store/headerActionStore';
 
+// 'store_manager' entries below are frontend-only. The mart_admins role constraint
+// (migrations 011/028) permits only super_admin, store_owner, sales_manager,
+// delivery_staff and staff, so no such account can exist. Kept as-is so the role
+// matrix is not redesigned in a security fix; resolved in a later phase.
 const NAV_ALL = [
   { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
   { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
@@ -73,10 +77,12 @@ const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.Elem
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  const { username, name, storeId, role, logout } = useAuthStore();
+  const { username, name, storeId, role, logout, isSuperAdmin } = useAuthStore();
   const { onAction, label } = useHeaderAction();
-  const userRole = role || 'super_admin';
-  const NAV = NAV_ALL.filter(item => item.roles.includes(userRole));
+  // Fail closed. An absent or unrecognised role yields an empty sidebar rather
+  // than the full super-admin nav (previously `role || 'super_admin'`).
+  const userRole = isKnownRole(role) ? (role as string) : '';
+  const NAV = userRole ? NAV_ALL.filter(item => item.roles.includes(userRole)) : [];
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
@@ -95,11 +101,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!username) return;
-    if (!storeId) {
+    if (isSuperAdmin()) {
       // super_admin — load all stores for selector
       storesApi.getAll().then(r => setStores((r.data.data || []).filter((s: any) => s.isActive))).catch(() => {});
     } else {
-      setActiveStoreId(storeId);
+      setActiveStoreId(storeId || localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-0000-000000000001');
     }
     // Fetch QR URL for payment collection
     settingsApi.getAll(getActiveStoreId()).then(r => {
@@ -123,7 +129,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { isDark, toggle } = useThemeStore();
   const handleLogout = () => { logout(); navigate('/login'); };
 
-  const bottomTabs = BOTTOM_NAV[userRole] || BOTTOM_NAV.staff;
+  // Fail closed — previously fell back to the staff tab set for any unknown role.
+  const bottomTabs = (userRole && BOTTOM_NAV[userRole]) || [];
 
   const PAGE_TITLES: Record<string, string> = {
     '/': 'Dashboard', '/orders': 'Orders', '/products': 'Products',

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
 import sharp from 'sharp';
-import { asyncHandler, AdminRequest } from '../middleware';
+import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE } from '../middleware';
 import { ProductService } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
 import { OrderService } from '../services/order.service';
@@ -237,7 +237,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     ipAddress: req.ip, userAgent: req.headers['user-agent'],
   }).catch(() => {});
   const token = jwt.sign(
-    { id: admin.id, username: admin.username, role: admin.role, storeId: admin.store_id, jti: require('uuid').v4() },
+    { id: admin.id, username: admin.username, role: admin.role, type: ADMIN_TOKEN_TYPE, storeId: admin.store_id, jti: require('uuid').v4() },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn } as any
   );

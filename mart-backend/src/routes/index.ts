@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticate, requireSuperAdmin, requireRole, authenticateCustomer, authenticateCustomerIfPresent } from '../middleware';
+import { authenticate, requireSuperAdmin, requireRole, requireStoreAccess, authenticateCustomer, authenticateCustomerIfPresent } from '../middleware';
 import * as ctrl from '../controllers';
 
 const router = Router();
@@ -147,10 +147,20 @@ router.put('/admin/inventory/:productId/stock',         authenticate, ctrl.admin
 router.get('/admin/inventory/:productId/history',       authenticate, ctrl.adminGetInventoryHistory);
 
 // ── Team management ────────────────────────────────────────────────────────────────
-router.get('/admin/stores/:storeId/team',          authenticate, ctrl.getStoreTeam);
-router.post('/admin/stores/:storeId/team',         authenticate, ctrl.addToStoreTeam);
-router.put('/admin/stores/:storeId/team/:userId',  authenticate, ctrl.updateStoreTeamMember);
-router.delete('/admin/stores/:storeId/team/:userId', authenticate, ctrl.removeFromStoreTeam);
+// requireStoreAccess authorises the :storeId path parameter. Without it any
+// authenticated admin could read or rewrite another store's team by editing the URL.
+//
+// Role matrix note: 'store_manager' is still referenced by the hub frontend
+// (ROLE_ROUTES / Layout NAV_ALL) but is not a valid mart_admins role — migrations
+// 011 and 028 constrain it to super_admin, store_owner, sales_manager,
+// delivery_staff, staff. No such account can exist, so those frontend entries are
+// dead rather than exploitable. Resolving the role matrix is deferred to the
+// analytics phase; adding 'store_manager' to ADMIN_ROLES would be a schema change
+// and is deliberately not done here.
+router.get('/admin/stores/:storeId/team',          authenticate, requireStoreAccess, ctrl.getStoreTeam);
+router.post('/admin/stores/:storeId/team',         authenticate, requireStoreAccess, ctrl.addToStoreTeam);
+router.put('/admin/stores/:storeId/team/:userId',  authenticate, requireStoreAccess, ctrl.updateStoreTeamMember);
+router.delete('/admin/stores/:storeId/team/:userId', authenticate, requireStoreAccess, ctrl.removeFromStoreTeam);
 router.get('/admin/users/lookup',                  authenticate, ctrl.lookupUserByPhone);
 router.get('/admin/users/:userId/stores',          authenticate, ctrl.getUserStores);
 router.put('/admin/stores/:id/deactivate',         authenticate, requireSuperAdmin, ctrl.deactivateStore);

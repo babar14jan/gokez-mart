@@ -11,24 +11,65 @@ export interface CustomerRequest extends Request {
   customer?: { id: string; phone: string };
 }
 
-export const authenticate = (req: AdminRequest, res: Response, next: NextFunction): void => {
+// ── Token typing ──────────────────────────────────────────────────────────────
+// Admin and customer tokens are signed with the same secret, so the signed `type`
+// claim is the only thing keeping the two audiences apart. Do not infer a type
+// from the presence of other claims: a token with no type is rejected, never
+// promoted.
+export const ADMIN_TOKEN_TYPE = 'admin';
+export const CUSTOMER_TOKEN_TYPE = 'customer';
+
+// Mirrors the mart_admins_role_check constraint applied in migration 028.
+// 'store_manager' is deliberately absent: the hub frontend still references it in
+// ROLE_ROUTES/NAV, but the database has never permitted it, so no live account can
+// carry it. Adding it here would create a second, divergent source of truth.
+export const ADMIN_ROLES = [
+  'super_admin',
+  'store_owner',
+  'sales_manager',
+  'delivery_staff',
+  'staff',
+] as const;
+
+export type AdminRole = typeof ADMIN_ROLES[number];
+
+function bearerToken(req: Request): string | null {
   const auth = req.headers.authorization;
-  if (!auth?.startsWith('Bearer ')) {
+  return auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+}
+
+export const authenticate = (req: AdminRequest, res: Response, next: NextFunction): void => {
+  const token = bearerToken(req);
+  if (!token) {
     res.status(401).json({ success: false, error: 'No token provided' });
     return;
   }
+  let payload: any;
   try {
-    const payload = jwt.verify(auth.slice(7), config.jwt.secret) as any;
-    req.admin = {
-      id: payload.id,
-      username: payload.username,
-      role: payload.role || 'super_admin',
-      storeId: payload.storeId || null,
-    };
-    next();
+    payload = jwt.verify(token, config.jwt.secret);
   } catch {
     res.status(401).json({ success: false, error: 'Invalid token' });
+    return;
   }
+  // A customer token must never be usable as an admin token. Previously this
+  // middleware defaulted a missing role to 'super_admin', which meant any
+  // verified customer token satisfied requireSuperAdmin.
+  if (payload.type !== ADMIN_TOKEN_TYPE) {
+    res.status(401).json({ success: false, error: 'Admin token required' });
+    return;
+  }
+  // Fail closed: an absent or unrecognised role is a rejection, never an elevation.
+  if (!ADMIN_ROLES.includes(payload.role)) {
+    res.status(403).json({ success: false, error: 'Access denied' });
+    return;
+  }
+  req.admin = {
+    id: payload.id,
+    username: payload.username,
+    role: payload.role,
+    storeId: payload.storeId || null,
+  };
+  next();
 };
 
 // Require super_admin role
@@ -49,12 +90,49 @@ export const requireRole = (...roles: string[]) => (req: AdminRequest, res: Resp
   next();
 };
 
+// ── Store scoping ─────────────────────────────────────────────────────────────
+// Routes that carry `:storeId` must never take the path parameter at face value:
+// it is caller-controlled. Super admins may target any store. Every other role
+// must either match the store embedded in their own token or hold an active row in
+// mart_admin_store_assignments — which is what lets delivery staff work across
+// several stores without that becoming a general-purpose bypass.
+async function hasStoreAssignment(adminId: string, storeId: string): Promise<boolean> {
+  const { rows } = await query(
+    `SELECT 1 FROM mart_admin_store_assignments
+     WHERE admin_id = $1 AND store_id = $2 AND is_active = true
+     LIMIT 1`,
+    [adminId, storeId]
+  );
+  return rows.length > 0;
+}
+
+export const requireStoreAccess = (req: AdminRequest, res: Response, next: NextFunction): void => {
+  const admin = req.admin;
+  if (!admin) {
+    res.status(401).json({ success: false, error: 'No token provided' });
+    return;
+  }
+  if (admin.role === 'super_admin') { next(); return; }
+  const requestedStoreId = req.params.storeId;
+  if (!requestedStoreId) {
+    res.status(403).json({ success: false, error: 'Access denied' });
+    return;
+  }
+  if (admin.storeId && admin.storeId === requestedStoreId) { next(); return; }
+  hasStoreAssignment(admin.id, requestedStoreId)
+    .then(allowed => {
+      if (allowed) return next();
+      res.status(403).json({ success: false, error: 'Access denied' });
+    })
+    .catch(() => res.status(500).json({ success: false, error: 'Something went wrong' }));
+};
+
 export const authenticateCustomer = async (req: CustomerRequest, res: Response, next: NextFunction): Promise<void> => {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith('Bearer ')) { res.status(401).json({ success: false, error: 'No token provided' }); return; }
+  const token = bearerToken(req);
+  if (!token) { res.status(401).json({ success: false, error: 'No token provided' }); return; }
   try {
-    const payload = jwt.verify(auth.slice(7), config.jwt.secret) as any;
-    if (payload.type !== 'customer') throw new Error('Not a customer token');
+    const payload = jwt.verify(token, config.jwt.secret) as any;
+    if (payload.type !== CUSTOMER_TOKEN_TYPE) throw new Error('Not a customer token');
     // Check token blacklist (logout)
     if (payload.jti) {
       const blacklisted = await query(

@@ -12,6 +12,10 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   sales_manager:  { label: 'Sales Manager',  color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   delivery_staff: { label: 'Delivery Staff', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   staff:          { label: 'Staff',          color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400' },
+  // 'store_manager' above is frontend-only and unreachable (the mart_admins role
+  // constraint permits only the other five). 'unknown' is the neutral badge for a
+  // token that carries no role at all — it must not borrow another role's label.
+  unknown:        { label: 'Unknown',        color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400' },
 };
 
 export default function ProfilePage() {
@@ -46,7 +50,9 @@ export default function ProfilePage() {
     } finally { setSaving(false); }
   };
 
-  const roleInfo = ROLE_LABELS[role || 'super_admin'] || ROLE_LABELS.staff;
+  // No super_admin fallback: a token with no role claim gets a neutral badge,
+  // not a "Super Admin" one.
+  const roleInfo = ROLE_LABELS[role || 'unknown'] || ROLE_LABELS.unknown;
 
   const formatDate = (d: string | null) => d
     ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })

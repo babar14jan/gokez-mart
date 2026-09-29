@@ -32,6 +32,10 @@ const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazy(() => import('./pages/CarouselPage'));
 
+// Note: 'store_manager' below is a frontend-only role. The mart_admins role
+// constraint (migrations 011/028) permits only super_admin, store_owner,
+// sales_manager, delivery_staff and staff, so no such account can exist. The
+// entry is harmless but unreachable; the role matrix is resolved in a later phase.
 const ROLE_ROUTES: Record<string, string[]> = {
   super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
@@ -44,9 +48,13 @@ const ROLE_ROUTES: Record<string, string[]> = {
 function ProtectedRoute({ children, path }: { children: React.ReactNode; path: string }) {
   const { isAuthenticated, role } = useAuthStore();
   if (!isAuthenticated) return <Navigate to="/hub" replace />;
-  const userRole = role || 'super_admin';
-  const allowed = ROLE_ROUTES[userRole] || ROLE_ROUTES.staff;
-  if (!allowed.includes(path)) return <Navigate to="/" replace />;
+  // Fail closed: a missing or unrecognised role is granted nothing. It is never
+  // promoted to super_admin (the previous `role || 'super_admin'`) and never
+  // silently downgraded to the staff allowlist (the previous `|| ROLE_ROUTES.staff`).
+  // Redirects to /hub, which is public, so a denied user cannot loop on a
+  // protected route. The backend remains the authoritative check regardless.
+  const allowed = role ? ROLE_ROUTES[role] : undefined;
+  if (!allowed || !allowed.includes(path)) return <Navigate to="/hub" replace />;
   return <Layout>{children}</Layout>;
 }
 
