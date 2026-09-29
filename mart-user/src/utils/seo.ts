@@ -115,6 +115,43 @@ function setAttr(selector: string, attr: string, value: string) {
 }
 
 /**
+ * Builds an absolute URL for a route path.
+ *
+ * The homepage keeps its trailing slash so this stays byte-identical to the
+ * canonical and og:url authored in index.html and to the <loc> in
+ * sitemap.xml. Both forms return 200 with no redirect, so a mismatch here
+ * would hand Google two conflicting canonicals for the same page depending on
+ * whether it read the raw HTML or the rendered DOM.
+ */
+const absoluteUrl = (path: string): string =>
+  `${SITE_ORIGIN}${path === '/' ? '/' : path}`;
+
+/** Collapses a pathname to its canonical form for comparison purposes. */
+const normalizePath = (pathname: string): string => {
+  const trimmed = (pathname || '').replace(/\/+$/, '');
+  return trimmed === '' ? '/' : trimmed;
+};
+
+/**
+ * The only paths that may ever be indexed. Derived from ROUTES so there is a
+ * single source of truth. Any other pathname on this origin is a private or
+ * transactional surface, even if the app happens to be showing the home view
+ * there (App.tsx maps unknown paths to 'home'), and is marked noindex so it is
+ * never indexed as a bare shell of the homepage.
+ */
+const PUBLIC_PATHS = new Set(
+  (Object.values(ROUTES) as RouteMeta[])
+    .filter(route => route.indexable && route.path !== null)
+    .map(route => normalizePath(route.path as string)),
+);
+
+/** The path currently in the address bar, normalised. */
+const currentPath = (): string => {
+  if (typeof window === 'undefined') return '/';
+  return normalizePath(window.location.pathname);
+};
+
+/**
  * Applies title, description, canonical and robots directives for a view.
  * Safe to call on every view change; idempotent for a given view.
  *
@@ -125,6 +162,12 @@ export function applySeo(view: SeoView, opts: { checkoutActive?: boolean } = {})
   if (typeof document === 'undefined') return;
 
   const route = (opts.checkoutActive ? ROUTES.checkout : ROUTES[view]) || ROUTES.home;
+
+  // A route is indexable only if its own metadata says so *and* the address bar
+  // is actually on a public path. The second condition is what stops /orders,
+  // /categories and /checkout — which App.tsx renders as the home view — from
+  // being served with `index, follow`.
+  const indexable = route.indexable && PUBLIC_PATHS.has(currentPath());
 
   document.title = route.title;
 
@@ -138,19 +181,21 @@ export function applySeo(view: SeoView, opts: { checkoutActive?: boolean } = {})
   // crawling, which does not stop a URL that has already been discovered from
   // being indexed as a bare shell. Authentication remains the real boundary for
   // private data — this only keeps those pages out of search results.
-  setAttr('meta[name="robots"]', 'content', route.indexable ? 'index, follow' : 'noindex, nofollow');
+  setAttr('meta[name="robots"]', 'content', indexable ? 'index, follow' : 'noindex, nofollow');
 
   // A canonical is only emitted for real, crawlable documents. Inventing one for
   // /account or /checkout would point a canonical at a page that should not be
   // indexed at all, so those routes keep the root canonical from index.html.
-  if (route.path !== null) {
-    setAttr('link[rel="canonical"]', 'href', `${SITE_ORIGIN}${route.path === '/' ? '' : route.path}`);
-    setAttr('meta[property="og:url"]', 'content', `${SITE_ORIGIN}${route.path === '/' ? '' : route.path}`);
-  } else {
-    setAttr('link[rel="canonical"]', 'href', `${SITE_ORIGIN}/`);
-    setAttr('meta[property="og:url"]', 'content', `${SITE_ORIGIN}/`);
-  }
+  const canonical = absoluteUrl(route.path ?? '/');
+  setAttr('link[rel="canonical"]', 'href', canonical);
+  setAttr('meta[property="og:url"]', 'content', canonical);
 }
 
 /** Exported for tests and for the sitemap, so both read from one source. */
 export const indexableRoutes = (Object.keys(ROUTES) as SeoView[]).filter(v => ROUTES[v].indexable);
+
+/** The canonical path list the sitemap must match, for the build-time guard. */
+export const publicPaths = (): string[] => [...PUBLIC_PATHS].sort();
+
+/** Exposed so the guard can assert the homepage keeps its trailing slash. */
+export const canonicalFor = absoluteUrl;

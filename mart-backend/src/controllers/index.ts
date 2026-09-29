@@ -1324,11 +1324,32 @@ export const adminUpdateCampaign = asyncHandler(async (req: AdminRequest, res: R
     res.status(403).json({ success: false, error: 'Only Super Admin can manage campaigns' }); return;
   }
   try {
-    const campaign = await CampaignService.update(req.params.id, req.body);
+    const campaign = await CampaignService.update(req.params.id, { ...req.body, adminId: req.admin?.id || null });
     if (!campaign) { res.status(404).json({ success: false, error: 'Campaign not found' }); return; }
     res.json({ success: true, data: campaign });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message || 'Campaign could not be updated' });
+  }
+});
+
+export const adminGetCampaignRedemptions = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try {
+    const data = await CampaignService.getRedemptions(req.params.id);
+    res.json({ success: true, data });
+  } catch (e: any) {
+    res.status(400).json({ success: false, error: e.message });
+  }
+});
+
+export const adminSupersedeCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (req.admin?.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Only Super Admin can manage campaigns' }); return;
+  }
+  try {
+    const campaign = await CampaignService.supersede(req.params.id, req.body, req.admin.id);
+    res.json({ success: true, data: campaign });
+  } catch (e: any) {
+    res.status(400).json({ success: false, error: e.message });
   }
 });
 

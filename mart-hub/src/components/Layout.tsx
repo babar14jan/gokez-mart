@@ -16,7 +16,7 @@ import { useHeaderAction } from '../store/headerActionStore';
 // (migrations 011/028) permits only super_admin, store_owner, sales_manager,
 // delivery_staff and staff, so no such account can exist. Kept as-is so the role
 // matrix is not redesigned in a security fix; resolved in a later phase.
-const NAV_ALL = [
+export const NAV_ALL = [
   { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
   { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
   { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'] },
@@ -39,7 +39,7 @@ const NAV_ALL = [
 ];
 
 // Bottom nav tabs per role — max 3 primary + More
-const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
+export const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
   super_admin:    [
     { label: 'Home',      href: '/',          icon: LayoutDashboard },
     { label: 'Orders',    href: '/orders',    icon: ClipboardList },

@@ -124,6 +124,8 @@ router.get('/admin/campaigns',                 authenticate, ctrl.adminGetCampai
 router.post('/admin/campaigns',                authenticate, requireSuperAdmin, ctrl.adminCreateCampaign);
 router.put('/admin/campaigns/:id',             authenticate, requireSuperAdmin, ctrl.adminUpdateCampaign);
 router.delete('/admin/campaigns/:id',          authenticate, requireSuperAdmin, ctrl.adminDeleteCampaign);
+router.get('/admin/campaigns/:id/redemptions',  authenticate, requireSuperAdmin, ctrl.adminGetCampaignRedemptions);
+router.post('/admin/campaigns/:id/supersede',   authenticate, requireSuperAdmin, ctrl.adminSupersedeCampaign);
 
 // Carousel slides (super_admin only)
 router.get('/admin/carousel',                  authenticate, requireSuperAdmin, ctrl.adminGetCarouselSlides);

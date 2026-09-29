@@ -1,5 +1,18 @@
 import { query } from '../database/db';
 
+// How long a raised minimum order keeps the previous threshold valid. Long
+// enough to cover a cart already in progress, short enough that the offer
+// cannot be re-run at the old threshold.
+const MIN_ORDER_GRACE_HOURS = 6;
+
+const normalizedCouponCode = (value: unknown) => value ? String(value).trim().toUpperCase() : null;
+
+const normalizedCouponCodeOrThrow = (value: unknown) => {
+  const code = normalizedCouponCode(value);
+  if (!code) throw new Error('A new coupon code is required to supersede this campaign');
+  return code;
+};
+
 export class CampaignService {
 
   // ── Admin CRUD ────────────────────────────────────────────────────────────────
@@ -93,21 +106,46 @@ export class CampaignService {
     const existing = existingResult.rows[0];
     if (!existing) return null;
 
-    const normalizedCouponCode = (value: unknown) => value ? String(value).trim().toUpperCase() : null;
-    const numberChanged = (value: unknown, stored: unknown) => value !== undefined && Number(value) !== Number(stored);
-    const changedFinancialFields = [
-      data.discountType !== undefined && data.discountType !== existing.discount_type && 'discount type',
-      numberChanged(data.discountValue, existing.discount_value) && 'discount value',
-      numberChanged(data.maxDiscount, existing.max_discount) && 'maximum discount',
-      numberChanged(data.minOrderAmount, existing.min_order_amount) && 'minimum order amount',
-      data.couponCode !== undefined && normalizedCouponCode(data.couponCode) !== normalizedCouponCode(existing.coupon_code) && 'coupon code',
-      numberChanged(data.perCustomerLimit, existing.per_customer_limit) && 'per-customer limit',
-      numberChanged(data.usageLimit, existing.usage_limit) && 'total usage limit',
-      data.storeId !== undefined && data.storeId !== existing.store_id && 'store scope',
-      data.eligibilityType !== undefined && data.eligibilityType !== existing.eligibility_type && 'eligibility',
-      numberChanged(data.inactiveDays, existing.inactive_days) && 'inactivity period',
-      data.newCustomersOnly !== undefined && data.newCustomersOnly !== existing.new_customers_only && 'new-customer eligibility',
-    ].filter(Boolean) as string[];
+    // A coupon code is the one field that is already published to customers
+    // (live carousel, banners, shared links), so it is never mutated in place.
+    // Supersede it instead: mint a new version and expire this one.
+    if (data.couponCode !== undefined && normalizedCouponCode(data.couponCode) !== normalizedCouponCode(existing.coupon_code)) {
+      throw new Error(
+        'The coupon code cannot be changed once the campaign is live because customers already hold it. ' +
+        'Supersede the campaign to issue a new code.'
+      );
+    }
+
+    // Commercial terms are editable while the campaign runs. Each redemption
+    // snapshots the terms it was granted (mart_campaign_uses.terms_snapshot),
+    // so history stays exact; these changes are recorded in
+    // mart_campaign_changes so a mid-flight edit is still auditable.
+    const termColumns: Record<string, string> = {
+      discountType: 'discount_type', discountValue: 'discount_value',
+      maxDiscount: 'max_discount', minOrderAmount: 'min_order_amount',
+      perCustomerLimit: 'per_customer_limit', usageLimit: 'usage_limit',
+      storeId: 'store_id', eligibilityType: 'eligibility_type',
+      inactiveDays: 'inactive_days', newCustomersOnly: 'new_customers_only',
+    };
+    const changedTerms: { field: string; from: unknown; to: unknown }[] = [];
+    const NUMERIC_TERM_COLUMNS = ['discount_value', 'max_discount', 'min_order_amount', 'per_customer_limit', 'usage_limit', 'inactive_days'];
+    for (const [key, column] of Object.entries(termColumns)) {
+      if (data[key] === undefined) continue;
+      const before = (existing as any)[column];
+      const after = data[key];
+      const isNumberColumn = NUMERIC_TERM_COLUMNS.includes(column);
+      const same = isNumberColumn ? Number(before) === Number(after) : before === after;
+      if (same) continue;
+      // NUMERIC columns come back from pg as strings ("500.00") while the
+      // request carries JS numbers (800). Normalise both sides so the audit
+      // trail reads "500 → 800" rather than "500.00 → 800".
+      changedTerms.push({
+        field: column,
+        from: isNumberColumn ? (before === null || before === undefined ? null : Number(before)) : before,
+        to: isNumberColumn ? (after === null || after === undefined || after === '' ? null : Number(after)) : after,
+      });
+    }
+
     let targetCustomersChanged = false;
     if (Array.isArray(data.targetCustomerIds)) {
       const targetResult = await query<{ customer_id: string }>(
@@ -117,14 +155,6 @@ export class CampaignService {
       const submittedTargets = [...new Set(data.targetCustomerIds)].sort();
       targetCustomersChanged = existingTargets.length !== submittedTargets.length ||
         existingTargets.some((customerId, index) => customerId !== submittedTargets[index]);
-    }
-
-    if (changedFinancialFields.length || targetCustomersChanged) {
-      const uses = await query(`SELECT 1 FROM mart_campaign_uses WHERE campaign_id = $1 LIMIT 1`, [id]);
-      if (uses.rows.length) {
-        const fields = [...changedFinancialFields, ...(targetCustomersChanged ? ['target audience'] : [])];
-        throw new Error(`Cannot change ${fields.join(', ')} after a campaign has been redeemed`);
-      }
     }
     if (data.eligibilityType === 'inactive_customers' && (!Number.isInteger(Number(data.inactiveDays)) || Number(data.inactiveDays) < 1)) {
       throw new Error('Inactive customer campaigns require a positive inactivity period');
@@ -158,6 +188,17 @@ export class CampaignService {
       fields.push(`inactive_days = $${i++}`);
       params.push(null);
     }
+    // Raising the minimum order opens a grace window on the previous threshold
+    // so a customer already part-way to the discount is not stranded. The
+    // window is deliberately short: it covers carts in progress, not a re-run
+    // of the old offer. Lowering it needs no grace.
+    const minOrderRaise = changedTerms.find(t => t.field === 'min_order_amount' && Number(t.to) > Number(t.from));
+    if (minOrderRaise) {
+      fields.push(`min_order_previous = $${i++}`);
+      params.push(Number(minOrderRaise.from) || 0);
+      fields.push(`min_order_grace_until = $${i++}`);
+      params.push(new Date(Date.now() + MIN_ORDER_GRACE_HOURS * 60 * 60 * 1000));
+    }
     if (!fields.length) throw new Error('Nothing to update');
     fields.push(`updated_at = NOW()`);
     params.push(id);
@@ -175,6 +216,31 @@ export class CampaignService {
             [id, customerId]
           );
         }
+      }
+    }
+    // Record the edit. Written for every term change, so the history of a live
+    // campaign is reconstructible even though the row itself stays mutable.
+    if (changedTerms.length || targetCustomersChanged) {
+      const entries = [...changedTerms.map(t => ({ field: t.field, from: t.from, to: t.to }))];
+      if (targetCustomersChanged) {
+        entries.push({ field: 'target_audience', from: '(previous targets)', to: `${data.targetCustomerIds!.length} customer(s)` });
+      }
+      for (const entry of entries) {
+        await query(
+          `INSERT INTO mart_campaign_changes (campaign_id, field, old_value, new_value, reason, changed_by)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [id, entry.field,
+           entry.from === null || entry.from === undefined ? null : String(entry.from),
+           entry.to === null || entry.to === undefined ? null : String(entry.to),
+           typeof data.changeReason === 'string' && data.changeReason.trim() ? data.changeReason.trim() : null,
+           data.adminId || null]
+        ).catch((auditErr: any) => {
+          // The campaign row is already committed at this point. Throwing here
+          // would report a failure for a change that did apply, so the audit
+          // write is made non-fatal and logged loudly instead. A missing audit
+          // row is recoverable; a false "save failed" is not.
+          console.error(`[campaign] audit write failed for campaign ${id} field ${entry.field}`, auditErr);
+        });
       }
     }
     // Sync carousel slide if show_in_carousel changed
@@ -204,6 +270,126 @@ export class CampaignService {
     await query(`DELETE FROM mart_campaigns WHERE id = $1`, [id]);
   }
 
+  // ── Redemptions ──────────────────────────────────────────────────────────────
+  // Reads the append-only ledger: who used the campaign, on which order, when,
+  // and under exactly which terms. This is the audit view the old immutability
+  // check was trying to protect.
+  static async getRedemptions(campaignId: string): Promise<{ stats: any; redemptions: any[]; changes: any[] }> {
+    const summary = await query(
+      `SELECT
+         COUNT(*) FILTER (WHERE cu.reversed_at IS NULL)::int                       AS total_uses,
+         COUNT(*) FILTER (WHERE cu.reversed_at IS NOT NULL)::int                   AS reversed_uses,
+         COUNT(DISTINCT cu.customer_id) FILTER (WHERE cu.reversed_at IS NULL)::int AS unique_customers,
+         COALESCE(SUM(cu.discount_applied) FILTER (WHERE cu.reversed_at IS NULL), 0)::float AS total_discount,
+         MAX(cu.used_at)                                                          AS last_used_at
+       FROM mart_campaign_uses cu
+       WHERE cu.campaign_id = $1`,
+      [campaignId]
+    );
+
+    const rows = await query(
+      `SELECT cu.id, cu.order_id, cu.customer_id, cu.discount_applied, cu.coupon_code_used,
+              cu.terms_snapshot, cu.used_at, cu.reversed_at, cu.reversal_reason,
+              o.total AS order_total, o.status AS order_status, o.guest_phone AS order_phone,
+              c.name AS customer_name, c.phone AS customer_phone
+       FROM mart_campaign_uses cu
+       LEFT JOIN mart_orders o ON o.id = cu.order_id
+       LEFT JOIN mart_customers c ON c.id = cu.customer_id
+       WHERE cu.campaign_id = $1
+       ORDER BY cu.used_at DESC
+       LIMIT 200`,
+      [campaignId]
+    );
+
+    const changes = await query(
+      `SELECT ch.field, ch.old_value, ch.new_value, ch.reason, ch.created_at, a.name AS changed_by_name
+       FROM mart_campaign_changes ch
+       LEFT JOIN mart_admins a ON a.id = ch.changed_by
+       WHERE ch.campaign_id = $1
+       ORDER BY ch.created_at DESC
+       LIMIT 100`,
+      [campaignId]
+    );
+
+    return { stats: summary.rows[0], redemptions: rows.rows, changes: changes.rows };
+  }
+
+  // ── Supersede ────────────────────────────────────────────────────────────────
+  // A published coupon code is never edited. This mints a new version carrying
+  // the new terms, retires the old one, and links them so the chain of custody
+  // stays visible. Mirrors the Stripe promotion-code pattern: inactivate the
+  // old code, create a new one, keep the relationship.
+  static async supersede(id: string, data: any, adminId: string): Promise<any> {
+    const existingResult = await query(`SELECT * FROM mart_campaigns WHERE id = $1`, [id]);
+    const existing = existingResult.rows[0];
+    if (!existing) throw new Error('Campaign not found');
+    if (existing.superseded_by) throw new Error('This campaign has already been superseded');
+    const newCode = normalizedCouponCodeOrThrow(data.couponCode);
+    if (newCode === normalizedCouponCode(existing.coupon_code)) {
+      throw new Error('The new coupon code must differ from the current one');
+    }
+    const clash = await query(`SELECT id FROM mart_campaigns WHERE coupon_code = $1`, [newCode]);
+    if (clash.rows.length) throw new Error('That coupon code is already in use');
+
+    // Every commercial term is carried over from the outgoing campaign unless
+    // the caller overrides it. `create` would otherwise fall back to its own
+    // defaults (discount 0, minimum 0, all stores, draft) and silently destroy
+    // the offer being superseded.
+    const pick = <T>(override: T | undefined, carried: T): T => override === undefined ? carried : override;
+    const eligibilityType = pick(data.eligibilityType, existing.eligibility_type || 'all');
+    const targetCustomerIds = Array.isArray(data.targetCustomerIds)
+      ? data.targetCustomerIds
+      : (await query(`SELECT customer_id FROM mart_campaign_targets WHERE campaign_id = $1`, [id])).rows.map(r => r.customer_id);
+
+    const replacement = await this.create({
+      // Copy forward
+      title: pick(data.title, existing.title),
+      subtitle: pick(data.subtitle, existing.subtitle),
+      description: pick(data.description, existing.description),
+      badgeText: pick(data.badgeText, existing.badge_text),
+      discountType: pick(data.discountType, existing.discount_type),
+      discountValue: pick(data.discountValue, existing.discount_value),
+      maxDiscount: pick(data.maxDiscount, existing.max_discount),
+      minOrderAmount: pick(data.minOrderAmount, existing.min_order_amount),
+      perCustomerLimit: pick(data.perCustomerLimit, existing.per_customer_limit),
+      usageLimit: pick(data.usageLimit, existing.usage_limit),
+      storeId: pick(data.storeId, existing.store_id),
+      eligibilityType,
+      inactiveDays: eligibilityType === 'inactive_customers'
+        ? pick(data.inactiveDays, existing.inactive_days)
+        : null,
+      // `new_customers_only` is derived from eligibility_type by `create`,
+      // so it is carried by eligibilityType above rather than passed twice.
+      targetCustomerIds: eligibilityType === 'targeted_customers' ? targetCustomerIds : undefined,
+      showInCarousel: pick(data.showInCarousel, existing.show_in_carousel),
+      carouselImageUrl: pick(data.carouselImageUrl, existing.carousel_image_url),
+      carouselGradient: pick(data.carouselGradient, existing.carousel_gradient),
+      carouselSortOrder: pick(data.carouselSortOrder, existing.carousel_sort_order),
+      status: pick(data.status, existing.status),
+      validFrom: pick(data.validFrom, existing.valid_from),
+      validUntil: pick(data.validUntil, existing.valid_until),
+      priority: pick(data.priority, existing.priority),
+      // Always the new one
+      couponCode: newCode,
+    }, adminId);
+
+    await query(
+      `UPDATE mart_campaigns
+       SET status = 'expired', superseded_by = $2, superseded_at = NOW(), updated_at = NOW()
+       WHERE id = $1`,
+      [id, replacement.id]
+    );
+    await query(
+      `INSERT INTO mart_campaign_changes (campaign_id, field, old_value, new_value, reason, changed_by)
+       VALUES ($1,'superseded_by',$2,$3,$4,$5)`,
+      [id, existing.coupon_code || '(auto-applied)', newCode,
+       typeof data.changeReason === 'string' && data.changeReason.trim() ? data.changeReason.trim() : null, adminId]
+    );
+    // Retire the old carousel slide so the superseded offer stops showing.
+    await query(`UPDATE mart_carousel_slides SET is_active = false WHERE campaign_id = $1`, [id]).catch(() => {});
+    return replacement;
+  }
+
   // ── Public: eligible campaigns for a customer + cart ─────────────────────────
 
   static async getEligible(customerId: string | null, cartTotal: number, storeId: string): Promise<any[]> {
@@ -218,9 +404,10 @@ export class CampaignService {
          AND (store_id = $1 OR store_id IS NULL)
          AND (valid_from IS NULL OR valid_from <= $2)
          AND (valid_until IS NULL OR valid_until >= $2)
-         AND (usage_limit IS NULL OR usage_count < usage_limit)
-         AND min_order_amount <= $3
-      ORDER BY priority DESC, discount_value DESC`,
+          AND (usage_limit IS NULL OR usage_count < usage_limit)
+          AND (min_order_amount <= $3
+               OR (min_order_previous IS NOT NULL AND min_order_grace_until > $2 AND min_order_previous <= $3))
+       ORDER BY priority DESC, discount_value DESC`,
       [storeId, now, cartTotal]
     );
 
@@ -287,8 +474,13 @@ export class CampaignService {
     // Check usage limit
     if (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) throw new Error('This coupon has reached its usage limit');
 
-    // Check min order
-    if (cartTotal < parseFloat(campaign.min_order_amount)) {
+    // Check min order — the previous threshold stays valid during the grace
+    // window so a raised minimum does not strand an in-progress cart.
+    const previousMinMet = !!campaign.min_order_previous &&
+      !!campaign.min_order_grace_until &&
+      new Date(campaign.min_order_grace_until) > now &&
+      cartTotal >= Number(campaign.min_order_previous);
+    if (cartTotal < parseFloat(campaign.min_order_amount) && !previousMinMet) {
       throw new Error(`Minimum order ₹${campaign.min_order_amount} required for this coupon`);
     }
 

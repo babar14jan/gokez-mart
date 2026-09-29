@@ -195,6 +195,8 @@ export const campaignsApi = {
   create: (data: any) => api.post("/admin/campaigns", data),
   update: (id: string, data: any) => api.put("/admin/campaigns/" + id, data),
   delete: (id: string) => api.delete("/admin/campaigns/" + id),
+  redemptions: (id: string) => api.get("/admin/campaigns/" + id + "/redemptions"),
+  supersede: (id: string, data: any) => api.post("/admin/campaigns/" + id + "/supersede", data),
 };
 
 export const carouselApi = {

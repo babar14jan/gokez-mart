@@ -38,7 +38,7 @@ const CarouselPage = lazy(() => import('./pages/CarouselPage'));
 // entry is harmless but unreachable; the role matrix is resolved in a later phase.
 const ROLE_ROUTES: Record<string, string[]> = {
   super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
-  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
+  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   sales_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],

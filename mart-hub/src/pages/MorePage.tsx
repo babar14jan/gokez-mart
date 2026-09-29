@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ConfirmDialog from '../components/ConfirmDialog';
 import {
-  KeyRound, Settings, LayoutDashboard, Tag, Users,
-  BarChart3, Shield, ChevronRight, Moon, Sun,
-  Pencil, X, Loader2, Save, Mail, Phone, Store, Package,
-  Bell, MessageSquare,
+  KeyRound, ChevronRight, Moon, Sun,
+  Pencil, X, Loader2, Save, Mail, Phone, Bell,
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, isKnownRole } from '../store/authStore';
+import { NAV_ALL, BOTTOM_NAV } from '../components/Layout';
 import { useThemeStore } from '../store/themeStore';
 import { api } from '../services/api';
 import { subscribeAdminToPush, unsubscribeAdminFromPush } from '../services/push';
@@ -133,51 +132,14 @@ export default function MorePage() {
 
   const roleInfo = ROLE_LABELS[role || 'staff'] || ROLE_LABELS.staff;
 
-  const roleLinks: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
-    super_admin: [
-      { label: 'Analytics',          href: '/analytics',          icon: BarChart3 },
-      { label: 'Customers',          href: '/customers',          icon: Users },
-      { label: 'Customer Leads',     href: '/customer-leads',     icon: Users },
-      { label: 'Categories',         href: '/categories',         icon: Tag },
-      { label: 'Catalog',            href: '/catalog',            icon: Package },
-      { label: 'Feedback',           href: '/feedback',           icon: MessageSquare },
-      { label: 'Campaigns',          href: '/campaigns',          icon: Tag },
-      { label: 'Store Requests', href: '/store-applications', icon: Store },
-      { label: 'Stores',             href: '/stores',             icon: LayoutDashboard },
-      { label: 'Users',              href: '/users',              icon: Users },
-      { label: 'Compliance',         href: '/compliance',         icon: Shield },
-      { label: 'Settings',           href: '/settings',           icon: Settings },
-    ],
-    store_owner: [
-      { label: 'My Team',         href: '/team',      icon: Users },
-      { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
-      { label: 'Customers',       href: '/customers', icon: Users },
-      { label: 'Catalog',         href: '/catalog',   icon: Package },
-      { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
-      { label: 'Campaigns',       href: '/campaigns', icon: Tag },
-      { label: 'Settings',        href: '/settings',  icon: Settings },
-    ],
-    store_manager: [
-      { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
-      { label: 'Customers',       href: '/customers', icon: Users },
-      { label: 'Catalog',         href: '/catalog',   icon: Package },
-      { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
-      { label: 'Campaigns',       href: '/campaigns', icon: Tag },
-      { label: 'Settings',        href: '/settings',  icon: Settings },
-    ],
-    sales_manager: [
-      { label: 'Analytics',       href: '/analytics', icon: BarChart3 },
-      { label: 'Customers',       href: '/customers', icon: Users },
-      { label: 'Catalog',         href: '/catalog',   icon: Package },
-      { label: 'Feedback',        href: '/feedback',  icon: MessageSquare },
-      { label: 'Campaigns',       href: '/campaigns', icon: Tag },
-      { label: 'Settings',        href: '/settings',  icon: Settings },
-    ],
-    delivery_staff: [],
-    staff: [],
-  };
-
-  const extraLinks = roleLinks[role || 'staff'] || [];
+  // Derived from the desktop sidebar matrix (NAV_ALL) so the two nav surfaces
+  // cannot drift. Anything the role can see in the sidebar — minus the items
+  // already pinned to the mobile bottom bar — appears here.
+  const roleKey = isKnownRole(role) ? (role as string) : '';
+  const bottomHrefs = new Set((roleKey && BOTTOM_NAV[roleKey]) ? BOTTOM_NAV[roleKey].map(t => t.href) : []);
+  const extraLinks = roleKey
+    ? NAV_ALL.filter(item => item.roles.includes(roleKey) && !bottomHrefs.has(item.href))
+    : [];
 
   return (
     <div className="max-w-lg mx-auto space-y-4 pb-6">

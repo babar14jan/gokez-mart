@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Tag, ToggleLeft, ToggleRight, Copy, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, Tag, ToggleLeft, ToggleRight, Copy, Check, BarChart3 } from 'lucide-react';
 import { campaignsApi, customersApi, productsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -20,6 +20,17 @@ const GRADIENTS = [
   'from-blue-500 via-indigo-500 to-violet-600',
   'from-slate-700 via-slate-800 to-slate-900',
 ];
+
+/**
+ * Postgres returns NUMERIC as a string ("20.00"). Trim the trailing zeros so
+ * the redemption ledger reads "20%" and "₹500" rather than "20.00%".
+ * Returns '' for null/empty so callers can fall back to an em dash.
+ */
+const fmtAmount = (v: unknown): string => {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? String(n) : String(v);
+};
 
 const STATUS_COLORS: Record<string, string> = {
   active:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -54,6 +65,23 @@ export default function CampaignsPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [carouselImageFile, setCarouselImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [redemptionFor, setRedemptionFor] = useState<any | null>(null);
+  const [redemptionData, setRedemptionData] = useState<any>(null);
+  const [redemptionLoading, setRedemptionLoading] = useState(false);
+  const [redemptionError, setRedemptionError] = useState('');
+
+  const openRedemptions = async (c: any) => {
+    setRedemptionFor(c);
+    setRedemptionData(null);
+    setRedemptionError('');
+    setRedemptionLoading(true);
+    try {
+      const res = await campaignsApi.redemptions(c.id);
+      setRedemptionData(res.data.data || { stats: {}, redemptions: [], changes: [] });
+    } catch (e: any) {
+      setRedemptionError(e?.response?.data?.error || 'Could not load redemptions');
+    } finally { setRedemptionLoading(false); }
+  };
 
   const load = async () => {
     try {
@@ -248,6 +276,9 @@ export default function CampaignsPage() {
                     </div>
                   </div>
                   {isSuperAdmin && <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button onClick={() => openRedemptions(c)} title="Redemptions & change log" className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
+                      <BarChart3 className="w-4 h-4" />
+                    </button>
                     <button onClick={() => toggleStatus(c)} title={c.status === 'active' ? 'Deactivate' : 'Activate'}>
                       {c.status === 'active'
                         ? <ToggleRight className="w-6 h-6 text-emerald-500" />
@@ -419,6 +450,127 @@ export default function CampaignsPage() {
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {deleting ? 'Deleting...' : 'Delete'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Redemptions + change log */}
+      {redemptionFor && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60" onClick={() => setRedemptionFor(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">Redemptions</p>
+                <p className="text-xs text-gray-500">{redemptionFor.title}</p>
+              </div>
+              <button onClick={() => setRedemptionFor(null)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700"><X className="w-4 h-4" /></button>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto flex-1 space-y-5">
+              {redemptionLoading && <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-emerald-500" /></div>}
+              {redemptionError && <p className="text-xs text-red-500">{redemptionError}</p>}
+
+              {redemptionData && !redemptionLoading && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { label: 'Total uses',   value: redemptionData.stats?.total_uses ?? 0 },
+                      { label: 'Unique users', value: redemptionData.stats?.unique_customers ?? 0 },
+                      { label: 'Discount given', value: '₹' + Math.round(redemptionData.stats?.total_discount ?? 0) },
+                      { label: 'Reversed',     value: redemptionData.stats?.reversed_uses ?? 0 },
+                      { label: 'Last used',    value: redemptionData.stats?.last_used_at ? new Date(redemptionData.stats.last_used_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—' },
+                    ].map(s => (
+                      <div key={s.label} className="rounded-xl border border-gray-100 dark:border-slate-700 p-2.5">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">{s.label}</p>
+                        <p className="text-sm font-black text-gray-900 dark:text-white">{s.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Who used it, on which order, when</p>
+                    {redemptionData.redemptions.length === 0
+                      ? <p className="text-xs text-gray-400">No redemptions yet.</p>
+                      : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-left text-gray-400 border-b border-gray-100 dark:border-slate-700">
+                                <th className="py-2 pr-3 font-semibold">When</th>
+                                <th className="py-2 pr-3 font-semibold">Customer</th>
+                                <th className="py-2 pr-3 font-semibold">Order</th>
+                                <th className="py-2 pr-3 font-semibold">Terms then</th>
+                                <th className="py-2 pr-3 font-semibold text-right">Discount</th>
+                                <th className="py-2 font-semibold">State</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {redemptionData.redemptions.map((r: any) => {
+                                const snap = r.terms_snapshot || {};
+                                const value = fmtAmount(snap.discount_value);
+                                const cap = fmtAmount(snap.max_discount);
+                                const minOrder = fmtAmount(snap.min_order_amount);
+                                const terms = snap.discount_type === 'percent'
+                                  ? `${value}%${cap ? ` (max ₹${cap})` : ''}`
+                                  : snap.discount_type === 'free_delivery' ? 'Free delivery'
+                                  : snap.discount_type === 'none' ? 'Info only'
+                                  : `₹${value}`;
+                                return (
+                                  <tr key={r.id} className="border-b border-gray-50 dark:border-slate-700/50">
+                                    <td className="py-2 pr-3 text-gray-600 dark:text-slate-300 whitespace-nowrap">
+                                      {new Date(r.used_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    </td>
+                                    <td className="py-2 pr-3 text-gray-600 dark:text-slate-300">
+                                      {r.customer_name || 'Guest'}
+                                      <span className="block text-[10px] text-gray-400">{r.customer_phone || r.order_phone || '—'}</span>
+                                    </td>
+                                    <td className="py-2 pr-3 font-mono text-[10px] text-gray-500">
+                                      #{String(r.order_id || '').slice(0, 8)}
+                                      <span className="block">₹{fmtAmount(r.order_total) || '—'} {r.order_status ? `· ${r.order_status}` : ''}</span>
+                                    </td>
+                                    <td className="py-2 pr-3 text-gray-500">
+                                      {terms}
+                                      {minOrder && minOrder !== '0' ? <span className="block text-[10px] text-gray-400">min ₹{minOrder}</span> : null}
+                                      {snap.inferred ? <span className="block text-[10px] text-amber-500">inferred</span> : null}
+                                    </td>
+                                    <td className="py-2 pr-3 text-right font-bold text-emerald-600">₹{fmtAmount(r.discount_applied)}</td>
+                                    <td className="py-2">
+                                      {r.reversed_at
+                                        ? <span className="text-[10px] text-red-500" title={r.reversal_reason || ''}>Reversed</span>
+                                        : <span className="text-[10px] text-emerald-600">Applied</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Changes while live</p>
+                    {redemptionData.changes.length === 0
+                      ? <p className="text-xs text-gray-400">No term changes recorded.</p>
+                      : (
+                        <ul className="space-y-1.5">
+                          {redemptionData.changes.map((ch: any, i: number) => (
+                            <li key={i} className="text-xs text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
+                              <span className="font-semibold">{ch.field}</span>{' '}
+                              <span className="text-gray-400 line-through">{ch.old_value}</span>{' → '}
+                              <span className="font-semibold">{ch.new_value}</span>
+                              <span className="block text-[10px] text-gray-400 mt-0.5">
+                                {new Date(ch.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                {ch.changed_by_name ? ` · by ${ch.changed_by_name}` : ''}
+                                {ch.reason ? ` · ${ch.reason}` : ''}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

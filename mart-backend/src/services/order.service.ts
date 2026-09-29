@@ -127,13 +127,22 @@ export class OrderService {
         );
         campaign = campaignResult.rows[0];
         const now = new Date();
-        if (!campaign || !['active', 'scheduled'].includes(campaign.status) ||
+        if (!campaign) throw new Error('Campaign is no longer eligible for this order');
+        // A raised minimum order must not strand a customer who was already
+        // part-way to the discount, so the previous threshold stays valid for
+        // the 6-hour grace window (see migration 053).
+        const minOrderMet = subtotal >= Number(campaign.min_order_amount) ||
+          (!!campaign.min_order_previous &&
+            !!campaign.min_order_grace_until &&
+            new Date(campaign.min_order_grace_until) > now &&
+            subtotal >= Number(campaign.min_order_previous));
+        if (!['active', 'scheduled'].includes(campaign.status) ||
           (campaign.status === 'scheduled' && (!campaign.valid_from || new Date(campaign.valid_from) > now)) ||
             (campaign.store_id && campaign.store_id !== data.storeId) ||
             (campaign.valid_from && new Date(campaign.valid_from) > now) ||
             (campaign.valid_until && new Date(campaign.valid_until) < now) ||
             (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) ||
-            subtotal < Number(campaign.min_order_amount)) {
+            !minOrderMet) {
           throw new Error('Campaign is no longer eligible for this order');
         }
         if (data.campaignId && campaign.coupon_code) {
@@ -225,10 +234,23 @@ export class OrderService {
       }
 
       if (campaign) {
+        // Snapshot the terms actually applied, so later edits to the campaign
+        // can never rewrite what this customer was granted.
+        const termsSnapshot = JSON.stringify({
+          discount_type: campaign.discount_type,
+          discount_value: campaign.discount_value,
+          max_discount: campaign.max_discount,
+          min_order_amount: campaign.min_order_amount,
+          per_customer_limit: campaign.per_customer_limit,
+          usage_limit: campaign.usage_limit,
+          coupon_code: campaign.coupon_code || null,
+          eligibility_type: campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all'),
+          store_id: campaign.store_id || null,
+        });
         await client.query(
-          `INSERT INTO mart_campaign_uses (campaign_id, customer_id, order_id, discount_applied, coupon_code_used)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [campaign.id, customerId, orderId, campaignDiscount, campaign.coupon_code || null]
+          `INSERT INTO mart_campaign_uses (campaign_id, customer_id, order_id, discount_applied, coupon_code_used, terms_snapshot)
+           VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+          [campaign.id, customerId, orderId, campaignDiscount, campaign.coupon_code || null, termsSnapshot]
         );
         await client.query(`UPDATE mart_campaigns SET usage_count = usage_count + 1 WHERE id = $1`, [campaign.id]);
       }
