@@ -9,7 +9,6 @@ const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-6
 const ROLE_OPTIONS = [
   { value: 'store_owner',    label: 'Store Owner',    desc: 'Full store control' },
   { value: 'store_manager',  label: 'Store Manager',  desc: 'Orders, products, customers' },
-  { value: 'sales_manager',  label: 'Sales Manager',  desc: 'Orders and customers' },
   { value: 'staff',          label: 'Staff',          desc: 'Packing, inventory, delivery' },
   { value: 'delivery_staff', label: 'Delivery',       desc: 'Delivery only' },
 ];
@@ -17,7 +16,6 @@ const ROLE_OPTIONS = [
 const ROLE_COLORS: Record<string, string> = {
   store_owner:    'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
   store_manager:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  sales_manager:  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   staff:          'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   delivery_staff: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
 };

@@ -86,6 +86,13 @@ router.put("/admin/orders/:id/terminate", authenticate, ctrl.adminTerminateOrder
 router.get('/admin/customers',         authenticate, ctrl.adminGetCustomers);
 router.get('/admin/customer-leads',        authenticate, requireSuperAdmin, ctrl.adminGetCustomerLeads);
 router.get('/admin/customer-leads/export', authenticate, requireSuperAdmin, ctrl.adminExportMarketingLeads);
+router.get('/admin/customer-funnel',       authenticate, requireSuperAdmin, ctrl.adminGetCustomerFunnel);
+router.get('/admin/customer-funnel/extended', authenticate, requireSuperAdmin, ctrl.adminGetCustomerFunnelExtended);
+
+// ── Phase 3 funnel instrumentation (public, anonymous, first-party) ───────────
+router.post('/funnel/event',   ctrl.postFunnelEvent);
+router.post('/funnel/cart',    authenticateCustomerIfPresent, ctrl.postFunnelCart);
+router.post('/funnel/campaign', ctrl.postFunnelCampaignTouch);
 
 // ── Admin settings ────────────────────────────────────────────────────────────
 router.get('/admin/settings',          authenticate, ctrl.adminGetSettings);     // ?storeId=
@@ -152,13 +159,9 @@ router.get('/admin/inventory/:productId/history',       authenticate, ctrl.admin
 // requireStoreAccess authorises the :storeId path parameter. Without it any
 // authenticated admin could read or rewrite another store's team by editing the URL.
 //
-// Role matrix note: 'store_manager' is still referenced by the hub frontend
-// (ROLE_ROUTES / Layout NAV_ALL) but is not a valid mart_admins role — migrations
-// 011 and 028 constrain it to super_admin, store_owner, sales_manager,
-// delivery_staff, staff. No such account can exist, so those frontend entries are
-// dead rather than exploitable. Resolving the role matrix is deferred to the
-// analytics phase; adding 'store_manager' to ADMIN_ROLES would be a schema change
-// and is deliberately not done here.
+// Role matrix note: store_manager became a real role in migration 056, which also
+// retired sales_manager. The valid set is super_admin, store_owner, store_manager,
+// delivery_staff and staff, and is enforced by ADMIN_ROLES in middleware.
 router.get('/admin/stores/:storeId/team',          authenticate, requireStoreAccess, ctrl.getStoreTeam);
 router.post('/admin/stores/:storeId/team',         authenticate, requireStoreAccess, ctrl.addToStoreTeam);
 router.put('/admin/stores/:storeId/team/:userId',  authenticate, requireStoreAccess, ctrl.updateStoreTeamMember);

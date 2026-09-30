@@ -181,10 +181,18 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <View className="flex-row items-start gap-2 rounded-xl px-3 py-2.5 mb-4" style={{ backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.gray200 }}>
-              <Text style={{ fontSize: 15 }}>📞</Text>
-              <Text className="flex-1 text-xs leading-5" style={{ fontFamily: 'Inter-Regular', color: colors.primaryDark }}>
-                We will call this number with your 6-digit verification code. It may take a few seconds. Do not share the code with anyone.
+            <View className="rounded-xl px-3 py-2.5 mb-4" style={{ backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.gray200 }}>
+              <View className="flex-row items-center gap-1.5">
+                <Text style={{ fontSize: 13 }}>📞</Text>
+                <Text className="flex-1 text-xs leading-5" style={{ fontFamily: 'Inter-SemiBold', color: colors.primaryDark }}>
+                  We'll send you a 6-digit code via call
+                </Text>
+              </View>
+              <Text className="mt-0.5 text-[10px] leading-4" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>
+                SMS OTP Coming soon
+              </Text>
+              <Text className="mt-1.5 text-[10px] leading-4" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>
+                Do not share this code with anyone.
               </Text>
             </View>
 

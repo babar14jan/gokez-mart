@@ -8,11 +8,42 @@ interface Setting { key: string; value: string; label: string; }
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
-const GROUPS = [
-  { title: 'Store', keys: ['store_name', 'store_address', 'delivery_area', 'estimated_delivery', 'store_open'] },
-  { title: 'Delivery & Pricing', keys: ['delivery_charge', 'free_delivery_above', 'min_order_amount'] },
+/**
+ * Tabs, each with its own save.
+ *
+ * This page used to carry two independent save paths on one scroll: a single
+ * "Save Changes" button at the top that wrote every mart_settings key, and a
+ * second button inside the branding card that wrote mart_stores. They covered
+ * different fields, so editing opening hours and pressing the top button wrote
+ * the hours nowhere and reported success. Splitting by tab means one button
+ * always covers exactly the fields on screen.
+ *
+ * `keys` are mart_settings rows. `store` marks the tab as also owning columns on
+ * mart_stores, which are written through a different endpoint entirely.
+ */
+type TabId = 'store' | 'hours' | 'zones' | 'payments';
+
+/** Headings used inside a tab. Every tab key must appear here or in a bespoke
+ *  card, or the field would render nowhere while still being saved. */
+const GROUP_TITLES = [
+  { title: 'Store', keys: ['store_name', 'store_address', 'delivery_area', 'estimated_delivery'] },
   { title: 'Customer Support', keys: ['whatsapp_number', 'support_name', 'support_phone'] },
+  { title: 'Delivery & Pricing', keys: ['delivery_charge', 'free_delivery_above', 'min_order_amount'] },
   { title: 'Payment Methods', keys: ['cod_enabled', 'upi_enabled', 'upi_id', 'upi_phone', 'upi_qr_enabled', 'phonepay_enabled', 'phonepay_qr_url'] },
+];
+
+const TABS: { id: TabId; label: string; keys: string[]; store?: boolean }[] = [
+  { id: 'store', label: 'Store', store: true,
+    keys: ['store_name', 'store_address', 'delivery_area', 'estimated_delivery',
+           'whatsapp_number', 'support_name', 'support_phone'] },
+  { id: 'hours', label: 'Hours & Delivery', store: true,
+    keys: ['store_open', 'delivery_charge', 'free_delivery_above', 'min_order_amount'] },
+  // Zones persist on their own per action, so this tab has no bulk save.
+  { id: 'zones', label: 'Delivery Zones', keys: [] },
+  { id: 'payments', label: 'Payments & Inventory',
+    keys: ['cod_enabled', 'upi_enabled', 'upi_id', 'upi_phone', 'upi_qr_enabled',
+           'phonepay_enabled', 'phonepay_qr_url',
+           'inventory_tracking', 'auto_out_of_stock', 'low_stock_threshold'] },
 ];
 
 // Hardcoded labels and placeholders — never rely on DB labels
@@ -63,11 +94,18 @@ const DEFAULT_HOURS = Object.fromEntries(['mon','tue','wed','thu','fri','sat','s
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Record<string, Setting>>({});
   const [values, setValues] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState<TabId>('store');
+  // Pristine copy of the last persisted state, per scope. A field is dirty when
+  // it differs from what the database actually holds, which is why this is
+  // compared against `savedValues` rather than tracked with a separate flag:
+  // a flag set on keystroke stays set even if the edit is undone, leaving a Save
+  // button that re-writes values nobody changed.
+  const [savedValues, setSavedValues] = useState<Record<string, string>>({});
+  const [savedBranding, setSavedBranding] = useState<{ ownerName: string; supportPhone: string; logoUrl: string; openingHours: any } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [savingBranding, setSavingBranding] = useState(false);
-  const [savedBranding, setSavedBranding] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [qrFile, setQrFile] = useState<File | null>(null);
   const [qrPreview, setQrPreview] = useState<string | null>(null);
   const [zones, setZones] = useState<any[]>([]);
@@ -87,65 +125,164 @@ export default function SettingsPage() {
 
   const loadZones = async () => { const zr = await zonesApi.getAll(getActiveStoreId()); setZones(zr.data.data || []); };
 
+  // Reads back whatever the database actually holds for this store. Used on
+  // mount and again after every save, so the form can never quietly drift away
+  // from the persisted value.
+  const loadStore = async () => {
+    const sr = await storesApi.getAll();
+    const store = (sr.data.data || []).find((s: any) => s.id === getActiveStoreId());
+    if (store) {
+      setStoreData(store);
+      const next = {
+        ownerName: store.ownerName || '',
+        supportPhone: store.supportPhone || '',
+        logoUrl: store.logoUrl || '',
+        openingHours: store.openingHours || DEFAULT_HOURS,
+      };
+      setBranding(next);
+      // Baseline comes from the database, never from the form. A write that
+      // silently did nothing therefore leaves the tab dirty rather than letting
+      // the Save button report a success that did not happen.
+      setSavedBranding(next);
+    }
+  };
+
   useEffect(() => {
     Promise.all([
       settingsApi.getAll(getActiveStoreId()),
       zonesApi.getAll(getActiveStoreId()),
-      storesApi.getAll(),
-    ]).then(([r, zr, sr]) => {
+      loadStore(),
+    ]).then(([r, zr]) => {
       setZones(zr.data.data || []);
       const map: Record<string, Setting> = {};
       const vals: Record<string, string> = {};
       for (const s of (r.data.data || [])) { map[s.key] = s; vals[s.key] = s.value; }
       setSettings(map);
       setValues(vals);
+      setSavedValues(vals);
       if (vals.phonepay_qr_url) setQrPreview(vals.phonepay_qr_url);
-      // Load current store branding
-      const store = (sr.data.data || []).find((s: any) => s.id === getActiveStoreId());
-      if (store) {
-        setStoreData(store);
-        setBranding({
-          ownerName: store.ownerName || '',
-          supportPhone: store.supportPhone || '',
-          logoUrl: store.logoUrl || '',
-          openingHours: store.openingHours || DEFAULT_HOURS,
-        });
-      }
       setLoading(false);
     });
   }, []);
 
-  const handleSave = async () => {
+  /** Settings keys belonging to the active tab, as a settingsApi.update payload. */
+  const keysFor = (tab: TabId) => {
+    const tab_ = TABS.find(t => t.id === tab)!;
+    const payload: Record<string, string> = {};
+    for (const key of tab_.keys) if (key in values) payload[key] = values[key];
+    return payload;
+  };
+
+  const isDirty = (tab: TabId) => {
+    const tab_ = TABS.find(t => t.id === tab)!;
+    if (tab_ === undefined) return false;
+    for (const key of tab_.keys) {
+      if (key in values && values[key] !== savedValues[key]) return true;
+    }
+    // A picked-but-unsaved QR file has not reached `values` yet, so nothing
+    // else here can see it. Without this the tab reads clean, shows no dirty
+    // dot, triggers no unload warning, and the selection is silently lost.
+    if (tab === 'payments' && qrFile) return true;
+    if (!tab_.store || !savedBranding) return false;
+    if (branding.ownerName !== savedBranding.ownerName) return true;
+    if (branding.supportPhone !== savedBranding.supportPhone) return true;
+    // The logo is set by an upload rather than typed, so a changed URL is the
+    // only signal that it is unsaved.
+    if (branding.logoUrl !== savedBranding.logoUrl) return true;
+    if (JSON.stringify(branding.openingHours) !== JSON.stringify(savedBranding.openingHours)) return true;
+    return false;
+  };
+
+  /**
+   * Saves the active tab.
+   *
+   * A tab can span two tables, so this issues up to two requests. They are
+   * sequential and the UI reports exactly which one failed: firing them in
+   * parallel would let one succeed and one fail with no way for the user to
+   * tell which half of the tab was persisted.
+   */
+  const saveTab = async (tab: TabId) => {
+    const tab_ = TABS.find(t => t.id === tab)!;
     setSaving(true);
+    setSaveError(null);
     try {
-      let updatedValues = { ...values };
-      if (qrFile) {
-        const res = await productsApi.uploadPhoto(qrFile);
-        updatedValues.phonepay_qr_url = res.data.data.url;
-        setValues(v => ({ ...v, phonepay_qr_url: res.data.data.url }));
+      if (tab_.store) {
+        if (!storeData) throw new Error('Store not loaded yet');
+        // Must be updateSettings(), not update(): the latter is requireSuperAdmin
+        // and returns 403 for a store owner or manager, so the write never
+        // happened even though the click looked successful.
+        await storesApi.updateSettings(getActiveStoreId(), {
+          ownerName: branding.ownerName,
+          supportPhone: branding.supportPhone,
+          logoUrl: branding.logoUrl,
+          openingHours: branding.openingHours,
+        });
+        // Read back what the database actually holds, so the form reflects the
+        // persisted value and a silently dropped write cannot look like success.
+        await loadStore();
       }
-      await settingsApi.update(updatedValues, getActiveStoreId());
+      const payload = keysFor(tab);
+      if (Object.keys(payload).length > 0) {
+        // The QR has to reach the server first, because settingsApi stores a URL
+        // rather than the image itself.
+        if (tab === 'payments' && qrFile) {
+          const res = await productsApi.uploadPhoto(qrFile);
+          payload.phonepay_qr_url = res.data.data.url;
+          setValues(v => ({ ...v, phonepay_qr_url: res.data.data.url }));
+          setQrFile(null);
+        }
+        await settingsApi.update(payload, getActiveStoreId());
+        // Re-read rather than trusting the local copy: the backend may normalise
+        // or reject a value, and the form should show what is really stored.
+        const sr = await settingsApi.getAll(getActiveStoreId());
+        const map: Record<string, Setting> = {};
+        const vals: Record<string, string> = {};
+        for (const item of (sr.data.data || [])) { map[item.key] = item; vals[item.key] = item.value; }
+        setSettings(map);
+        setValues(vals);
+        setSavedValues(vals);
+        if (vals.phonepay_qr_url) setQrPreview(vals.phonepay_qr_url);
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err: any) {
-      alert(`Failed to save: ${err?.response?.data?.error || err?.message}`);
+    } catch (e: any) {
+      // Surface the real reason. Swallowing it into a generic message is what
+      // made a 403 look like "saved then vanished".
+      setSaveError(e?.response?.data?.error || e?.message || 'Unknown error');
     } finally { setSaving(false); }
   };
 
-  const saveBranding = async () => {
-    if (!storeData) return;
-    setSavingBranding(true);
-    try {
-      await storesApi.update(getActiveStoreId(), {
-        ownerName: branding.ownerName,
-        supportPhone: branding.supportPhone,
-        logoUrl: branding.logoUrl,
-        openingHours: branding.openingHours,
-      });
-      setSavedBranding(true);
-      setTimeout(() => setSavedBranding(false), 3000);
-    } catch { alert('Failed to save branding'); }
-    finally { setSavingBranding(false); }
+  // Warn before a browser-level navigation (refresh, tab close, back out of the
+  // SPA's history) would throw away unsaved edits. In-app sidebar navigation is
+  // deliberately not blocked: this app uses BrowserRouter, and react-router's
+  // useBlocker requires a data router, which it is not. Hand-rolling a history
+  // patcher to cover it would be far easier to get subtly wrong than the
+  // per-tab dirty dot and the Discard button already are.
+  useEffect(() => {
+    if (!TABS.some(t => isDirty(t.id))) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Browsers ignore the text and show their own wording; a non-empty
+      // returnValue is what makes them prompt at all.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [values, branding, savedValues, savedBranding]);
+
+  /** Drops unsaved edits on the active tab. */
+  const discardTab = (tab: TabId) => {
+    const tab_ = TABS.find(t => t.id === tab)!;
+    if (tab_.store) {
+      // Re-read rather than copying the baseline, so discard cannot itself
+      // disagree with the database.
+      loadStore();
+    }
+    setValues(v => {
+      const next = { ...v };
+      for (const key of tab_.keys) if (key in savedValues) next[key] = savedValues[key];
+      return next;
+    });
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,25 +318,67 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex justify-end">
-        <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white text-sm font-semibold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors">
-          {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : <><Save className="w-4 h-4" /> {saved ? 'Saved ✓' : 'Save Changes'}</>}
-        </button>
+
+      {/* Tabs. role="tablist" with aria-selected so the active section is
+          announced, and each tab marks unsaved work with a dot. */}
+      <div role="tablist" aria-label="Settings sections" className="flex gap-1 p-1 bg-gray-100 dark:bg-slate-800 rounded-xl overflow-x-auto">
+        {TABS.map(tab => {
+          const active = tab.id === activeTab;
+          const dirty = isDirty(tab.id);
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={active}
+              aria-controls={`panel-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex-1 min-w-fit whitespace-nowrap px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                active
+                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300'
+              }`}
+            >
+              {tab.label}
+              {dirty && <span aria-label="Unsaved changes" className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-500" />}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Store Branding */}
-      {storeData && (
+      {/* One save per tab, covering exactly the fields on screen. Disabled while
+          clean so it cannot re-write values nobody changed. The error shows
+          inline rather than in an alert the user can dismiss without reading. */}
+      {activeTab !== 'zones' && (
+        <div className="flex items-center justify-end gap-2">
+          {saveError && (
+            <span role="alert" className="text-xs font-medium text-red-600 dark:text-red-400 mr-auto">
+              {saveError}
+            </span>
+          )}
+          {isDirty(activeTab) && (
+            <button onClick={() => discardTab(activeTab)} disabled={saving}
+              className="px-3 py-2 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors">
+              Discard
+            </button>
+          )}
+          <button onClick={() => saveTab(activeTab)} disabled={saving || !isDirty(activeTab)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white text-sm font-semibold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+              : <><Save className="w-4 h-4" /> {saved ? 'Saved \u2713' : 'Save Changes'}</>}
+          </button>
+        </div>
+      )}
+
+      <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} className="space-y-6">
+
+      {/* Store tab */}
+      {activeTab === 'store' && storeData && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700 flex items-center justify-between">
             <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
               <Store className="w-3.5 h-3.5" /> Store Branding
             </h2>
-            <button onClick={saveBranding} disabled={savingBranding}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white text-xs font-semibold rounded-xl hover:bg-emerald-600 disabled:opacity-50">
-              {savingBranding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              {savedBranding ? 'Saved ✓' : 'Save'}
-            </button>
           </div>
           <div className="p-4 space-y-4">
             {/* Logo */}
@@ -224,11 +403,33 @@ export default function SettingsPage() {
               <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Store Support Phone</label>
               <input type="tel" value={branding.supportPhone} onChange={e => setBranding(b => ({ ...b, supportPhone: e.target.value }))} className={inp} placeholder="+91 XXXXX XXXXX" />
             </div>
-            {/* Opening Hours */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" /> Opening Hours
-              </label>
+          </div>
+        </div>
+      )}
+
+      {/* Hours tab: the schedule, plus the manual override that sits with it. */}
+      {activeTab === 'hours' && storeData && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
+            <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5" /> Opening Hours
+            </h2>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between gap-4 py-0.5">
+              <div>
+                <label className="text-sm text-gray-700 dark:text-slate-300">Store is Open</label>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                  Overrides the hours below. While off, customers see a closed notice with no reopening time.
+                </p>
+              </div>
+              <Toggle checked={values['store_open'] === 'true'}
+                onChange={() => setValues(v => ({ ...v, store_open: v['store_open'] === 'true' ? 'false' : 'true' }))} />
+            </div>
+            <div className="border-t border-gray-100 dark:border-slate-700 pt-4">
+              <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-3">
+                Times are India Standard Time. Orders placed outside them are still accepted, and flagged for staff.
+              </p>
               <div className="space-y-2">
                 {DAYS.map(day => (
                   <div key={day} className="flex items-center gap-3">
@@ -256,19 +457,21 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {GROUPS.map(group => (        <div key={group.title} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+      {/* Settings groups, each shown only on the tab that owns its keys. */}
+      {TABS.filter(t => t.id === activeTab && t.keys.length > 0).map(tab => (
+        <div key={tab.id} className="space-y-4">
+          {GROUP_TITLES.filter(g => g.keys.some(k => tab.keys.includes(k))).map(group => (
+          <div key={group.title} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
             <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">{group.title}</h2>
           </div>
           <div className="p-4 space-y-4">
-            {group.keys.map(key => {
+            {group.keys.filter(key => tab.keys.includes(key)).map(key => {
               const setting = settings[key];
               const meta = FIELD_META[key];
               if (!meta) return null;
-              // Only render if value exists in DB (setting loaded) or it's a known boolean
               if (!setting && !BOOLEAN_KEYS.has(key)) return null;
 
-              // UPI QR upload
               if (key === 'phonepay_qr_url') {
                 const qrEnabled = values['upi_qr_enabled'] === 'true' || values['phonepay_enabled'] === 'true';
                 if (!qrEnabled) return null;
@@ -315,9 +518,13 @@ export default function SettingsPage() {
             })}
           </div>
         </div>
+          ))}
+        </div>
       ))}
 
-      {/* Inventory Settings */}
+      {/* Inventory card: bespoke because its sub-fields depend on the master
+          toggle. Lives on the Payments & Inventory tab. */}
+      {activeTab === 'payments' && (
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
           <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Inventory</h2>
@@ -365,8 +572,11 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+      )}
 
-      {/* Delivery Zones */}
+      {/* Delivery Zones: each action persists on its own, so this tab has no
+          bulk save and every row is either stored or not. */}
+      {activeTab === 'zones' && (
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700 flex items-center justify-between">
           <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -435,6 +645,8 @@ export default function SettingsPage() {
         )}
       </div>
 
+      )}
+
       {confirmDeleteZoneId && (
         <ConfirmDialog
           title="Delete Zone"
@@ -444,6 +656,8 @@ export default function SettingsPage() {
           onCancel={() => setConfirmDeleteZoneId(null)}
         />
       )}
+
+      </div>
     </div>
   );
 }

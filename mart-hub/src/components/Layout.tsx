@@ -12,26 +12,25 @@ import { storesApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { useHeaderAction } from '../store/headerActionStore';
 
-// 'store_manager' entries below are frontend-only. The mart_admins role constraint
-// (migrations 011/028) permits only super_admin, store_owner, sales_manager,
-// delivery_staff and staff, so no such account can exist. Kept as-is so the role
-// matrix is not redesigned in a security fix; resolved in a later phase.
+// Roles mirror mart_admins_role_check in migration 056, including store_manager.
+// sales_manager was retired: the database now permits super_admin, store_owner,
+// store_manager, delivery_staff and staff only.
 export const NAV_ALL = [
-  { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
-  { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff'] },
-  { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'] },
-  { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'] },
-  { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff'] },
+  { label: 'Orders',             href: '/orders',              icon: ClipboardList,   roles: ['super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff'] },
+  { label: 'Products',           href: '/products',            icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'staff'] },
+  { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'staff'] },
+  { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Customer Leads',     href: '/customer-leads',      icon: Users,           roles: ['super_admin'] },
-  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin', 'store_owner'] },
-  { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
-  { label: 'Feedback',         href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager'] },
+  { label: 'Feedback',         href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Campaigns',         href: '/campaigns',           icon: Tag,             roles: ['super_admin', 'store_owner'] },
   { label: 'Carousel',           href: '/carousel',            icon: ImageIcon,           roles: ['super_admin'] },
   { label: 'My Deliveries',      href: '/delivery',            icon: ClipboardList,   roles: ['delivery_staff', 'staff'] },
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
-  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager', 'sales_manager'] },
+  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Stores',             href: '/stores',              icon: LayoutDashboard, roles: ['super_admin'] },
   { label: 'Store Requests', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
   { label: 'Users',              href: '/users',               icon: Users,           roles: ['super_admin'] },
@@ -53,12 +52,6 @@ export const BOTTOM_NAV: Record<string, { label: string; href: string; icon: Rea
     { label: 'Products',  href: '/products',  icon: Package },
   ],
   store_manager: [
-    { label: 'Home',      href: '/',          icon: LayoutDashboard },
-    { label: 'Orders',    href: '/orders',    icon: ClipboardList },
-    { label: 'Inventory', href: '/inventory', icon: Boxes },
-    { label: 'Products',  href: '/products',  icon: Package },
-  ],
-  sales_manager:  [
     { label: 'Home',      href: '/',          icon: LayoutDashboard },
     { label: 'Orders',    href: '/orders',    icon: ClipboardList },
     { label: 'Inventory', href: '/inventory', icon: Boxes },

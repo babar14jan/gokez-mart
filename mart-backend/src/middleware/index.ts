@@ -19,19 +19,33 @@ export interface CustomerRequest extends Request {
 export const ADMIN_TOKEN_TYPE = 'admin';
 export const CUSTOMER_TOKEN_TYPE = 'customer';
 
-// Mirrors the mart_admins_role_check constraint applied in migration 028.
-// 'store_manager' is deliberately absent: the hub frontend still references it in
-// ROLE_ROUTES/NAV, but the database has never permitted it, so no live account can
-// carry it. Adding it here would create a second, divergent source of truth.
+// Mirrors the mart_admins_role_check constraint applied in migration 056.
+//
+// This list is the single source of truth for "is this a role the system
+// accepts". Every write path that accepts a role from a request body must go
+// through isValidAdminRole rather than keeping its own copy: the previous
+// arrangement had adminCreateUser validating against a list wider than the
+// database constraint, so creating a store_manager passed validation and then
+// died on a Postgres check violation surfaced to the user as a bare 500.
+//
+// The database constraint remains the backstop. This list exists so an invalid
+// role is rejected with a 400 and a readable message instead of a 500.
 export const ADMIN_ROLES = [
   'super_admin',
   'store_owner',
-  'sales_manager',
+  'store_manager',
   'delivery_staff',
   'staff',
 ] as const;
 
 export type AdminRole = typeof ADMIN_ROLES[number];
+
+/** True when `value` is a role this system accepts. */
+export const isValidAdminRole = (value: unknown): value is AdminRole =>
+  typeof value === 'string' && (ADMIN_ROLES as readonly string[]).includes(value);
+
+/** Human-readable list for error messages, so the API never lies about what is allowed. */
+export const ADMIN_ROLE_LIST = ADMIN_ROLES.join(', ');
 
 function bearerToken(req: Request): string | null {
   const auth = req.headers.authorization;

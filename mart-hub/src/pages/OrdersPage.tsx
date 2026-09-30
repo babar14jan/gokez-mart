@@ -177,7 +177,7 @@ export default function OrdersPage() {
   const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
   const canCancelOutsideArea = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
-  const canManage    = ['super_admin', 'store_owner', 'sales_manager', 'store_manager'].includes(role || '');
+  const canManage    = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
   const canDispatch = false;
   const canAssignDelivery = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
 
@@ -461,11 +461,26 @@ export default function OrdersPage() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
                         {STATUS_LABELS[order.status] || order.status}
                       </span>
-                      {order.deliveryPreference && (
-                        <span className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">
-                          {PREF_LABELS[order.deliveryPreference]}
-                        </span>
-                      )}
+                        {order.deliveryPreference && (
+                          <span className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                            {PREF_LABELS[order.deliveryPreference]}
+                          </span>
+                        )}
+                        {/* Taken while the store was shut. Shown while the order is
+                            still live: staff should hold it for the next opening
+                            rather than treat it as a late or mistaken order. A
+                            manual closure says so, because "reopens 9 AM" would be
+                            a promise the owner never made. */}
+                        {order.placedOutsideHours && !TERMINAL.includes(order.status) && (
+                          <span
+                            title={order.closedReason === 'manual'
+                              ? 'Store was manually closed when this was placed'
+                              : `Outside posted hours — expected from ${order.scheduledForLabel || 'the next opening'}`}
+                            className="text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full"
+                          >
+                            {order.closedReason === 'manual' ? 'Store closed' : `After hours${order.scheduledForLabel ? ` · ${order.scheduledForLabel}` : ''}`}
+                          </span>
+                        )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <IndianRupee className="w-3.5 h-3.5 text-gray-900 dark:text-white" />

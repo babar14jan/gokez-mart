@@ -1,6 +1,7 @@
 import { query } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import { isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
 
 export interface TeamMember {
   id: string;
@@ -60,6 +61,12 @@ export class TeamService {
 
   // Add existing user to store
   static async addToStore(adminId: string, storeId: string, role: string, assignedBy: string): Promise<void> {
+    // mart_admin_store_assignments.role gained a CHECK in migration 056. This
+    // write previously accepted any string, so a typo here would have become an
+    // unhandled constraint violation instead of a clean rejection.
+    if (!isValidAdminRole(role)) {
+      throw Object.assign(new Error(`Role must be one of: ${ADMIN_ROLE_LIST}`), { status: 400 });
+    }
     await query(
       `INSERT INTO mart_admin_store_assignments (admin_id, store_id, role, assigned_by)
        VALUES ($1, $2, $3, $4)
@@ -80,6 +87,16 @@ export class TeamService {
     phone?: string; email?: string; role: string;
     storeId: string; assignedBy: string;
   }): Promise<any> {
+    // This path had no role validation and no password rule, unlike
+    // adminCreateUser. It went straight to the INSERT, so a store_manager
+    // chosen in the Team screen passed the UI check and then failed on the
+    // mart_admins_role_check constraint as an opaque 500.
+    if (!isValidAdminRole(data.role)) {
+      throw Object.assign(new Error(`Role must be one of: ${ADMIN_ROLE_LIST}`), { status: 400 });
+    }
+    if (!data.password || data.password.length < 8) {
+      throw Object.assign(new Error('Password must be at least 8 characters'), { status: 400 });
+    }
     const existing = await query(`SELECT 1 FROM mart_admins WHERE username = $1`, [data.username]);
     if (existing.rows.length) throw new Error('Username already exists');
     const hash = await bcrypt.hash(data.password, 12);
@@ -104,6 +121,9 @@ export class TeamService {
     let i = 1;
     if (data.role !== undefined)     { fields.push(`role = $${i++}`);      params.push(data.role); }
     if (data.isActive !== undefined) { fields.push(`is_active = $${i++}`); params.push(data.isActive); }
+    if (data.role !== undefined && !isValidAdminRole(data.role)) {
+      throw Object.assign(new Error(`Role must be one of: ${ADMIN_ROLE_LIST}`), { status: 400 });
+    }
     if (!fields.length) return;
     fields.push(`updated_at = NOW()`);
     params.push(adminId, storeId);

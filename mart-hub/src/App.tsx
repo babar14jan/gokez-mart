@@ -32,15 +32,13 @@ const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazy(() => import('./pages/CarouselPage'));
 
-// Note: 'store_manager' below is a frontend-only role. The mart_admins role
-// constraint (migrations 011/028) permits only super_admin, store_owner,
-// sales_manager, delivery_staff and staff, so no such account can exist. The
-// entry is harmless but unreachable; the role matrix is resolved in a later phase.
+// Roles mirror mart_admins_role_check in migration 056. store_manager is a real
+// role; it used to be listed here while the database still rejected it, which
+// made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
   super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
-  sales_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
   staff:           ['/', '/orders', '/products', '/inventory', '/delivery', '/profile', '/change-password', '/more'],
 };

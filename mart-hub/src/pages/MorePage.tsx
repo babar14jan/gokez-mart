@@ -17,7 +17,6 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   super_admin:    { label: 'Super Admin',    color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
   store_owner:    { label: 'Store Owner',    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
   store_manager:  { label: 'Store Manager',  color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
-  sales_manager:  { label: 'Sales Manager',  color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   delivery_staff: { label: 'Delivery Staff', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   staff:          { label: 'Staff',          color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400' },
 };
@@ -151,7 +150,6 @@ export default function MorePage() {
           super_admin:    'from-indigo-600 via-violet-600 to-purple-700 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900',
           store_owner:    'from-emerald-600 via-teal-600 to-cyan-700 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900',
           store_manager:  'from-teal-500 via-emerald-600 to-green-700 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900',
-          sales_manager:  'from-amber-500 via-orange-500 to-red-500 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900',
           delivery_staff: 'from-blue-500 via-indigo-500 to-violet-600 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900',
           staff:          'from-slate-600 via-slate-700 to-slate-800 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900',
         };

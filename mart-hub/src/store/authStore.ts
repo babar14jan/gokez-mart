@@ -22,10 +22,10 @@ const get = (key: string) => localStorage.getItem(key);
 const set = (key: string, val: string | null) => val ? localStorage.setItem(key, val) : localStorage.removeItem(key);
 
 // Must stay in sync with ADMIN_ROLES in mart-backend/src/middleware/index.ts.
-// 'store_manager' is intentionally listed: the database has never allowed that
-// role, so the entry is unreachable rather than a permission grant.
+// store_manager became a real role in migration 056. sales_manager was retired
+// in the same migration and is no longer accepted.
 export const KNOWN_ROLES = [
-  'super_admin', 'store_owner', 'store_manager', 'sales_manager', 'delivery_staff', 'staff',
+  'super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff',
 ] as const;
 
 // No fallback. An unknown or absent role is treated as no access at all — the

@@ -1,0 +1,325 @@
+================================================================================
+ GOKEZ MART - FEATURE INVENTORY
+================================================================================
+ Generated : 30 Sep 2026
+ Repo      : feature/mart_mobile_app @ 1b222e5
+ Method    : read from source (routes, pages, migrations, tests) - not from docs
+ Status key: [BUILT]   code exists and compiles
+            [PARTIAL]  code exists but incomplete
+            [OPEN]     not implemented
+            [NEW]      built in this session, not yet committed or deployed
+
+ Apps      : mart-backend (API)  mart-user (storefront web)  mart-hub (admin)
+             mart-mobile (Expo native)
+ Scale     : 113 API routes, 55 SQL migrations, 154 backend tests
+
+
+================================================================================
+ 1. mart-backend  (Express + TypeScript API)   113 routes
+================================================================================
+
+1.1 AUTHENTICATION & ACCOUNTS                            [BUILT]
+  - Customer OTP auth: /auth/send-otp, /auth/verify-otp
+  - Session profile: /auth/me, /auth/profile, /auth/logout
+  - Customer orders: /auth/orders
+  - Photo upload: /auth/upload
+  - Saved addresses CRUD: /auth/addresses (3 routes)
+  - Admin auth: /admin/login, /admin/me, /admin/change-password
+  - Admin profile: /admin/profile
+  - User lookup by phone: /admin/users/lookup
+
+1.2 CATALOG                                              [BUILT]
+  - Public products: /products, /products/:id
+  - Public categories: /categories
+  - Public carousel: /carousel
+  - Admin products: /admin/products (3 routes)
+  - Admin categories: /admin/categories (4 routes)
+  - Admin catalog: /admin/catalog (2 routes)
+  - Admin carousel: /admin/carousel (3 routes)
+  - Public store applications: /store-applications
+  - Admin store applications: /admin/store-applications (2 routes)
+  - Image upload: /admin/upload
+
+1.3 ORDERS                                                [BUILT]
+  - Order placement: /orders
+  - Public order tracking: /orders/track
+  - Admin orders: /admin/orders (2 routes)
+  - Cancellation reasons: /admin/orders (status change + reason)
+  - Order status history table: migration 044
+  - Idempotency guards: migration 045
+
+1.4 INVENTORY                                             [BUILT]
+  - Admin inventory: /admin/inventory
+  - Restock: /admin/inventory/:productId/restock
+  - Set stock: /admin/inventory/:productId/stock
+  - Stock history: /admin/inventory/:productId/history
+  - Inventory settings: /admin/settings (on/off, auto out-of-stock, threshold)
+  - Numeric safety + stock precision: migrations 031-033
+
+1.5 STORES, ZONES & TEAM                                  [BUILT]
+  - Admin stores: /admin/stores (7 routes)
+  - Store deactivate (super admin): /admin/stores/:id/deactivate
+  - Delivery zones: /admin/zones (4 routes)
+  - Public zones: /zones
+  - Store settings: /admin/settings
+  - Public settings: /settings/public
+  - Team CRUD: /admin/stores/:storeId/team (4 routes)
+  - User->store map: /admin/users/:userId/stores
+  - Store geocoding: /geocode/reverse
+
+1.6 ROLES & PERMISSIONS                                   [NEW]
+  - 5 roles only: super_admin, store_owner, store_manager, delivery_staff, staff
+  - sales_manager retired and migrated to store_manager (migration 056)
+  - Shared role validator (isValidAdminRole / ADMIN_ROLES) in middleware
+  - requireStoreAccess on all store-scoped routes
+  - No custom role-definition management                      [OPEN]
+
+1.7 CAMPAIGNS                                             [BUILT]
+  - Public campaigns: /campaigns/eligible, /campaigns/validate
+  - Admin campaigns: /admin/campaigns (6 routes)
+  - Campaign governance + financial guards (migrations 039, 046, 047, 048, 053)
+  - Welcome-campaign eligibility corrected (migration 048)
+  - Campaign usage seed (migration 041)
+
+1.8 CUSTOMERS, LEADS & FEEDBACK                           [BUILT]
+  - Admin customers: /admin/customers
+  - Customer photo: migration 036
+  - Customer leads: /admin/customer-leads (2 routes)
+  - Customer addresses: migration 043
+  - Address coordinates: migration 051
+  - Public feedback: /feedback
+  - Admin feedback: /admin/feedback
+  - Feedback table: migration 037
+
+1.9 COMPLIANCE (DPDP / privacy)                            [BUILT]
+  - Account deletion: /compliance/deletion (POST + GET status)
+  - Data export: /compliance/data-export (POST + GET status)
+  - Grievances: /compliance/grievances (POST + GET)
+  - Marketing consent: /compliance/marketing-consent (PUT + GET)
+  - Admin deletion queue: /admin/compliance/deletions (2 routes)
+  - Admin grievances: /admin/compliance/grievances (2 routes)
+  - Audit logs: /admin/compliance/audit-logs
+  - Audit log + data export tables: migration 035
+
+1.10 PUSH NOTIFICATIONS                                    [BUILT]
+  - VAPID public key: /push/vapid-public-key
+  - Customer subscribe: /push/subscribe/customer
+  - Admin subscribe: /push/subscribe/admin
+
+1.11 FUNNEL & ATTRIBUTION                                  [NEW]
+  - Anonymous event intake: /funnel/event (public, no auth)
+  - Durable server-side cart: /funnel/cart
+  - Campaign touch recording: /funnel/campaign
+  - Admin funnel query: /admin/customer-funnel (+ /extended)
+  - First-party only: no PII in mart_funnel_events
+  - Cart conversion is closed by the order itself, atomically with the order
+  - Cart customer identity is resolved server-side, never from the request body
+  - Remaining gaps - see section 7
+
+1.12 STORE HOURS & ORDER CLOSURE                           [NEW]
+  - Canonical IST (Asia/Kolkata) opening-hours evaluator, no per-store timezone
+  - Public /settings/public returns server-computed openState
+  - Order creation evaluates hours inside the order transaction
+  - Migration 057 adds:
+      placed_outside_hours  BOOLEAN NOT NULL DEFAULT false
+      closed_reason         TEXT
+      scheduled_for         TIMESTAMPTZ
+      + partial index + closure-consistency CHECK constraint
+  - Store stays browsable and orderable while closed (by design)
+
+
+================================================================================
+ 2. mart-user  (customer storefront, React web/PWA)
+================================================================================
+
+2.1 SHOPPING                                               [BUILT]
+  - Home + carousel, categories, product detail sheet
+  - Cart drawer, floating cart, checkout
+  - Product cards with add-to-cart
+  - Address form and saved addresses
+  - Order history
+  - Login modal / phone modal / name prompt
+
+2.2 STORE HOURS SURFACE                                   [NEW]
+  - StoreStatusStrip: global "store closed" notice below the header
+  - One global closed-order dialog (single instance, not per checkout mount)
+  - Checkout confirmOrder() gate after form validation
+  - Exact refetch at nextOpenAt, capped at 24h
+  - Hidden on embedded (non-standalone) pages
+  - Note: strip refreshes on a 3-min poll at closing time; the exact timer is
+    only armed for the reopening moment.
+
+2.3 ACCOUNT & COMPLIANCE PAGES                             [BUILT]
+  - Profile, order history, notification settings
+  - Privacy page, Terms page
+  - Grievance page, Feedback page
+  - Delete account page
+  - Routing is a hand-rolled view switcher on window.location.pathname
+    (no react-router in this app)
+
+2.4 PWA, SEO & BRANDING                                    [BUILT]
+  - Service worker + manifest + install prompt
+  - robots.txt, sitemap.xml, OG image, favicons, icons
+  - cache-version.json / version.json cache busting
+  - _headers / _redirects for Netlify-style hosting
+  - 16-check SEO gate script in the build
+  - Branded QR assets + generator/verifier in docs/marketing
+
+
+================================================================================
+ 3. mart-hub  (admin dashboard, 25 pages)
+================================================================================
+
+3.1 OPERATIONS                                            [BUILT]
+  - Login, Dashboard, More (mobile nav)
+  - Orders + Delivery (order status flow)
+  - Products, Categories, Catalog, Carousel
+  - Inventory, Customers, Customer Leads
+  - Feedback, Campaigns
+  - Users, Stores, Store Applications, Team
+  - Analytics, Profile, Change Password
+
+3.2 ROLES                                                 [NEW]
+  - sales_manager removed from all hub routes, nav, labels and role pickers
+  - store_manager is selectable and functional
+  - Settings route restricted to super_admin / store_owner / store_manager
+
+3.3 SETTINGS PAGE (redesigned this session)                [NEW]
+  - Four tabs: Store | Hours & Delivery | Delivery Zones | Payments & Inventory
+  - Per-tab dirty tracking, compared against a database-sourced baseline
+  - Save disabled while a tab is clean
+  - Discard per tab
+  - Inline save errors (no dismissable alert)
+  - beforeunload guard against losing unsaved edits
+  - Branding/hours written via storesApi.updateSettings() - never the
+    super-admin-only storesApi.update(), which 403s store owners
+  - Opening hours + store_open toggle + delivery pricing on ONE tab
+  - Zones are per-action; no bulk save
+
+3.4 ORDER CLOSURE VISIBILITY                              [NEW]
+  - Live orders show "After hours - <IST label>" or "Store closed"
+  - Badges hidden on terminal orders
+
+3.5 FUNNEL PANEL                                           [NEW]
+  - FunnelPanel.tsx, super-admin only
+
+
+================================================================================
+ 4. mart-mobile  (Expo SDK 54 + Expo Router + NativeWind)   [PARTIAL]
+================================================================================
+ Plan doc: mart-mobile/PLAN.md - Phases 1-3 done, Phase 4 open.
+
+4.1 SCREENS PRESENT (17 screens + 3 layouts)               [PARTIAL]
+  - Tabs: Home, Categories, Orders, Profile
+  - Auth: login, setup-profile
+  - checkout, product/[id], addresses, address-form
+  - notification-settings, feedback, grievance, privacy, terms
+  - Order detail: BOTH app/order/[id].tsx AND app/order-detail/[id].tsx exist
+    (likely a leftover duplicate - needs review)
+  - Components: ProductCard, CartPill, HomeCarousel, LoginPrompt
+
+4.2 NOT DONE (Phase 4)                                    [OPEN]
+  - Push notification registration after first order
+  - Offline banner (NetInfo)
+  - Campaign / coupon code on checkout
+  - Feedback trigger after delivery
+  - Delete account flow
+  - Privacy / Terms screens (files exist, may be placeholders)
+  - Skeleton loaders, haptics, empty-state art
+  - Dark mode (themeStore wired, classes not finished)
+  - App icon + splash assets
+  - EAS build: no first APK yet
+  - app.config.js still has placeholder EAS project id
+
+
+================================================================================
+ 5. TESTS  (154 passing, 0 failing)
+================================================================================
+  mart-backend/tests/security.test.ts            61
+  mart-backend/tests/funnel.test.ts              37
+  mart-backend/tests/storeHours.test.ts          29
+  mart-backend/tests/campaign-governance.test.ts 27
+
+  Note: mart-hub and mart-user have NO test runner. Frontend coverage is limited
+  to source-level guards in security.test.ts plus build/SEO gates.
+
+
+================================================================================
+ 6. DEPLOYMENT STATE  -- READ THIS BEFORE DEPLOYING
+================================================================================
+  NOTHING is committed, pushed, or deployed. Branch is still at 1b222e5.
+  Working tree: 25 modified files, 14 untracked paths.
+
+  These 4 migrations are UNTRACKED - they exist only on disk:
+      054_funnel_events.sql
+      055_server_side_cart.sql
+      056_store_manager_role.sql
+      057_order_closure_fields.sql
+
+  Migration 056 MUST be applied BEFORE the new backend/hub code is deployed.
+  The new ADMIN_ROLES rejects sales_manager, so deploying code first locks out
+  any admin still holding that role.
+
+  Migrations 056 and 057 were verified against throwaway local PostgreSQL
+  clusters (full chain from zero, idempotency, constraint cases). They have
+  NOT been applied to any production or remote database.
+
+  Deploy order:  run 054-057  ->  deploy backend  ->  deploy hub  ->  deploy user
+
+
+================================================================================
+ 7. KNOWN OPEN GAPS
+================================================================================
+  Funnel hardening (4 of 7 done this session):
+    [DONE] markConverted() is wired into order placement, on the order's own
+           transaction, and records the order id alongside converted_at
+    [DONE] the public cart endpoint no longer accepts a client-supplied
+           customerId; it resolves the customer from auth or the OTP-verified
+           session link
+    [DONE] mart_carts.order_id, so every conversion reconciles against a real
+           order (ON DELETE SET NULL withdraws it if the order is deleted)
+    [DONE] the funnel counts a conversion only when its order still exists
+    [OPEN] customer session identity does not expire
+    [OPEN] guest orders are not linked to a session/channel
+    [OPEN] campaign touch window and coverage are incomplete
+    [OPEN] login_abandoned is recorded but absent from EVENT_STAGE_DEFS, so it
+           is never displayed
+    [OPEN] product_viewed is deduplicated per session, not per product
+
+  Migrations 054-057 are still untracked and unapplied anywhere. The earlier
+  full-chain re-apply test fails at 001_initial_schema.sql, which is NOT
+  re-runnable (it uses ON CONFLICT on a constraint added by a later migration).
+  That is pre-existing and unrelated: the supported path is one ordered pass from
+  zero, which applies all 55 cleanly. 055 and 057 re-apply cleanly on their own.
+
+  31 pre-existing date formatters omit the timeZone option and rely on the
+  machine's local zone. Out of scope for the IST work - new code passes the
+  zone explicitly.
+
+  SettingsService.updateMany() updates keys one query at a time, so a multi-key
+  save is not atomic. A partial failure leaves some keys written.
+
+  Campaign supersede/audit backlog is a separate workstream, untouched.
+
+
+================================================================================
+ 8. HOW TO CHECK PROGRESS YOURSELF
+================================================================================
+  # what is implemented, by route
+  grep -cE "router\.(get|post|put|patch|delete)\(" mart-backend/src/routes/index.ts
+
+  # what is implemented, by screen
+  ls mart-hub/src/pages mart-user/src/pages mart-mobile/app
+
+  # what is in the database
+  ls mart-backend/src/database/migrations
+
+  # is it still green
+  cd mart-backend && npm test
+  cd mart-hub      && npx tsc --noEmit && npm run build
+  cd mart-user     && npm run build
+
+  # what is uncommitted
+  git status --porcelain
+
+================================================================================

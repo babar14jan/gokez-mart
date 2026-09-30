@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { X, RefreshCw, ShieldCheck, ArrowRight, Tag } from 'lucide-react';
+import { X, RefreshCw, ShieldCheck, ArrowRight, Tag, PhoneCall } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { subscribeToPush } from '../services/push';
 import { useCustomerStore } from '../store/customerStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
+import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../utils/track';
 
 interface LoginModalProps {
   onClose: () => void;
@@ -49,6 +50,9 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
   }, [step]);
 
   const handleClose = () => {
+    if (step === 'phone' || step === 'otp') {
+      track('login_abandoned', { step, reason: 'closed' });
+    }
     if (step === 'otp' && !window.confirm('Cancel login? You will need to request a new OTP.')) return;
     loginFlow.clear();
     onClose();
@@ -61,6 +65,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
     setLoading(true); setError('');
     try {
       await authApi.sendOtp(cleaned);
+      track('otp_requested');
       loginFlow.beginOtp(cleaned, !!pendingCheckout);
       setPhone(cleaned);
       setStep('otp');
@@ -76,7 +81,8 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
     if (otp.length !== 6) { setError('Enter the 6-digit OTP'); return; }
     setLoading(true); setError('');
     try {
-      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp);
+      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp, getFunnelSessionId());
+      track('login_verified');
       const { token, customer } = res.data.data;
       loginFlow.clear();
       login(token, customer);
@@ -90,6 +96,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
         campaignApi.getEligible(0, '').then(r => {
           const offers = r.data.data || [];
           if (offers.length > 0) {
+            trackCampaignTouch(offers[0].id);
             setWelcomeOffer(offers[0]);
             setStep('offer');
           } else {
@@ -135,160 +142,223 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
     } finally { setSavingProfile(false); }
   };
 
+  const digits = phone.replace(/\D/g, '');
+  const maskedPhone = digits.length > 4 ? `${'•'.repeat(6)}${digits.slice(-4)}` : digits;
+  const phoneValid = digits.length === 10;
+
+  // One size for both steps. The phone step used an 80px logo while the OTP
+  // step used 48px for the same asset, and stacked a 56px icon tile underneath
+  // it: 76px of decoration for one brand mark, which is what pushed the panel
+  // past a 667px viewport. Smaller and consistent costs nothing visually.
+  const BrandMark = () => (
+    <div className="flex flex-col items-center">
+      <img src="/mart_brand_new.png" alt="Gokez Mart"
+        className="h-12 w-auto object-contain dark:hidden" />
+      <img src="/mart_brand_dark.png" alt="Gokez Mart"
+        className="h-12 w-auto object-contain hidden dark:block" />
+      <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-900 dark:text-slate-100">
+        Shop Local <span className="align-middle">&bull;</span> Support Local
+      </p>
+    </div>
+  );
+
+  const ErrorNote = ({ id }: { id: string }) => error ? (
+    <p id={id} role="alert" aria-live="polite"
+      className="mb-3 rounded-2xl border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+      {error}
+    </p>
+  ) : null;
+
+  const Spinner = () => <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />;
+
+  const primaryBtn =
+    'flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 py-3 text-[15px] font-bold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-800';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-6">
+    <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto overscroll-contain bg-slate-900/60 backdrop-blur-sm sm:items-center sm:p-6">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-title"
+        className="relative flex w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-800 min-h-[100dvh] sm:min-h-0 sm:rounded-3xl">
 
-        <div className="flex items-center justify-end mb-5">
-          <button onClick={handleClose} aria-label={step === 'otp' ? 'Cancel login' : 'Close login'} className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-7 sm:pb-7">
 
-        {step === 'offer' && welcomeOffer ? (
-          <>
-            <div className="text-center mb-5">
-              <div className={`w-full h-24 rounded-2xl bg-gradient-to-br ${welcomeOffer.carousel_gradient || 'from-violet-500 via-purple-600 to-indigo-600'} flex flex-col items-center justify-center mb-4 relative overflow-hidden`}>
-                <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
-                {welcomeOffer.badge_text && <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full mb-1">{welcomeOffer.badge_text}</span>}
-                <p className="text-2xl font-black text-white drop-shadow">
-                  {welcomeOffer.discount_type === 'flat' ? `₹${welcomeOffer.discount_value} OFF` :
-                   welcomeOffer.discount_type === 'percent' ? `${welcomeOffer.discount_value}% OFF` : 'FREE DELIVERY'}
+          <div className="flex justify-end">
+            <button type="button" onClick={handleClose}
+              aria-label={step === 'otp' ? 'Cancel login' : 'Close login'}
+              className="-mr-2 grid h-11 w-11 place-items-center rounded-2xl text-gray-500 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:bg-slate-700">
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+
+          {step === 'offer' && welcomeOffer ? (
+            <>
+              <div className="text-center mb-5">
+                <div className={`w-full h-24 rounded-2xl bg-gradient-to-br ${welcomeOffer.carousel_gradient || 'from-violet-500 via-purple-600 to-indigo-600'} flex flex-col items-center justify-center mb-4 relative overflow-hidden`}>
+                  <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
+                  {welcomeOffer.badge_text && <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full mb-1">{welcomeOffer.badge_text}</span>}
+                  <p className="text-2xl font-black text-white drop-shadow">
+                    {welcomeOffer.discount_type === 'flat' ? `₹${welcomeOffer.discount_value} OFF` :
+                     welcomeOffer.discount_type === 'percent' ? `${welcomeOffer.discount_value}% OFF` : 'FREE DELIVERY'}
+                  </p>
+                </div>
+                <h2 id="login-title" className="text-base font-bold text-gray-900 dark:text-white mb-1">{welcomeOffer.title} 🎉</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-500">{welcomeOffer.subtitle || 'Applied automatically at checkout'}</p>
+                {welcomeOffer.coupon_code && (
+                  <div className="mt-2 inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 text-xs font-bold px-3 py-1.5 rounded-xl">
+                    <Tag className="w-3.5 h-3.5" />
+                    Code: <span className="font-mono">{welcomeOffer.coupon_code}</span>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => { onSuccess?.(); onClose(); }} className={primaryBtn}>
+                <ArrowRight className="h-4 w-4" aria-hidden="true" /> Start Shopping
+              </button>
+            </>
+          ) : step === 'profile' ? (
+            <>
+              <div className="text-center mb-5">
+                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <span className="text-2xl" aria-hidden="true">👋</span>
+                </div>
+                <h2 id="login-title" className="text-base font-bold text-gray-900 dark:text-white mb-1">Almost there!</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-500">Tell us your name so we can personalise your experience</p>
+              </div>
+              <ErrorNote id="login-error" />
+              <form onSubmit={handleSaveProfile} className="space-y-3">
+                <label htmlFor="login-name" className="sr-only">Your full name</label>
+                <input id="login-name" name="name" type="text" value={newName} autoComplete="name"
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Your full name *"
+                  aria-invalid={Boolean(error)}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                  autoFocus />
+                <button type="submit" disabled={savingProfile || !newName.trim()} className={primaryBtn}>
+                  {savingProfile
+                    ? <Spinner />
+                    : <><ArrowRight className="h-4 w-4" aria-hidden="true" /> {pendingCheckout ? 'Continue to Checkout' : 'Continue'}</>
+                  }
+                </button>
+                <button type="button" onClick={() => { onSuccess?.(); onClose(); }}
+                  className="w-full text-sm text-gray-500 hover:text-gray-600 dark:text-slate-300 py-1 transition-colors">
+                  Skip for now
+                </button>
+              </form>
+            </>
+          ) : step === 'phone' ? (
+            <>
+              <div className="rounded-3xl bg-gradient-to-b from-amber-100 via-lime-50 to-emerald-50 px-5 pb-3 pt-3 dark:from-amber-950/40 dark:via-slate-800 dark:to-emerald-950/30">
+                <BrandMark />
+
+                <h2 id="login-title" className="mt-3 text-center text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
+                  Enter your mobile number
+                </h2>
+                <p className="mx-auto mt-1 max-w-[19rem] text-center text-[13px] text-gray-600 dark:text-slate-300">
+                  We'll use it to keep your orders and account secure.
                 </p>
               </div>
-              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">{welcomeOffer.title} 🎉</h2>
-              <p className="text-sm text-gray-500 dark:text-slate-400">{welcomeOffer.subtitle || 'Applied automatically at checkout'}</p>
-              {welcomeOffer.coupon_code && (
-                <div className="mt-2 inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 text-xs font-bold px-3 py-1.5 rounded-xl">
-                  <Tag className="w-3.5 h-3.5" />
-                  Code: <span className="font-mono">{welcomeOffer.coupon_code}</span>
+
+              <form onSubmit={handleSendOtp} className="mt-3 space-y-2.5">
+                <ErrorNote id="login-error" />
+
+                <label htmlFor="login-phone" className="sr-only">Mobile number</label>
+                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-700/60">
+                  <span className="text-sm font-semibold text-gray-500 dark:text-slate-400">+91</span>
+                  <span className="h-4 w-px bg-slate-300 dark:bg-slate-500" aria-hidden="true" />
+                  <input
+                    id="login-phone" name="phone" type="tel" value={phone} maxLength={10}
+                    onChange={e => setPhone(e.target.value.replace(/\D/g,'').slice(0,10))}
+                    onFocus={() => trackOnce('login_field_focused')}
+                    placeholder="10-digit mobile number"
+                    inputMode="numeric" autoComplete="tel"
+                    aria-invalid={Boolean(error)}
+                    className="flex-1 bg-transparent py-2.5 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
+                    autoFocus />
                 </div>
-              )}
-            </div>
-            <button onClick={() => { onSuccess?.(); onClose(); }}
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm">
-              <ArrowRight className="w-4 h-4" /> Start Shopping
-            </button>
-          </>
-        ) : step === 'profile' ? (
-          <>
-            <div className="text-center mb-5">
-              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="text-2xl">👋</span>
+
+                <button type="submit" disabled={loading || !phoneValid} className={primaryBtn}>
+                  {loading ? <Spinner /> : <>Continue with OTP</>}
+                </button>
+              </form>
+
+              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                <p className="flex items-center gap-1.5 text-[12px] font-bold leading-snug text-slate-800 dark:text-slate-100">
+                  <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  Your number is private.
+                </p>
+                <p className="mt-0.5 pl-5 text-[12px] leading-snug text-gray-500 dark:text-slate-400">
+                  We never share it. No spam, only order and account updates.
+                </p>
               </div>
-              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Almost there!</h2>
-              <p className="text-sm text-gray-500 dark:text-slate-400">Tell us your name so we can personalise your experience</p>
-            </div>
-            {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-3 py-2 rounded-xl mb-4">{error}</div>}
-            <form onSubmit={handleSaveProfile} className="space-y-3">
-              <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="Your full name *"
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                autoFocus />
-              <button type="submit" disabled={savingProfile || !newName.trim()}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm">
-                {savingProfile
-                  ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <><ArrowRight className="w-4 h-4" /> {pendingCheckout ? 'Continue to Checkout' : 'Continue'}</>
-                }
-              </button>
-              <button type="button" onClick={() => { onSuccess?.(); onClose(); }}
-                className="w-full text-sm text-gray-500 hover:text-gray-600 dark:hover:text-slate-300 py-1 transition-colors">
-                Skip for now
-              </button>
-            </form>
-          </>
-        ) : step === 'phone' ? (
-          <>
-            <div className="flex flex-col items-center mb-5">
-              <img src="/mart_brand_new.png" alt="Gokez Mart"
-                className="h-24 w-auto object-contain dark:hidden" />
-              <img src="/mart_brand_dark.png" alt="Gokez Mart"
-                className="h-24 w-auto object-contain hidden dark:block" />
-              <p className="-mt-2 text-[11px] font-black uppercase tracking-wide text-black dark:text-slate-200">
-                Shop Local <span className="align-middle">&bull;</span> Support Local
+            </>
+          ) : (
+            <>
+              <div className="rounded-3xl bg-gradient-to-b from-amber-100 via-lime-50 to-emerald-50 px-5 pb-3 pt-3 dark:from-amber-950/40 dark:via-slate-800 dark:to-emerald-950/30">
+                <BrandMark />
+
+                <h2 id="login-title" className="mt-3 text-center text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
+                  Enter the verification code
+                </h2>
+                <p className="mx-auto mt-1 flex max-w-[19rem] items-center justify-center gap-1.5 text-center text-[13px] text-gray-600 dark:text-slate-300">
+                  <PhoneCall className="h-3.5 w-3.5 flex-shrink-0 text-slate-500 dark:text-slate-400" aria-hidden="true" />
+                  <span>We'll send you a 6-digit code via call</span>
+                </p>
+                <p className="mt-0.5 text-center text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  SMS OTP Coming soon
+                </p>
+                <p className="mt-1.5 text-center text-sm text-slate-700 dark:text-slate-200">
+                  +91 {maskedPhone}
+                  <button type="button" onClick={() => { loginFlow.clear(); setStep('phone'); setOtp(''); setError(''); }}
+                    className="-my-2 ml-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded px-2 text-xs font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400">
+                    Edit
+                  </button>
+                </p>
+              </div>
+
+              <form onSubmit={handleVerifyOtp} className="mt-3 space-y-2">
+                <ErrorNote id="login-error" />
+                <label htmlFor="login-otp" className="sr-only">6-digit verification code</label>
+                <input
+                  id="login-otp" name="otp" type="tel" value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
+                  placeholder="6-digit OTP"
+                  inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                  aria-invalid={Boolean(error)}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                  autoFocus />
+                <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn}>
+                  {loading ? <Spinner /> : <>Verify &amp; Sign In</>}
+                </button>
+                <button type="button" onClick={handleResend} disabled={resendTimer > 0 || loading}
+                  className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-2xl py-2 text-sm text-gray-500 transition-colors hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400">
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {(step === 'phone' || step === 'otp') && (
+            <div className="mt-auto pt-3 text-center">
+              <p className="text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
+                By continuing, you agree to our{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer"
+                  className="font-semibold text-slate-700 underline underline-offset-2 hover:text-emerald-700 dark:text-slate-300">
+                  Terms
+                </a>
+                {' '}&amp;{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer"
+                  className="font-semibold text-slate-700 underline underline-offset-2 hover:text-emerald-700 dark:text-slate-300">
+                  Privacy Policy
+                </a>
+              </p>
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-500">
+                &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
               </p>
             </div>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-5 text-center">
-              Enter your mobile number to continue
-            </p>
-            {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-3 py-2 rounded-xl mb-4">{error}</div>}
-            <form onSubmit={handleSendOtp} className="space-y-3">
-              <div className="flex items-center gap-2 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-3 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                <span className="text-sm font-semibold text-gray-500 dark:text-slate-400 flex-shrink-0">+91</span>
-                <div className="w-px h-4 bg-gray-300 dark:bg-slate-500" />
-                <input
-                  type="tel" value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g,'').slice(0,10))}
-                  placeholder="10-digit mobile number"
-                  className="flex-1 bg-transparent text-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none"
-                  autoFocus inputMode="numeric"
-                />
-              </div>
-              {/* Temporary notice — remove when SMS OTP is live */}
-              <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3.5 py-3">
-                <span className="text-lg flex-shrink-0">📞</span>
-                <div>
-                  <p className="text-sm font-bold text-amber-800 dark:text-amber-400">You will receive OTP via phone call</p>
-                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">SMS OTP coming soon</p>
-                </div>
-              </div>
-
-              <button type="submit" disabled={loading || phone.replace(/\D/g,'').length !== 10}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm">
-                {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <>Send OTP</>}
-              </button>
-            </form>
-          </>
-        ) : (
-          <>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Enter OTP</h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">
-              Sent to <span className="font-semibold text-gray-700 dark:text-slate-300">+91 {phone}</span>
-              <button onClick={() => { loginFlow.clear(); setStep('phone'); setOtp(''); setError(''); }}
-                className="ml-2 text-emerald-600 text-xs font-semibold hover:underline">Change</button>
-            </p>
-            {error && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-3 py-2 rounded-xl mb-4">{error}</div>}
-            <form onSubmit={handleVerifyOtp} className="space-y-3">
-              <input
-                type="tel" value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
-                placeholder="6-digit OTP"
-                className="w-full text-center text-2xl font-bold tracking-[0.5em] bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                autoFocus inputMode="numeric" maxLength={6}
-              />
-              <button type="submit" disabled={loading || otp.length !== 6}
-                className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm">
-                {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <>Verify & Sign In</>}
-              </button>
-              <button type="button" onClick={handleResend} disabled={resendTimer > 0 || loading}
-                className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 dark:text-slate-400 hover:text-emerald-600 disabled:opacity-50 transition-colors py-1">
-                <RefreshCw className="w-3.5 h-3.5" />
-                {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
-              </button>
-            </form>
-          </>
-        )}
-
-        <div className="flex items-center justify-center gap-1.5 mt-4 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-full w-fit mx-auto">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-          <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Your data is secure. We never share your information.</span>
+          )}
         </div>
-        <p className="text-center text-[10px] text-gray-500 dark:text-slate-400 mt-3">
-          By continuing, you agree to our{' '}
-          <a href="/terms" target="_blank" rel="noopener noreferrer"
-            className="font-semibold text-gray-600 dark:text-slate-300 hover:underline">
-            Terms
-          </a>
-          {' '}&amp;{' '}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer"
-            className="font-semibold text-gray-600 dark:text-slate-300 hover:underline">
-            Privacy Policy
-          </a>
-        </p>
-        <p className="text-center text-[10px] text-gray-500 dark:text-slate-400 mt-1">
-          &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
-        </p>
       </div>
     </div>
   );

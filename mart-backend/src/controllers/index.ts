@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
 import sharp from 'sharp';
-import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE } from '../middleware';
+import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
 import { ProductService } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
 import { OrderService } from '../services/order.service';
@@ -19,6 +19,10 @@ import { query, transaction } from '../database/db';
 import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
 import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
+import { FunnelService, FunnelRange } from '../services/funnel.service';
+import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.service';
+import { FunnelCartService } from '../services/funnelCart.service';
+import { evaluateStoreOpen } from '../utils/storeHours';
 import { config } from '../config';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -86,7 +90,13 @@ export const getProduct = asyncHandler(async (req: Request, res: Response) => {
 export const getPublicSettings = asyncHandler(async (req: Request, res: Response) => {
   const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
   const settings = await SettingsService.getPublic(storeId);
-  res.json({ success: true, data: settings });
+  // Open/closed is computed here rather than in the browser so there is exactly
+  // one implementation of the schedule, and so the answer cannot depend on the
+  // customer's device clock or timezone. The storefront re-fetches at
+  // nextOpenAt to pick up the change instead of re-deriving it locally.
+  const store = await StoreService.findById(storeId);
+  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
+  res.json({ success: true, data: { ...settings, openState } });
 });
 
 export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {
@@ -145,6 +155,13 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   if (!idempotencyKey || idempotencyKey.length > 128) {
     res.status(400).json({ success: false, error: 'A valid Idempotency-Key is required' }); return;
   }
+  // Optional, and only ever used to close the cart funnel. It is a client-chosen
+  // string, so it is validated and length-capped rather than trusted; a bad value
+  // is dropped instead of failing the order, because analytics must never be the
+  // reason a customer cannot check out.
+  const funnelSessionId = typeof req.body.funnelSessionId === 'string'
+    ? req.body.funnelSessionId.trim().slice(0, 64) || null
+    : null;
   if (campaignId && couponCode) {
     res.status(400).json({ success: false, error: 'Select either an offer or a coupon code, not both' }); return;
   }
@@ -165,6 +182,7 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     campaignId: campaignId || null,
     couponCodeUsed: couponCode || null,
     customerId: req.customer?.id || null,
+    funnelSessionId,
     idempotencyKey,
   });
 
@@ -568,7 +586,7 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
 // ── Admin customer controllers ────────────────────────────────────────────────
 
 export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const allowedRoles = ['super_admin', 'store_owner', 'store_manager', 'sales_manager'];
+  const allowedRoles = ['super_admin', 'store_owner', 'store_manager'];
   if (!req.admin || !allowedRoles.includes(req.admin.role)) {
     res.status(403).json({ success: false, error: 'Access denied' }); return;
   }
@@ -591,6 +609,22 @@ export const adminGetCustomerLeads = asyncHandler(async (req: AdminRequest, res:
     CustomerLeadService.getCounts(),
   ]);
   res.json({ success: true, data: leads, counts });
+});
+
+export const adminGetCustomerFunnelExtended = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const range = req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
+    ? req.query.range
+    : 'all';
+  const summary = await FunnelService.getExtended(range as FunnelRange);
+  res.json({ success: true, data: summary });
+});
+
+export const adminGetCustomerFunnel = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const range = req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
+    ? req.query.range
+    : 'all';
+  const summary = await FunnelService.getSummary(range as FunnelRange);
+  res.json({ success: true, data: summary });
 });
 
 function csvCell(value: string | null | undefined): string {
@@ -739,10 +773,64 @@ export const customerSendOtp = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const customerVerifyOtp = asyncHandler(async (req: Request, res: Response) => {
-  const { phone, otp } = req.body;
+  const { phone, otp, funnelSessionId } = req.body;
   if (!phone || !otp) { res.status(400).json({ success: false, error: 'Phone and OTP required' }); return; }
   const result = await CustomerAuthService.verifyOtp(phone, otp);
+  // Attribution link only. Auth behaviour is unchanged and a missing or invalid
+  // session id is ignored rather than surfaced, so a tracking failure can never
+  // affect whether a customer logs in. The phone is not stored here; the
+  // customer id was already resolved server-side by the call above.
+  if (funnelSessionId && result?.customer?.id) {
+    await FunnelEventService.linkSessionToCustomer(funnelSessionId, result.customer.id).catch(() => undefined);
+  }
   res.json({ success: true, data: result });
+});
+
+export const postFunnelEvent = asyncHandler(async (req: Request, res: Response) => {
+  const { sessionId, eventName, path, props, channel } = req.body ?? {};
+  if (!sessionId || !eventName) {
+    res.status(400).json({ success: false, error: 'sessionId and eventName required' });
+    return;
+  }
+  const recorded = await FunnelEventService.recordEvent({
+    sessionId, eventName, path, props, channel,
+  });
+  res.json({ success: true, data: { recorded } });
+});
+
+export const postFunnelCart = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { sessionId, items, reachedCheckout } = req.body ?? {};
+  if (!sessionId) { res.status(400).json({ success: false, error: 'sessionId required' }); return; }
+
+  // The customer is resolved here, never read from the request body. This
+  // endpoint is public, so a body-supplied customerId let anyone attach a cart
+  // to any account in the database -- and through the one-live-cart-per-customer
+  // index, occupy that account's live cart slot.
+  //
+  // Two server-side sources, in order of strength: an authenticated customer,
+  // then the verified-customer link on this session. The session link is only
+  // ever written after OTP verification, so a caller cannot forge it by sending
+  // a customerId.
+  const customerId = req.customer?.id
+    ?? await FunnelEventService.resolveSessionCustomer(String(sessionId)).catch(() => null);
+
+  const result = await FunnelCartService.upsert({
+    sessionId,
+    customerId: customerId ?? null,
+    items: Array.isArray(items) ? items : [],
+    reachedCheckout: reachedCheckout === true,
+  });
+  res.json({ success: true, data: result });
+});
+
+export const postFunnelCampaignTouch = asyncHandler(async (req: Request, res: Response) => {
+  const { sessionId, campaignId } = req.body ?? {};
+  if (!sessionId || !campaignId) {
+    res.status(400).json({ success: false, error: 'sessionId and campaignId required' });
+    return;
+  }
+  await FunnelEventService.recordCampaignTouch(sessionId, campaignId);
+  res.json({ success: true });
 });
 
 export const customerGetMe = asyncHandler(async (req: CustomerRequest, res: Response) => {
@@ -845,9 +933,8 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
   if (password.length < 8) {
     res.status(400).json({ success: false, error: 'Password must be at least 8 characters' }); return;
   }
-  const valid = ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff', 'delivery_staff'];
-  if (!valid.includes(role)) {
-    res.status(400).json({ success: false, error: `Role must be one of: ${valid.join(', ')}` }); return;
+  if (!isValidAdminRole(role)) {
+    res.status(400).json({ success: false, error: `Role must be one of: ${ADMIN_ROLE_LIST}` }); return;
   }
   if (role !== 'super_admin' && !storeId) {
     res.status(400).json({ success: false, error: 'storeId is required for non-super_admin roles' }); return;
@@ -875,6 +962,11 @@ export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Respo
   }
   if (id === req.admin!.id && isActive === false) {
     res.status(400).json({ success: false, error: 'Cannot deactivate your own account' }); return;
+  }
+  // Previously unvalidated: `role` was pushed straight into the UPDATE and the
+  // only backstop was the database CHECK, so a bad role surfaced as a 500.
+  if (role !== undefined && !isValidAdminRole(role)) {
+    res.status(400).json({ success: false, error: `Role must be one of: ${ADMIN_ROLE_LIST}` }); return;
   }
   const fields: string[] = [];
   const params: unknown[] = [];
@@ -1196,11 +1288,20 @@ export const addToStoreTeam = asyncHandler(async (req: AdminRequest, res: Respon
   const storeId = req.params.storeId || resolveStoreId(req);
   const { adminId, role, username, password, name, phone, email } = req.body;
   if (!role) { res.status(400).json({ success: false, error: 'role is required' }); return; }
+  // Checked here, at the edge, so an unusable role is a readable 400. Validating
+  // only inside the service meant the error surfaced as a bare 500, because
+  // errorHandler masks the message for any 5xx.
+  if (!isValidAdminRole(role)) {
+    res.status(400).json({ success: false, error: `Role must be one of: ${ADMIN_ROLE_LIST}` }); return;
+  }
   if (adminId) {
     await TeamService.addToStore(adminId, storeId, role, req.admin!.id);
     res.json({ success: true, message: 'Member added to store' });
   } else {
     if (!username || !password) { res.status(400).json({ success: false, error: 'username and password required' }); return; }
+    if (password.length < 8) {
+      res.status(400).json({ success: false, error: 'Password must be at least 8 characters' }); return;
+    }
     const member = await TeamService.createAndAssign({ username, password, name, phone, email, role, storeId, assignedBy: req.admin!.id });
     res.status(201).json({ success: true, data: member });
   }

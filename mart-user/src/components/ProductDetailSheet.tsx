@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import { trackOnce } from '../utils/track';
 
 function displayName(product: Product): string {
   const eng = product.name?.trim();
@@ -18,6 +19,11 @@ interface ProductDetailSheetProps {
 }
 
 export default function ProductDetailSheet({ product, onClose }: ProductDetailSheetProps) {
+  // Reached the product sheet = product viewed. Once per mount, not per scroll.
+  useEffect(() => {
+    trackOnce('product_viewed', { productId: product.id, productName: product.name });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
   const { items, addItem, updateQty } = useCartStore();
   const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
   const qty = cartItem?.quantity || 0;

@@ -6,6 +6,7 @@ import type { PublicSettings, Product } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import AddressForm from '../components/AddressForm';
+import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 
 interface CheckoutPageProps {
   settings: PublicSettings;
@@ -14,6 +15,12 @@ interface CheckoutPageProps {
   onBack: () => void;
   onHome: () => void;
   onSuccess: (orderNumber: string, preference: string, storeName?: string, savedAmount?: number) => void;
+  /**
+   * Awaited before the order is sent. Resolves false to abandon the submission
+   * without losing the basket. Owned by App so a single dialog serves both the
+   * mobile and desktop mounts of this page.
+   */
+  confirmOrder?: () => Promise<boolean>;
 }
 
 const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
@@ -26,7 +33,7 @@ const PREFERENCES = [
 
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
-export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess }: CheckoutPageProps) {
+export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder }: CheckoutPageProps) {
   const orderRequestKey = useRef(crypto.randomUUID());
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
@@ -156,6 +163,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const selectedPref = PREFERENCES.find(p => p.value === deliveryPreference)!;
   const currentNote = showCustomNote ? (customNote || '✏️ Custom note') : deliveryNote;
 
+  // Reaching checkout is a distinct funnel stage, and it is also recorded on
+  // the server cart so "started checkout, never ordered" survives a reload.
+  useEffect(() => {
+    if (items.length === 0) return;
+    trackOnce('checkout_started', { itemCount: items.length, subtotal: items.reduce((s2, i) => s2 + i.price * i.quantity, 0) });
+    syncFunnelCart(items, { reachedCheckout: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = isLoggedIn ? (authName || guestName) : guestName;
@@ -163,6 +179,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     if (!name || !phone) { setError('Name and phone are required'); return; }
     if (phone.replace(/\D/g, '').length < 10) { setError('Enter a valid 10-digit phone number'); return; }
     if (!resolvedAddress) { setError('Please add a delivery address'); return; }
+    // After validation, before the request: a customer with a form problem
+    // should be told about that, not asked to confirm a delay they have not
+    // reached yet. Defaulting to "proceed" keeps checkout working if this page
+    // is ever rendered without the prop.
+    if (confirmOrder && !(await confirmOrder())) return;
     setLoading(true); setError('');
     try {
       const res = await storeApi.placeOrder({
@@ -176,7 +197,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
         campaignId: appliedCouponCode ? undefined : appliedCampaign?.id || undefined,
         couponCode: appliedCouponCode || undefined,
+        // Without this the server has no way to tie the order back to the cart
+        // that produced it, and the funnel reports every checkout as abandoned.
+        funnelSessionId: getFunnelSessionId(),
       }, orderRequestKey.current);
+      track('order_completed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
       clearCart();
       onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined);
     } catch (err: any) {

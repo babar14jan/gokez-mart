@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Search, X, CheckCircle } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
@@ -7,6 +7,8 @@ import { useCustomerStore } from './store/customerStore';
 import { subscribeToPush } from './services/push';
 import { getUserLocation, findMatchingZone } from './services/geofence';
 import Navbar from './components/Navbar';
+import StoreStatusStrip from './components/StoreStatusStrip';
+import ConfirmDialog from './components/ConfirmDialog';
 import BottomNav from './components/BottomNav';
 import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
@@ -22,6 +24,7 @@ import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
+import { track, getFunnelChannel } from './utils/track';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
 
@@ -74,6 +77,12 @@ export default function App() {
   const [checkoutActive, setCheckoutActive] = useState(false);
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
   const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number } | null>(null);
+  // One session_start per session, fired as early as possible so a visit that
+  // never reaches the login screen is still counted.
+  useEffect(() => {
+    track('session_start', { channel: getFunnelChannel() });
+  }, []);
+
   const [pendingCheckout, setPendingCheckout] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()?.pendingCheckout));
 
   const { isLoggedIn } = useCustomerAuthStore();
@@ -100,6 +109,41 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [settings, setSettings] = useState<PublicSettings>(DEFAULT_SETTINGS);
+  // Holds the resolver for the in-flight "store is closed" confirmation. Kept as
+  // a ref-backed closure rather than a boolean so the promise settles exactly
+  // once, whether the customer confirms, cancels, or the dialog unmounts.
+  const [closedPrompt, setClosedPrompt] = useState<{ resolve: (ok: boolean) => void } | null>(null);
+  const openState = settings.openState;
+
+  /**
+   * Gate for order submission while the store is shut.
+   *
+   * Resolves true immediately when open, so the common path costs nothing. When
+   * closed it parks the customer's intent and shows one dialog, rendered here
+   * rather than inside CheckoutPage: checkout is mounted twice (a mobile sheet
+   * and a desktop panel), so a dialog owned by the page would exist twice.
+   *
+   * CheckoutPage awaits this before calling placeOrder. The order is still
+   * created either way -- closing a store delays fulfilment, it does not
+   * disqualify anyone -- and the server independently records the closure state.
+   */
+  const confirmOrder = useCallback(() => new Promise<boolean>(resolve => {
+    if (openState?.isOpen !== false) { resolve(true); return; }
+    setClosedPrompt({ resolve });
+  }), [openState?.isOpen]);
+
+  const settlePrompt = useCallback((ok: boolean) => {
+    setClosedPrompt(current => {
+      current?.resolve(ok);
+      return null;
+    });
+  }, []);
+
+  // A pending prompt must never be left hanging: unmounting with the dialog open
+  // would leave CheckoutPage awaiting a promise that can never resolve.
+  useEffect(() => () => {
+    setClosedPrompt(current => { current?.resolve(false); return null; });
+  }, []);
   const [zones, setZones] = useState<MartZone[]>([]);
   const [selectedZone, setSelectedZone] = useState<MartZone | null>(SHAPOORJI_ZONE);
   const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
@@ -231,6 +275,27 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, [selectedZone]);
+
+  // The 3-minute poll above would leave a stale "closed" strip for up to three
+  // minutes after the store actually opens, so schedule an exact refetch for the
+  // moment the server says it reopens. Without this a customer who left the page
+  // open across opening time is told the store is shut while staff are packing
+  // their order.
+  useEffect(() => {
+    if (openState?.isOpen !== false || !openState.nextOpenAt) return;
+    const delay = new Date(openState.nextOpenAt).getTime() - Date.now();
+    // Guard against a past or unparseable instant, which would fire immediately
+    // and spin. The poll above still covers those cases.
+    if (!Number.isFinite(delay) || delay <= 0 || delay > 24 * 60 * 60 * 1000) return;
+    const storeId = selectedZone?.storeId;
+    const timer = setTimeout(async () => {
+      try {
+        const srRes = await storeApi.getSettings(storeId);
+        setSettings(srRes.data.data || DEFAULT_SETTINGS);
+      } catch {}
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [openState?.isOpen, openState?.nextOpenAt, selectedZone?.storeId]);
 
   const filteredProducts = products.filter(p => {
     const matchCat = activeCategoryId === 'all' || p.categoryId === activeCategoryId;
@@ -398,6 +463,24 @@ export default function App() {
         />
       )}
 
+      {/* Closed-store notice: below the header, on every page, never blocking. */}
+      {!isEmbed && <StoreStatusStrip openState={openState} />}
+
+      {/* One dialog for both checkout mounts. Resolved explicitly in both
+          directions so CheckoutPage is never left awaiting a dead promise. */}
+      {closedPrompt && (
+        <ConfirmDialog
+          title="We're closed right now"
+          message={openState?.nextOpenLabel
+            ? `You can still place your order. We'll start preparing it when we reopen at ${openState.nextOpenLabel}, and deliver as soon as possible after that.`
+            : "You can still place your order. We'll start preparing it when we reopen."}
+          confirmLabel="Place order"
+          cancelLabel="Keep shopping"
+          danger={false}
+          onConfirm={() => settlePrompt(true)}
+          onCancel={() => settlePrompt(false)}
+        />
+      )}
 
       {/* Checkout — overlay on both mobile and desktop */}
       {checkoutActive && (
@@ -412,6 +495,7 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
+              confirmOrder={confirmOrder}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
             />
           </div>
@@ -423,6 +507,7 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
+              confirmOrder={confirmOrder}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
             />
           </div>

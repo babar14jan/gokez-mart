@@ -2,6 +2,8 @@ import { query, transaction } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 import { SettingsService } from './settings.service';
 import { InventoryService } from './inventory.service';
+import { evaluateStoreOpen, formatIstDateTime } from '../utils/storeHours';
+import { FunnelCartService } from './funnelCart.service';
 
 export interface OrderItem {
   productId: string;
@@ -29,6 +31,11 @@ export interface CreateOrderDto {
   campaignDiscount?: number;
   couponCodeUsed?: string | null;
   customerId?: string | null;
+  /**
+   * Anonymous funnel session that produced this order. Only used to close the
+   * cart funnel; it grants no authority. Never trusted as an identity.
+   */
+  funnelSessionId?: string | null;
   idempotencyKey: string;
 }
 
@@ -197,6 +204,29 @@ export class OrderService {
       const actualDelivery = campaign?.discount_type === 'free_delivery' || subtotal >= freeAbove ? 0 : deliveryCharge;
       const total = Math.max(0, subtotal + actualDelivery - campaignDiscount);
 
+      // Whether the store is trading is decided here, on the server, inside the
+      // same transaction as the insert. The storefront already shows the customer
+      // a closed-store notice, but that copy is advisory: a client-supplied flag
+      // would be forgeable, and a device with the wrong clock or timezone would
+      // disagree with the schedule. The order record is the accountable copy.
+      //
+      // A closed store never blocks checkout. Both store columns and the setting
+      // are read together because store_open is a manual override that wins over
+      // the posted hours, and the two produce different reasons.
+      const closureRows = await client.query(
+        `SELECT s.opening_hours, sv.value AS store_open
+           FROM mart_stores s
+           LEFT JOIN mart_settings sv ON sv.store_id = s.id AND sv.key = 'store_open'
+          WHERE s.id = $1`,
+        [data.storeId]
+      );
+      const closure = closureRows.rows[0];
+      const openState = evaluateStoreOpen(
+        closure?.opening_hours as never,
+        closure?.store_open,
+        new Date(),
+      );
+
       // Create order
       const orderId = uuidv4();
       await client.query(
@@ -204,15 +234,21 @@ export class OrderService {
            (id, order_number, store_id, customer_id, guest_name, guest_phone, guest_address, delivery_latitude, delivery_longitude,
             subtotal, delivery_charge, total, payment_method, notes,
             delivery_preference, delivery_note, fulfilled_by,
-            campaign_id, campaign_discount, coupon_code_used, idempotency_key)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+            campaign_id, campaign_discount, coupon_code_used, idempotency_key,
+            placed_outside_hours, closed_reason, scheduled_for)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
         [orderId, orderNumber, data.storeId, customerId, data.guestName, data.guestPhone,
          data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod, data.notes || null,
          data.deliveryPreference || 'within_15',
          data.deliveryNote || 'Ring the bell',
          data.storeName || null,
-        campaign?.id || null, campaignDiscount, campaign?.coupon_code || null, data.idempotencyKey]
+        campaign?.id || null, campaignDiscount, campaign?.coupon_code || null, data.idempotencyKey,
+        openState.isOpen ? false : true,
+        openState.closedReason,
+        // A manual closure has no reopening time to promise, so it stays null
+        // rather than carrying a guess the owner never made.
+        openState.nextOpenAt]
       );
 
       await client.query(
@@ -259,6 +295,14 @@ export class OrderService {
       await client.query(
         `UPDATE mart_orders SET whatsapp_sent = true WHERE id = $1`, [orderId]
       );
+
+      // Close the cart funnel loop. This runs on the transaction's own client so
+      // the conversion is atomic with the order: if anything above throws, this
+      // rolls back too and the cart stays "abandoned" rather than being recorded
+      // as an order that never existed.
+      if (data.funnelSessionId) {
+        await FunnelCartService.markConverted(data.funnelSessionId, orderId, client);
+      }
 
       return {
         orderId,
@@ -372,6 +416,13 @@ export class OrderService {
               o.delivery_sequence as "deliverySequence",
               o.batch_id as "batchId",
               o.fulfilled_by as "fulfilledBy",
+              -- Closure fields: staff need to know an order was taken after
+              -- hours so it is held for the next opening rather than treated as
+              -- a late order, and so a manual closure is not mistaken for a
+              -- mistimed one.
+              o.placed_outside_hours as "placedOutsideHours",
+              o.closed_reason as "closedReason",
+              o.scheduled_for as "scheduledFor",
               COALESCE((
                 SELECT json_agg(json_build_object(
                   'fromStatus', e.from_status,
@@ -399,7 +450,10 @@ export class OrderService {
        LIMIT $${i} OFFSET $${i + 1}`,
       [...params, limit, offset]
     );
-    return result.rows;
+    // Labelled here rather than in the hub so every order timestamp is rendered
+    // by the same IST formatter. The hub's own date helpers omit the timezone and
+    // would show these in the browser's zone.
+    return result.rows.map(row => ({ ...row, scheduledForLabel: formatIstDateTime(row.scheduledFor) }));
   }
 
   static async updateStatus(id: string, status: string) {
@@ -459,7 +513,7 @@ export class OrderService {
       );
       const actorName = actorResult.rows[0]?.name || actor.username;
 
-      const processingRoles = ['super_admin', 'store_owner', 'store_manager', 'sales_manager', 'staff'];
+      const processingRoles = ['super_admin', 'store_owner', 'store_manager', 'staff'];
       const assignmentRoles = ['super_admin', 'store_owner', 'store_manager'];
       const outsideAreaRoles = ['super_admin', 'store_owner', 'store_manager'];
       const isAssignedHandler = existing.deliveryById === actor.id;

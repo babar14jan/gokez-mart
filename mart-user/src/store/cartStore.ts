@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Product } from '../services/api';
+import { syncFunnelCart, track } from '../utils/track';
 
 export interface CartItem {
   productId: string;
@@ -41,19 +42,31 @@ export const useCartStore = create<CartState>()(
           }
           return { items: [...state.items, { productId: product.id, productName: product.name, unit: u, price: p, quantity: 1, photoUrl: product.photoUrl }] };
         });
+        track('cart_added', { productId: product.id, productName: product.name, unit: u, quantity: 1 });
+        syncFunnelCart(get().items);
       },
 
-      removeItem: (productId, unit) =>
-        set(state => ({ items: state.items.filter(i => !(i.productId === productId && i.unit === unit)) })),
+      removeItem: (productId, unit) => {
+        set(state => ({ items: state.items.filter(i => !(i.productId === productId && i.unit === unit)) }));
+        track('cart_removed', { productId, unit });
+        syncFunnelCart(get().items);
+      },
 
-      updateQty: (productId, unit, qty) =>
+      updateQty: (productId, unit, qty) => {
         set(state => ({
           items: qty <= 0
             ? state.items.filter(i => !(i.productId === productId && i.unit === unit))
             : state.items.map(i => i.productId === productId && i.unit === unit ? { ...i, quantity: qty } : i),
-        })),
+        }));
+        track('cart_updated', { productId, unit, quantity: qty });
+        syncFunnelCart(get().items);
+      },
 
-      clearCart: () => set({ items: [], appliedCampaign: null, campaignDiscount: 0 }),
+      clearCart: () => {
+        set({ items: [], appliedCampaign: null, campaignDiscount: 0 });
+        track('cart_cleared');
+        syncFunnelCart([]);
+      },
 
       setAppliedCampaign: (campaign, discount) => set({ appliedCampaign: campaign, campaignDiscount: discount }),
 

@@ -83,8 +83,41 @@ export const customersApi = {
   getAll: () => api.get('/admin/customers'),
 };
 
+export type FunnelRange = '7d' | '30d' | '90d' | 'all';
+
+export interface FunnelStage {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface FunnelDropoff {
+  retriedNeverVerified: number;
+  verifiedNeverOrdered: number;
+  avgOtpRequests: number;
+}
+
+export interface FunnelSummary {
+  range: FunnelRange;
+  stages: FunnelStage[];
+  dropoff: FunnelDropoff;
+  daily: { date: string; requested: number; verified: number; ordered: number }[];
+  totals: { customers: number; orders: number; revenue: number };
+  eventStages: { key: string; label: string; sessions: number }[];
+  channels: { channel: string; sessions: number; ordered: number }[];
+  attribution: {
+    campaignId: string;
+    campaignName: string;
+    code: string | null;
+    firstTouchOrders: number;
+    lastTouchOrders: number;
+  }[];
+  cart: { carts: number; reachedCheckout: number; converted: number; abandoned: number };
+}
+
 export const customerLeadsApi = {
   getAll: (status: 'all' | 'unverified' | 'verified') => api.get('/admin/customer-leads', { params: { status } }),
+  getFunnel: (range: FunnelRange) => api.get('/admin/customer-funnel/extended', { params: { range } }),
   downloadMarketingCsv: () => api.get('/admin/customer-leads/export', { responseType: 'blob' }),
 };
 
@@ -111,6 +144,12 @@ export const storesApi = {
   create: (data: { name: string; address?: string; ownerName?: string; supportPhone?: string; logoUrl?: string; revenueModel?: string; commissionPercent?: number; monthlyFee?: number; estimatedDelivery?: string }) => api.post('/admin/stores', data),
   update: (id: string, data: { name?: string; address?: string; isActive?: boolean; isLive?: boolean; ownerName?: string; supportPhone?: string; logoUrl?: string; openingHours?: any; revenueModel?: string; commissionPercent?: number; monthlyFee?: number; estimatedDelivery?: string }) =>
     api.put(`/admin/stores/${id}`, data),
+  // Branded store fields for a non-super-admin (opening hours, logo, support
+  // phone, owner name). Must be used instead of update() by store owners and
+  // managers: update() is requireSuperAdmin and answers 403, which is why
+  // saving opening hours appeared to do nothing.
+  updateSettings: (id: string, data: { ownerName?: string; supportPhone?: string; logoUrl?: string; openingHours?: any }) =>
+    api.put(`/admin/stores/${id}/settings`, data),
 };
 
 export const storeApplicationsApi = {

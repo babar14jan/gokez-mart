@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, ActivityIndicator,
+  View, Text, FlatList, TouchableOpacity, ActivityIndicator, Modal,
   RefreshControl, ScrollView, Dimensions, type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
 import { router } from 'expo-router';

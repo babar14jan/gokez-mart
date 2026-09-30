@@ -1,0 +1,385 @@
+/**
+ * Phase 2/3 funnel instrumentation tests.
+ *
+ * Two things here are worth locking down with tests rather than trusting to
+ * review: the funnel payload allowlist (it is the only thing standing between a
+ * bug in the storefront and personal data in the analytics table), and the
+ * super-admin boundary on the aggregated view.
+ *
+ * Harness matches tests/security.test.ts and tests/campaign-governance.test.ts:
+ * Node's `node:test` via `tsx`, with `pg.Pool.prototype.connect` stubbed so the
+ * real service code runs and the real SQL is captured for assertion.
+ */
+
+import { test, describe, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = process.env.DATABASE_URL
+  || 'postgresql://postgres:postgres@localhost:5433/gokez_mart_test';
+process.env.MART_JWT_SECRET = 'funnel-test-secret';
+process.env.SUPABASE_URL = 'https://example.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+
+const require = createRequire(__filename);
+
+type Row = Record<string, any>;
+interface Call { text: string; params: unknown[] }
+
+const calls: Call[] = [];
+let eventRows: Row[] = [];
+let sessionRow: Row | null = null;
+
+const pg = require('pg');
+(pg.Pool.prototype as any).connect = async function () {
+  return {
+    query: async (text: string, params: unknown[] = []) => {
+      calls.push({ text, params });
+      if (/FROM mart_funnel_events/.test(text)) return { rows: eventRows };
+      if (/FROM mart_funnel_sessions/.test(text)) return { rows: sessionRow ? [sessionRow] : [] };
+      return { rows: [] };
+    },
+    release: () => undefined,
+    end: async () => undefined,
+  };
+};
+
+const { FunnelEventService, FUNNEL_EVENTS, normaliseChannel } = require('../src/services/funnelEvent.service');
+const { FunnelCartService } = require('../src/services/funnelCart.service');
+const { FunnelService } = require('../src/services/funnel.service');
+
+/** Reads a repo file by workspace-relative path. */
+const read = (p: string) => require('fs').readFileSync(require('path').resolve(__dirname, '../..', p), 'utf8');
+
+const lastEventInsert = () => [...calls].reverse().find(c => /INSERT INTO mart_funnel_events/.test(c.text));
+const insertedProps = (): Record<string, unknown> => JSON.parse(lastEventInsert()!.params[3] as string);
+
+beforeEach(() => { calls.length = 0; eventRows = []; sessionRow = null; });
+
+describe('A. The funnel event allowlist is enforced server-side', () => {
+  test('an unrecognised event name is rejected outright, not stored', async () => {
+    const recorded = await FunnelEventService.recordEvent({
+      sessionId: 'sess-a', eventName: 'definitely_not_a_real_event',
+    });
+    assert.equal(recorded, false);
+    assert.equal(lastEventInsert(), undefined, 'no event row should be written');
+  });
+
+  test('a prototype-pollution style name cannot slip through', async () => {
+    for (const name of ['__proto__', 'constructor', 'toString', '']) {
+      assert.equal(await FunnelEventService.recordEvent({ sessionId: 's', eventName: name }), false, name);
+    }
+  });
+
+  test('every documented funnel event is accepted', async () => {
+    for (const name of FUNNEL_EVENTS) {
+      assert.equal(await FunnelEventService.recordEvent({ sessionId: 'sess-a', eventName: name }), true, name);
+    }
+  });
+
+  test('a missing session id stores nothing', async () => {
+    assert.equal(await FunnelEventService.recordEvent({ sessionId: '', eventName: 'session_start' }), false);
+    assert.equal(await FunnelEventService.recordEvent({ sessionId: '   ', eventName: 'session_start' }), false);
+  });
+
+  test('an event always creates its session first, so no orphan rows', async () => {
+    await FunnelEventService.recordEvent({ sessionId: 'sess-a', eventName: 'login_viewed' });
+    const sessionTouch = calls.find(c => /INSERT INTO mart_funnel_sessions/.test(c.text));
+    assert.ok(sessionTouch, 'session row must be written before the event');
+  });
+});
+
+describe('B. No personal data can reach mart_funnel_events', () => {
+  test('an unknown prop key is dropped rather than stored', async () => {
+    await FunnelEventService.recordEvent({
+      sessionId: 'sess-a', eventName: 'login_number_entered',
+      props: { productId: 'p1', phone: '9876543210', email: 'a@b.com', address: '12 High St' },
+    });
+    const props = insertedProps();
+    assert.deepEqual(Object.keys(props), ['productId']);
+    assert.equal(JSON.stringify(props).includes('9876543210'), false);
+  });
+
+  test('a 10-digit run is stripped even under an allowed key', async () => {
+    await FunnelEventService.recordEvent({
+      sessionId: 'sess-a', eventName: 'login_number_entered',
+      props: { productName: 'Call 9876543210 now' },
+    });
+    assert.equal(JSON.stringify(insertedProps()).includes('9876543210'), false);
+  });
+
+  test('non-finite numbers and nested objects are discarded', async () => {
+    await FunnelEventService.recordEvent({
+      sessionId: 'sess-a', eventName: 'cart_added',
+      props: { quantity: Number.NaN, subtotal: Infinity, itemCount: 3, productId: { nested: true } },
+    });
+    const props = insertedProps();
+    assert.equal('quantity' in props, false);
+    assert.equal('subtotal' in props, false);
+    assert.equal('productId' in props, false);
+    assert.equal(props.itemCount, 3);
+  });
+
+  test('an oversized prop bag is trimmed, and the stored value is still valid JSON', async () => {
+    await FunnelEventService.recordEvent({
+      sessionId: 'sess-a', eventName: 'product_viewed',
+      props: Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`productId`, 'x'.repeat(120)])),
+    });
+    const raw = lastEventInsert()!.params[3] as string;
+    assert.ok(raw.length <= 1024 + 300, `payload not trimmed: ${raw.length}`);
+    assert.doesNotThrow(() => JSON.parse(raw));
+  });
+});
+
+describe('C. Channel handling cannot be spoofed into nonsense', () => {
+  test('a missing or malformed channel becomes unattributed, never a label we did not define', () => {
+    for (const value of [undefined, null, '', '   ', 'a'.repeat(99), 'has space', '<script>', "'; DROP TABLE--"]) {
+      assert.equal(normaliseChannel(value), 'unattributed', String(value));
+    }
+  });
+
+  test('a legitimate marker is preserved and lower-cased', () => {
+    assert.equal(normaliseChannel('QR'), 'qr');
+    assert.equal(normaliseChannel('standee'), 'standee');
+    assert.equal(normaliseChannel('whatsapp_1'), 'whatsapp_1');
+  });
+});
+
+describe('D. Session linking is additive and cannot affect auth', () => {
+  test('linking writes only customer_id and never overwrites attribution columns', async () => {
+    await FunnelEventService.linkSessionToCustomer('sess-a', 'cust-1');
+    const call = calls.find(c => /UPDATE mart_funnel_sessions/.test(c.text))!;
+    assert.ok(/SET customer_id = \$2/.test(call.text));
+    assert.equal(/first_campaign_id\s*=/.test(call.text), false, 'must not clobber campaign attribution');
+  });
+
+  test('an empty session id or customer id is a no-op', async () => {
+    await FunnelEventService.linkSessionToCustomer('', 'cust-1');
+    await FunnelEventService.linkSessionToCustomer('sess-a', '');
+    assert.equal(calls.length, 0);
+  });
+
+  test('a campaign touch latches the first touch but always updates the last', async () => {
+    await FunnelEventService.recordCampaignTouch('sess-a', 'camp-1');
+    await FunnelEventService.recordCampaignTouch('sess-a', 'camp-2');
+    const call = calls.filter(c => /UPDATE mart_funnel_sessions/.test(c.text)).pop()!;
+    assert.ok(/first_campaign_id = COALESCE\(first_campaign_id, \$2\)/.test(call.text), 'first touch must not move');
+    assert.ok(/last_campaign_id = \$2/.test(call.text), 'last touch must follow the latest campaign');
+  });
+});
+
+describe('E. Server cart arithmetic and edge cases', () => {
+  test('an emptied cart with no checkout deletes the row instead of storing an empty cart', async () => {
+    await FunnelCartService.upsert({ sessionId: 'sess-a', items: [] });
+    const call = calls.find(c => /DELETE FROM mart_carts/.test(c.text))!;
+    assert.ok(call, 'an abandoned empty cart should not linger as a row');
+  });
+
+  test('an empty cart that reached checkout is retained, so the drop-off is visible', async () => {
+    await FunnelCartService.upsert({ sessionId: 'sess-a', items: [], reachedCheckout: true });
+    const call = calls.find(c => /INSERT INTO mart_carts/.test(c.text))!;
+    assert.ok(call, 'checkout reached with no items must still be recorded');
+  });
+
+  test('subtotal and count are computed from the items, not trusted from the client', async () => {
+    const result = await FunnelCartService.upsert({
+      sessionId: 'sess-a',
+      items: [
+        { productId: 'p1', productName: 'Tomato', unit: 'kg', price: 40, quantity: 2, photoUrl: null },
+        { productId: 'p2', productName: 'Milk', unit: 'l', price: 25.5, quantity: 1, photoUrl: null },
+      ],
+    });
+    assert.equal(result.itemCount, 3);
+    assert.equal(result.subtotal, 105.5);
+    const call = calls.find(c => /INSERT INTO mart_carts/.test(c.text))!;
+    assert.equal(call.params[3], 3, 'item_count column');
+    assert.equal(call.params[4], 105.5, 'subtotal column');
+  });
+
+  test('a hostile quantity cannot inflate the cart', async () => {
+    const result = await FunnelCartService.upsert({
+      sessionId: 'sess-a',
+      items: [{ productId: 'p1', productName: 'x', unit: 'kg', price: 1, quantity: 999999, photoUrl: null }],
+    });
+    assert.ok(result.itemCount <= 99, `quantity not clamped: ${result.itemCount}`);
+  });
+
+  test('markConverted is idempotent via COALESCE so a retry cannot move the date', async () => {
+    await FunnelCartService.markConverted('sess-a', 'order-1');
+    const call = calls.find(c => /UPDATE mart_carts/.test(c.text))!;
+    assert.ok(/converted_at = COALESCE\(converted_at, NOW\(\)\)/.test(call.text));
+  });
+});
+
+// markConverted had no call site, so `converted_at` was never set. The panel
+// derives `abandoned = reachedCheckout - converted`, which meant every checkout
+// in the business was reported as abandoned and the "Ordered" tile read 0.
+// These cover the three things that had to be true for the number to be real.
+describe('E2. A placed order closes its own cart, and the closure is verifiable', () => {
+  test('a conversion records the order it came from, not just a timestamp', async () => {
+    await FunnelCartService.markConverted('sess-a', 'order-7');
+    const call = calls.find(c => /UPDATE mart_carts/.test(c.text))!;
+    assert.ok(/order_id\s*=\s*COALESCE\(mart_carts\.order_id/.test(call.text),
+      'the conversion is not linked to an order, so it cannot be reconciled against sales');
+    assert.deepEqual(call.params, ['sess-a', 'order-7']);
+  });
+
+  test('a conversion with no order is refused rather than recorded as a bare claim', async () => {
+    await FunnelCartService.markConverted('sess-a', '');
+    assert.equal(calls.find(c => /UPDATE mart_carts/.test(c.text)), undefined,
+      'converted_at was set with no order behind it');
+  });
+
+  test('an already-converted cart is not re-pointed at a different order', async () => {
+    // The `converted_at IS NULL` guard means the first order wins. Without it a
+    // retry carrying a new idempotency key would rewrite the attribution.
+    await FunnelCartService.markConverted('sess-a', 'order-7');
+    const call = calls.find(c => /UPDATE mart_carts/.test(c.text))!;
+    assert.ok(/AND converted_at IS NULL/.test(call.text),
+      'a later order can overwrite which order a cart is credited to');
+  });
+
+  test('the session id is length-capped, matching the bound used on ingest', async () => {
+    await FunnelCartService.markConverted('x'.repeat(500), 'order-7');
+    const call = calls.find(c => /UPDATE mart_carts/.test(c.text))!;
+    assert.equal((call.params[0] as string).length, 64);
+  });
+
+  test('it runs on the caller\'s transaction client when given one', async () => {
+    // This is what makes a rolled-back order leave its cart unconverted. If this
+    // ever silently falls back to the shared pool, the atomicity is gone.
+    const seen: string[] = [];
+    const client = { query: async (text: string) => { seen.push(text); return { rows: [] }; } };
+    await FunnelCartService.markConverted('sess-a', 'order-7', client);
+    assert.equal(seen.length, 1, 'the transaction client was not used');
+    assert.ok(/UPDATE mart_carts/.test(seen[0]));
+    assert.equal(calls.filter(c => /UPDATE mart_carts/.test(c.text)).length, 0,
+      'it escaped onto the shared pool instead of joining the order transaction');
+  });
+});
+
+describe('E3. The order path actually performs the conversion', () => {
+  test('the order service calls markConverted inside its transaction', () => {
+    const src = read('mart-backend/src/services/order.service.ts');
+    assert.ok(/FunnelCartService\.markConverted\(data\.funnelSessionId, orderId, client\)/.test(src),
+      'order.service no longer closes its own cart, so converted_at stays NULL');
+    // It must be the transaction's client, not the pool.
+    assert.ok(/markConverted\([^)]*,\s*client\)/.test(src),
+      'the conversion is not bound to the order transaction');
+  });
+
+  test('the conversion happens after the order row is written, inside the transaction', () => {
+    const src = read('mart-backend/src/services/order.service.ts');
+    const insert = src.indexOf('INSERT INTO mart_order_items');
+    const convert = src.indexOf('FunnelCartService.markConverted');
+    assert.ok(insert > -1 && convert > insert,
+      'the cart is marked converted before the order exists');
+    const close = src.indexOf('});', src.indexOf('return {', convert));
+    assert.ok(convert < close, 'the conversion escaped the transaction body');
+  });
+
+  test('the controller accepts a session id but never lets it fail the order', () => {
+    const src = read('mart-backend/src/controllers/index.ts');
+    assert.ok(/funnelSessionId = typeof req\.body\.funnelSessionId === 'string'/.test(src),
+      'the session id is no longer type-checked and capped before use');
+    // Analytics must never be the reason a customer cannot check out, so a bad
+    // value is coerced to null rather than rejected.
+    assert.ok(!/400[\s\S]{0,200}funnelSessionId[\s\S]{0,80}(400|error)/.test(src),
+      'a malformed funnelSessionId appears able to reject the order');
+  });
+
+  test('the storefront actually sends it', () => {
+    const src = read('mart-user/src/pages/CheckoutPage.tsx');
+    assert.ok(/funnelSessionId: getFunnelSessionId\(\)/.test(src),
+      'the checkout does not send a session id, so the server cannot close the cart');
+    const api = read('mart-user/src/services/api.ts');
+    assert.ok(/funnelSessionId\?:\s*string/.test(api),
+      'the placeOrder payload type does not accept a session id');
+  });
+
+  test('the funnel only counts a conversion that still has an order', () => {
+    const src = read('mart-backend/src/services/funnel.service.ts');
+    assert.ok(/converted_at IS NOT NULL AND order_id IS NOT NULL/.test(src),
+      'a conversion with no surviving order is still being counted');
+  });
+});
+
+describe('F. Aggregations survive an empty database instead of throwing', () => {
+  test('getSummary returns a zeroed funnel rather than a 500', async () => {
+    const summary = await FunnelService.getSummary('all');
+    assert.equal(summary.stages.length, 4);
+    assert.ok(summary.stages.every(s => s.count === 0));
+    assert.equal(summary.dropoff.avgOtpRequests, 0);
+    assert.deepEqual(summary.daily, []);
+  });
+
+  test('getExtended returns zeroed channels, attribution and cart metrics', async () => {
+    const extended = await FunnelService.getExtended('30d');
+    assert.deepEqual(extended.channels, []);
+    assert.deepEqual(extended.attribution, []);
+    assert.equal(extended.cart.abandoned, 0);
+    assert.equal(extended.eventStages.length, 11);
+    assert.ok(extended.eventStages.every(s => s.sessions === 0));
+  });
+
+  test('cart abandonment can never go negative', async () => {
+    sessionRow = { carts: 5, reached_checkout: 2, converted: 4 };
+    const extended = await FunnelService.getExtended('all');
+    assert.equal(extended.cart.abandoned, 0, 'reached checkout below converted must clamp to 0');
+  });
+});
+
+// POST /funnel/cart is public. It used to write `customerId` straight from the
+// request body into mart_carts.customer_id, so anyone who knew or guessed a
+// customer UUID could attach a cart to that account -- and, because
+// idx_carts_customer_unique allows one live cart per customer, occupy its slot.
+describe('E4. The public cart endpoint cannot be told whose cart it is', () => {
+  test('the customer id is no longer read from the request body', () => {
+    const src = read('mart-backend/src/controllers/index.ts');
+    const fn = src.slice(src.indexOf('export const postFunnelCart'));
+    const body = fn.slice(0, fn.indexOf('res.json'));
+    assert.ok(!/const \{[^}]*\bcustomerId\b[^}]*\} = req\.body/.test(body),
+      'postFunnelCart still destructures a customerId out of the request body');
+    assert.ok(!/customerId:\s*req\.body\.customerId/.test(body),
+      'postFunnelCart still forwards a body-supplied customerId');
+  });
+
+  test('it is resolved server-side from auth or the verified session link', () => {
+    const src = read('mart-backend/src/controllers/index.ts');
+    const fn = src.slice(src.indexOf('export const postFunnelCart'));
+    const body = fn.slice(0, fn.indexOf('res.json'));
+    assert.ok(/req\.customer\?\.id/.test(body),
+      'an authenticated customer is not preferred');
+    assert.ok(/FunnelEventService\.resolveSessionCustomer\(/.test(body),
+      'the customer is not resolved from the verified session link');
+  });
+
+  test('the route accepts an optional customer session', () => {
+    const src = read('mart-backend/src/routes/index.ts');
+    const line = src.split('\n').find(l => /'\/funnel\/cart'/.test(l))!;
+    assert.ok(/authenticateCustomerIfPresent/.test(line),
+      '/funnel/cart is not behind authenticateCustomerIfPresent, so req.customer is never populated');
+  });
+
+  test('the storefront no longer sends a customer id', () => {
+    const src = read('mart-user/src/utils/track.ts');
+    const fn = src.slice(src.indexOf('export function syncFunnelCart'));
+    const body = fn.slice(0, fn.indexOf('}'));
+    assert.ok(!/customerId/.test(body),
+      'syncFunnelCart still offers a customerId option, which invites the spoof back');
+  });
+
+  test('a session can only carry a customer id via OTP verification', async () => {
+    // The whole safety argument rests on linkSessionToCustomer being an UPDATE,
+    // so an unverified session id can never acquire a customer_id.
+    const src = read('mart-backend/src/services/funnelEvent.service.ts');
+    const start = src.indexOf('static async linkSessionToCustomer');
+    const fn = src.slice(start, src.indexOf('static async', start + 10));
+    const sql = fn.slice(fn.indexOf('await query'));
+    assert.ok(/UPDATE mart_funnel_sessions/.test(sql),
+      'linkSessionToCustomer is no longer a bare UPDATE');
+    assert.ok(!/INSERT/i.test(sql),
+      'linkSessionToCustomer can now create a session row carrying a customer_id');
+  });
+});

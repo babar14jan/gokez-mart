@@ -11,7 +11,6 @@ const ROLE_MESSAGES: Record<string, string> = {
   super_admin:    'Here\u2019s the overview across your stores.',
   store_owner:    'Here\u2019s how your store is performing.',
   store_manager:  'Here\u2019s the store overview.',
-  sales_manager:  'Here\u2019s the sales overview.',
   delivery_staff: 'Here\u2019s your delivery summary.',
   staff:          'Here\u2019s what\u2019s happening.',
 };

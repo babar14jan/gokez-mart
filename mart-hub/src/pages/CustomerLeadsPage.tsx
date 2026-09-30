@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, Phone, Users } from 'lucide-react';
 import { customerLeadsApi } from '../services/api';
+import FunnelPanel from '../components/FunnelPanel';
 
 type LeadFilter = 'all' | 'unverified' | 'verified';
 
@@ -74,7 +75,7 @@ export default function CustomerLeadsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">Customer Leads</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">OTP requests and verification conversion.</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Login funnel, drop-off and OTP verification conversion.</p>
         </div>
         <button type="button" onClick={downloadMarketingCsv} disabled={downloading}
           className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50">
@@ -82,6 +83,8 @@ export default function CustomerLeadsPage() {
           {downloading ? 'Preparing CSV...' : 'Download consented list'}
         </button>
       </div>
+
+      <FunnelPanel />
 
       <div className="inline-flex w-full rounded-lg border border-gray-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-800 sm:w-auto">
         {filters.map(item => (

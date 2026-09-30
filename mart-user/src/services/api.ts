@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const configuredApiUrl = (import.meta as any).env?.VITE_API_URL?.trim();
 const isDevelopment = Boolean((import.meta as any).env?.DEV);
-const API_URL = configuredApiUrl || (isDevelopment ? 'http://localhost:3004/api/v1' : '');
+export const API_URL = configuredApiUrl || (isDevelopment ? 'http://localhost:3004/api/v1' : '');
 
 export const isApiConfigured = Boolean(API_URL);
 
@@ -33,6 +33,23 @@ export interface Product {
   categoryId: string; categoryName: string;
 }
 
+/**
+ * Open/closed state, computed by the server from the store's posted hours and
+ * the manual open/closed switch. The browser deliberately does not re-derive
+ * this: a single implementation means the customer is never told one thing
+ * while the order is recorded as another.
+ */
+export interface StoreOpenState {
+  isOpen: boolean;
+  closedReason: 'manual' | 'outside_hours' | 'never_opens' | null;
+  /** ISO instant the store next opens. Null after a manual closure, when no
+   *  reopening time was ever promised. */
+  nextOpenAt: string | null;
+  /** Preformatted IST label, e.g. "9:00 AM tomorrow". */
+  nextOpenLabel: string | null;
+  closesAtLabel: string | null;
+}
+
 export interface PublicSettings {
   store_name: string; store_address: string; delivery_charge: string;
   free_delivery_above: string; min_order_amount: string;
@@ -40,6 +57,7 @@ export interface PublicSettings {
   cod_enabled: string; upi_enabled: string; phonepay_enabled: string;
   phonepay_qr_url: string; upi_phone: string; upi_id: string;
   whatsapp_number: string; support_name: string; support_phone: string;
+  openState?: StoreOpenState;
 }
 
 export interface MartZone {
@@ -54,7 +72,11 @@ export interface MartZone {
 
 export const authApi = {
   sendOtp: (phone: string) => api.post('/auth/send-otp', { phone }),
-  verifyOtp: (phone: string, otp: string) => api.post('/auth/verify-otp', { phone, otp }),
+  // `funnelSessionId` is optional and additive: the backend uses it to link the
+  // anonymous session to the customer for attribution and ignores it if absent,
+  // so authentication behaviour is unchanged either way.
+  verifyOtp: (phone: string, otp: string, funnelSessionId?: string) =>
+    api.post('/auth/verify-otp', { phone, otp, ...(funnelSessionId ? { funnelSessionId } : {}) }),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
   updateProfile: (data: { name?: string; address?: string; address2?: string; photoUrl?: string }) => api.put('/auth/profile', data),
@@ -110,6 +132,8 @@ export const storeApi = {
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
     paymentMethod: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;
+    /** Closes the cart funnel. Optional; the server ignores a malformed value. */
+    funnelSessionId?: string;
   }, idempotencyKey: string) => api.post('/orders', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
   trackOrders: () => api.get('/orders/track'),
 };
