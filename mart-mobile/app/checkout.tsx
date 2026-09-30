@@ -12,6 +12,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useZoneStore } from '@/store/zoneStore';
 import { useThemeColors } from '@/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type PayMethod = 'cod' | 'upi' | 'phonepay';
 const DELIVERY_NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
@@ -63,10 +64,42 @@ export default function CheckoutScreen() {
   // and a one-off address inline; the backend auto-creates the customer from
   // the phone (order.service.ts), exactly as it does for verified orders.
   const isGuest = !customer;
-  const [guestName,      setGuestName]     = useState('');
-  const [guestPhone,     setGuestPhone]    = useState('');
-  const [guestAddrDraft, setGuestAddrDraft]= useState('');
-  const [showGuestAddr,  setShowGuestAddr] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [guestAddrDraft, setGuestAddrDraft] = useState('');
+  const [showGuestAddr, setShowGuestAddr] = useState(false);
+  const [guestLoaded, setGuestLoaded] = useState(false);
+
+  useEffect(() => {
+    if (isGuest) {
+      const loadGuest = async () => {
+        const [name, phone, addr] = await Promise.all([
+          AsyncStorage.getItem('guest_name'),
+          AsyncStorage.getItem('guest_phone'),
+          AsyncStorage.getItem('guest_address'),
+        ]);
+        setGuestName(name || '');
+        setGuestPhone(phone || '');
+        setGuestAddrDraft(addr || '');
+        setGuestLoaded(true);
+      };
+      loadGuest();
+    } else {
+      setGuestLoaded(true);
+    }
+  }, [isGuest]);
+
+  useEffect(() => {
+    if (isGuest && guestName && guestLoaded) AsyncStorage.setItem('guest_name', guestName);
+  }, [guestName, isGuest, guestLoaded]);
+
+  useEffect(() => {
+    if (isGuest && guestPhone && guestLoaded) AsyncStorage.setItem('guest_phone', guestPhone);
+  }, [guestPhone, isGuest, guestLoaded]);
+
+  useEffect(() => {
+    if (isGuest && guestAddrDraft && guestLoaded) AsyncStorage.setItem('guest_address', guestAddrDraft);
+  }, [guestAddrDraft, isGuest, guestLoaded]);
 
   const loadAddresses = useCallback(() => addressApi.list().then(r => {
     const list = r.data.data ?? [];
@@ -136,8 +169,8 @@ export default function CheckoutScreen() {
     if (sub < minOrder) { Alert.alert('Minimum order', `Add ₹${Math.ceil(minOrder - sub)} more to place order.`); return; }
     const orderName = customer?.name ?? guestName.trim();
     const orderPhone = customer?.phone ?? guestPhone.trim();
-    if (!orderName || !orderPhone) {
-      Alert.alert('Your details', 'Please tell us your name and phone number.');
+    if (!orderPhone) {
+      Alert.alert('Phone number', 'Please enter your phone number to place the order.');
       return;
     }
     if (orderPhone.replace(/\D/g, '').length < 10) {
@@ -155,6 +188,20 @@ export default function CheckoutScreen() {
         ]
       );
       return;
+    }
+    // Check if store is closed
+    const openState = settings?.openState;
+    if (openState && !openState.isOpen) {
+      const message = openState.nextOpenLabel
+        ? `Store is closed right now. Your order will be prepared when we reopen at ${openState.nextOpenLabel}.`
+        : 'Store is closed right now. Your order will be prepared when we reopen.';
+      const confirmed = await new Promise<boolean>(resolve => {
+        Alert.alert('Store Closed', message, [
+          { text: 'Keep Shopping', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Place Order Anyway', onPress: () => resolve(true) },
+        ]);
+      });
+      if (!confirmed) return;
     }
     setPlacing(true);
     try {
@@ -188,7 +235,14 @@ export default function CheckoutScreen() {
           style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.gray100 }}>
           <Ionicons name="close" size={20} color={colors.gray700} />
         </TouchableOpacity>
-        <Text style={{ fontSize: 17, fontFamily: 'Inter-SemiBold', color: colors.gray900 }}>Checkout</Text>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={{ fontSize: 17, fontFamily: 'Inter-SemiBold', color: colors.gray900 }}>Checkout</Text>
+          {settings?.openState && !settings.openState.isOpen && (
+            <Text style={{ fontSize: 9, fontFamily: 'Inter-Medium', color: '#fbbf24', marginTop: -2 }}>
+              {settings.openState.closedReason === 'manual' ? 'Store closed' : 'Store closed — opens ' + settings.openState.nextOpenLabel}
+            </Text>
+          )}
+        </View>
         <View style={{ width: 36 }} />
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 12, paddingBottom: 140 }}>
@@ -269,15 +323,15 @@ export default function CheckoutScreen() {
             <SectionTitle icon="person-outline" title="Your details" />
             <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
               <View style={{ gap: 4 }}>
-                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Name</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Name <Text style={{ color: colors.gray400, fontWeight: '400' }}>(optional)</Text></Text>
                 <TextInput
                   style={{ borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
                   value={guestName} onChangeText={setGuestName}
-                  placeholder="Your name" placeholderTextColor={colors.gray400}
+                  placeholder="Your name (optional)" placeholderTextColor={colors.gray400}
                 />
               </View>
               <View style={{ gap: 4 }}>
-                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Phone number</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Phone number <Text style={{ color: colors.red500 }}>✱</Text></Text>
                 <TextInput
                   style={{ borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
                   value={guestPhone} onChangeText={t => setGuestPhone(t.replace(/[^\d]/g, '').slice(0, 10))}

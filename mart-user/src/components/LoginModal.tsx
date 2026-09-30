@@ -6,6 +6,7 @@ import { subscribeToPush } from '../services/push';
 import { useCustomerStore } from '../store/customerStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../utils/track';
+import ConfirmDialog from './ConfirmDialog';
 
 interface LoginModalProps {
   onClose: () => void;
@@ -32,6 +33,14 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
   const { setPhone: savePhone, setName, addAddress } = useCustomerStore();
   const loginFlow = useLoginFlowStore();
 
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const handleConfirmCancel = () => {
+    loginFlow.clear();
+    setShowCancelConfirm(false);
+    onClose();
+  };
+
   useEffect(() => {
     if (step !== 'otp') return;
     const updateTimer = () => {
@@ -54,7 +63,10 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
     if (step === 'phone' || step === 'otp') {
       track('login_abandoned', { step, reason: 'closed' });
     }
-    if (step === 'otp' && !window.confirm('Cancel login? You will need to request a new OTP.')) return;
+    if (step === 'otp') {
+      setShowCancelConfirm(true);
+      return;
+    }
     loginFlow.clear();
     onClose();
   };
@@ -162,10 +174,10 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
   const BrandMark = () => (
     <div className="flex flex-col items-center">
       <img src="/mart_brand_new.png" alt="Gokez Mart"
-        className="h-12 w-auto object-contain dark:hidden" />
+        className="h-16 w-auto object-contain dark:hidden" />
       <img src="/mart_brand_dark.png" alt="Gokez Mart"
-        className="h-12 w-auto object-contain hidden dark:block" />
-      <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-900 dark:text-slate-100">
+        className="h-16 w-auto object-contain hidden dark:block" />
+      <p className="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-slate-900 dark:text-slate-100">
         Shop Local <span className="align-middle">&bull;</span> Support Local
       </p>
     </div>
@@ -182,7 +194,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
 
   const GuestLink = () => onGuest ? (
     <button type="button" onClick={handleGuest}
-      className="w-full py-1 text-center text-[13px] font-semibold text-slate-500 underline underline-offset-2 transition-colors hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-emerald-400">
+      className="w-full py-2 text-center text-[13px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors focus-visible:outline-none focus-visible:underline">
       Continue as guest
     </button>
   ) : null;
@@ -198,7 +210,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
         aria-labelledby="login-title"
         className="relative flex w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-800 min-h-[100dvh] sm:min-h-0 sm:rounded-3xl">
 
-        <div className="flex flex-1 flex-col overflow-y-auto px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-7 sm:pb-7">
+        <div className="flex flex-1 flex-col overflow-y-auto px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-7 sm:pb-7">
 
           <div className="flex justify-end">
             <button type="button" onClick={handleClose}
@@ -265,13 +277,13 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
             </>
           ) : step === 'phone' ? (
             <>
-              <div className="rounded-3xl bg-gradient-to-b from-amber-100 via-lime-50 to-emerald-50 px-5 pb-3 pt-3 dark:from-amber-950/40 dark:via-slate-800 dark:to-emerald-950/30">
+              <div className="rounded-3xl bg-gradient-to-b from-emerald-50 via-lime-50 to-amber-100 px-5 pb-3 pt-3 dark:from-emerald-950/30 dark:via-slate-800 dark:to-amber-950/40">
                 <BrandMark />
 
                 <h2 id="login-title" className="mt-3 text-center text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
                   Enter your mobile number
                 </h2>
-                <p className="mx-auto mt-1 max-w-[19rem] text-center text-[13px] text-gray-600 dark:text-slate-300">
+                <p className="mx-auto mt-1 text-center text-[13px] text-gray-600 dark:text-slate-300 whitespace-nowrap">
                   We'll use it to keep your orders and account secure.
                 </p>
               </div>
@@ -297,18 +309,18 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
                 <button type="submit" disabled={loading || !phoneValid} className={primaryBtn}>
                   {loading ? <Spinner /> : <>Continue with OTP</>}
                 </button>
+                <GuestLink />
               </form>
 
-              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-                <p className="flex items-center gap-1.5 text-[12px] font-bold leading-snug text-slate-800 dark:text-slate-100">
+              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/20 text-center">
+                <p className="flex items-center justify-center gap-1.5 text-[12px] font-bold leading-snug text-slate-800 dark:text-slate-100">
                   <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                   Your number is private.
                 </p>
-                <p className="mt-0.5 pl-5 text-[12px] leading-snug text-gray-500 dark:text-slate-400">
+                <p className="mt-0.5 pl-5 text-[12px] leading-snug text-gray-500 dark:text-slate-400 text-center">
                   We never share it. No spam, only order and account updates.
                 </p>
               </div>
-              <GuestLink />
             </>
           ) : (
             <>
@@ -378,6 +390,18 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
           )}
         </div>
       </div>
+
+      {showCancelConfirm && (
+        <ConfirmDialog
+          title="Cancel login?"
+          message="You'll need to request a new OTP to sign in."
+          confirmLabel="Cancel login"
+          cancelLabel="Keep trying"
+          danger
+          onConfirm={handleConfirmCancel}
+          onCancel={() => setShowCancelConfirm(false)}
+        />
+      )}
     </div>
   );
 }

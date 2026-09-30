@@ -212,6 +212,16 @@ export const trackOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   res.json({ success: true, data: orders });
 });
 
+export const trackGuestOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { phone } = req.query;
+  if (!phone || typeof phone !== 'string' || phone.replace(/\D/g, '').length < 10) {
+    res.status(400).json({ success: false, error: 'Valid phone number required' });
+    return;
+  }
+  const orders = await OrderService.trackByPhone(phone.replace(/\D/g, ''));
+  res.json({ success: true, data: orders });
+});
+
 // ── Public stores + zones ─────────────────────────────────────────────────────
 
 export const getZones = asyncHandler(async (_req: Request, res: Response) => {

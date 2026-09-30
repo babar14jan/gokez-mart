@@ -461,6 +461,7 @@ export default function App() {
         <Navbar
           zones={zones}
           selectedZone={selectedZone}
+          openState={openState}
           onZoneChange={async (zone) => {
           setSelectedZone(zone);
           setShowOutsideWarning(false);

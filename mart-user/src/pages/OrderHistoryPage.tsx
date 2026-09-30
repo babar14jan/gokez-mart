@@ -161,6 +161,25 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
             </div>
           </div>
 
+          {/* Closed store indicator */}
+          {order.placedOutsideHours && (
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl p-3">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-600 dark:text-amber-400">🕘</span>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    {order.closedReason === 'manual' ? 'Store was manually closed' : 'Ordered outside store hours'}
+                  </p>
+                  {order.scheduledForLabel && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      Will be prepared at {order.scheduledForLabel}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Address */}
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center flex-shrink-0">

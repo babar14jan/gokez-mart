@@ -127,6 +127,21 @@ export default function OrderDetailScreen() {
               </Text>
             </View>
           )}
+          {order.placedOutsideHours && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fef3c7', borderRadius: 8, marginHorizontal: 14, padding: 10 }}>
+              <Ionicons name="time-outline" size={14} color="#f59e0b" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: '#92400e' }}>
+                  {order.closedReason === 'manual' ? 'Store was manually closed' : 'Ordered outside store hours'}
+                </Text>
+                {order.scheduledForLabel && (
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: '#92400e', marginTop: 2 }}>
+                    Will be prepared at {order.scheduledForLabel}
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
         </Card>
 
         {/* Items */}

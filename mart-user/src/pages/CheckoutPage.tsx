@@ -62,13 +62,46 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   // login). It rides inside the order and the server files it into the same
   // address book when the order lands, so a later login with the same phone
   // finds it again.
-  const [guestAddress, setGuestAddress] = useState<string>('');
+  const [guestAddress, setGuestAddress] = useState(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn) {
+      return localStorage.getItem('guest_address') || '';
+    }
+    return '';
+  });
   const [guestAddressLabel, setGuestAddressLabel] = useState('Home');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn && guestAddress) {
+      localStorage.setItem('guest_address', guestAddress);
+    }
+  }, [guestAddress, isLoggedIn]);
 
   const deliveryAddress = defaultAddr?.address || (isLoggedIn ? authAddress : null) || guestAddress || null;
 
-  const [guestName, setGuestName] = useState((isLoggedIn ? authName : savedName) || '');
-  const [guestPhone, setGuestPhone] = useState((isLoggedIn ? authPhone : savedPhone) || '');
+  const [guestName, setGuestName] = useState(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn) {
+      return localStorage.getItem('guest_name') || '';
+    }
+    return (isLoggedIn ? authName : savedName) || '';
+  });
+  const [guestPhone, setGuestPhone] = useState(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn) {
+      return localStorage.getItem('guest_phone') || '';
+    }
+    return (isLoggedIn ? authPhone : savedPhone) || '';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn && guestName) {
+      localStorage.setItem('guest_name', guestName);
+    }
+  }, [guestName, isLoggedIn]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn && guestPhone) {
+      localStorage.setItem('guest_phone', guestPhone);
+    }
+  }, [guestPhone, isLoggedIn]);
 
   // Address
   const [showAddressList, setShowAddressList] = useState(false);
@@ -173,6 +206,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
+  const canSubmit = canCheckout && !!resolvedAddress && (!!guestName?.trim() || isLoggedIn) && (!!guestPhone?.trim() || isLoggedIn);
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
   const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
   const selectedPref = PREFERENCES.find(p => p.value === deliveryPreference)!;
@@ -191,7 +225,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     e.preventDefault();
     const name = isLoggedIn ? (authName || guestName) : guestName;
     const phone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
-    if (!name || !phone) { setError('Name and phone are required'); return; }
+    if (!name?.trim() || !phone?.trim()) { setError('Please fill in your name and phone number'); return; }
     if (phone.replace(/\D/g, '').length < 10) { setError('Enter a valid 10-digit phone number'); return; }
     if (!resolvedAddress) { setError('Please add a delivery address'); return; }
     // After validation, before the request: a customer with a form problem
@@ -397,25 +431,30 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="px-4 py-3 space-y-3">
+) : (
+              <div className="px-4 py-3 space-y-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
                 <div className="flex items-center gap-2">
                   <User className="w-4 h-4 text-emerald-600" />
                   <p className="text-xs font-bold text-gray-900 dark:text-white">Who's ordering?</p>
+                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">Required</span>
                 </div>
-                <p className="text-[11px] leading-snug text-gray-500 dark:text-slate-400 -mt-1.5">
+                <p className="text-[11px] leading-snug text-emerald-700 dark:text-emerald-400 -mt-1.5">
                   No login needed — we'll use these details for delivery.
                 </p>
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Name</label>
+                  <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
+                    Name <span className="text-emerald-600" aria-hidden="true">*</span>
+                  </label>
                   <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)}
-                    placeholder="Your name" className={inp} />
+                    placeholder="Your name" className={inp} required aria-required="true" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Phone number</label>
+                  <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
+                    Phone number <span className="text-emerald-600" aria-hidden="true">*</span>
+                  </label>
                   <input type="tel" inputMode="numeric" value={guestPhone}
                     onChange={e => setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="10-digit mobile number" className={inp} />
+                    placeholder="10-digit mobile number" className={inp} required aria-required="true" />
                 </div>
               </div>
             )}
@@ -652,19 +691,25 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 : <p className="text-xs text-red-500 font-semibold mt-0.5">Add delivery address</p>
               }
             </div>
-            <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">Change</span>
+            <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{deliveryAddress ? 'Change' : 'Add'}</span>
           </button>
 
           <div className="px-4 pb-4">
             {!canCheckout && sub < minOrder && (
               <p className="text-xs text-red-500 text-center mb-2">Minimum order ₹{minOrder}. Add ₹{(minOrder - sub).toFixed(0)} more.</p>
             )}
+            {!resolvedAddress && canCheckout && (
+              <p className="text-xs text-red-500 text-center mb-2">Add a delivery address to continue</p>
+            )}
+            {!isLoggedIn && (!guestName?.trim() || !guestPhone?.trim()) && canCheckout && resolvedAddress && (
+              <p className="text-xs text-red-500 text-center mb-2">Fill in your name and phone number</p>
+            )}
             <div className="flex items-center gap-3">
               <div className="w-16 flex-shrink-0 text-center">
                 <p className="text-[10px] text-gray-500 dark:text-slate-400">To pay</p>
                 <p className="text-lg font-bold text-gray-900 dark:text-white">₹{total.toFixed(0)}</p>
               </div>
-              <button type="submit" form="checkout-form" disabled={loading || !canCheckout}
+              <button type="submit" form="checkout-form" disabled={loading || !canSubmit}
                 className="flex-1 h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight">
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <>

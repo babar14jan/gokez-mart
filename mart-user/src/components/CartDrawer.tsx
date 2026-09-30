@@ -251,12 +251,16 @@ export default function CartDrawer({ open, onClose, settings, onCheckout }: Cart
       <div ref={sheetRef}
         className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-800 rounded-t-3xl shadow-2xl flex flex-col"
         style={{ maxHeight: '88vh' }}>
-        <CartContent />
+        <div className="flex-1 overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          <CartContent />
+        </div>
       </div>
 
       {/* Desktop — side drawer */}
       <div className="hidden sm:flex fixed right-0 top-0 h-full w-full max-w-sm z-50 bg-white dark:bg-slate-800 flex-col shadow-2xl">
-        <CartContent />
+        <div className="flex-1 overflow-y-auto overscroll-contain pt-[env(safe-area-inset-top)]">
+          <CartContent />
+        </div>
       </div>
     </>
   );

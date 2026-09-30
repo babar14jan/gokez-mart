@@ -31,6 +31,7 @@ router.get('/settings/public',     ctrl.getPublicSettings);  // ?storeId=
 router.post('/geocode/reverse',    ctrl.reverseGeocode);
 router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
+router.get('/orders/track/guest',   ctrl.trackGuestOrder);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
 router.post('/admin/login',            ctrl.adminLogin);

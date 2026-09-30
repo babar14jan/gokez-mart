@@ -36,6 +36,14 @@ export interface PublicSettings {
   cod_enabled: string; upi_enabled: string; phonepay_enabled: string;
   phonepay_qr_url: string; upi_phone: string; upi_id: string;
   whatsapp_number: string; support_name: string; support_phone: string;
+  // Store open state from backend
+  openState?: {
+    isOpen: boolean;
+    closedReason: 'manual' | 'outside_hours' | 'never_opens';
+    nextOpenAt: string | null;
+    nextOpenLabel: string | null;
+    closesAtLabel: string | null;
+  };
 }
 
 export interface MartZone {
@@ -57,6 +65,11 @@ export interface Order {
     total: number; photoUrl?: string | null;
   }>;
   guestAddress: string; guestName?: string; guestPhone?: string;
+  // Closed store fields
+  placedOutsideHours?: boolean;
+  closedReason?: 'manual' | 'outside_hours' | 'never_opens' | null;
+  scheduledFor?: string | null;
+  scheduledForLabel?: string | null;
 }
 
 export interface Grievance {
@@ -143,6 +156,7 @@ export const storeApi = {
     campaignId?: string; couponCode?: string;
   }) => api.post('/orders', data),
   trackOrders: () => api.get('/orders/track'),
+  trackGuestOrders: (phone: string) => api.get('/orders/track/guest', { params: { phone } }),
 };
 
 // ── Campaign API ──────────────────────────────────────────────────────────────
