@@ -330,6 +330,61 @@ describe('F. Aggregations survive an empty database instead of throwing', () => 
   });
 });
 
+describe('G. The "Today" range is its own window, not "All time"', () => {
+  test('getSummary("today") stays range "today" and zeroes on empty data', async () => {
+    const summary = await FunnelService.getSummary('today');
+    assert.equal(summary.range, 'today');
+    assert.ok(summary.stages.every(s => s.count === 0));
+    assert.deepEqual(summary.daily, []);
+  });
+
+  test('getExtended("today") stays range "today"', async () => {
+    const extended = await FunnelService.getExtended('today');
+    assert.equal(extended.range, 'today');
+    assert.deepEqual(extended.channels, []);
+    assert.ok(extended.eventStages.every(s => s.sessions === 0));
+  });
+
+  test('the SQL for "today" anchors to midnight, not a sliding 24h window', () => {
+    // Treating "today" as days=1 would spill yesterday evening into the panel
+    // at 00:01. The panel must mean what the label promises.
+    const src = read('mart-backend/src/services/funnel.service.ts');
+    assert.ok(/date_trunc\('day', NOW\(\)\)/.test(src),
+      '"today" is not anchored to the start of the calendar day');
+  });
+
+  test('the admin controller keeps "today" distinct from "all"', () => {
+    // This was the actual failure mode: unknown ranges silently collapse to
+    // "all", so the button would have shown "Today" but returned all-time data.
+    const src = read('mart-backend/src/controllers/index.ts');
+    const extended = src.slice(src.indexOf('adminGetCustomerFunnelExtended'));
+    assert.ok(/req\.query\.range === 'today'/.test(extended),
+      'the extended funnel handler no longer recognises range=today');
+    assert.ok(new Set((extended.match(/'today'|'7d'|'30d'|'90d'/g) ?? [])).size >= 4,
+      'the extended funnel whitelist dropped part of the range set');
+  });
+
+  test('a funnel session expires, so a returning device is counted again', () => {
+    // A session id that lives forever in localStorage means a phone that came
+    // back today (or the owner re-testing their own QR) can never move the
+    // funnel again. The id must rotate after quiet time, like a GA session.
+    const src = read('mart-user/src/utils/track.ts');
+    assert.ok(/SESSION_IDLE_MS\s*=\s*\d+\s*\*\s*60\s*\*\s*1000/.test(src),
+      'the session id no longer expires after a quiet window');
+    assert.ok(/store\.setItem\(SESSION_AT/.test(src),
+      'no last-activity timestamp is kept for the session window');
+  });
+
+  test('channel is re-derived when a session rotates', () => {
+    // If the channel cache survives the id rotation, a returning visitor who
+    // arrives via a different marker (a Google exit, a fresh QR) keeps the old
+    // attribution instead of resampling the URL.
+    const src = read('mart-user/src/utils/track.ts');
+    assert.ok(/removeItem\(CHANNEL_KEY\)/.test(src),
+      'the stale channel cache is not cleared when the session rotates');
+  });
+});
+
 // POST /funnel/cart is public. It used to write `customerId` straight from the
 // request body into mart_carts.customer_id, so anyone who knew or guessed a
 // customer UUID could attach a cart to that account -- and, because
@@ -381,5 +436,82 @@ describe('E4. The public cart endpoint cannot be told whose cart it is', () => {
       'linkSessionToCustomer is no longer a bare UPDATE');
     assert.ok(!/INSERT/i.test(sql),
       'linkSessionToCustomer can now create a session row carrying a customer_id');
+  });
+});
+
+describe('H. Guest checkouts persist like logged-in customers', () => {
+  test('the guest address is filed into the address book when the order lands', () => {
+    const src = read('mart-backend/src/services/order.service.ts');
+    assert.ok(/INSERT INTO mart_customer_addresses/.test(src),
+      'a guest address is not saved to the address book with the order');
+    assert.ok(/lower\(trim\(address_line\)\)/.test(src),
+      'identical guest addresses are not re-inserted as duplicates');
+    assert.ok(/guestAddressLabel \|\| 'Home'/.test(src),
+      'a guest address is inserted without a Home label, leaving the book label blank');
+  });
+
+  test('the address is keyed to the phone-derived customer, never a client id', () => {
+    // Guest orders never name an account; the server resolves the customer from
+    // the phone inside the same transaction and files the address against that
+    // row. That row is exactly what a later OTP login resolves to.
+    const order = read('mart-backend/src/services/order.service.ts');
+    const block = order.slice(order.indexOf('const customerResult'), order.indexOf('const productIds'));
+    assert.ok(/mart_customer_addresses/.test(block),
+      'the address insert is not inside the transaction that resolves the phone customer');
+    const ctrl = read('mart-backend/src/controllers/index.ts');
+    assert.ok(/guestAddressLabel: typeof guestAddressLabel === 'string'/.test(ctrl),
+      'the order endpoint no longer bounds the guest address label');
+  });
+
+  test('a later OTP login with the same phone retrieves the guest data', () => {
+    const auth = read('mart-backend/src/services/customerAuth.service.ts');
+    assert.ok(/ON CONFLICT \(phone\) DO UPDATE SET last_seen_at/.test(auth),
+      'OTP verification creates a new customer row instead of reusing the guest one');
+    // The same upsert path reuses the phone-derived row, so the address the
+    // guest saved (mart_customer_addresses.customer_id → that row) and the name
+    // they typed (mart_customers.name) both come back after login.
+    const order = read('mart-backend/src/services/order.service.ts');
+    assert.ok(/name = COALESCE\(EXCLUDED\.name/.test(order),
+      'the guest-supplied name is not kept on the customer row for later login');
+  });
+
+  test('the storefronts keep a guest address instead of dropping it', () => {
+    const page = read('mart-user/src/pages/CheckoutPage.tsx');
+    assert.ok(/setGuestAddress\(address\)/.test(page),
+      'the web checkout drops the guest address on save');
+    const mobile = read('mart-mobile/app/checkout.tsx');
+    assert.ok(/guestAddressLabel: isGuest \? 'Home' : undefined/.test(mobile),
+      'the mobile checkout does not label its guest address for the address book');
+  });
+});
+describe('I. Guest checkouts flow through the lead funnel', () => {
+  test('an order seeds a lead for a phone that never requested an OTP', () => {
+    const order = read('mart-backend/src/services/order.service.ts');
+    const block = order.slice(order.indexOf('const customerResult'), order.indexOf('const productIds'));
+    assert.ok(/INSERT INTO mart_customer_leads/.test(block),
+      'a guest checkout does not write a lead, so it never reaches the funnel');
+    assert.ok(/VALUES \(\$1, \$2, 0/.test(block),
+      'a guest checkout is stamped otp_request_count 0, so the admin table treats it as an OTP request');
+    assert.ok(/first_otp_requested_at, last_otp_requested_at\).*NOW\(\), NOW\(\)/s.test(block),
+      'a guest lead has no windowing timestamp, so the funnel ranges filter it out');
+  });
+
+  test('the funnel stages count guest orders by phone', () => {
+    const src = read('mart-backend/src/services/funnel.service.ts');
+    const leadBase = src.slice(src.indexOf('const LEAD_BASE'), src.indexOf('interface FunnelAggregateRow'));
+    assert.ok(/guest_phone = l\.phone/.test(leadBase),
+      'the funnel no longer matches a lead to guest orders by phone');
+  });
+
+  test('the admin leads list and counts expose a guest bucket', () => {
+    const svc = read('mart-backend/src/services/customerLead.service.ts');
+    assert.ok(/otp_request_count = 0/.test(svc),
+      'guest leads cannot be queried separately from other unverified leads');
+    const ctrl = read('mart-backend/src/controllers/index.ts');
+    assert.ok(/=== 'guest'/.test(ctrl),
+      'the admin leads controller no longer accepts status=guest');
+    const hub = read('mart-hub/src/pages/CustomerLeadsPage.tsx');
+    assert.ok(/'Guest'/.test(hub),
+      'the super admin is never shown a guest bucket for checkout-only shoppers');
   });
 });

@@ -59,6 +59,15 @@ export default function CheckoutScreen() {
   const [showOffers,    setShowOffers]    = useState(false);
   const [billExpanded,  setBillExpanded]  = useState(false);
 
+  // Guest checkout: nobody is required to log in. A guest supplies name, phone
+  // and a one-off address inline; the backend auto-creates the customer from
+  // the phone (order.service.ts), exactly as it does for verified orders.
+  const isGuest = !customer;
+  const [guestName,      setGuestName]     = useState('');
+  const [guestPhone,     setGuestPhone]    = useState('');
+  const [guestAddrDraft, setGuestAddrDraft]= useState('');
+  const [showGuestAddr,  setShowGuestAddr] = useState(false);
+
   const loadAddresses = useCallback(() => addressApi.list().then(r => {
     const list = r.data.data ?? [];
     setAddresses(list);
@@ -124,9 +133,19 @@ export default function CheckoutScreen() {
   };
 
   const handlePlace = async () => {
-    if (!customer) { router.push('/(auth)/login'); return; }
     if (sub < minOrder) { Alert.alert('Minimum order', `Add ₹${Math.ceil(minOrder - sub)} more to place order.`); return; }
+    const orderName = customer?.name ?? guestName.trim();
+    const orderPhone = customer?.phone ?? guestPhone.trim();
+    if (!orderName || !orderPhone) {
+      Alert.alert('Your details', 'Please tell us your name and phone number.');
+      return;
+    }
+    if (orderPhone.replace(/\D/g, '').length < 10) {
+      Alert.alert('Phone number', 'Enter a valid 10-digit phone number.');
+      return;
+    }
     if (!address.trim()) {
+      if (isGuest) { setShowGuestAddr(true); return; }
       Alert.alert(
         'Add delivery address',
         'We need your address to deliver this order.',
@@ -140,8 +159,9 @@ export default function CheckoutScreen() {
     setPlacing(true);
     try {
       const res = await storeApi.placeOrder({
-        guestName: customer.name ?? customer.phone,
-        guestPhone: customer.phone,
+        guestName: orderName,
+        guestPhone: orderPhone.replace(/\D/g, ''),
+        guestAddressLabel: isGuest ? 'Home' : undefined,
         guestAddress: address.trim(),
         deliveryNote: customNote.trim() || note,
         paymentMethod: payment,
@@ -241,6 +261,32 @@ export default function CheckoutScreen() {
               )}
             />
           </View>
+        )}
+
+        {/* Guest details — only shown when nobody is logged in */}
+        {isGuest && (
+          <Card>
+            <SectionTitle icon="person-outline" title="Your details" />
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Name</Text>
+                <TextInput
+                  style={{ borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
+                  value={guestName} onChangeText={setGuestName}
+                  placeholder="Your name" placeholderTextColor={colors.gray400}
+                />
+              </View>
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Phone number</Text>
+                <TextInput
+                  style={{ borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
+                  value={guestPhone} onChangeText={t => setGuestPhone(t.replace(/[^\d]/g, '').slice(0, 10))}
+                  placeholder="10-digit mobile number" placeholderTextColor={colors.gray400}
+                  keyboardType="number-pad" maxLength={10}
+                />
+              </View>
+            </View>
+          </Card>
         )}
 
         {/* Delivery note — Zepto style: title+subtitle row, opens bottom sheet */}
@@ -354,6 +400,32 @@ export default function CheckoutScreen() {
           </Card>
         )}
 
+        {/* Guest address capture */}
+        <Modal visible={showGuestAddr} transparent animationType="slide" onRequestClose={() => setShowGuestAddr(false)}>
+          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} activeOpacity={1} onPress={() => setShowGuestAddr(false)} />
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 }}>
+            <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.gray200 }} />
+            </View>
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
+              <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: colors.gray900 }}>Delivery address</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500 }}>
+                No login needed — we&apos;ll save this address for your next order.
+              </Text>
+              <TextInput
+                style={{ borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 14, padding: 14, minHeight: 90, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, textAlignVertical: 'top', backgroundColor: colors.gray50 }}
+                value={guestAddrDraft} onChangeText={setGuestAddrDraft}
+                placeholder="Full address, landmark, nearby store..." placeholderTextColor={colors.gray400}
+                multiline autoFocus
+              />
+              <TouchableOpacity onPress={() => { setAddress(guestAddrDraft.trim()); setShowGuestAddr(false); }}
+                style={{ height: 46, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: '#fff' }}>Save address</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         {/* Bill */}
         <Card>
           <TouchableOpacity onPress={() => setBillExpanded(s => !s)}
@@ -402,9 +474,12 @@ export default function CheckoutScreen() {
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.gray100 }}>
 
         {/* Address row */}
-        <TouchableOpacity onPress={() => router.push(address
-          ? { pathname: '/addresses', params: { selectForCheckout: 'true' } }
-          : { pathname: '/address-form', params: { returnToCheckout: 'true' } }
+        <TouchableOpacity onPress={() => (isGuest
+          ? setShowGuestAddr(true)
+          : router.push(address
+            ? { pathname: '/addresses', params: { selectForCheckout: 'true' } }
+            : { pathname: '/address-form', params: { returnToCheckout: 'true' } }
+          )
         )}
           style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 }}>
           <Ionicons name="chevron-up" size={18} color={colors.primary} />

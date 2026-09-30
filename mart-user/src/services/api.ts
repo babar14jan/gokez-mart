@@ -126,6 +126,7 @@ export const storeApi = {
     api.post<{ success: boolean; data: { house: string; building: string; locality: string; city: string; pincode: string } }>('/geocode/reverse', { latitude, longitude }),
   placeOrder: (data: {
     guestName: string; guestPhone: string; guestAddress: string;
+    guestAddressLabel?: string;
     latitude?: number | null; longitude?: number | null;
     zoneName?: string; storeId?: string;
     deliveryPreference?: string; deliveryNote?: string;

@@ -22,7 +22,18 @@ import { API_URL, isApiConfigured } from '../services/api';
 const isDevelopment = Boolean((import.meta as any).env?.DEV);
 
 const SESSION_KEY = 'mart-funnel-session';
+const SESSION_AT = 'mart-funnel-session-at';
 const CHANNEL_KEY = 'mart-funnel-channel';
+
+/**
+ * A funnel session ends after this much quiet time. Past the window a revisit
+ * on the same device counts as a new session again, so a QR camper's repeat
+ * scans -- or a shopper coming back the next day -- still move the funnel
+ * instead of being pinned to one lifetime id per device. Activity from any
+ * tracked event keeps the session alive, which is what stops rapid re-scans
+ * from inflating the count.
+ */
+const SESSION_IDLE_MS = 30 * 60 * 1000;
 
 export type FunnelEvent =
   | 'session_start'
@@ -85,12 +96,24 @@ export function getFunnelChannel(): string {
 export function getFunnelSessionId(): string {
   const store = safeLocalStorage();
   if (!store) return randomId();
-  let id = store.getItem(SESSION_KEY);
-  if (!id || id.length > 64) {
-    id = randomId();
-    try { store.setItem(SESSION_KEY, id); } catch { /* noop */ }
+  const stored = store.getItem(SESSION_KEY);
+  const lastActive = Number(store.getItem(SESSION_AT) ?? 0);
+  const expired = !stored || stored.length > 64 || !lastActive || Date.now() - lastActive > SESSION_IDLE_MS;
+  if (expired) {
+    const id = randomId();
+    try {
+      store.setItem(SESSION_KEY, id);
+      store.setItem(SESSION_AT, String(Date.now()));
+      // A new session may arrive through a different marker than the old one
+      // (a fresh QR after a Google entry, say), so re-derive the channel from
+      // the URL instead of trusting the stale cache.
+      store.removeItem(CHANNEL_KEY);
+    } catch { /* noop */ }
+    return id;
   }
-  return id;
+  // Touch the session: any activity extends the current one.
+  try { store.setItem(SESSION_AT, String(Date.now())); } catch { /* noop */ }
+  return stored;
 }
 
 function post(path: string, body: unknown): void {

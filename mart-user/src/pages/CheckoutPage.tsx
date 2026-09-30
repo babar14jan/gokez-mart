@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronUp, Clock } from 'lucide-react';
+import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronUp, Clock, User } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi } from '../services/api';
 import type { PublicSettings, Product } from '../services/api';
@@ -21,6 +21,11 @@ interface CheckoutPageProps {
    * mobile and desktop mounts of this page.
    */
   confirmOrder?: () => Promise<boolean>;
+  /**
+   * Opens the login modal from inside checkout. Guests use it to unlock offers
+   * (and order history); the OTP step stays fully optional for placing an order.
+   */
+  onLogin?: () => void;
 }
 
 const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
@@ -33,7 +38,7 @@ const PREFERENCES = [
 
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
-export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder }: CheckoutPageProps) {
+export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
   const orderRequestKey = useRef(crypto.randomUUID());
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
@@ -52,10 +57,18 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   }, [storeId]);
 
   const defaultAddr = getDefaultAddress();
-  const deliveryAddress = defaultAddr?.address || (isLoggedIn ? authAddress : null);
 
-  const [guestName] = useState((isLoggedIn ? authName : savedName) || '');
-  const [guestPhone] = useState((isLoggedIn ? authPhone : savedPhone) || '');
+  // A guest supplies their delivery address inline (the address book is behind
+  // login). It rides inside the order and the server files it into the same
+  // address book when the order lands, so a later login with the same phone
+  // finds it again.
+  const [guestAddress, setGuestAddress] = useState<string>('');
+  const [guestAddressLabel, setGuestAddressLabel] = useState('Home');
+
+  const deliveryAddress = defaultAddr?.address || (isLoggedIn ? authAddress : null) || guestAddress || null;
+
+  const [guestName, setGuestName] = useState((isLoggedIn ? authName : savedName) || '');
+  const [guestPhone, setGuestPhone] = useState((isLoggedIn ? authPhone : savedPhone) || '');
 
   // Address
   const [showAddressList, setShowAddressList] = useState(false);
@@ -97,7 +110,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   }, []);
 
   useEffect(() => {
-    if (!storeId) return;
+    // Offer eligibility is a verified-customer perk. Guests skip the fetch:
+    // both campaign endpoints are auth-gated server-side and would 401.
+    if (!storeId || !isLoggedIn) return;
     campaignApi.getEligible(cartSubtotal, storeId)
       .then(r => {
         const campaigns = r.data.data || [];
@@ -159,7 +174,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   const resolvedAddress = deliveryAddress;
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
-  const selectedLabel = selectedAddress?.label ?? 'Address';
+  const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
   const selectedPref = PREFERENCES.find(p => p.value === deliveryPreference)!;
   const currentNote = showCustomNote ? (customNote || '✏️ Custom note') : deliveryNote;
 
@@ -189,6 +204,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       const res = await storeApi.placeOrder({
         guestName: name, guestPhone: phone.replace(/\D/g, ''),
         guestAddress: resolvedAddress,
+        guestAddressLabel: isLoggedIn ? undefined : guestAddressLabel,
         latitude: selectedAddress?.latitude ?? null,
         longitude: selectedAddress?.longitude ?? null,
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
@@ -348,7 +364,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                       onSave={async (label, address, coordinates) => {
                         setAddressSaving(true);
                         try {
-                          await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
+                          if (isLoggedIn) {
+                            await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
+                          } else {
+                            // Guests have no server address book yet; hold the
+                            // address for this checkout and let the order land it
+                            // in the book server-side.
+                            setGuestAddress(address);
+                            setGuestAddressLabel(label.trim() || 'Home');
+                          }
                           setAddingNew(false);
                           setShowAddressList(false);
                         } finally { setAddressSaving(false); }
@@ -359,9 +383,48 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             </div>
           )}
 
-          {/* ── Offers / Coupons ── */}
+          {/* ── Who's ordering ── */}
           <div className={card}>
-            <div className="px-4 py-3">
+            {isLoggedIn ? (
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+                    <User className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{authName || 'Customer'}</p>
+                    <p className="text-[11px] text-gray-500">+91 {authPhone}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 py-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-emerald-600" />
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">Who's ordering?</p>
+                </div>
+                <p className="text-[11px] leading-snug text-gray-500 dark:text-slate-400 -mt-1.5">
+                  No login needed — we'll use these details for delivery.
+                </p>
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Name</label>
+                  <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)}
+                    placeholder="Your name" className={inp} />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1">Phone number</label>
+                  <input type="tel" inputMode="numeric" value={guestPhone}
+                    onChange={e => setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="10-digit mobile number" className={inp} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Offers / Coupons ── */}
+          {isLoggedIn ? (
+            <div className={card}>
+              <div className="px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 {eligibleCampaigns.length > 0 && <div className="flex items-center gap-2">
                   <Tag className="w-4 h-4 text-violet-500" />
@@ -413,8 +476,20 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 </div>
                 <button type="button" onClick={removeCampaign} className="p-1 text-emerald-600 hover:text-red-500 flex-shrink-0" aria-label="Remove offer"><X className="w-3.5 h-3.5" /></button>
               </div>}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className={card}>
+              <div className="px-4 py-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-violet-500" />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
+                </div>
+                <button type="button" onClick={onLogin}
+                  className="text-xs font-bold text-violet-600 dark:text-violet-400 whitespace-nowrap">Log in to unlock</button>
+              </div>
+            </div>
+          )}
 
           {/* ── USP: Delivery time + Note in one card ── */}
           <div className={card}>

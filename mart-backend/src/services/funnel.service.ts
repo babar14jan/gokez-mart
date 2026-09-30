@@ -1,9 +1,9 @@
 import { query } from '../database/db';
 import type { FunnelEventName } from './funnelEvent.service';
 
-export type FunnelRange = '7d' | '30d' | '90d' | 'all';
+export type FunnelRange = 'today' | '7d' | '30d' | '90d' | 'all';
 
-const RANGE_DAYS: Record<FunnelRange, number | null> = { '7d': 7, '30d': 30, '90d': 90, all: null };
+const RANGE_DAYS: Record<FunnelRange, number | null> = { today: null, '7d': 7, '30d': 30, '90d': 90, all: null };
 
 export interface FunnelStage {
   key: string;
@@ -38,7 +38,7 @@ export interface FunnelSummary {
 // An order counts against a lead when it is tied to the verified customer OR
 // was placed as a guest using the same phone, so a customer who ordered
 // before logging in is not counted as a non-buyer.
-const LEAD_BASE = `
+const LEAD_BASE = (range: FunnelRange) => `
   SELECT
     l.id,
     l.otp_request_count,
@@ -55,8 +55,7 @@ const LEAD_BASE = `
         AND o.status = 'delivered'
     ) AS has_delivered
   FROM mart_customer_leads l
-  WHERE ($1::int IS NULL
-         OR l.first_otp_requested_at >= NOW() - ($1::int * INTERVAL '1 day'))
+  WHERE ${RANGE_WHERE('l.first_otp_requested_at', range)}
 `;
 
 interface FunnelAggregateRow {
@@ -75,7 +74,7 @@ export class FunnelService {
 
     const [aggregate, daily, totals] = await Promise.all([
       query<FunnelAggregateRow>(
-        `WITH lead_base AS (${LEAD_BASE})
+        `WITH lead_base AS (${LEAD_BASE(range)})
          SELECT COUNT(*)::int                                            AS leads,
                 COUNT(*) FILTER (WHERE verified_at IS NOT NULL)::int      AS verified,
                 COUNT(*) FILTER (WHERE has_order)::int                    AS ordered,
@@ -88,7 +87,7 @@ export class FunnelService {
         [days]
       ),
       query<FunnelDailyPoint>(
-        `WITH lead_base AS (${LEAD_BASE})
+        `WITH lead_base AS (${LEAD_BASE(range)})
          SELECT to_char(DATE_TRUNC('day', first_otp_requested_at), 'YYYY-MM-DD') AS date,
                 COUNT(*)::int                                        AS requested,
                 COUNT(*) FILTER (WHERE verified_at IS NOT NULL)::int  AS verified,
@@ -159,7 +158,7 @@ export class FunnelService {
       query<{ event_name: FunnelEventName; sessions: number }>(
         `SELECT event_name, COUNT(DISTINCT session_id)::int AS sessions
          FROM mart_funnel_events
-         WHERE ${RANGE_WHERE('mart_funnel_events.created_at')}
+         WHERE ${RANGE_WHERE('mart_funnel_events.created_at', range)}
          GROUP BY event_name`,
         [days]
       ),
@@ -171,7 +170,7 @@ export class FunnelService {
                   WHERE o.customer_id = s.customer_id
                 ))::int AS ordered
          FROM mart_funnel_sessions s
-         WHERE ${RANGE_WHERE('s.first_seen_at')}
+         WHERE ${RANGE_WHERE('s.first_seen_at', range)}
          GROUP BY s.channel
          ORDER BY sessions DESC`,
         [days]
@@ -213,8 +212,7 @@ export class FunnelService {
                 -- that no longer exists.
                 COUNT(*) FILTER (WHERE converted_at IS NOT NULL AND order_id IS NOT NULL)::int AS converted
          FROM mart_carts
-         WHERE $1::int IS NULL
-            OR created_at >= NOW() - ($1::int * INTERVAL '1 day')`,
+         WHERE ${RANGE_WHERE('created_at', range)}`,
         [days]
       ),
     ]);
@@ -294,6 +292,10 @@ const EVENT_STAGE_DEFS: Array<{ key: FunnelEventName; label: string }> = [
   { key: 'order_completed', label: 'Order completed' },
 ];
 
-const RANGE_WHERE = (column: string) => `
-  ($1::int IS NULL
-   OR ${column} >= NOW() - ($1::int * INTERVAL '1 day'))`;
+const RANGE_WHERE = (column: string, range: FunnelRange): string =>
+  // "Today" is one calendar day from midnight, not a sliding 24h window --
+  // "1 day" would spill into yesterday evening. Number ranges stay as sliding
+  // windows, which is the semantics the labels imply.
+  range === 'today'
+    ? `${column} >= date_trunc('day', NOW())`
+    : `($1::int IS NULL OR ${column} >= NOW() - ($1::int * INTERVAL '1 day'))`;

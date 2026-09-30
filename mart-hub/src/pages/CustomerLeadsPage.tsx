@@ -3,7 +3,7 @@ import { Download, Phone, Users } from 'lucide-react';
 import { customerLeadsApi } from '../services/api';
 import FunnelPanel from '../components/FunnelPanel';
 
-type LeadFilter = 'all' | 'unverified' | 'verified';
+type LeadFilter = 'all' | 'unverified' | 'verified' | 'guest';
 
 interface Lead {
   id: string;
@@ -21,6 +21,7 @@ interface Counts {
   total: number;
   unverified: number;
   verified: number;
+  guest: number;
 }
 
 const formatDate = (value: string | null) => value
@@ -30,7 +31,7 @@ const formatDate = (value: string | null) => value
 export default function CustomerLeadsPage() {
   const [filter, setFilter] = useState<LeadFilter>('all');
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [counts, setCounts] = useState<Counts>({ total: 0, unverified: 0, verified: 0 });
+  const [counts, setCounts] = useState<Counts>({ total: 0, unverified: 0, verified: 0, guest: 0 });
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
@@ -41,7 +42,7 @@ export default function CustomerLeadsPage() {
     customerLeadsApi.getAll(filter)
       .then(response => {
         setLeads(response.data.data || []);
-        setCounts(response.data.counts || { total: 0, unverified: 0, verified: 0 });
+        setCounts(response.data.counts || { total: 0, unverified: 0, verified: 0, guest: 0 });
       })
       .catch(() => setError('Could not load customer leads. Please try again.'))
       .finally(() => setLoading(false));
@@ -66,6 +67,7 @@ export default function CustomerLeadsPage() {
 
   const filters: Array<{ id: LeadFilter; label: string; count: number }> = [
     { id: 'all', label: 'All', count: counts.total },
+    { id: 'guest', label: 'Guest', count: counts.guest },
     { id: 'unverified', label: 'Unverified', count: counts.unverified },
     { id: 'verified', label: 'Verified', count: counts.verified },
   ];
@@ -111,14 +113,14 @@ export default function CustomerLeadsPage() {
               <div key={lead.id} className="space-y-2 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0"><p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{lead.name || 'Unidentified lead'}</p><p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400"><Phone className="h-3 w-3" />{lead.phone}</p></div>
-                  <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${lead.verifiedAt ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>{lead.verifiedAt ? 'Verified' : 'Unverified'}</span>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-bold ${lead.verifiedAt ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : lead.otpRequestCount === 0 ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>{lead.verifiedAt ? 'Verified' : lead.otpRequestCount === 0 ? 'Guest' : 'Unverified'}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs"><div><p className="text-gray-500 dark:text-slate-400">{lead.verifiedAt ? 'Last login' : 'Last OTP request'}</p><p className="mt-0.5 font-medium text-gray-800 dark:text-slate-200">{formatDate(lead.verifiedAt ? lead.lastSuccessfulLoginAt : lead.lastOtpRequestedAt)}</p></div><div><p className="text-gray-500 dark:text-slate-400">OTP requests</p><p className="mt-0.5 font-medium text-gray-800 dark:text-slate-200">{lead.otpRequestCount}</p></div></div>
+                <div className="grid grid-cols-2 gap-2 text-xs"><div><p className="text-gray-500 dark:text-slate-400">{lead.verifiedAt ? 'Last login' : lead.otpRequestCount === 0 ? 'Placed first order' : 'Last OTP request'}</p><p className="mt-0.5 font-medium text-gray-800 dark:text-slate-200">{formatDate(lead.verifiedAt ? lead.lastSuccessfulLoginAt : lead.lastOtpRequestedAt)}</p></div><div><p className="text-gray-500 dark:text-slate-400">OTP requests</p><p className="mt-0.5 font-medium text-gray-800 dark:text-slate-200">{lead.otpRequestCount}</p></div></div>
               </div>
             ))}
           </div>
           <div className="hidden overflow-x-auto rounded-lg border border-gray-100 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 md:block">
-            <table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400"><tr><th className="px-4 py-3 font-semibold">Lead</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last activity</th><th className="px-4 py-3 font-semibold">OTP requests</th><th className="px-4 py-3 font-semibold">Marketing consent</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-slate-700">{leads.map(lead => <tr key={lead.id}><td className="px-4 py-3"><p className="font-semibold text-gray-900 dark:text-white">{lead.name || 'Unidentified lead'}</p><p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{lead.phone}</p></td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-bold ${lead.verifiedAt ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>{lead.verifiedAt ? 'Verified' : 'Unverified'}</span></td><td className="px-4 py-3 text-gray-600 dark:text-slate-300">{formatDate(lead.verifiedAt ? lead.lastSuccessfulLoginAt : lead.lastOtpRequestedAt)}</td><td className="px-4 py-3 font-semibold text-gray-800 dark:text-slate-200">{lead.otpRequestCount}</td><td className="px-4 py-3 text-gray-600 dark:text-slate-300">{lead.verifiedAt ? (lead.marketingConsent ? 'Granted' : 'Not granted') : '-'}</td></tr>)}</tbody></table>
+            <table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400"><tr><th className="px-4 py-3 font-semibold">Lead</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Last activity</th><th className="px-4 py-3 font-semibold">OTP requests</th><th className="px-4 py-3 font-semibold">Marketing consent</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-slate-700">{leads.map(lead => <tr key={lead.id}><td className="px-4 py-3"><p className="font-semibold text-gray-900 dark:text-white">{lead.name || 'Unidentified lead'}</p><p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{lead.phone}</p></td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-bold ${lead.verifiedAt ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : lead.otpRequestCount === 0 ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>{lead.verifiedAt ? 'Verified' : lead.otpRequestCount === 0 ? 'Guest' : 'Unverified'}</span></td><td className="px-4 py-3 text-gray-600 dark:text-slate-300">{formatDate(lead.verifiedAt ? lead.lastSuccessfulLoginAt : lead.lastOtpRequestedAt)}</td><td className="px-4 py-3 font-semibold text-gray-800 dark:text-slate-200">{lead.otpRequestCount}</td><td className="px-4 py-3 text-gray-600 dark:text-slate-300">{lead.verifiedAt ? (lead.marketingConsent ? 'Granted' : 'Not granted') : '-'}</td></tr>)}</tbody></table>
           </div>
         </>
       )}

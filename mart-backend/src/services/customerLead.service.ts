@@ -1,6 +1,6 @@
 import { query } from '../database/db';
 
-export type LeadStatus = 'all' | 'unverified' | 'verified';
+export type LeadStatus = 'all' | 'unverified' | 'verified' | 'guest';
 
 export class CustomerLeadService {
   static async recordOtpRequest(phone: string): Promise<void> {
@@ -29,11 +29,16 @@ export class CustomerLeadService {
   }
 
   static async findAll(status: LeadStatus) {
+    // A guest is a plain checkout pickup: never asked for an OTP (count 0) and
+    // never verified. visually the admin page renders these as their own bucket
+    // so guest conversion is not hidden inside "unverified".
     const condition = status === 'unverified'
       ? 'l.verified_at IS NULL'
       : status === 'verified'
         ? 'l.verified_at IS NOT NULL'
-        : 'TRUE';
+        : status === 'guest'
+          ? 'l.verified_at IS NULL AND l.otp_request_count = 0'
+          : 'TRUE';
     const result = await query(
       `SELECT l.id, l.phone, c.name,
               l.otp_request_count as "otpRequestCount",
@@ -52,10 +57,11 @@ export class CustomerLeadService {
   }
 
   static async getCounts() {
-    const result = await query<{ total: number; unverified: number; verified: number }>(
+    const result = await query<{ total: number; unverified: number; verified: number; guest: number }>(
       `SELECT COUNT(*)::int as total,
               COUNT(*) FILTER (WHERE verified_at IS NULL)::int as unverified,
-              COUNT(*) FILTER (WHERE verified_at IS NOT NULL)::int as verified
+              COUNT(*) FILTER (WHERE verified_at IS NOT NULL)::int as verified,
+              COUNT(*) FILTER (WHERE verified_at IS NULL AND otp_request_count = 0)::int as guest
        FROM mart_customer_leads`
     );
     return result.rows[0];

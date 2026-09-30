@@ -136,7 +136,7 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { guestName, guestPhone, guestAddress, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
+  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
   if (!guestName || !guestPhone || !guestAddress || !items?.length || !paymentMethod) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
@@ -174,6 +174,9 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
 
   const result = await OrderService.create({
     guestName, guestPhone, guestAddress, items, paymentMethod, notes,
+    guestAddressLabel: typeof guestAddressLabel === 'string' && guestAddressLabel.trim()
+      ? guestAddressLabel.trim().slice(0, 24)
+      : undefined,
     storeId: storeId || SHAPOORJI_ID,
     storeName,
     zoneName, deliveryPreference, deliveryNote,
@@ -601,7 +604,7 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
 });
 
 export const adminGetCustomerLeads = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const status = req.query.status === 'unverified' || req.query.status === 'verified'
+  const status = req.query.status === 'unverified' || req.query.status === 'verified' || req.query.status === 'guest'
     ? req.query.status
     : 'all';
   const [leads, counts] = await Promise.all([
@@ -612,7 +615,7 @@ export const adminGetCustomerLeads = asyncHandler(async (req: AdminRequest, res:
 });
 
 export const adminGetCustomerFunnelExtended = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const range = req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
+  const range = req.query.range === 'today' || req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
     ? req.query.range
     : 'all';
   const summary = await FunnelService.getExtended(range as FunnelRange);
@@ -620,7 +623,7 @@ export const adminGetCustomerFunnelExtended = asyncHandler(async (req: AdminRequ
 });
 
 export const adminGetCustomerFunnel = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const range = req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
+  const range = req.query.range === 'today' || req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
     ? req.query.range
     : 'all';
   const summary = await FunnelService.getSummary(range as FunnelRange);

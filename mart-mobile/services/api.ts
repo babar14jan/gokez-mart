@@ -135,6 +135,7 @@ export const storeApi = {
   getZones: () => api.get<{ success: boolean; data: MartZone[] }>('/zones'),
   placeOrder: (data: {
     guestName: string; guestPhone: string; guestAddress: string;
+    guestAddressLabel?: string;
     zoneName?: string; storeId?: string;
     deliveryPreference?: string; deliveryNote?: string;
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;

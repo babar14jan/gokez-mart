@@ -11,11 +11,12 @@ interface LoginModalProps {
   onClose: () => void;
   onSuccess?: () => void;
   pendingCheckout?: boolean;
+  onGuest?: () => void;
 }
 
 type Step = 'phone' | 'otp' | 'profile' | 'offer';
 
-export default function LoginModal({ onClose, onSuccess, pendingCheckout }: LoginModalProps) {
+export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGuest }: LoginModalProps) {
   const restoredFlow = useLoginFlowStore.getState().getActiveOtpFlow();
   const [step, setStep] = useState<Step>(() => restoredFlow ? 'otp' : 'phone');
   const [phone, setPhone] = useState(() => restoredFlow?.phone || '');
@@ -142,6 +143,14 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
     } finally { setSavingProfile(false); }
   };
 
+  // "Login is optional": a shopper mid-login can drop out and still order as a
+  // guest. Dropping the OTP flow here is intentional — no expired-flow nudge
+  // should ever repin them to a login they decided to skip.
+  const handleGuest = () => {
+    loginFlow.clear();
+    onGuest?.();
+  };
+
   const digits = phone.replace(/\D/g, '');
   const maskedPhone = digits.length > 4 ? `${'•'.repeat(6)}${digits.slice(-4)}` : digits;
   const phoneValid = digits.length === 10;
@@ -170,6 +179,13 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
   ) : null;
 
   const Spinner = () => <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />;
+
+  const GuestLink = () => onGuest ? (
+    <button type="button" onClick={handleGuest}
+      className="w-full py-1 text-center text-[13px] font-semibold text-slate-500 underline underline-offset-2 transition-colors hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-emerald-400">
+      Continue as guest
+    </button>
+  ) : null;
 
   const primaryBtn =
     'flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 py-3 text-[15px] font-bold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-800';
@@ -244,6 +260,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
                   className="w-full text-sm text-gray-500 hover:text-gray-600 dark:text-slate-300 py-1 transition-colors">
                   Skip for now
                 </button>
+                <GuestLink />
               </form>
             </>
           ) : step === 'phone' ? (
@@ -291,6 +308,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout }: Logi
                   We never share it. No spam, only order and account updates.
                 </p>
               </div>
+              <GuestLink />
             </>
           ) : (
             <>

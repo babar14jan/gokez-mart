@@ -17,6 +17,7 @@ export interface CreateOrderDto {
   guestName: string;
   guestPhone: string;
   guestAddress: string;
+  guestAddressLabel?: string;
   latitude?: number | null;
   longitude?: number | null;
   storeId: string;
@@ -94,6 +95,43 @@ export class OrderService {
       const customerId = customerResult.rows[0]?.id || null;
       if ((data.campaignId || data.couponCodeUsed) && data.customerId !== customerId) {
         throw new Error('Sign in with the ordering phone number to redeem an offer');
+      }
+
+      // A guest's address lands in the same address book a logged-in customer
+      // uses, keyed to the same customer row (the phone-derived one above). When
+      // that phone later verifies an OTP, listAddresses serves this row back, so
+      // a guest returning as a logged-in shopper finds their address instead of
+      // retyping it. Default is claimed only if it is the very first address on
+      // the account; identical addresses are not duplicated.
+      if (customerId && data.guestAddress?.trim()) {
+        await client.query(
+          `INSERT INTO mart_customer_addresses (customer_id, label, address_line, latitude, longitude, is_default)
+           SELECT $1, $2, $3, $4, $5,
+                  NOT EXISTS (SELECT 1 FROM mart_customer_addresses WHERE customer_id = $1)
+           WHERE NOT EXISTS (
+             SELECT 1 FROM mart_customer_addresses
+             WHERE customer_id = $1 AND lower(trim(address_line)) = lower(trim($3))
+           )`,
+          [customerId, data.guestAddressLabel || 'Home', data.guestAddress.trim(), data.latitude ?? null, data.longitude ?? null]
+        );
+      }
+
+      // Capture the shopper in the lead funnel. A guest who never touched the
+      // OTP flow has no mart_customer_leads row, so their order would be
+      // invisible there even though LEAD_BASE already matches orders by
+      // guest_phone. Seed the lead with otp_request_count = 0 so the admin table
+      // never mistakes a checkout for an OTP request, and set the windowing
+      // timestamps (NOT NULL, filtered on by the funnel) to the checkout moment
+      // so the guest lands on their own day.
+      if (customerId && data.guestPhone) {
+        await client.query(
+          `INSERT INTO mart_customer_leads (phone, customer_id, otp_request_count, first_otp_requested_at, last_otp_requested_at)
+           VALUES ($1, $2, 0, NOW(), NOW())
+           ON CONFLICT (phone) DO UPDATE SET
+             customer_id = COALESCE(mart_customer_leads.customer_id, EXCLUDED.customer_id),
+             updated_at = NOW()`,
+          [data.guestPhone, customerId]
+        );
       }
 
       const productIds = new Set<string>();

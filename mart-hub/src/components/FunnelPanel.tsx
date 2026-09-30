@@ -4,6 +4,7 @@ import { customerLeadsApi } from '../services/api';
 import type { FunnelRange, FunnelSummary } from '../services/api';
 
 const RANGES: Array<{ id: FunnelRange; label: string }> = [
+  { id: 'today', label: 'Today' },
   { id: '7d', label: '7 days' },
   { id: '30d', label: '30 days' },
   { id: '90d', label: '90 days' },

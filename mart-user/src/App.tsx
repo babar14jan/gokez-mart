@@ -14,6 +14,7 @@ import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import LoginModal from './components/LoginModal';
+import CheckoutGuestPrompt from './components/CheckoutGuestPrompt';
 import CheckoutPage from './pages/CheckoutPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
@@ -75,6 +76,7 @@ export default function App() {
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
+  const [showGuestPrompt, setShowGuestPrompt] = useState(false);
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
   const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number } | null>(null);
   // One session_start per session, fired as early as possible so a visit that
@@ -328,14 +330,35 @@ export default function App() {
         else { setShowOutsideBlock(true); return; }
       } else { setShowOutsideBlock(true); return; }
     }
-    // Require login before checkout
-    if (!isLoggedIn) {
-      // After login, proceed to checkout
-      setPendingCheckout(true);
-      setShowLoginModal(true);
-      return;
-    }
+    // Login is an option, never a requirement. A small prompt lets a shopper
+    // pick: continue as guest (one tap into checkout) or log in (offers, order
+    // history). Both land in the same checkout, and the guest path is fully
+    // captured (address book + lead funnel) when the order is placed.
+    if (!isLoggedIn) { setShowGuestPrompt(true); return; }
     setCheckoutActive(true);
+  };
+
+  const handleGuestCheckout = () => {
+    setShowGuestPrompt(false);
+    setCheckoutActive(true);
+  };
+
+  const handleGuestPromptLogin = () => {
+    setPendingCheckout(true);
+    setShowGuestPrompt(false);
+    setShowLoginModal(true);
+  };
+
+  // Escape hatch from anywhere in the login modal: drop the OTP flow and keep
+  // the shopper moving. In a checkout-bound context (prompt or offers lock)
+  // that means landing back on checkout; otherwise the modal just closes.
+  const handleLoginModalGuest = () => {
+    useLoginFlowStore.getState().clear();
+    setShowLoginModal(false);
+    if (pendingCheckout) {
+      setPendingCheckout(false);
+      setCheckoutActive(true);
+    }
   };
 
   // Success screen
@@ -385,7 +408,7 @@ export default function App() {
   return (
     <div className={`min-h-screen ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
-      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onClose={() => { useLoginFlowStore.getState().clear(); setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
+      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onGuest={handleLoginModalGuest} onClose={() => { useLoginFlowStore.getState().clear(); setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
         setShowLoginModal(false);
         if (pendingCheckout) {
           setPendingCheckout(false);
@@ -394,6 +417,7 @@ export default function App() {
           setView('home');
         }
       }} />}
+      {showGuestPrompt && <CheckoutGuestPrompt itemCount={cartItems} onGuest={handleGuestCheckout} onLogin={handleGuestPromptLogin} onClose={() => setShowGuestPrompt(false)} />}
       {showNamePrompt && <NamePrompt onDone={() => { setShowNamePrompt(false); setView('home'); }} />}
 
       {/* Outside zone — soft warning */}
@@ -495,6 +519,7 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
+              onLogin={() => { setCheckoutActive(false); setPendingCheckout(true); setShowLoginModal(true); }}
               confirmOrder={confirmOrder}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
             />
@@ -507,6 +532,7 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
+              onLogin={() => { setCheckoutActive(false); setPendingCheckout(true); setShowLoginModal(true); }}
               confirmOrder={confirmOrder}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
             />
