@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Download, Phone, Users, Shield, Info, X, RotateCcw, Search, ChevronUp, ChevronDown, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Download, Phone, Users } from 'lucide-react';
 import { customerLeadsApi } from '../services/api';
 import FunnelPanel from '../components/FunnelPanel';
-import { useAuthStore, isKnownRole } from '../store/authStore';
+import { useAuthStore } from '../store/authStore';
 
 type LeadFilter = 'all' | 'unverified' | 'verified' | 'guest';
 
@@ -60,23 +60,8 @@ const getLastActivityLabel = (lead: Lead): string => {
   return 'Last OTP request';
 };
 
-type SortField = 'name' | 'phone' | 'status' | 'lastActivity' | 'otpRequests' | 'marketingConsent';
-type SortDirection = 'asc' | 'desc';
-
-interface SortConfig {
-  field: SortField;
-  direction: SortDirection;
-}
-
-const EMPTY_STATE_MESSAGES: Record<LeadFilter, { title: string; description: string }> = {
-  all: { title: 'No leads yet', description: 'Customer leads will appear here once users start the login flow.' },
-  verified: { title: 'No verified leads', description: 'Verified customers who completed OTP verification will appear here.' },
-  unverified: { title: 'No unverified leads', description: 'Users who requested OTP but haven\'t verified will appear here.' },
-  guest: { title: 'No guest leads', description: 'Users who placed orders without verifying will appear here.' },
-};
-
 export default function CustomerLeadsPage() {
-  const { role, isSuperAdmin } = useAuthStore();
+  const { isSuperAdmin } = useAuthStore();
   const isSuper = isSuperAdmin();
   const canAccessLeads = isSuper;
 
