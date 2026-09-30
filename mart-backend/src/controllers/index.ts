@@ -267,11 +267,33 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     action: 'login', detail: `Login from ${req.ip}`,
     ipAddress: req.ip, userAgent: req.headers['user-agent'],
   }).catch(() => {});
+  const jti = require('uuid').v4();
   const token = jwt.sign(
-    { id: admin.id, username: admin.username, role: admin.role, type: ADMIN_TOKEN_TYPE, storeId: admin.store_id, jti: require('uuid').v4() },
+    { id: admin.id, username: admin.username, role: admin.role, type: ADMIN_TOKEN_TYPE, storeId: admin.store_id, jti },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn } as any
   );
+
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+
+  await query(
+    `INSERT INTO mart_admin_sessions (admin_id, token_jti, ip_address, user_agent, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [admin.id, jti, req.ip || null, req.headers['user-agent'] || null, expiresAt]
+  );
+
+  const activeSessions = await query(
+    `SELECT id FROM mart_admin_sessions WHERE admin_id = $1 AND is_active = true AND expires_at > NOW() ORDER BY created_at DESC`,
+    [admin.id]
+  );
+
+  if (activeSessions.rows.length > 2) {
+    const sessionsToRevoke = activeSessions.rows.slice(2);
+    for (const session of sessionsToRevoke) {
+      await query(`UPDATE mart_admin_sessions SET is_active = false, revoked_at = NOW() WHERE id = $1`, [session.id]);
+    }
+  }
+
   res.json({ success: true, data: {
     token,
     id: admin.id,
@@ -282,6 +304,21 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     role: admin.role,
     storeId: admin.store_id,
   }});
+});
+
+export const adminLogout = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    try {
+      const payload = jwt.verify(token, config.jwt.secret) as any;
+      await query(
+        `UPDATE mart_admin_sessions SET is_active = false, revoked_at = NOW() WHERE token_jti = $1`,
+        [payload.jti]
+      );
+    } catch {}
+  }
+  res.json({ success: true });
 });
 
 export const adminGetMe = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -800,13 +837,13 @@ export const customerVerifyOtp = asyncHandler(async (req: Request, res: Response
 });
 
 export const postFunnelEvent = asyncHandler(async (req: Request, res: Response) => {
-  const { sessionId, eventName, path, props, channel } = req.body ?? {};
+  const { sessionId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign } = req.body ?? {};
   if (!sessionId || !eventName) {
     res.status(400).json({ success: false, error: 'sessionId and eventName required' });
     return;
   }
   const recorded = await FunnelEventService.recordEvent({
-    sessionId, eventName, path, props, channel,
+    sessionId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign,
   });
   res.json({ success: true, data: { recorded } });
 });

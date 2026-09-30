@@ -6,12 +6,10 @@ import type { MartZone } from '../services/api';
 
 type View = 'home' | 'categories' | 'orders' | 'account';
 
-import type { StoreOpenState } from '../services/api';
 
 interface NavbarProps {
   zones: MartZone[];
   selectedZone: MartZone | null;
-  openState?: StoreOpenState;
   onZoneChange: (zone: MartZone) => void;
   activeView: View;
   onNavChange: (v: View) => void;
@@ -25,10 +23,10 @@ const navItems = [
   { id: 'home',       label: 'Home',       Icon: Home },
   { id: 'categories', label: 'Categories', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: ClipboardList },
-  { id: 'account',    label: 'Profile',    Icon: User },
+  { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-export default function Navbar({ zones, selectedZone, openState, onZoneChange, activeView, onNavChange, onCheckout, search, onSearch }: NavbarProps) {
+export default function Navbar({ zones, selectedZone, onZoneChange, activeView, onNavChange, onCheckout, search, onSearch }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
   const totalItems = useCartStore(s => s.totalItems());
   const { isDark, toggle } = useThemeStore();
@@ -130,12 +128,7 @@ export default function Navbar({ zones, selectedZone, openState, onZoneChange, a
               Shop Local <span className="align-middle">&bull;</span> Support Local
             </p>
           )}
-          {/* Store closed indicator */}
-          {openState && !openState.isOpen && (
-            <p className="mt-0.5 text-[8px] sm:text-[9px] font-medium text-amber-300 dark:text-amber-400 whitespace-nowrap">
-              {openState.closedReason === 'manual' ? 'Store closed' : 'Store closed — opens ' + openState.nextOpenLabel}
-            </p>
-          )}
+
         </div>
 
         {/* ── Desktop layout ── */}

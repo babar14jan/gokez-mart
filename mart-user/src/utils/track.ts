@@ -141,11 +141,16 @@ function post(path: string, body: unknown): void {
 export function track(event: FunnelEvent, props?: Record<string, unknown>): void {
   try {
     if (!isApiConfigured && isDevelopment) return;
+    const urlParams = new URLSearchParams(window.location.search);
     post('/funnel/event', {
       sessionId: getFunnelSessionId(),
       eventName: event,
       channel: getFunnelChannel(),
       path: window.location.pathname,
+      referrer: document.referrer || undefined,
+      utmSource: urlParams.get('utm_source') || undefined,
+      utmMedium: urlParams.get('utm_medium') || undefined,
+      utmCampaign: urlParams.get('utm_campaign') || undefined,
       props: props ?? {},
     });
   } catch { /* noop */ }

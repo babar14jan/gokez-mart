@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Phone, MapPin, Navigation, RefreshCw, CheckCircle, Package, Clock } from 'lucide-react';
 import { ordersApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 
 const RIDER_STEPS = [
   { status: 'ready_to_pickup',  label: 'Ready to Pickup', emoji: '📦' },
@@ -52,6 +53,7 @@ export default function DeliveryPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [paymentOrder, setPaymentOrder] = useState<any | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = async (silent = false) => {
@@ -189,7 +191,7 @@ export default function DeliveryPage() {
                   )}
                   {order.status === 'out_for_delivery' && (
                     <button
-                      onClick={() => updateStatus(order.id, 'delivered')}
+                      onClick={() => setPaymentOrder(order)}
                       disabled={updating === order.id}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-3 text-center leading-tight whitespace-normal bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-colors">
                       {updating === order.id
@@ -225,6 +227,17 @@ export default function DeliveryPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {paymentOrder && (
+        <PaymentConfirmDialog
+          orderTotal={paymentOrder.total}
+          onConfirm={async (_method, _cashAmount, _upiAmount) => {
+            await updateStatus(paymentOrder.id, 'delivered');
+            setPaymentOrder(null);
+          }}
+          onCancel={() => setPaymentOrder(null)}
+        />
       )}
     </div>
   );

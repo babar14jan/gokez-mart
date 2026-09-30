@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, RefreshCw, ShieldCheck, ArrowRight, Tag, PhoneCall } from 'lucide-react';
+import { X, RefreshCw, ArrowRight, Tag, PhoneCall } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { subscribeToPush } from '../services/push';
@@ -277,18 +277,9 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
             </>
           ) : step === 'phone' ? (
             <>
-              <div className="rounded-3xl bg-gradient-to-b from-emerald-50 via-lime-50 to-amber-100 px-5 pb-3 pt-3 dark:from-emerald-950/30 dark:via-slate-800 dark:to-amber-950/40">
-                <BrandMark />
+              <img src="/login_page.webp" alt="Login" className="w-full max-h-[30vh] object-cover rounded-2xl mb-4" />
 
-                <h2 id="login-title" className="mt-3 text-center text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
-                  Enter your mobile number
-                </h2>
-                <p className="mx-auto mt-1 text-center text-[13px] text-gray-600 dark:text-slate-300 whitespace-nowrap">
-                  We'll use it to keep your orders and account secure.
-                </p>
-              </div>
-
-              <form onSubmit={handleSendOtp} className="mt-3 space-y-2.5">
+              <form onSubmit={handleSendOtp} className="mt-6 space-y-3">
                 <ErrorNote id="login-error" />
 
                 <label htmlFor="login-phone" className="sr-only">Mobile number</label>
@@ -311,16 +302,6 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
                 </button>
                 <GuestLink />
               </form>
-
-              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/20 text-center">
-                <p className="flex items-center justify-center gap-1.5 text-[12px] font-bold leading-snug text-slate-800 dark:text-slate-100">
-                  <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  Your number is private.
-                </p>
-                <p className="mt-0.5 pl-5 text-[12px] leading-snug text-gray-500 dark:text-slate-400 text-center">
-                  We never share it. No spam, only order and account updates.
-                </p>
-              </div>
             </>
           ) : (
             <>
@@ -369,25 +350,7 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
             </>
           )}
 
-          {(step === 'phone' || step === 'otp') && (
-            <div className="mt-auto pt-3 text-center">
-              <p className="text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-                By continuing, you agree to our{' '}
-                <a href="/terms" target="_blank" rel="noopener noreferrer"
-                  className="font-semibold text-slate-700 underline underline-offset-2 hover:text-emerald-700 dark:text-slate-300">
-                  Terms
-                </a>
-                {' '}&amp;{' '}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer"
-                  className="font-semibold text-slate-700 underline underline-offset-2 hover:text-emerald-700 dark:text-slate-300">
-                  Privacy Policy
-                </a>
-              </p>
-              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-500">
-                &copy; {new Date().getFullYear()} Gokez Technologies Pvt. Ltd.
-              </p>
-            </div>
-          )}
+
         </div>
       </div>
 

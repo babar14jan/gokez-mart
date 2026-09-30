@@ -1,13 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, ActivityIndicator, Modal,
-  RefreshControl, ScrollView, Dimensions, type NativeSyntheticEvent, type NativeScrollEvent,
+  RefreshControl, ScrollView, Dimensions, TextInput, type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { authApi, type Order } from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi, storeApi, type Order } from '@/services/api';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/constants/theme';
@@ -198,6 +199,8 @@ export default function OrdersScreen() {
   const [tab,           setTab]           = useState<'current' | 'past'>('current');
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const [cancelling,    setCancelling]    = useState<string | null>(null);
+  const [guestPhone,    setGuestPhone]    = useState('');
+  const [guestOrders,   setGuestOrders]   = useState<Order[]>([]);
   const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const pagerRef = useRef<ScrollView>(null);
 
@@ -246,17 +249,73 @@ export default function OrdersScreen() {
     });
   };
 
+  const handleGuestTrack = async () => {
+    const phone = guestPhone.replace(/\D/g, '');
+    if (phone.length < 10) return;
+    try {
+      const res = await storeApi.trackGuestOrders(phone);
+      setGuestOrders(res.data.data ?? []);
+    } catch { setGuestOrders([]); }
+  };
+
   const active = orders.filter(o => !CLOSED.includes(o.status));
   const past   = orders.filter(o => CLOSED.includes(o.status));
 
   if (!isLoggedIn) {
     return (
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <LoginPrompt
-          icon="receipt-outline"
-          title="Track your orders"
-          subtitle="Login to view your order history, track deliveries and reorder your favourites."
-        />
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+        <View style={{ padding: 16 }}>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 4 }}>My Orders</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray500, marginBottom: 16 }}>Enter your phone number to track your order</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TextInput
+              placeholder="Phone number"
+              placeholderTextColor={colors.gray400}
+              keyboardType="phone-pad"
+              maxLength={10}
+              value={guestPhone}
+              onChangeText={setGuestPhone}
+              style={{ flex: 1, height: 48, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.gray200, paddingHorizontal: 14, fontSize: 15, fontFamily: 'Inter-Regular', color: colors.gray900 }}
+            />
+            <TouchableOpacity
+              onPress={handleGuestTrack}
+              disabled={guestPhone.replace(/\D/g, '').length < 10}
+              style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', opacity: guestPhone.replace(/\D/g, '').length < 10 ? 0.4 : 1 }}
+            >
+              <Ionicons name="search" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {guestOrders.length > 0 && (
+          <FlatList
+            data={guestOrders}
+            keyExtractor={o => o.id}
+            renderItem={({ item: order }) => (
+              <TouchableOpacity
+                onPress={() => router.push(`/order/${order.id}`)}
+                style={{ backgroundColor: colors.surface, borderRadius: 16, marginHorizontal: 16, marginBottom: 10, padding: 14, borderWidth: 1, borderColor: colors.gray100 }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900 }}>#{order.orderNumber}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900 }}>₹{order.total}</Text>
+                </View>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500 }}>{STATUS_LABELS[order.status]}</Text>
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={{ paddingBottom: 100 }}
+          />
+        )}
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 20, elevation: 12 }}>
+          <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: colors.gray900, textAlign: 'center', marginBottom: 4 }}>See all your orders & offers</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray500, textAlign: 'center', marginBottom: 16 }}>Login to view your full order history and exclusive offers.</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/(auth)/login')}
+            style={{ height: 50, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
+          >
+            <Ionicons name="call-outline" size={18} color="#fff" />
+            <Text style={{ fontSize: 15, fontFamily: 'Inter-Bold', color: '#fff' }}>Login with Phone</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }

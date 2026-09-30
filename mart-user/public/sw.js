@@ -85,7 +85,7 @@ self.addEventListener('fetch', (e) => {
         cache.match(e.request).then(cached => cached || fetch(e.request).then(response => {
           e.waitUntil(cacheImage(e.request, response));
           return response;
-        }).catch(() => new Response('', { status: 404 }))
+        }).catch(() => new Response('', { status: 404 })))
       )
     );
     return;

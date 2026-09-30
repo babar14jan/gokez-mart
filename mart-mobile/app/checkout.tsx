@@ -169,6 +169,10 @@ export default function CheckoutScreen() {
     if (sub < minOrder) { Alert.alert('Minimum order', `Add ₹${Math.ceil(minOrder - sub)} more to place order.`); return; }
     const orderName = customer?.name ?? guestName.trim();
     const orderPhone = customer?.phone ?? guestPhone.trim();
+    if (isGuest && !orderName) {
+      Alert.alert('Name required', 'Please enter your name to place the order.');
+      return;
+    }
     if (!orderPhone) {
       Alert.alert('Phone number', 'Please enter your phone number to place the order.');
       return;
@@ -220,6 +224,7 @@ export default function CheckoutScreen() {
       });
       clearCart();
       const orderId = res.data.data?.id;
+      if (isGuest) await AsyncStorage.setItem('guest_phone', orderPhone.replace(/\D/g, ''));
       router.replace(orderId ? `/order/${orderId}` : '/(tabs)/orders');
     } catch {
       Alert.alert('Order failed', 'Failed to place order. Please try again.');

@@ -35,6 +35,7 @@ router.get('/orders/track/guest',   ctrl.trackGuestOrder);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
 router.post('/admin/login',            ctrl.adminLogin);
+router.post('/admin/logout',           authenticate, ctrl.adminLogout);
 router.get('/admin/me',                authenticate, ctrl.adminGetMe);
 router.put('/admin/profile',           authenticate, ctrl.adminUpdateProfile);
 router.put('/admin/change-password',   authenticate, ctrl.adminChangePassword);

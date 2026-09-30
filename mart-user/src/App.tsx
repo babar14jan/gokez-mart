@@ -40,7 +40,7 @@ const SHAPOORJI_ZONE: MartZone = {
 };
 
 const OrderHistoryPage = lazy(() => import('./pages/OrderHistoryPage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const GrievancePage = lazy(() => import('./pages/GrievancePage'));
@@ -310,7 +310,7 @@ export default function App() {
 
   // Account tab — show login modal if not logged in, but still navigate
   const handleNavChange = (v: View) => {
-    if (v === 'account' && !isLoggedIn) { setPendingCheckout(false); setShowLoginModal(true); return; }
+    if (v === 'account') { setPendingCheckout(false); }
     setView(v);
   };
 
@@ -461,7 +461,6 @@ export default function App() {
         <Navbar
           zones={zones}
           selectedZone={selectedZone}
-          openState={openState}
           onZoneChange={async (zone) => {
           setSelectedZone(zone);
           setShowOutsideWarning(false);
@@ -489,7 +488,7 @@ export default function App() {
       )}
 
       {/* Closed-store notice: below the header, on every page, never blocking. */}
-      {!isEmbed && <StoreStatusStrip openState={openState} />}
+      {!isEmbed && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
 
       {/* One dialog for both checkout mounts. Resolved explicitly in both
           directions so CheckoutPage is never left awaiting a dead promise. */}
@@ -564,12 +563,11 @@ export default function App() {
         </div>
       ) : view === 'account' ? (
         <div className={PAGE_BOTTOM}>
-          <DeferredPage><ProfilePage
+          <DeferredPage><AccountPage
             onBack={() => setView('home')}
             supportName={settings.support_name}
             supportPhone={settings.support_phone}
             whatsappNumber={settings.whatsapp_number}
-            onNavigate={(v) => setView(v as 'home' | 'orders' | 'account' | 'privacy' | 'terms')}
           /></DeferredPage>
         </div>
       ) : (

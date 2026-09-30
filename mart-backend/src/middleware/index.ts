@@ -52,7 +52,7 @@ function bearerToken(req: Request): string | null {
   return auth?.startsWith('Bearer ') ? auth.slice(7) : null;
 }
 
-export const authenticate = (req: AdminRequest, res: Response, next: NextFunction): void => {
+export const authenticate = async (req: AdminRequest, res: Response, next: NextFunction): Promise<void> => {
   const token = bearerToken(req);
   if (!token) {
     res.status(401).json({ success: false, error: 'No token provided' });
@@ -75,6 +75,14 @@ export const authenticate = (req: AdminRequest, res: Response, next: NextFunctio
   // Fail closed: an absent or unrecognised role is a rejection, never an elevation.
   if (!ADMIN_ROLES.includes(payload.role)) {
     res.status(403).json({ success: false, error: 'Access denied' });
+    return;
+  }
+  const sessionResult = await query(
+    `SELECT id FROM mart_admin_sessions WHERE token_jti = $1 AND is_active = true AND expires_at > NOW()`,
+    [payload.jti]
+  );
+  if (sessionResult.rows.length === 0) {
+    res.status(401).json({ success: false, error: 'Session expired or revoked' });
     return;
   }
   req.admin = {

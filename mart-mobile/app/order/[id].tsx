@@ -2,9 +2,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Image } from 'expo-image';
-import { authApi, type Order } from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi, storeApi, type Order } from '@/services/api';
 import { useThemeColors } from '@/constants/theme';
 import { ORDER_STATUS_LABELS } from '@/constants/config';
+import { useAuthStore } from '@/store/authStore';
 
 const STATUS_STEPS = [
   { key: 'pending',          label: 'Order Placed',     icon: '📋' },
@@ -25,16 +27,25 @@ function getStepIndex(status: string) {
 export default function OrderTrackingScreen() {
   const colors   = useThemeColors();
   const { id }    = useLocalSearchParams<{ id: string }>();
+  const { isLoggedIn } = useAuthStore();
   const [order,   setOrder]   = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const res = await authApi.getOrders();
-      setOrder((res.data.data ?? []).find((o: Order) => o.id === id) ?? null);
+      if (isLoggedIn) {
+        const res = await authApi.getOrders();
+        setOrder((res.data.data ?? []).find((o: Order) => o.id === id) ?? null);
+      } else {
+        const phone = await AsyncStorage.getItem('guest_phone');
+        if (phone) {
+          const res = await storeApi.trackGuestOrders(phone);
+          setOrder((res.data.data ?? []).find((o: Order) => o.id === id) ?? null);
+        }
+      }
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [id]);
+  }, [id, isLoggedIn]);
 
   useEffect(() => {
     load();
@@ -139,6 +150,20 @@ export default function OrderTrackingScreen() {
           <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 6 }}>📍 Delivery Address</Text>
           <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray600, lineHeight: 18 }}>{order.guestAddress}</Text>
         </View>
+
+        {/* Guest login prompt */}
+        {!isLoggedIn && (
+          <View style={{ backgroundColor: colors.surface, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.gray100 }}>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 4 }}>Want to see all your orders?</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray500, marginBottom: 12 }}>Login to track all past history and offers.</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(auth)/login')}
+              style={{ height: 44, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: '#fff' }}>Login with Phone</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );

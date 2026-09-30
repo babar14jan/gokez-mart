@@ -8,6 +8,7 @@ import { ordersApi, teamApi } from '../services/api';
 import { printReceipt } from '../utils/printReceipt';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
+import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 
 type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
 type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
@@ -161,6 +162,7 @@ export default function OrdersPage() {
   const [cancellationReason, setCancellationReason] = useState('');
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolutionType, setResolutionType] = useState<'failed_delivery' | 'terminated'>('failed_delivery');
+  const [paymentOrder, setPaymentOrder] = useState<any | null>(null);
   const [resolutionReason, setResolutionReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
   const [statusOpen, setStatusOpen] = useState(false);
@@ -631,7 +633,14 @@ export default function OrdersPage() {
 
                     {deliveryAction && (
                       <button
-                        onClick={e => updateStatus(order.id, deliveryAction.status, e)}
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (deliveryAction.status === 'delivered') {
+                            setPaymentOrder(order);
+                          } else {
+                            updateStatus(order.id, deliveryAction.status, e);
+                          }
+                        }}
                         disabled={isUpdating}
                         className={`flex-1 min-w-[132px] flex items-center justify-center gap-1.5 px-3 py-2.5 text-center text-xs font-bold leading-tight whitespace-normal rounded-xl transition-all disabled:opacity-50 ${deliveryAction.color}`}>
                         {isUpdating
@@ -846,6 +855,17 @@ export default function OrdersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {paymentOrder && (
+        <PaymentConfirmDialog
+          orderTotal={paymentOrder.total}
+          onConfirm={async (_method, _cashAmount, _upiAmount) => {
+            await updateStatus(paymentOrder.id, 'delivered');
+            setPaymentOrder(null);
+          }}
+          onCancel={() => setPaymentOrder(null)}
+        />
       )}
     </div>
   );

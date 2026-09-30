@@ -154,7 +154,7 @@ export const storeApi = {
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
     paymentMethod: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;
-  }) => api.post('/orders', data),
+  }) => api.post('/orders', data, { headers: { 'Idempotency-Key': crypto.randomUUID() } }),
   trackOrders: () => api.get('/orders/track'),
   trackGuestOrders: (phone: string) => api.get('/orders/track/guest', { params: { phone } }),
 };

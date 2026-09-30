@@ -60,6 +60,10 @@ export class OrderService {
     const deliveryCharge = parseFloat(settings.delivery_charge || '15');
     const freeAbove = parseFloat(settings.free_delivery_above || '150');
 
+    // Normalize phone once so leads, orders, and funnels all match
+    const cleanPhone = data.guestPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) throw new Error('Invalid phone number');
+
     // Retry on order number collision (extremely rare but safe)
     let orderNumber = this.generateOrderNumber();
     const existing = await query(`SELECT 1 FROM mart_orders WHERE order_number = $1`, [orderNumber]);
@@ -67,7 +71,7 @@ export class OrderService {
 
     return transaction(async (client) => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [data.idempotencyKey]);
-      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-order:${data.guestPhone}`]);
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-order:${cleanPhone}`]);
       const prior = await client.query(
         `SELECT id, order_number as "orderNumber", subtotal::float, delivery_charge::float as "deliveryCharge", total::float
          FROM mart_orders WHERE idempotency_key = $1`,
@@ -86,11 +90,11 @@ export class OrderService {
            name = COALESCE(EXCLUDED.name, mart_customers.name),
            address = COALESCE(EXCLUDED.address, mart_customers.address),
            updated_at = NOW()`,
-        [data.guestPhone, data.guestName, data.guestAddress]
+        [cleanPhone, data.guestName, data.guestAddress]
       );
 
       const customerResult = await client.query(
-        `SELECT id FROM mart_customers WHERE phone = $1`, [data.guestPhone]
+        `SELECT id FROM mart_customers WHERE phone = $1`, [cleanPhone]
       );
       const customerId = customerResult.rows[0]?.id || null;
       if ((data.campaignId || data.couponCodeUsed) && data.customerId !== customerId) {
@@ -123,14 +127,14 @@ export class OrderService {
       // never mistakes a checkout for an OTP request, and set the windowing
       // timestamps (NOT NULL, filtered on by the funnel) to the checkout moment
       // so the guest lands on their own day.
-      if (customerId && data.guestPhone) {
+      if (customerId && cleanPhone) {
         await client.query(
           `INSERT INTO mart_customer_leads (phone, customer_id, otp_request_count, first_otp_requested_at, last_otp_requested_at)
            VALUES ($1, $2, 0, NOW(), NOW())
            ON CONFLICT (phone) DO UPDATE SET
              customer_id = COALESCE(mart_customer_leads.customer_id, EXCLUDED.customer_id),
              updated_at = NOW()`,
-          [data.guestPhone, customerId]
+          [cleanPhone, customerId]
         );
       }
 
@@ -199,7 +203,7 @@ export class OrderService {
           const priorOrders = await client.query(
             `SELECT COUNT(*)::int AS count FROM mart_orders
              WHERE guest_phone = $1 AND status NOT IN ('cancelled', 'terminated', 'failed_delivery')`,
-            [data.guestPhone]
+            [cleanPhone]
           );
           if (priorOrders.rows[0].count > 0) throw new Error('This offer is only for first-time customers');
         }
@@ -275,8 +279,8 @@ export class OrderService {
             campaign_id, campaign_discount, coupon_code_used, idempotency_key,
             placed_outside_hours, closed_reason, scheduled_for)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
-        [orderId, orderNumber, data.storeId, customerId, data.guestName, data.guestPhone,
-         data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
+[orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
+          data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod, data.notes || null,
          data.deliveryPreference || 'within_15',
          data.deliveryNote || 'Ring the bell',
@@ -351,7 +355,8 @@ export class OrderService {
         total,
         whatsappMessage: this.buildWhatsAppMessage({
           orderNumber, guestName: data.guestName,
-          guestPhone: data.guestPhone, guestAddress: data.guestAddress,
+          guestPhone: data.guestPhone, // display format for WhatsApp
+          guestAddress: data.guestAddress,
           items: resolvedItems, subtotal, deliveryCharge: actualDelivery,
           total, paymentMethod: data.paymentMethod,
           storeName: settings.store_name || 'Gokez Mart',

@@ -89,14 +89,35 @@ function sanitiseProps(input: unknown): Record<string, unknown> {
   return trimmed;
 }
 
-export function normaliseChannel(value: unknown): string {
-  if (typeof value !== 'string') return 'unattributed';
-  // Length is checked BEFORE any truncation. Truncating first would let a
-  // 99-character label be cut to a 32-character string that then passes the
-  // pattern, silently manufacturing a junk channel bucket.
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > 32) return 'unattributed';
-  return VALID_CHANNEL.test(trimmed) ? trimmed.toLowerCase() : 'unattributed';
+export function normaliseChannel(value: unknown, referrer?: string, utmSource?: string): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed && trimmed.length <= 32 && VALID_CHANNEL.test(trimmed)) return trimmed.toLowerCase();
+  }
+  // Infer from utm_source if present
+  if (utmSource) {
+    const trimmed = utmSource.trim().toLowerCase();
+    if (trimmed && trimmed.length <= 32 && VALID_CHANNEL.test(trimmed)) return `utm_${trimmed}`;
+  }
+  // Infer from referrer
+  if (referrer) {
+    try {
+      const refUrl = new URL(referrer);
+      const host = refUrl.hostname.replace('www.', '');
+      // Known referrers
+      if (host.includes('google')) return 'google';
+      if (host.includes('facebook') || host.includes('fb.com')) return 'facebook';
+      if (host.includes('instagram')) return 'instagram';
+      if (host.includes('whatsapp')) return 'whatsapp';
+      if (host.includes('twitter') || host.includes('x.com')) return 'twitter';
+      if (host.includes('linkedin')) return 'linkedin';
+      if (host.includes('youtube')) return 'youtube';
+      // Generic: use hostname (truncated)
+      const cleaned = host.replace(/[^a-z0-9_-]/gi, '_').slice(0, 32);
+      if (cleaned && VALID_CHANNEL.test(cleaned)) return cleaned;
+    } catch { /* noop */ }
+  }
+  return 'unattributed';
 }
 
 export class FunnelEventService {
@@ -123,7 +144,7 @@ export class FunnelEventService {
        ON CONFLICT (session_id) DO UPDATE SET last_seen_at = NOW()`,
       [
         sessionId,
-        normaliseChannel(params.channel),
+        normaliseChannel(params.channel, params.referrer, params.utmSource),
         sanitiseString(params.landingPath, MAX_PATH_LENGTH),
         sanitiseString(params.referrer, MAX_PATH_LENGTH),
         sanitiseString(params.utmSource, 120),
@@ -139,6 +160,10 @@ export class FunnelEventService {
     path?: string;
     props?: unknown;
     channel?: string;
+    referrer?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
   }): Promise<boolean> {
     const sessionId = sanitiseString(params.sessionId, MAX_SESSION_ID_LENGTH);
     if (!sessionId) return false;
@@ -150,6 +175,10 @@ export class FunnelEventService {
       sessionId,
       channel: params.channel,
       landingPath: params.path,
+      referrer: params.referrer,
+      utmSource: params.utmSource,
+      utmMedium: params.utmMedium,
+      utmCampaign: params.utmCampaign,
     });
     await query(
       `INSERT INTO mart_funnel_events (session_id, event_name, path, props)
