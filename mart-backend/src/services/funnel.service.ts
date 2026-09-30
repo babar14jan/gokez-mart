@@ -84,7 +84,7 @@ export class FunnelService {
                                    AND NOT has_order)::int               AS verified_never_ordered,
                 COALESCE(ROUND(AVG(otp_request_count)::numeric, 2), 0)    AS avg_otp_requests
          FROM lead_base`,
-        [days]
+        range === 'today' ? [] : [days]
       ),
       query<FunnelDailyPoint>(
         `WITH lead_base AS (${LEAD_BASE(range)})
@@ -95,7 +95,7 @@ export class FunnelService {
          FROM lead_base
          GROUP BY 1
          ORDER BY 1`,
-        [days]
+        range === 'today' ? [] : [days]
       ),
       query<{ customers: number; orders: number; revenue: string | number }>(
         `SELECT (SELECT COUNT(*)::int FROM mart_customers)            AS customers,
@@ -160,7 +160,7 @@ export class FunnelService {
          FROM mart_funnel_events
          WHERE ${RANGE_WHERE('mart_funnel_events.created_at', range)}
          GROUP BY event_name`,
-        [days]
+        range === 'today' ? [] : [days]
       ),
       query<ChannelRow>(
         `SELECT s.channel,
@@ -173,7 +173,7 @@ export class FunnelService {
          WHERE ${RANGE_WHERE('s.first_seen_at', range)}
          GROUP BY s.channel
          ORDER BY sessions DESC`,
-        [days]
+        range === 'today' ? [] : [days]
       ),
       query<AttributionRow>(
         `WITH touches AS (
@@ -213,7 +213,7 @@ export class FunnelService {
                 COUNT(*) FILTER (WHERE converted_at IS NOT NULL AND order_id IS NOT NULL)::int AS converted
          FROM mart_carts
          WHERE ${RANGE_WHERE('created_at', range)}`,
-        [days]
+        range === 'today' ? [] : [days]
       ),
     ]);
 
