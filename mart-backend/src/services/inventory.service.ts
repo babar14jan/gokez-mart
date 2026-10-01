@@ -1,4 +1,5 @@
 import { query, transaction } from '../database/db';
+import { badRequest, forbidden, notFound, conflict } from '../utils/apiError';
 import { parseSellingUnit } from '../utils/unitConversion';
 
 export class InventoryService {
@@ -53,10 +54,10 @@ export class InventoryService {
        FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
       [productId, storeId]
     );
-    if (!cur.rows[0]) throw new Error('Product not found in this store');
+    if (!cur.rows[0]) throw notFound('That product is no longer available in this store');
 
     const current = cur.rows[0].stock_quantity ?? 0;
-    if (isNaN(qty) || !isFinite(qty)) throw new Error('Invalid quantity');
+    if (isNaN(qty) || !isFinite(qty)) throw badRequest('Invalid quantity');
     const effectiveStockUnit = stockUnit || cur.rows[0].stock_unit || 'kg';
     const newQty = Math.max(0, current + qty);
     const isReduction = qty < 0;

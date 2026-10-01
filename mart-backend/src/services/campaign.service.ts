@@ -1,4 +1,5 @@
 import { query } from '../database/db';
+import { badRequest, forbidden, notFound, conflict } from '../utils/apiError';
 
 // How long a raised minimum order keeps the previous threshold valid. Long
 // enough to cover a cart already in progress, short enough that the offer
@@ -526,7 +527,7 @@ export class CampaignService {
          AND (status = 'active' OR (valid_from IS NOT NULL AND valid_from <= NOW()))`,
       [code.toUpperCase()]
     );
-    if (!result.rows[0]) throw new Error('Invalid or expired coupon code');
+    if (!result.rows[0]) throw badRequest('That coupon code is not valid');
     const campaign = result.rows[0];
 
     // Check store scope
@@ -534,8 +535,8 @@ export class CampaignService {
 
     // Check validity dates
     const now = new Date();
-    if (campaign.valid_from && new Date(campaign.valid_from) > now) throw new Error('This coupon is not active yet');
-    if (campaign.valid_until && new Date(campaign.valid_until) < now) throw new Error('This coupon has expired');
+    if (campaign.valid_from && new Date(campaign.valid_from) > now) throw badRequest('This coupon is not active yet');
+    if (campaign.valid_until && new Date(campaign.valid_until) < now) throw badRequest('This coupon has expired');
 
     // Check usage limit
     if (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) throw new Error('This coupon has reached its usage limit');
@@ -547,7 +548,7 @@ export class CampaignService {
       new Date(campaign.min_order_grace_until) > now &&
       cartTotal >= Number(campaign.min_order_previous);
     if (cartTotal < parseFloat(campaign.min_order_amount) && !previousMinMet) {
-      throw new Error(`Minimum order ₹${campaign.min_order_amount} required for this coupon`);
+      throw badRequest(`Add ₹${Number(campaign.min_order_amount) - cartTotal} more to use this coupon (minimum order ₹${Number(campaign.min_order_amount)})`);
     }
 
     if (customerId) {
@@ -558,7 +559,7 @@ export class CampaignService {
           `SELECT COUNT(*) as cnt FROM mart_orders WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
           [customerId]
         );
-        if (parseInt(orderCount.rows[0].cnt) > 0) throw new Error('This offer is for new customers only');
+        if (parseInt(orderCount.rows[0].cnt) > 0) throw forbidden('This offer is for new customers only');
       }
       // Check per customer limit
       if (eligibilityType === 'inactive_customers') {
@@ -576,7 +577,7 @@ export class CampaignService {
         `SELECT COUNT(*) as cnt FROM mart_campaign_uses WHERE campaign_id = $1 AND customer_id = $2 AND reversed_at IS NULL`,
         [campaign.id, customerId]
       );
-      if (parseInt(uses.rows[0].cnt) >= campaign.per_customer_limit) throw new Error('You have already used this coupon');
+      if (parseInt(uses.rows[0].cnt) >= campaign.per_customer_limit) throw conflict('You have already used this coupon');
     }
 
     return campaign;

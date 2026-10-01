@@ -1,4 +1,5 @@
 import { query, transaction } from '../database/db';
+import { badRequest, forbidden, notFound, conflict } from '../utils/apiError';
 import { v4 as uuidv4 } from 'uuid';
 import { SettingsService } from './settings.service';
 import { InventoryService } from './inventory.service';
@@ -158,7 +159,7 @@ export class OrderService {
       );
       const customerId = customerResult.rows[0]?.id || null;
       if ((data.campaignId || data.couponCodeUsed) && data.customerId !== customerId) {
-        throw new Error('Sign in with the ordering phone number to redeem an offer');
+        throw forbidden('Sign in with the ordering phone number to redeem this offer');
       }
 
       // A guest's address lands in the same address book a logged-in customer
@@ -201,7 +202,7 @@ export class OrderService {
       const productIds = new Set<string>();
       const resolvedItems: OrderItem[] = [];
       for (const item of data.items) {
-        if (productIds.has(item.productId)) throw new Error('Each product can only be included once per order');
+        if (productIds.has(item.productId)) throw badRequest('Each product can only be included once per order');
         productIds.add(item.productId);
         const product = await client.query(
           `SELECT p.name, sp.price::float AS price, sp.unit
@@ -265,7 +266,7 @@ export class OrderService {
              WHERE guest_phone = $1 AND status NOT IN ('cancelled', 'terminated', 'failed_delivery')`,
             [cleanPhone]
           );
-          if (priorOrders.rows[0].count > 0) throw new Error('This offer is only for first-time customers');
+          if (priorOrders.rows[0].count > 0) throw forbidden('This offer is only for first-time customers');
         }
         if (eligibilityType === 'inactive_customers') {
           const priorDelivery = await client.query(

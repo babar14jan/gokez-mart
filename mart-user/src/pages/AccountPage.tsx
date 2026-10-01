@@ -209,14 +209,6 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
 
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
-      <div className="w-full bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <p className="text-lg font-semibold text-gray-900 dark:text-white">
-            {name ? `Welcome back, ${name.split(' ')[0]}!` : 'My Account'}
-          </p>
-        </div>
-      </div>
-
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-3">
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
           <div className="flex items-center gap-4">

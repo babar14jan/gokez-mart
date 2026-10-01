@@ -4,6 +4,7 @@ import { query, transaction } from '../database/db';
 import { config } from '../config';
 import { ComplianceService } from './compliance.service';
 import { CustomerLeadService } from './customerLead.service';
+import { badRequest, unauthorized, notFound, tooManyRequests, badGateway } from '../utils/apiError';
 
 const TWO_FACTOR_BASE = 'https://2factor.in/API/V1';
 const OTP_EXPIRY_MINUTES = 10;
@@ -14,7 +15,7 @@ export class CustomerAuthService {
   // ── Send OTP ────────────────────────────────────────────────────────────────
   static async sendOtp(phone: string): Promise<{ message: string }> {
     const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length !== 10) throw new Error('Invalid phone number');
+    if (cleaned.length !== 10) throw badRequest('Enter a valid 10-digit mobile number');
 
     // Capture the expressed sign-in intent independently of OTP delivery or verification.
     await CustomerLeadService.recordOtpRequest(cleaned);
@@ -29,7 +30,7 @@ export class CustomerAuthService {
       [cleaned]
     );
     if (parseInt(recent.rows[0].count) >= 3) {
-      throw new Error('Too many OTP requests. Please wait before trying again.');
+      throw tooManyRequests('Too many OTP requests. Please wait before trying again.');
     }
 
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
@@ -52,7 +53,7 @@ export class CustomerAuthService {
     const data: any = await res.json();
 
     if (data.Status !== 'Success') {
-      throw new Error('Failed to send OTP. Please try again.');
+      throw badGateway('Could not send the OTP right now. Please try again in a moment.');
     }
 
     await query(
@@ -77,18 +78,18 @@ export class CustomerAuthService {
       [cleaned]
     );
 
-    if (!otpRow.rows[0]) throw new Error('No OTP found. Please request a new one.');
+    if (!otpRow.rows[0]) throw badRequest('No OTP was requested for this number. Tap Send OTP to get a new one.');
 
     const row = otpRow.rows[0];
 
     if (new Date() > new Date(row.expires_at)) {
       await query(`DELETE FROM mart_otps WHERE id = $1`, [row.id]);
-      throw new Error('OTP expired. Please request a new one.');
+      throw badRequest('That OTP has expired. Tap Resend to get a new one.');
     }
 
     if (row.attempts >= MAX_ATTEMPTS) {
       await query(`DELETE FROM mart_otps WHERE id = $1`, [row.id]);
-      throw new Error('Too many failed attempts. Please request a new OTP.');
+      throw tooManyRequests('Too many incorrect attempts. Tap Resend to get a new OTP.');
     }
 
     let verified = false;
@@ -102,7 +103,7 @@ export class CustomerAuthService {
 
     if (!verified) {
       await query(`UPDATE mart_otps SET attempts = attempts + 1 WHERE id = $1`, [row.id]);
-      throw new Error('Invalid OTP. Please try again.');
+      throw unauthorized('Incorrect OTP. Please check the 6 digits and try again.');
     }
 
     // OTP verified — delete it
@@ -184,9 +185,45 @@ export class CustomerAuthService {
     return result.rows;
   }
 
+  /**
+   * Idempotent by address. Adding an address the customer already has returns the
+   * existing row instead of inserting a second one.
+   *
+   * This used to insert unconditionally and relied on the frontend to filter
+   * duplicates out, which is not a real safeguard: LoginFlow calls this after every
+   * successful OTP with isDefault = true, so on a fresh device -- or whenever the
+   * address book had not finished loading, since the client-side check only sees
+   * the local cache -- each login inserted another copy AND unset the customer's
+   * real default in favour of the duplicate.
+   *
+   * The advisory lock below is already held, so this check-then-insert cannot race
+   * two concurrent adds into two rows.
+   */
   static async addAddress(customerId: string, label: string, addressLine: string, makeDefault: boolean, latitude?: number | null, longitude?: number | null): Promise<any> {
     return transaction(async client => {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-address:${customerId}`]);
+
+      const dupe = await client.query(
+        `SELECT id, label, address_line as "addressLine", latitude::float, longitude::float,
+                is_default as "isDefault", created_at as "createdAt"
+           FROM mart_customer_addresses
+          WHERE customer_id = $1 AND lower(btrim(address_line)) = lower(btrim($2))
+          ORDER BY is_default DESC, created_at ASC
+          LIMIT 1`,
+        [customerId, addressLine.trim()]
+      );
+      if (dupe.rows[0]) {
+        const found = dupe.rows[0];
+        // Already saved. Still honour an explicit "make this my default", but never
+        // clear another default just because the address was already on file.
+        if (makeDefault && !found.isDefault) {
+          await client.query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
+          await client.query(`UPDATE mart_customer_addresses SET is_default = true WHERE id = $1`, [found.id]);
+          found.isDefault = true;
+        }
+        return found;
+      }
+
       const existing = await client.query(
         `SELECT COUNT(*) as count FROM mart_customer_addresses WHERE customer_id = $1`,
         [customerId]
@@ -215,7 +252,7 @@ export class CustomerAuthService {
                  is_default as "isDefault", created_at as "createdAt"`,
       [label.trim() || 'Home', addressLine.trim(), latitude ?? null, longitude ?? null, addressId, customerId]
     );
-    if (!result.rows[0]) throw new Error('Address not found');
+    if (!result.rows[0]) throw notFound('Address not found');
     return result.rows[0];
   }
 
@@ -224,7 +261,7 @@ export class CustomerAuthService {
       `DELETE FROM mart_customer_addresses WHERE id = $1 AND customer_id = $2 RETURNING is_default`,
       [addressId, customerId]
     );
-    if (!result.rows[0]) throw new Error('Address not found');
+    if (!result.rows[0]) throw notFound('Address not found');
     if (result.rows[0].is_default) {
       await query(
         `UPDATE mart_customer_addresses SET is_default = true
@@ -241,7 +278,7 @@ export class CustomerAuthService {
         `SELECT id FROM mart_customer_addresses WHERE id = $1 AND customer_id = $2 FOR UPDATE`,
         [addressId, customerId]
       );
-      if (!target.rows[0]) throw new Error('Address not found');
+      if (!target.rows[0]) throw notFound('Address not found');
       await client.query(`UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1`, [customerId]);
       await client.query(
         `UPDATE mart_customer_addresses SET is_default = true, updated_at = NOW() WHERE id = $1 AND customer_id = $2`,
