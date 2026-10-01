@@ -943,32 +943,59 @@ export const customerGetOrders = asyncHandler(async (req: CustomerRequest, res: 
   res.json({ success: true, data: orders });
 });
 
-export const customerCancelOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { id } = req.params;
-  // Verify order belongs to this customer and is cancellable
-  const result = await query<{ status: string; customer_id: string | null; store_id: string | null; order_number: string; guest_name: string }>(
-    `SELECT status, customer_id, store_id, order_number, guest_name FROM mart_orders WHERE id = $1`, [id]
-  );
-  const order = result.rows[0];
-  if (!order) { res.status(404).json({ success: false, error: 'Order not found' }); return; }
-  if (order.customer_id !== req.customer!.id) { res.status(403).json({ success: false, error: 'Not your order' }); return; }
-  if (!['pending', 'confirmed'].includes(order.status)) {
-    res.status(400).json({ success: false, error: 'Order cannot be cancelled at this stage' }); return;
+/**
+ * Shared cancellation handler. `scope` decides what the caller must present:
+ * a session customer id, or a guest tracking token. The service does the
+ * matching, so the two entry points cannot drift on status rules or on the
+ * side effects of cancelling (campaign redemption, audit event, store push).
+ */
+type CancelScope = { customerId: string } | { trackingToken: string };
+
+/**
+ * Shared cancellation handler. `scope` decides what the caller must present:
+ * a session customer id, or a guest tracking token. The service owns the
+ * matching, so the two entry points cannot drift on the status rules or on the
+ * side effects of cancelling (campaign redemption, audit event, store push).
+ */
+async function runCancel(req: CustomerRequest, res: Response, scope: CancelScope) {
+  let order;
+  try {
+    order = await OrderService.cancelByCaller(req.params.id, scope);
+  } catch (err: any) {
+    const status = err?.status === 404 || err?.status === 400 ? err.status : 500;
+    res.status(status).json({ success: false, error: err?.message || 'Could not cancel the order' });
+    return;
   }
-  await transaction(async client => {
-    await client.query(`UPDATE mart_orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`, [id]);
-    await OrderService.reverseCampaignRedemption(id, 'cancelled', client);
-  });
-  // Notify store admins
-  if (order.store_id) {
-    PushService.notifyStoreAdmins(order.store_id, {
-      title: `Order #${order.order_number} cancelled`,
-      body: `${order.guest_name} cancelled the order`,
+
+  if (order.storeId) {
+    PushService.notifyStoreAdmins(order.storeId, {
+      title: `Order #${order.orderNumber} cancelled`,
+      body: `${order.guestName || 'Customer'} cancelled the order`,
       url: '/orders',
-      tag: `order-${id}`,
+      tag: `order-${req.params.id}`,
     }).catch(() => {});
   }
   res.json({ success: true, message: 'Order cancelled' });
+}
+
+export const customerCancelOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  if (!req.customer) { res.status(401).json({ success: false, error: 'Not signed in' }); return; }
+  await runCancel(req, res, { customerId: req.customer.id });
+});
+
+/**
+ * Guest self-service cancel. The tracking token is the credential the guest
+ * already holds from placing the order, so no OTP is needed. Without a valid
+ * token this returns the same 404 as an unknown order id, so order ids cannot
+ * be probed. Rate limited separately from order placement in app.ts.
+ */
+export const guestCancelOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const token = typeof req.body?.trackingToken === 'string' ? req.body.trackingToken.trim() : '';
+  if (!token) {
+    res.status(400).json({ success: false, error: 'A tracking token is required' });
+    return;
+  }
+  await runCancel(req, res, { trackingToken: token });
 });
 
 // ── Admin user management (super_admin only) ─────────────────────────────────

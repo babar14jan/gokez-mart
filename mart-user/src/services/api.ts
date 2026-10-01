@@ -137,6 +137,8 @@ export const storeApi = {
     funnelSessionId?: string;
   }, idempotencyKey: string) => api.post('/orders', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
   trackOrdersByTokens: (tokens: string[]) => api.get('/orders/track/tokens', { params: { tokens: tokens.join(',') } }),
+  cancelOrderByToken: (orderId: string, trackingToken: string) =>
+    api.post(`/orders/track/${orderId}/cancel`, { trackingToken }),
 };
 
 // ── Feedback ────────────────────────────────────────────────────────────────────────────────

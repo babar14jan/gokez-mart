@@ -32,6 +32,7 @@ router.post('/geocode/reverse',    ctrl.reverseGeocode);
 router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 router.get('/orders/track/tokens',  ctrl.trackGuestOrdersByTokens);
+router.post('/orders/track/:id/cancel', ctrl.guestCancelOrder);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
 router.post('/admin/login',            ctrl.adminLogin);

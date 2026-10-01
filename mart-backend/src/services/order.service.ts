@@ -645,6 +645,63 @@ export class OrderService {
     return order;
   }
 
+  /**
+   * Single cancellation path for both callers: a signed-in customer (matched on
+   * customer_id) and a guest (matched on the unguessable tracking token issued
+   * at order creation).
+   *
+   * The credential is folded into the SELECT rather than checked afterwards, so
+   * a wrong token returns the same 404 as a missing order. Answering 403 for
+   * "exists but not yours" would let a caller probe order ids.
+   *
+   * Previously this ran inline in the controller: it wrote no status event and
+   * no cancellation_reason, so a customer-cancelled order showed up with no
+   * explanation in the customer's own order screen.
+   */
+  static async cancelByCaller(
+    orderId: string,
+    scope: { customerId: string } | { trackingToken: string }
+  ) {
+    const isGuest = 'trackingToken' in scope;
+    const credential = isGuest ? scope.trackingToken : scope.customerId;
+    const matchColumn = isGuest ? 'o.tracking_token' : 'o.customer_id';
+
+    const order = await transaction(async (client) => {
+      const current = await client.query(
+        `SELECT o.id, o.status, o.order_number as "orderNumber", o.store_id as "storeId",
+                o.customer_id as "customerId", o.guest_name as "guestName",
+                o.cancellation_reason as "cancellationReason"
+         FROM mart_orders o
+         WHERE o.id = $1 AND ${matchColumn} = $2
+         FOR UPDATE`,
+        [orderId, credential]
+      );
+      const existing = current.rows[0];
+      if (!existing) throw Object.assign(new Error('Order not found'), { status: 404 });
+      if (!['pending', 'confirmed'].includes(existing.status)) {
+        throw Object.assign(new Error('Order cannot be cancelled at this stage'), { status: 400 });
+      }
+
+      await client.query(
+        `UPDATE mart_orders
+            SET status = 'cancelled',
+                cancellation_reason = 'customer_request',
+                updated_at = NOW()
+          WHERE id = $1`,
+        [orderId]
+      );
+      await this.reverseCampaignRedemption(orderId, 'cancelled', client);
+      await client.query(
+        `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_name)
+         VALUES ($1, $2, 'cancelled', $3)`,
+        [orderId, existing.status, isGuest ? 'Customer (guest)' : 'Customer']
+      );
+      return existing;
+    });
+
+    return order;
+  }
+
   static async trackByPhone(phone: string) {
     return this.findAll({ phone, limit: 10 });
   }
@@ -662,7 +719,12 @@ export class OrderService {
 
     const placeholders = clean.map((_, i) => `$${i + 1}`).join(',');
     const result = await query(
-      `${ORDER_LIST_PROJECTION}
+      `${ORDER_LIST_PROJECTION},
+              -- Returned only here: the caller already proved possession by
+              -- supplying this token, and the client needs it to cancel its own
+              -- order later. Kept out of the admin projection so the credential
+              -- never lands in the staff order list.
+              o.tracking_token as "trackingToken"
        FROM mart_orders o
        LEFT JOIN mart_order_items oi ON oi.order_id = o.id
        LEFT JOIN mart_products p ON p.id = oi.product_id

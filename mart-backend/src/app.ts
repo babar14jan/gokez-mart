@@ -118,6 +118,17 @@ app.use('/api/v1/admin/login', rateLimit({
   },
 }));
 
+// 5. Guest self-service cancel — 20 / 5 min per IP. Must be declared before the
+// generic /orders limiter below, otherwise Express matches that one first and
+// its message ("Too many orders placed") would be returned for a cancellation.
+app.use('/api/v1/orders/track/:id/cancel', rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: isProd ? 20 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many cancellation attempts. Please wait a few minutes.' },
+}));
+
 // 5. Order placement — 10 orders / 5 min per IP (prevent order spam)
 app.use('/api/v1/orders', rateLimit({
   windowMs: 5 * 60 * 1000,

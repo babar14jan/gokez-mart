@@ -277,7 +277,19 @@ export default function LoginModal({ onClose, onSuccess, pendingCheckout, onGues
             </>
           ) : step === 'phone' ? (
             <>
-              <img src="/login_page.webp" alt="Login" className="w-full max-h-[30vh] object-cover rounded-2xl mb-4" />
+              {/* The source art is 1024x979, so a capped-height object-cover box cut roughly
+                    a third of it off on a phone. Sized by its own aspect ratio instead,
+                    and the dialog scrolls, so the whole image is visible.
+
+                    Mobile only: full-bleed to the screen edges. The dialog's scroll
+                    container is px-5, so -mx-5 plus a width that adds those 40px back
+                    is what actually reaches the edges — w-full alone would be 40px
+                    short and leave a gap. The top bleed cancels the safe-area padding
+                    so the art runs under the status bar; sm: restores the inset,
+                    rounded corners and normal padding for the desktop dialog. */}
+              <img src="/login_page.webp" alt="Log in to Gokez Mart"
+                width={1024} height={979} decoding="async"
+                className="-mx-5 -mt-[max(1rem,env(safe-area-inset-top))] mb-4 block h-auto w-[calc(100%_+_2.5rem)] rounded-none sm:mx-0 sm:mt-0 sm:w-full sm:rounded-2xl" />
 
               <form onSubmit={handleSendOtp} className="mt-6 space-y-3">
                 <ErrorNote id="login-error" />
