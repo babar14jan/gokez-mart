@@ -101,7 +101,7 @@ export interface FunnelSummary {
   range: FunnelRange;
   stages: FunnelStage[];
   dropoff: FunnelDropoff;
-  daily: { date: string; requested: number; verified: number; ordered: number }[];
+  daily: { date: string; visits: number; requested: number; verified: number; ordered: number }[];
   totals: { customers: number; orders: number; revenue: number };
   eventStages: { key: string; label: string; sessions: number }[];
   channels: { channel: string; sessions: number; ordered: number }[];

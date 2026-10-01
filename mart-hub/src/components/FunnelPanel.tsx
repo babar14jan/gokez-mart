@@ -29,8 +29,28 @@ export default function FunnelPanel() {
   }, [range]);
 
   const stages = summary?.stages ?? [];
-  const top = stages[0]?.count ?? 0;
-  const peak = Math.max(1, ...(summary?.daily ?? []).map(d => d.requested));
+  // Bars scale against the largest stage, not the first one. Keying off
+  // stages[0] collapses every bar to its 6% floor on a period where nobody
+  // requested an OTP but later stages still have counts.
+  const barMax = Math.max(1, ...stages.map(s => s.count));
+  // Scales against the largest of the three series so visits, which outnumber
+// leads on any given day, do not flatten the other two into invisibility.
+const peak = Math.max(1, ...(summary?.daily ?? []).flatMap(d => [d.visits, d.requested, d.ordered]));
+const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions));
+
+  // The empty state must consider every signal the panel renders, not just the
+  // first stage. "Number entered" counts OTP requests, so a day with visits,
+  // carts and orders but nobody reaching the login step reported zero there and
+  // blanked the whole panel -- which is the normal shape of a single day.
+  const hasActivity = Boolean(
+    summary &&
+    (stages.some(s => s.count > 0) ||
+     summary.channels.some(c => c.sessions > 0) ||
+     summary.eventStages.some(s => s.sessions > 0) ||
+     summary.cart.carts > 0 ||
+     summary.cart.reachedCheckout > 0 ||
+     summary.daily.some(d => d.requested > 0 || d.ordered > 0)),
+  );
 
   return (
     <section className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -53,14 +73,14 @@ export default function FunnelPanel() {
 
       {loading ? (
         <div className="flex h-32 items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" /></div>
-      ) : !summary || top === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">No login activity in this period yet.</p>
+      ) : !summary || !hasActivity ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">No activity in this period yet.</p>
       ) : (
         <>
           <div className="space-y-2">
             {stages.map((stage, i) => {
               const prev = i === 0 ? stage.count : stages[i - 1].count;
-              const width = top > 0 ? Math.max(6, Math.round((stage.count / top) * 100)) : 0;
+              const width = stage.count > 0 ? Math.max(6, Math.round((stage.count / barMax) * 100)) : 0;
               return (
                 <div key={stage.key}>
                   {i > 0 && (
@@ -98,27 +118,35 @@ export default function FunnelPanel() {
             </div>
           </div>
 
-          {summary.daily.length > 1 && (
+          {summary.daily.length > 0 && (
             <div className="mt-4">
               <div className="mb-1.5 flex items-center justify-between">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-                  Numbers entered vs ordered, by day
+                  Visits, numbers entered vs ordered, by day
                 </p>
                 <p className="flex items-center gap-3 text-[10px] text-gray-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-blue-400 dark:bg-blue-600" />Visits</span>
                   <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-emerald-500" />Entered</span>
                   <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-400 dark:bg-slate-500" />Ordered</span>
                 </p>
               </div>
-              <div className="flex h-12 items-end gap-px">
+              <div className="flex h-14 items-end gap-px">
                 {summary.daily.map(point => (
-                  <div key={point.date} className="group relative flex flex-1 flex-col justify-end gap-px" title={`${point.date}: ${point.requested} entered, ${point.ordered} ordered`}>
+                  <div key={point.date} className="group relative flex flex-1 flex-col justify-end gap-px"
+                    title={`${point.date}: ${point.visits} visits, ${point.requested} entered, ${point.ordered} ordered`}>
                     <div className="w-full rounded-sm bg-slate-400 dark:bg-slate-500"
                       style={{ height: `${Math.round((point.ordered / peak) * 100)}%` }} />
                     <div className="w-full rounded-sm bg-emerald-500"
                       style={{ height: `${Math.round((point.requested / peak) * 100)}%` }} />
+                    <div className="w-full rounded-sm bg-blue-400 dark:bg-blue-600"
+                      style={{ height: `${Math.round((point.visits / peak) * 100)}%` }} />
                   </div>
                 ))}
               </div>
+              <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
+                A visit is an anonymous session; nobody has entered a number yet,
+                so it is never counted as a lead.
+              </p>
             </div>
           )}
 
@@ -152,6 +180,10 @@ export default function FunnelPanel() {
               <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
                 A visit is an anonymous session, not a unique person. Reprints carrying{' '}
                 <code className="rounded bg-gray-100 px-1 dark:bg-slate-700">?ch=</code> split out automatically.
+                <span className="mt-0.5 block">
+                  Ordered counts only orders tied to a signed-in customer, so guest
+                  checkouts do not appear against the channel they came from.
+                </span>
               </p>
             </div>
           )}
@@ -167,7 +199,7 @@ export default function FunnelPanel() {
                     <span className="w-40 shrink-0 truncate text-xs text-gray-600 dark:text-slate-300">{stage.label}</span>
                     <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-gray-100 dark:bg-slate-700/60">
                       <div className="h-full rounded-sm bg-blue-500 dark:bg-blue-600"
-                        style={{ width: `${Math.round((stage.sessions / Math.max(1, summary.eventStages[0].sessions)) * 100)}%` }} />
+                        style={{ width: `${Math.round((stage.sessions / eventMax) * 100)}%` }} />
                     </div>
                     <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800 dark:text-slate-200">{stage.sessions}</span>
                   </div>

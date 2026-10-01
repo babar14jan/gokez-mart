@@ -13,6 +13,9 @@ export interface FunnelStage {
 
 export interface FunnelDailyPoint {
   date: string;
+  /** Anonymous sessions that first landed in the period. A visit is not a lead:
+   *  nobody has entered a number yet, so it must not be counted as one. */
+  visits: number;
   requested: number;
   verified: number;
   ordered: number;
@@ -86,15 +89,43 @@ export class FunnelService {
          FROM lead_base`,
         range === 'today' ? [] : [days]
       ),
+      // Visits and leads live in different tables on purpose: a session has no
+      // number, a lead has no guarantee of a session row surviving. The series is
+      // built per day from both and combined on the date, so a day with traffic
+      // but no OTP still appears -- with visits counted and entered at zero.
       query<FunnelDailyPoint>(
-        `WITH lead_base AS (${LEAD_BASE(range)})
-         SELECT to_char(DATE_TRUNC('day', first_otp_requested_at), 'YYYY-MM-DD') AS date,
-                COUNT(*)::int                                        AS requested,
-                COUNT(*) FILTER (WHERE verified_at IS NOT NULL)::int  AS verified,
-                COUNT(*) FILTER (WHERE has_order)::int                AS ordered
-         FROM lead_base
-         GROUP BY 1
-         ORDER BY 1`,
+        `WITH days AS (
+           SELECT DATE_TRUNC('day', first_seen_at) AS day FROM mart_funnel_sessions
+           WHERE ${RANGE_WHERE('first_seen_at', range)}
+           UNION
+           SELECT DATE_TRUNC('day', first_otp_requested_at) AS day FROM mart_customer_leads
+           WHERE ${RANGE_WHERE('first_otp_requested_at', range)}
+         ),
+         visits AS (
+           SELECT DATE_TRUNC('day', first_seen_at) AS day, COUNT(*)::int AS n
+           FROM mart_funnel_sessions
+           WHERE ${RANGE_WHERE('first_seen_at', range)}
+           GROUP BY 1
+         ),
+         lead_days AS (
+           SELECT to_char(DATE_TRUNC('day', first_otp_requested_at), 'YYYY-MM-DD') AS date,
+                  COUNT(*)::int                                        AS requested,
+                  COUNT(*) FILTER (WHERE verified_at IS NOT NULL)::int  AS verified,
+                  COUNT(*) FILTER (WHERE has_order)::int                AS ordered
+           FROM (${LEAD_BASE(range)}) lb
+           GROUP BY 1
+         )
+         SELECT to_char(d.day, 'YYYY-MM-DD') AS date,
+                COALESCE(v.n, 0)::int        AS visits,
+                COALESCE(l.requested, 0)::int AS "requested",
+                COALESCE(l.verified, 0)::int  AS "verified",
+                COALESCE(l.ordered, 0)::int   AS "ordered"
+         FROM days d
+         LEFT JOIN visits v ON v.day = d.day
+         LEFT JOIN lead_days l ON l.date = to_char(d.day, 'YYYY-MM-DD')
+         ORDER BY d.day`,
+        // RANGE_WHERE always binds $1, so every repeated use in this query
+        // shares the one placeholder rather than consuming a new parameter.
         range === 'today' ? [] : [days]
       ),
       query<{ customers: number; orders: number; revenue: string | number }>(
@@ -165,7 +196,11 @@ export class FunnelService {
       query<ChannelRow>(
         `SELECT s.channel,
                 COUNT(*)::int AS sessions,
-                COUNT(*) FILTER (WHERE EXISTS (
+                -- Guest orders carry no customer_id, and a session only gains one
+                -- when the shopper signs in. Attributing an unlinked guest order to a
+                -- channel would be a guess, so those are honestly absent here rather
+                -- than spread across channels by inference.
+                COUNT(*) FILTER (WHERE s.customer_id IS NOT NULL AND EXISTS (
                   SELECT 1 FROM mart_orders o
                   WHERE o.customer_id = s.customer_id
                 ))::int AS ordered
