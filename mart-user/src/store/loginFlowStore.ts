@@ -22,11 +22,17 @@ interface LoginFlowState {
   pendingCampaignId: string | null;
   /** Where to send the shopper once OTP completes, e.g. '/orders'. */
   postLoginPath: string | null;
+  /**
+   * Where to put the shopper back if they DECLINE login. Distinct from
+   * postLoginPath: signing in from the account tab means success goes to
+   * '/orders', but giving up has to return to whatever page they came from.
+   */
+  guestReturnPath: string | null;
   beginOtp: (phone: string, pendingCheckout: boolean, pendingCouponApply?: boolean) => void;
   markOtpResent: () => void;
-  setPendingCheckout: (pendingCheckout: boolean) => void;
   setPendingCouponApply: (pendingCouponApply: boolean, campaignId?: string | null) => void;
   setPostLoginPath: (path: string | null) => void;
+  setGuestReturnPath: (path: string | null) => void;
   clear: () => void;
   getActiveOtpFlow: () => ActiveOtpFlow | null;
 }
@@ -39,6 +45,7 @@ const emptyFlow = {
   pendingCouponApply: false,
   pendingCampaignId: null,
   postLoginPath: null,
+  guestReturnPath: null,
 };
 
 export const useLoginFlowStore = create<LoginFlowState>()(
@@ -62,19 +69,21 @@ export const useLoginFlowStore = create<LoginFlowState>()(
         const now = Date.now();
         set({ expiresAt: now + OTP_EXPIRY_MS, resendAvailableAt: now + RESEND_DELAY_MS });
       },
-      setPendingCheckout: (pendingCheckout) => set({ pendingCheckout }),
       setPendingCouponApply: (pendingCouponApply, campaignId) => set({
         pendingCouponApply,
         pendingCampaignId: campaignId ?? null,
       }),
       setPostLoginPath: (path) => set({ postLoginPath: path }),
-      // Preserves postLoginPath: the OTP handlers call clear() before handing
-      // control back to the view that still needs to read the redirect target.
-      clear: () => set({ ...emptyFlow, postLoginPath: get().postLoginPath }),
+      setGuestReturnPath: (path) => set({ guestReturnPath: path }),
+      // Preserves both redirect targets: the OTP handlers call clear() before
+      // handing control back to the view that still needs to read them.
+      clear: () => set({ ...emptyFlow, postLoginPath: get().postLoginPath, guestReturnPath: get().guestReturnPath }),
       getActiveOtpFlow: () => {
         const { phone, expiresAt, resendAvailableAt, pendingCheckout, pendingCouponApply, pendingCampaignId } = get();
         if (!phone || !expiresAt || !resendAvailableAt || expiresAt <= Date.now()) {
-          if (phone || expiresAt || resendAvailableAt) set({ ...emptyFlow, postLoginPath: get().postLoginPath });
+          if (phone || expiresAt || resendAvailableAt) {
+            set({ ...emptyFlow, postLoginPath: get().postLoginPath, guestReturnPath: get().guestReturnPath });
+          }
           return null;
         }
         return { phone, expiresAt, resendAvailableAt, pendingCheckout, pendingCouponApply, pendingCampaignId };
@@ -83,7 +92,7 @@ export const useLoginFlowStore = create<LoginFlowState>()(
     {
       name: 'mart-login-flow',
       storage: createJSONStorage(() => sessionStorage),
-      partialize: ({ phone, expiresAt, resendAvailableAt, pendingCheckout, pendingCouponApply, pendingCampaignId, postLoginPath }) => ({
+      partialize: ({ phone, expiresAt, resendAvailableAt, pendingCheckout, pendingCouponApply, pendingCampaignId, postLoginPath, guestReturnPath }) => ({
         phone,
         expiresAt,
         resendAvailableAt,
@@ -91,6 +100,7 @@ export const useLoginFlowStore = create<LoginFlowState>()(
         pendingCouponApply,
         pendingCampaignId,
         postLoginPath,
+        guestReturnPath,
       }),
     }
   )

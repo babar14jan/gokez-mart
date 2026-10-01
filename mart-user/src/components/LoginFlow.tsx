@@ -14,6 +14,12 @@ export interface LoginFlowProps {
   pendingCheckout?: boolean;
   onGuest?: () => void;
   variant?: 'modal' | 'page';
+  /**
+   * The overlay has no other way out, so it needs the guest escape inline. A page
+   * host that renders its own "Continue as guest" must switch this off, or the
+   * customer sees the same action twice.
+   */
+  showGuestLink?: boolean;
 }
 
 type Step = 'phone' | 'otp' | 'profile' | 'offer';
@@ -29,10 +35,12 @@ type Step = 'phone' | 'otp' | 'profile' | 'offer';
  *
  * The component renders only the steps -- the host owns its own chrome, which is
  * what lets one flow sit inside the checkout overlay and inside the Account page.
- * `variant` exists solely for the one thing that genuinely differs: the login art
- * is full-bleed inside the modal's padded panel, but stays contained on the page.
+ * `variant` covers the two things that genuinely differ: the overlay can be
+ * dismissed with Escape and cancels its own safe-area top padding, while the page
+ * cancels its py-6 instead. Everything else -- steps, OTP, analytics, the guest
+ * exit and the login art -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal' }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true }: LoginFlowProps) {
   const isModal = variant === 'modal';
   const restoredFlow = useLoginFlowStore.getState().getActiveOtpFlow();
   const [step, setStep] = useState<Step>(() => restoredFlow ? 'otp' : 'phone');
@@ -220,7 +228,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   // This is now the only way out of the login flow on every step, so it carries
   // the 44px WCAG 2.2 target floor the cross used to provide: py-2 on 13px text
   // is only ~34px tall.
-  const GuestLink = () => onGuest ? (
+  const GuestLink = () => (onGuest && showGuestLink) ? (
     <button type="button" onClick={handleGuest}
       className="flex min-h-[44px] w-full items-center justify-center py-2 text-center text-[13px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors focus-visible:outline-none focus-visible:underline">
       Continue as guest
@@ -289,27 +297,44 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             </>
           ) : step === 'phone' ? (
             <>
-              {/* The source art is 1024x979, so a capped-height object-cover box cut roughly
-                    a third of it off on a phone. Sized by its own aspect ratio instead,
-                    and the host scrolls, so the whole image is visible.
+              {/* One login visual for the whole app. The overlay used to show a
+                    separate illustration from the Account page, so the same login
+                    looked like two different screens; the page's Guest_page.webp is
+                    now the only one, supplied by the flow for both hosts.
 
-                    Modal only: full-bleed to the screen edges. The modal's scroll
-                    container is px-5, so -mx-5 plus a width that adds those 40px back
-                    is what actually reaches the edges — w-full alone would be 40px
-                    short and leave a gap. The top bleed cancels the safe-area padding
-                    so the art runs under the status bar; sm: restores the inset,
-                    rounded corners and normal padding for the desktop dialog.
+                    Never cropped: sized by its own intrinsic ratio (936x913) rather
+                    than a capped-height object-cover box, which used to cut about a
+                    third of it off on a phone. The host scrolls, so all of it shows.
 
-                    That arithmetic is hardcoded to the modal's own padding, which is
-                    exactly why it lives here rather than being shared blindly: on the
-                    Account page the container is a different width, so the art stays
-                    contained instead of repeating a magic 2.5rem against a px-5 it no
-                    longer owns. */}
-              <img src="/login_page.webp" alt="Log in to Gokez Mart"
-                width={1024} height={979} decoding="async"
-                className={`mb-4 block h-auto w-full ${isModal
-                  ? '-mx-5 -mt-[max(1rem,env(safe-area-inset-top))] w-[calc(100%_+_2.5rem)] rounded-none sm:mx-0 sm:mt-0 sm:w-full sm:rounded-2xl'
-                  : 'rounded-2xl'}`} />
+                    Flush to the host edges at EVERY width, which is why there is no
+                    inset/rounded "framed" variant on desktop. Two things that bit
+                    here, both worth keeping in mind before editing:
+
+                    1. `max-w-none` is load-bearing. Tailwind's preflight sets
+                       `img { max-width: 100% }`, which clamps the bleed width back
+                       to the container's content box no matter how wide `width`
+                       says. Combined with -mx-5 that left a 40px gap down the right
+                       and a flush left edge. This was the real cause; the `w-full`
+                       clash below was only the secondary one.
+
+                    2. `w-full` must NOT appear alongside the bleed width. Both set
+                       `width`, so the one emitted later in the stylesheet wins the
+                       cascade regardless of class order in the attribute -- and
+                       Tailwind happened to emit `.w-full` after it. Only one width
+                       rule per breakpoint, never two.
+
+                    3. The bleed is arithmetically tied to each host's own padding:
+                       px-5 (2.5rem) for the Account page at all widths, but the
+                       overlay switches to px-7 (3.5rem) from sm up. Change either
+                       host's padding and these two numbers have to move with it.
+                       Both hosts clip (overflow-hidden) so the flush art takes the
+                       card/dialog corner radius instead of needing its own. */}
+              <img src="/Guest_page.webp" alt="Welcome to Gokez Mart"
+                width={936} height={913} decoding="async"
+                className={`mb-4 block h-auto max-w-none -mx-5 w-[calc(100%_+_2.5rem)] rounded-none ${
+                  isModal
+                    ? '-mt-[max(1rem,env(safe-area-inset-top))] sm:-mx-7 sm:w-[calc(100%_+_3.5rem)]'
+                    : '-mt-6'}`} />
 
               <form onSubmit={handleSendOtp} className="mt-6 space-y-3">
                 <ErrorNote id="login-error" />

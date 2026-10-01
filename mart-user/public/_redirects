@@ -19,7 +19,7 @@
 # or not an asset matches the incoming request." A `/*` rule would therefore
 # shadow real files and serve index.html in place of:
 #   robots.txt, sitemap.xml, manifest.json, sw.js, version.json,
-#   cache-version.json, /icons/*, /assets/*, /qr-sizes/*, and the brand images.
+#   cache-version.json, /icons/*, /assets/*, and the brand images.
 # Those failures are silent — a crawler would receive HTML where it expects XML,
 # and the PWA would fail to install.
 #

@@ -316,7 +316,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
             Sign in with your phone number to see all your past orders and track current ones.
           </p>
           <button
-            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
             className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm mb-3"
           >
             Track My Orders →
@@ -398,7 +398,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
         )}
         <div className="text-center">
           <button
-            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
             className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
           >
             Track a different order →

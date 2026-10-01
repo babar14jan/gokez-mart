@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -7,7 +7,6 @@ import { useThemeStore } from '../store/themeStore';
 import { getLocationPermission } from '../services/push';
 import AddressForm from '../components/AddressForm';
 import { useLoginFlowStore } from '../store/loginFlowStore';
-import { useCartStore } from '../store/cartStore';
 import LoginFlow from '../components/LoginFlow';
 
 interface AccountPageProps {
@@ -22,7 +21,6 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
   const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
   const { } = useThemeStore();
-  const cartCount = useCartStore(s => s.items.length);
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(name || '');
@@ -112,6 +110,17 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
     ? name.trim().split(/\s+/).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
     : (phone || '?')[0].toUpperCase();
 
+  // Declining login returns to the page this visit started from: the tab the
+  // customer tapped, or '/orders' for the guest "Track My Orders" CTA. It used
+  // to branch on cartCount, which sent people to Checkout or Home regardless of
+  // where they actually were.
+  const leaveAsGuest = () => {
+    const { guestReturnPath } = useLoginFlowStore.getState();
+    useLoginFlowStore.getState().clear();
+    useLoginFlowStore.getState().setGuestReturnPath(null);
+    navigate(guestReturnPath || '/');
+  };
+
   const navigate = (path: string) => {
     window.history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -141,16 +150,6 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
     return (
       <div className="min-h-screen bg-white dark:bg-slate-900 font-sans">
         <div className="w-full sm:max-w-sm sm:mx-auto bg-white dark:bg-slate-800 sm:rounded-3xl sm:shadow-xl overflow-hidden">
-          {/* The logged-out account page is a real destination (both guest "Track
-              My Orders" CTAs deep-link to /account), so it needs a way back out.
-              Previously the only exit was the guest link below. */}
-          <div className="flex border-b border-gray-100 bg-white px-2 py-2 dark:border-slate-700 dark:bg-slate-800">
-            <button type="button" onClick={() => onBack?.()}
-              className="-ml-1 flex min-h-[44px] items-center gap-1 rounded-xl px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-300 dark:hover:bg-slate-700">
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Back
-            </button>
-          </div>
-          <img src="/Guest_page.webp" alt="Welcome to Gokez Mart" className="w-full block" />
           <div className="px-5 py-6 space-y-4">
 <LoginFlow
               variant="page"
@@ -160,19 +159,30 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
               // mid-login into the checkout modal, and it would label the name
               // step "Continue to Checkout" when this page actually navigates to
               // postLoginPath (/orders).
-              onGuest={() => navigate(cartCount > 0 ? '/checkout' : '/')}
+              // Only the guest exit is stood down: the page renders its own
+              // "Continue as guest" link below, so the flow's copy is switched off
+              // to avoid showing the same action twice. The hero image is NOT --
+              // the flow supplies it, so both hosts share one login visual.
+              showGuestLink={false}
+              // The page owns the guest exit (the flow's own is switched off above), so it
+              // has to do the flow's cleanup itself. LoginFlow.handleGuest normally
+              // calls loginFlow.clear() before leaving; without that, a shopper who
+              // abandons login here leaves an unexpired OTP flow in sessionStorage,
+              // which App reads on next boot and turns into a surprise modal.
+              onGuest={leaveAsGuest}
               onSuccess={() => {
                 // Honour the redirect intent recorded before this page was opened.
                 // "/orders" is the default because /account is reached from the
                 // guest "Track My Orders" CTA.
                 const redirect = useLoginFlowStore.getState().postLoginPath || '/orders';
                 useLoginFlowStore.getState().setPostLoginPath(null);
+                useLoginFlowStore.getState().setGuestReturnPath(null);
                 navigate(redirect);
               }}
             />
             <div className="text-center">
               <button
-                onClick={() => navigate(cartCount > 0 ? '/checkout' : '/')}
+                onClick={leaveAsGuest}
                 className="text-base font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
               >
                 Continue as guest →

@@ -74,9 +74,19 @@ export default function App() {
     if (path === '/notification-settings') return 'notification-settings';
     if (path === '/delete-account') return 'delete-account';
     if (path === '/account') return 'account';
+    if (path === '/categories') return 'categories';
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
+  // The bottom tabs move `view` without pushing history, so nothing else records
+  // which screen the shopper was on before opening the account login. Needed so
+  // "Continue as guest" returns there instead of guessing from the basket.
+  const VIEW_PATH: Record<View, string> = {
+    home: '/', categories: '/categories', orders: '/orders', account: '/account',
+    privacy: '/privacy', terms: '/terms', grievance: '/grievance',
+    'delete-account': '/delete-account', feedback: '/feedback',
+    'notification-settings': '/notification-settings',
+  };
   // Mirrored in state because writing sessionStorage alone does not re-render,
   // which made "Not now" look like it did nothing.
   const [signInPromptDismissed, setSignInPromptDismissed] = useState(
@@ -194,6 +204,9 @@ export default function App() {
       // customer who signed in from the account page was dumped on the home
       // screen instead of their order history.
       else if (path === '/orders') setView('orders');
+      // Declining login from the account tab returns here, so this path has to
+      // resolve to a view. Without it the guest exit fell through to Home.
+      else if (path === '/categories') setView('categories');
       else if (path === '/checkout') { setView('home'); setCheckoutActive(true); }
       else setView('home');
     };
@@ -323,7 +336,12 @@ export default function App() {
 
   // Account tab — show login modal if not logged in, but still navigate
   const handleNavChange = (v: View) => {
-    if (v === 'account') { setPendingCheckout(false); }
+    if (v === 'account') {
+      setPendingCheckout(false);
+      // Re-tapping the Account tab must not record '/account' as the origin, or
+      // the guest exit would navigate to the page it is already leaving.
+      if (view !== 'account') useLoginFlowStore.getState().setGuestReturnPath(VIEW_PATH[view]);
+    }
     setView(v);
   };
 
