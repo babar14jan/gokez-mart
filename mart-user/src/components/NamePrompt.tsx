@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useFinePointer } from '../utils/useFinePointer';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -9,6 +10,7 @@ interface NamePromptProps {
 }
 
 export default function NamePrompt({ onDone }: NamePromptProps) {
+  const finePointer = useFinePointer();
   const { updateProfile } = useCustomerAuthStore();
   const { setName: syncName } = useCustomerStore();
   const [name, setName] = useState('');
@@ -48,7 +50,7 @@ export default function NamePrompt({ onDone }: NamePromptProps) {
         </p>
 
         <input
-          autoFocus
+          autoFocus={finePointer}
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}

@@ -44,3 +44,53 @@ body { background-color: #ffffff; color: #111827; }
 }
 
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+  /* Height of the on-screen keyboard over the layout viewport, published by
+     useKeyboardInset(). Defaults to 0 so the shell is a plain full-height page
+     until a keyboard actually opens. */
+  :root { --kb: 0px; }
+
+  /* Full-height page shell.
+
+     Every page used min-h-screen, which is 100vh -- a height chosen without the
+     keyboard in mind, so with the keyboard up the shell stayed taller than
+     anything visible and the customer could scroll a long way past their own
+     form. 100dvh tracks the real viewport, and subtracting --kb keeps the shell
+     exactly as tall as what is still on screen.
+
+     This replaces min-h-screen rather than sitting alongside it on purpose.
+     min-h-screen is a Tailwind utility; keeping it on the element as well would
+     put two competing min-height values on one node and re-introduce exactly the
+     kind of cascade surprise documented in LoginFlow. Delete the class when this
+     one is applied, do not add it. */
+  .page-shell {
+    min-height: calc(100dvh - var(--kb, 0px));
+  }
+
+  /* ---- While the on-screen keyboard is up ------------------------------
+     Flagged by useKeyboardInset() as .kb-open on <html>.
+
+     The 6rem/9rem bottom padding exists to clear the fixed bottom nav, which
+     cannot be tapped while the keyboard covers the lower half of the screen.
+     Leaving it in place just pushes the form further down and adds scroll
+     distance, so it collapses to a normal gutter. */
+
+  .kb-open .page-bottom {
+    padding-bottom: 1rem;
+  }
+
+  /* The login hero is 45% of a phone viewport on its own, so with a keyboard up
+     it left barely 128px for the phone field -- the customer had to scroll to
+     reach a field they had just tapped. Capping it while the keyboard is open
+     brings the input above the fold. svh, not dvh: dvh moves as the keyboard
+     animates, which is precisely the shake being fixed here.
+
+     This is the one compromise in this file: a shorter box means object-fit
+     crops the illustration, which cannot be avoided -- the art is 936x913, so
+     nearly square, and full width on a 390px phone already makes it 380px tall.
+     It only engages while the keyboard is up, so the resting page is unchanged. */
+  .kb-open .login-art {
+    max-height: 34svh;
+    object-fit: cover;
+    object-position: top;
+  }

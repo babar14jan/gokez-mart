@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useFinePointer } from '../utils/useFinePointer';
 import { Loader2, LocateFixed, Save } from 'lucide-react';
 import { storeApi } from '../services/api';
 
@@ -150,11 +151,12 @@ function Field({ label, required = false, value, onChange, placeholder, autoFocu
   autoFocus?: boolean;
   inputMode?: 'numeric';
 }) {
+  const finePointer = useFinePointer();
   return (
     <div>
       <label className="block text-[10px] font-medium text-gray-500 mb-1">{label}{required ? ' *' : ''}</label>
       <input type="text" inputMode={inputMode} maxLength={inputMode === 'numeric' ? 6 : undefined} value={value} onChange={onChange}
-        className={inputClass} placeholder={placeholder} autoFocus={autoFocus} />
+        className={inputClass} placeholder={placeholder} autoFocus={autoFocus && finePointer} />
     </div>
   );
 }

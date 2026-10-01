@@ -51,7 +51,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (!this.state.error) return this.props.children;
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-950 px-6">
+      <div className="page-shell flex items-center justify-center bg-gray-50 dark:bg-slate-950 px-6">
         <div className="max-w-sm text-center">
           <div className="text-5xl mb-4" aria-hidden="true">
             🛒

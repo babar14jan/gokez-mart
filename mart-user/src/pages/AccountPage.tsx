@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
@@ -7,7 +7,9 @@ import { useThemeStore } from '../store/themeStore';
 import { getLocationPermission } from '../services/push';
 import AddressForm from '../components/AddressForm';
 import { useLoginFlowStore } from '../store/loginFlowStore';
-import LoginFlow from '../components/LoginFlow';
+import LoginFlow, { type Step } from '../components/LoginFlow';
+import { track } from '../utils/track';
+import { useFinePointer } from '../utils/useFinePointer';
 
 interface AccountPageProps {
   onBack?: () => void;
@@ -18,6 +20,7 @@ interface AccountPageProps {
 }
 
 export default function AccountPage({ onBack, supportName, supportPhone, whatsappNumber }: AccountPageProps) {
+  const finePointer = useFinePointer();
   const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
   const { } = useThemeStore();
@@ -114,7 +117,15 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
   // customer tapped, or '/orders' for the guest "Track My Orders" CTA. It used
   // to branch on cartCount, which sent people to Checkout or Home regardless of
   // where they actually were.
+  const loginStep = useRef<Step>('phone');
+
   const leaveAsGuest = () => {
+    // The flow's own GuestLink tracks this itself, but showGuestLink is off here,
+    // so without emitting it here every abandonment from this page would be
+    // invisible in the hub funnel.
+    if (loginStep.current === 'phone' || loginStep.current === 'otp') {
+      track('login_abandoned', { step: loginStep.current, reason: 'guest' });
+    }
     const { guestReturnPath } = useLoginFlowStore.getState();
     useLoginFlowStore.getState().clear();
     useLoginFlowStore.getState().setGuestReturnPath(null);
@@ -148,7 +159,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-white dark:bg-slate-900 font-sans">
+      <div className="page-shell bg-white dark:bg-slate-900 font-sans">
         <div className="w-full sm:max-w-sm sm:mx-auto bg-white dark:bg-slate-800 sm:rounded-3xl sm:shadow-xl overflow-hidden">
           <div className="px-5 py-6 space-y-4">
 <LoginFlow
@@ -164,6 +175,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
               // to avoid showing the same action twice. The hero image is NOT --
               // the flow supplies it, so both hosts share one login visual.
               showGuestLink={false}
+              onStepChange={(s) => { loginStep.current = s; }}
               // The page owns the guest exit (the flow's own is switched off above), so it
               // has to do the flow's cleanup itself. LoginFlow.handleGuest normally
               // calls loginFlow.clear() before leaving; without that, a shopper who
@@ -196,7 +208,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 font-sans">
+    <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       <div className="w-full bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <p className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -226,7 +238,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
             <div className="flex-1 min-w-0">
               {editingName ? (
                 <div className="flex items-center gap-2">
-                  <input autoFocus type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
+                  <input autoFocus={finePointer} type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
                     className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500" placeholder="Your full name" />
                   <button onClick={saveName} disabled={saving === 'name'}
                     className="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg flex-shrink-0">

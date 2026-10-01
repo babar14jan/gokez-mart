@@ -1,7 +1,7 @@
 export default function TermsPage({ embed = false }: { embed?: boolean } = {}) {
   const updated = 'September 2026';
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 font-sans">
+    <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       {!embed && (
         <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 px-4 py-3 flex items-center gap-3">
           <button onClick={() => window.history.back()}

@@ -14,7 +14,13 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="preload" as="image" href="/mart_brand_new.webp" type="image/webp" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: on Android the keyboard shrinks the
+         LAYOUT viewport instead of only the visual one, so focused fields stay
+         reachable without the whole page reflowing under the customer. The
+         default (resizes-visual) is what makes a form look like it is shaking as
+         the browser scrolls a fixed-height page around the caret. iOS Safari
+         ignores this directive, which is why --kb exists as well. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Gokez MART" />

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, ArrowRight, Tag, PhoneCall } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
+import { useFinePointer } from '../utils/useFinePointer';
 import { subscribeToPush } from '../services/push';
 import { useCustomerStore } from '../store/customerStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -20,9 +21,15 @@ export interface LoginFlowProps {
    * customer sees the same action twice.
    */
   showGuestLink?: boolean;
+  /**
+   * Reports the visible step so a host that renders its OWN guest exit can emit
+   * login_abandoned for the right step. AccountPage does exactly that, and without
+   * this its button would silently drop the event the hub funnel counts.
+   */
+  onStepChange?: (step: Step) => void;
 }
 
-type Step = 'phone' | 'otp' | 'profile' | 'offer';
+export type Step = 'phone' | 'otp' | 'profile' | 'offer';
 
 /**
  * The one and only customer login implementation.
@@ -40,10 +47,19 @@ type Step = 'phone' | 'otp' | 'profile' | 'offer';
  * cancels its py-6 instead. Everything else -- steps, OTP, analytics, the guest
  * exit and the login art -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onStepChange }: LoginFlowProps) {
   const isModal = variant === 'modal';
+  // See useFinePointer: auto-focusing a field on a phone opens the keyboard on
+  // arrival and the browser scrolls to it, which is the page shake we are avoiding.
+  const finePointer = useFinePointer();
   const restoredFlow = useLoginFlowStore.getState().getActiveOtpFlow();
   const [step, setStep] = useState<Step>(() => restoredFlow ? 'otp' : 'phone');
+
+  // Held in a ref so an inline arrow from the host cannot re-fire this every
+  // render; the effect should depend on the step changing, nothing else.
+  const stepChangeRef = useRef(onStepChange);
+  stepChangeRef.current = onStepChange;
+  useEffect(() => { stepChangeRef.current?.(step); }, [step]);
   const [phone, setPhone] = useState(() => restoredFlow?.phone || '');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -281,7 +297,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   placeholder="Your full name *"
                   aria-invalid={Boolean(error)}
                   className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                  autoFocus />
+                  autoFocus={finePointer} />
                 <button type="submit" disabled={savingProfile || !newName.trim()} className={primaryBtn}>
                   {savingProfile
                     ? <Spinner />
@@ -331,7 +347,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                        card/dialog corner radius instead of needing its own. */}
               <img src="/Guest_page.webp" alt="Welcome to Gokez Mart"
                 width={936} height={913} decoding="async"
-                className={`mb-4 block h-auto max-w-none -mx-5 w-[calc(100%_+_2.5rem)] rounded-none ${
+                className={`login-art mb-4 block h-auto max-w-none -mx-5 w-[calc(100%_+_2.5rem)] rounded-none ${
                   isModal
                     ? '-mt-[max(1rem,env(safe-area-inset-top))] sm:-mx-7 sm:w-[calc(100%_+_3.5rem)]'
                     : '-mt-6'}`} />
@@ -351,7 +367,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     inputMode="numeric" autoComplete="tel"
                     aria-invalid={Boolean(error)}
                     className="flex-1 bg-transparent py-2.5 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
-                    autoFocus />
+                    autoFocus={finePointer} />
                 </div>
 
                 <button type="submit" disabled={loading || !phoneValid} className={primaryBtn}>
@@ -394,7 +410,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   inputMode="numeric" autoComplete="one-time-code" maxLength={6}
                   aria-invalid={Boolean(error)}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                  autoFocus />
+                  autoFocus={finePointer} />
                 <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn}>
                   {loading ? <Spinner /> : <>Verify &amp; Sign In</>}
                 </button>

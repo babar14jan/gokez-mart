@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useFinePointer } from '../utils/useFinePointer';
 import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi } from '../services/api';
@@ -40,6 +41,7 @@ const PREFERENCES = [
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
 export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
+  const finePointer = useFinePointer();
   const orderRequestKey = useRef(crypto.randomUUID());
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
@@ -328,7 +330,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   // permanently disabled Place Order button and no explanation.
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col">
+      <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
         <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
           <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-slate-400">
             <ChevronUp className="w-4 h-4 rotate-90" /> Back
@@ -352,7 +354,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+    <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
         <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
@@ -760,7 +762,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   {showCustomNote && (
                     <>
                       <textarea value={customNote} onChange={e => setCustomNote(e.target.value)}
-                        className={`${inp} resize-none`} rows={2} placeholder="e.g. Come to 3rd floor" autoFocus />
+                        className={`${inp} resize-none`} rows={2} placeholder="e.g. Come to 3rd floor" autoFocus={finePointer} />
                       <button type="button" onClick={() => setShowNotes(false)}
                         className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-colors">
                         Done

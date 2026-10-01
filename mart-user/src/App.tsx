@@ -23,6 +23,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
+import { useKeyboardInset } from './utils/useKeyboardInset';
 import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
 import { track, getFunnelChannel } from './utils/track';
@@ -173,6 +174,10 @@ export default function App() {
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
   const cartItems = useCartStore(s => s.totalItems());
+
+  // Keeps .page-shell equal to the visible height; see the hook for why one
+  // mechanism covers both iOS and Android.
+  useKeyboardInset();
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -360,6 +365,25 @@ export default function App() {
     }
   };
 
+  // "Apply & Save" / "Log in for offers" in checkout. This used to open the login
+  // OVERLAY, which meant redeeming a coupon presented a second login design --
+  // the same complaint as the duplicate account page. It now goes through the
+  // Account page, the same host "Track My Orders" uses, so there is one login to
+  // learn. postLoginPath returns to /checkout afterwards, where the resume effect
+  // in CheckoutPage redeems the code and shows it applied.
+  const handleCheckoutLogin = (campaign?: any) => {
+    const flow = useLoginFlowStore.getState();
+    flow.setPendingCouponApply(true, campaign?.id ?? null);
+    flow.setPostLoginPath('/checkout');
+    // Declining login must come back here too, basket intact, not to Home.
+    flow.setGuestReturnPath('/checkout');
+    setPendingCheckout(false);
+    setCheckoutActive(false);
+    setShowLoginModal(false);
+    window.history.pushState({}, '', '/account');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
   const handleCheckout = async () => {
     setPreCheckoutView(view);
     if (!selectedZone) {
@@ -390,7 +414,7 @@ export default function App() {
     const curStep = 0;
 
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 px-4 py-8">
+      <div className="page-shell bg-gray-50 dark:bg-slate-900 px-4 py-8">
         <div className="max-w-lg mx-auto space-y-4">
           <div className="text-center">
             <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -526,7 +550,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
+    <div className={`page-shell ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onGuest={handleLoginModalGuest} onClose={() => {
         useLoginFlowStore.getState().clear();
@@ -649,7 +673,7 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
-              onLogin={(campaign?: any) => { setCheckoutActive(false); setPendingCheckout(true); useLoginFlowStore.getState().setPendingCouponApply(true, campaign?.id ?? null); setShowLoginModal(true); }}
+              onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
               confirmOrder={confirmOrder}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status }); }}
             />
@@ -662,7 +686,7 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
-              onLogin={(campaign?: any) => { setCheckoutActive(false); setPendingCheckout(true); useLoginFlowStore.getState().setPendingCouponApply(true, campaign?.id ?? null); setShowLoginModal(true); }}
+              onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
               confirmOrder={confirmOrder}
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status }); }}
             />
