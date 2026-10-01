@@ -25,11 +25,11 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
             <button
               key={id}
               onClick={() => onChange(id)}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-colors
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200
                 ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'}`}
             >
               <div className="relative">
-                <Icon className={`w-6 h-6 transition-transform ${isActive ? 'scale-110' : ''}`} />
+                <Icon className="w-6 h-6" />
               </div>
               <span className={`text-[11px] font-semibold ${isActive ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
                 {label}

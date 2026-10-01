@@ -40,6 +40,53 @@ export interface CreateOrderDto {
   idempotencyKey: string;
 }
 
+// Shared projection for every order list: the admin hub and the public token
+// tracking endpoint must never drift apart. Only the WHERE clause differs.
+const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.guest_name as "guestName",
+              o.guest_phone as "guestPhone", o.guest_address as "guestAddress",
+              o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
+              o.total::float, o.payment_method as "paymentMethod",
+              o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
+              o.delivery_latitude::float as "deliveryLatitude", o.delivery_longitude::float as "deliveryLongitude",
+              o.termination_reason as "terminationReason",
+              o.cancellation_reason as "cancellationReason",
+              o.campaign_id as "campaignId",
+              o.campaign_discount::float as "campaignDiscount",
+              o.coupon_code_used as "couponCodeUsed",
+              o.delivery_by_name as "deliveryByName",
+              o.delivery_by_phone as "deliveryByPhone",
+              o.delivery_by as "deliveryById",
+              o.delivery_preference as "deliveryPreference",
+              o.delivery_note as "deliveryNote",
+              o.delivery_sequence as "deliverySequence",
+              o.batch_id as "batchId",
+              o.fulfilled_by as "fulfilledBy",
+              -- Closure fields: staff need to know an order was taken after
+              -- hours so it is held for the next opening rather than treated as
+              -- a late order, and so a manual closure is not mistaken for a
+              -- mistimed one.
+              o.placed_outside_hours as "placedOutsideHours",
+              o.closed_reason as "closedReason",
+              o.scheduled_for as "scheduledFor",
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                  'fromStatus', e.from_status,
+                  'toStatus', e.to_status,
+                  'actorName', e.actor_name,
+                  'createdAt', e.created_at
+                ) ORDER BY e.created_at ASC)
+                FROM mart_order_status_events e WHERE e.order_id = o.id
+              ), '[]') as "statusEvents",
+              json_agg(json_build_object(
+                'productId', oi.product_id,
+                'productName', oi.product_name,
+                'unit', oi.unit,
+                'price', oi.price::float,
+                'quantity', oi.quantity,
+                'total', oi.total::float,
+                'photoUrl', p.photo_url
+              )) as items`;
+
 export class OrderService {
   // Generate sequential order number MART-001, MART-002 etc
   private static generateOrderNumber(): string {
@@ -64,6 +111,10 @@ export class OrderService {
     const cleanPhone = data.guestPhone.replace(/\D/g, '');
     if (cleanPhone.length !== 10) throw new Error('Invalid phone number');
 
+    // The token is a guest's only credential for reading their order without an
+    // account, so it must be unguessable and unique per order.
+    const trackingToken = uuidv4();
+
     // Retry on order number collision (extremely rare but safe)
     let orderNumber = this.generateOrderNumber();
     const existing = await query(`SELECT 1 FROM mart_orders WHERE order_number = $1`, [orderNumber]);
@@ -73,12 +124,21 @@ export class OrderService {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [data.idempotencyKey]);
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-order:${cleanPhone}`]);
       const prior = await client.query(
-        `SELECT id, order_number as "orderNumber", subtotal::float, delivery_charge::float as "deliveryCharge", total::float
+        `SELECT id, order_number as "orderNumber", subtotal::float, delivery_charge::float as "deliveryCharge",
+                total::float, tracking_token as "trackingToken"
          FROM mart_orders WHERE idempotency_key = $1`,
         [data.idempotencyKey]
       );
       if (prior.rows[0]) {
-        return { ...prior.rows[0], orderId: prior.rows[0].id, storeName: data.storeName || 'Gokez Mart', duplicate: true };
+        // An idempotent retry must hand back the token already stored on the
+        // order; minting a second one would silently break the guest's first.
+        return {
+          ...prior.rows[0],
+          orderId: prior.rows[0].id,
+          trackingToken: prior.rows[0].trackingToken,
+          storeName: data.storeName || 'Gokez Mart',
+          duplicate: true,
+        };
       }
 
       // The customer and campaign are resolved within this transaction. The
@@ -277,8 +337,8 @@ export class OrderService {
             subtotal, delivery_charge, total, payment_method, notes,
             delivery_preference, delivery_note, fulfilled_by,
             campaign_id, campaign_discount, coupon_code_used, idempotency_key,
-            placed_outside_hours, closed_reason, scheduled_for)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+            placed_outside_hours, closed_reason, scheduled_for, tracking_token)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
 [orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
           data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod, data.notes || null,
@@ -290,7 +350,8 @@ export class OrderService {
         openState.closedReason,
         // A manual closure has no reopening time to promise, so it stays null
         // rather than carrying a guess the owner never made.
-        openState.nextOpenAt]
+        openState.nextOpenAt,
+        trackingToken]
       );
 
       await client.query(
@@ -349,6 +410,7 @@ export class OrderService {
       return {
         orderId,
         orderNumber,
+        trackingToken,
         storeName: data.storeName || 'Gokez Mart',
         subtotal,
         deliveryCharge: actualDelivery,
@@ -440,50 +502,7 @@ export class OrderService {
     const offset = filters?.offset || 0;
 
     const result = await query(
-      `SELECT o.id, o.order_number as "orderNumber", o.guest_name as "guestName",
-              o.guest_phone as "guestPhone", o.guest_address as "guestAddress",
-              o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
-              o.total::float, o.payment_method as "paymentMethod",
-              o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
-              o.delivery_latitude::float as "deliveryLatitude", o.delivery_longitude::float as "deliveryLongitude",
-              o.termination_reason as "terminationReason",
-              o.cancellation_reason as "cancellationReason",
-              o.campaign_id as "campaignId",
-              o.campaign_discount::float as "campaignDiscount",
-              o.coupon_code_used as "couponCodeUsed",
-              o.delivery_by_name as "deliveryByName",
-              o.delivery_by_phone as "deliveryByPhone",
-              o.delivery_by as "deliveryById",
-              o.delivery_preference as "deliveryPreference",
-              o.delivery_note as "deliveryNote",
-              o.delivery_sequence as "deliverySequence",
-              o.batch_id as "batchId",
-              o.fulfilled_by as "fulfilledBy",
-              -- Closure fields: staff need to know an order was taken after
-              -- hours so it is held for the next opening rather than treated as
-              -- a late order, and so a manual closure is not mistaken for a
-              -- mistimed one.
-              o.placed_outside_hours as "placedOutsideHours",
-              o.closed_reason as "closedReason",
-              o.scheduled_for as "scheduledFor",
-              COALESCE((
-                SELECT json_agg(json_build_object(
-                  'fromStatus', e.from_status,
-                  'toStatus', e.to_status,
-                  'actorName', e.actor_name,
-                  'createdAt', e.created_at
-                ) ORDER BY e.created_at ASC)
-                FROM mart_order_status_events e WHERE e.order_id = o.id
-              ), '[]') as "statusEvents",
-              json_agg(json_build_object(
-                'productId', oi.product_id,
-                'productName', oi.product_name,
-                'unit', oi.unit,
-                'price', oi.price::float,
-                'quantity', oi.quantity,
-                'total', oi.total::float,
-                'photoUrl', p.photo_url
-              )) as items
+      `${ORDER_LIST_PROJECTION}
        FROM mart_orders o
        LEFT JOIN mart_order_items oi ON oi.order_id = o.id
        LEFT JOIN mart_products p ON p.id = oi.product_id
@@ -628,5 +647,31 @@ export class OrderService {
 
   static async trackByPhone(phone: string) {
     return this.findAll({ phone, limit: 10 });
+  }
+
+  /**
+   * Public order lookup for guests who never created an account.
+   *
+   * The tracking token is an unguessable uuid issued at order creation, so
+   * possession of the token is the credential. Invalid shapes are dropped in
+   * SQL rather than surfacing as a Postgres cast error.
+   */
+  static async trackByTokens(tokens: string[]) {
+    const clean = [...new Set(tokens.map(t => String(t).trim()).filter(Boolean))].slice(0, 20);
+    if (!clean.length) return [];
+
+    const placeholders = clean.map((_, i) => `$${i + 1}`).join(',');
+    const result = await query(
+      `${ORDER_LIST_PROJECTION}
+       FROM mart_orders o
+       LEFT JOIN mart_order_items oi ON oi.order_id = o.id
+       LEFT JOIN mart_products p ON p.id = oi.product_id
+       WHERE o.tracking_token IN (${placeholders})
+       GROUP BY o.id
+       ORDER BY o.created_at DESC`,
+      clean
+    );
+    // Same IST formatting as the admin hub so both surfaces agree on timestamps.
+    return result.rows.map(row => ({ ...row, scheduledForLabel: formatIstDateTime(row.scheduledFor) }));
   }
 }

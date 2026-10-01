@@ -31,7 +31,7 @@ router.get('/settings/public',     ctrl.getPublicSettings);  // ?storeId=
 router.post('/geocode/reverse',    ctrl.reverseGeocode);
 router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
-router.get('/orders/track/guest',   ctrl.trackGuestOrder);
+router.get('/orders/track/tokens',  ctrl.trackGuestOrdersByTokens);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
 router.post('/admin/login',            ctrl.adminLogin);
@@ -145,7 +145,8 @@ router.post('/admin/carousel/reorder',         authenticate, requireSuperAdmin, 
 
 // Public campaign routes
 router.get('/carousel',                        ctrl.getCarouselSlides);
-router.get('/campaigns/eligible',              authenticateCustomer, ctrl.getEligibleCampaigns);
+router.get('/campaigns/welcome',                          ctrl.getPublicWelcomeOffers);
+router.get('/campaigns/eligible',              authenticateCustomerIfPresent, ctrl.getEligibleCampaigns);
 router.post('/campaigns/validate',             authenticateCustomer, ctrl.validateCouponCode);
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);

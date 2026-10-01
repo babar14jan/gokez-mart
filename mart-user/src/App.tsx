@@ -14,7 +14,7 @@ import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import LoginModal from './components/LoginModal';
-import CheckoutGuestPrompt from './components/CheckoutGuestPrompt';
+
 import CheckoutPage from './pages/CheckoutPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
@@ -26,6 +26,7 @@ import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
 import { track, getFunnelChannel } from './utils/track';
+import { saveTrackingToken } from './utils/guestTracking';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
 
@@ -76,9 +77,14 @@ export default function App() {
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
-  const [showGuestPrompt, setShowGuestPrompt] = useState(false);
+  // Mirrored in state because writing sessionStorage alone does not re-render,
+  // which made "Not now" look like it did nothing.
+  const [signInPromptDismissed, setSignInPromptDismissed] = useState(
+    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem('guest_signin_dismissed') === '1'
+  );
+
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
-  const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number } | null>(null);
+  const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number; trackingToken?: string; items?: any[]; total?: number; guestAddress?: string; guestName?: string; guestPhone?: string; createdAt?: string; status?: string } | null>(null);
   // One session_start per session, fired as early as possible so a visit that
   // never reaches the login screen is still counted.
   useEffect(() => {
@@ -182,6 +188,7 @@ export default function App() {
       else if (path === '/notification-settings') setView('notification-settings');
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
+      else if (path === '/checkout') { setView('home'); setCheckoutActive(true); }
       else setView('home');
     };
     window.addEventListener('popstate', handlePop);
@@ -320,6 +327,20 @@ export default function App() {
     (window as any).__navToAccount = () => handleNavChange('account');
   });
 
+  // Escape hatch from inside the login modal: drop the OTP flow and keep the
+  // shopper moving. Checkout opened the modal, so dropping out must land back
+  // in checkout with the basket intact — otherwise "continue as guest" throws
+  // them out of the page they were already on.
+  const handleLoginModalGuest = () => {
+    useLoginFlowStore.getState().clear();
+    useLoginFlowStore.getState().setPostLoginPath(null);
+    setShowLoginModal(false);
+    if (pendingCheckout) {
+      setPendingCheckout(false);
+      setCheckoutActive(true);
+    }
+  };
+
   const handleCheckout = async () => {
     setPreCheckoutView(view);
     if (!selectedZone) {
@@ -330,75 +351,155 @@ export default function App() {
         else { setShowOutsideBlock(true); return; }
       } else { setShowOutsideBlock(true); return; }
     }
-    // Login is an option, never a requirement. A small prompt lets a shopper
-    // pick: continue as guest (one tap into checkout) or log in (offers, order
-    // history). Both land in the same checkout, and the guest path is fully
-    // captured (address book + lead funnel) when the order is placed.
-    if (!isLoggedIn) { setShowGuestPrompt(true); return; }
     setCheckoutActive(true);
   };
 
-  const handleGuestCheckout = () => {
-    setShowGuestPrompt(false);
-    setCheckoutActive(true);
-  };
-
-  const handleGuestPromptLogin = () => {
-    setPendingCheckout(true);
-    setShowGuestPrompt(false);
-    setShowLoginModal(true);
-  };
-
-  // Escape hatch from anywhere in the login modal: drop the OTP flow and keep
-  // the shopper moving. In a checkout-bound context (prompt or offers lock)
-  // that means landing back on checkout; otherwise the modal just closes.
-  const handleLoginModalGuest = () => {
-    useLoginFlowStore.getState().clear();
-    setShowLoginModal(false);
-    if (pendingCheckout) {
-      setPendingCheckout(false);
-      setCheckoutActive(true);
-    }
-  };
+  // Persist the tracking token in an effect, never during render: the success
+  // screen render body must stay side-effect free or StrictMode double-invokes
+  // it and a throw there blanks the whole app.
+  useEffect(() => {
+    const token = successData?.trackingToken;
+    if (!token) return;
+    saveTrackingToken(token);
+  }, [successData?.trackingToken]);
 
   // Success screen
   if (successData) {
+    const STEPS = ['pending', 'preparing', 'out_for_delivery', 'delivered'];
+    const STEP_LABELS = ['Order Placed', 'Being Prepared', 'On the Way', 'Delivered'];
+    const STEP_ICONS = ['🛒', '🍳', '🛵', '🎉'];
+    const curStep = 0;
+
     return (
-      <div className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center px-4">
-        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl p-8 max-w-sm w-full text-center">
-          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-emerald-500" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Order Placed! 🎉</h2>
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 px-4 py-8">
+        <div className="max-w-lg mx-auto space-y-4">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-emerald-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Order Placed! 🎉</h2>
             {successData.savedAmount && successData.savedAmount > 0 && (
               <div className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-full mb-2">
                 🎉 You saved ₹{successData.savedAmount.toFixed(0)} with this order!
               </div>
             )}
-          <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">
-            Order <span className="font-bold text-gray-900 dark:text-white">Order #{successData.num}</span>
-          </p>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
-            Your order is confirmed. We&apos;ll deliver within <span className="font-semibold text-gray-900 dark:text-white">
-              {successData.preference === 'within_15' ? '10-15 mins' : successData.preference === 'within_30' ? '30 mins' : '1 hour'}
-            </span>.
-            {successData.storeName && (
-              <span className="block text-xs text-gray-500 mt-1">🏪 Fulfilled by {successData.storeName}</span>
-            )}
-          </p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              Order <span className="font-bold text-gray-900 dark:text-white">#{successData.num}</span>
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-md border border-emerald-100 dark:border-emerald-900">
+            <div className="bg-emerald-500 px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-white font-bold text-sm">Order Placed</p>
+                <p className="text-emerald-100 text-xs mt-0.5">
+                  {successData.preference === 'within_15' ? '⚡ Expected in 10-15 mins'
+                    : successData.preference === 'within_30' ? '🕐 Expected in ~30 mins'
+                    : '🕑 Expected in ~1 hour'}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-emerald-100 text-xs font-semibold">Order #{successData.num}</span>
+                {successData.storeName && (
+                  <p className="text-emerald-200 text-[10px] mt-0.5">🏪 {successData.storeName}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="px-4 pt-5 pb-4">
+              <div className="relative flex justify-between items-start">
+                <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 dark:bg-slate-700" />
+                <div className="absolute top-4 left-4 h-0.5 bg-emerald-500 transition-all duration-700"
+                  style={{ width: '0%' }} />
+                {STEPS.map((step, i) => (
+                  <div key={step} className="flex flex-col items-center gap-1.5 z-10" style={{ width: '20%' }}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 bg-white dark:bg-slate-800 transition-all ${
+                      i < curStep ? 'border-emerald-500' :
+                      i === curStep ? 'border-emerald-500 shadow-md shadow-emerald-200 scale-110' :
+                      'border-gray-200 dark:border-slate-600'
+                    }`}>
+                      {i <= curStep
+                        ? <span className={i === curStep ? 'animate-bounce' : ''}>{STEP_ICONS[i]}</span>
+                        : <span className="w-2 h-2 rounded-full bg-gray-200 dark:bg-slate-600 block" />}
+                    </div>
+                    <span className={`text-[9px] font-semibold text-center leading-tight ${
+                      i <= curStep ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'
+                    }`}>{STEP_LABELS[i]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-4 pb-3">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                {(successData.items || []).map((item: any, i: number) => (
+                  <div key={i} className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0">
+                    {item.photoUrl
+                      ? <img src={item.photoUrl} alt={item.productName} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center text-xl">🥦</div>
+                    }
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mx-4 pt-3 border-t border-gray-100 dark:border-slate-700 space-y-1.5 pb-4">
+              <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white">
+                <span>{(successData.items || []).length} items</span><span>₹{successData.total}</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="text-gray-500 text-xs mt-0.5">📍</span>
+                <p className="text-[11px] text-gray-500 leading-tight">{successData.guestAddress}</p>
+              </div>
+            </div>
+          </div>
+
           <button onClick={() => { setSuccessData(null); setView('orders'); }}
-            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm mb-3">
+            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm">
             Track My Order
           </button>
           <button onClick={() => { setSuccessData(null); setView('home'); }}
-            className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-2xl transition-colors mb-4">
+            className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-2xl transition-colors border border-gray-200 dark:border-slate-700">
             Continue Shopping
           </button>
           {settings.whatsapp_number && (
             <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
-              className="text-xs text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+              className="block text-center text-xs text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
               Need help? Chat on WhatsApp →
             </a>
+          )}
+          {!isLoggedIn && !signInPromptDismissed && (
+            <div className="pt-2">
+              <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-2xl p-3 text-center">
+                <p className="text-[11px] text-violet-700 dark:text-violet-300 mb-2">
+                  💡 Sign in to see all your past orders and track them easily
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => {
+                      // The whole point of this prompt is to reach order history,
+                      // so tell the login flow where to land once OTP completes.
+                      useLoginFlowStore.getState().setPostLoginPath('/orders');
+                      setSuccessData(null);
+                      setShowLoginModal(true);
+                    }}
+                    className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline"
+                  >
+                    Sign in
+                  </button>
+                  <span className="text-violet-300 dark:text-violet-600">·</span>
+                  <button
+                    onClick={() => {
+                      sessionStorage.setItem('guest_signin_dismissed', '1');
+                      setSignInPromptDismissed(true);
+                    }}
+                    className="text-[11px] text-gray-500 hover:text-gray-600"
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -408,16 +509,26 @@ export default function App() {
   return (
     <div className={`min-h-screen ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
-      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onGuest={handleLoginModalGuest} onClose={() => { useLoginFlowStore.getState().clear(); setShowLoginModal(false); setPendingCheckout(false); }} onSuccess={() => {
+      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onGuest={handleLoginModalGuest} onClose={() => {
+        useLoginFlowStore.getState().clear();
+        useLoginFlowStore.getState().setPostLoginPath(null);
+        setShowLoginModal(false);
+        setPendingCheckout(false);
+      }} onSuccess={() => {
+        const redirect = useLoginFlowStore.getState().postLoginPath;
+        useLoginFlowStore.getState().setPostLoginPath(null);
         setShowLoginModal(false);
         if (pendingCheckout) {
           setPendingCheckout(false);
           setCheckoutActive(true);
+        } else if (redirect === '/orders') {
+          // Signed in to see order history — that is where they asked to go.
+          setView('orders');
         } else {
           setView('home');
         }
       }} />}
-      {showGuestPrompt && <CheckoutGuestPrompt itemCount={cartItems} onGuest={handleGuestCheckout} onLogin={handleGuestPromptLogin} onClose={() => setShowGuestPrompt(false)} />}
+
       {showNamePrompt && <NamePrompt onDone={() => { setShowNamePrompt(false); setView('home'); }} />}
 
       {/* Outside zone — soft warning */}
@@ -519,9 +630,9 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
-              onLogin={() => { setCheckoutActive(false); setPendingCheckout(true); setShowLoginModal(true); }}
+              onLogin={(campaign?: any) => { setCheckoutActive(false); setPendingCheckout(true); useLoginFlowStore.getState().setPendingCouponApply(true, campaign?.id ?? null); setShowLoginModal(true); }}
               confirmOrder={confirmOrder}
-              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status }); }}
             />
           </div>
           {/* Desktop — right side drawer */}
@@ -532,9 +643,9 @@ export default function App() {
               storeId={selectedZone?.storeId}
               onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
               onHome={() => { setCheckoutActive(false); setView('home'); }}
-              onLogin={() => { setCheckoutActive(false); setPendingCheckout(true); setShowLoginModal(true); }}
+              onLogin={(campaign?: any) => { setCheckoutActive(false); setPendingCheckout(true); useLoginFlowStore.getState().setPendingCouponApply(true, campaign?.id ?? null); setShowLoginModal(true); }}
               confirmOrder={confirmOrder}
-              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status }); }}
             />
           </div>
         </div>

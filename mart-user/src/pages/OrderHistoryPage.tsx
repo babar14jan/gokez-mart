@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { ShoppingBag, RefreshCw, X, Phone, MapPin, RotateCcw, IndianRupee, MessageCircle } from 'lucide-react';
-import { authApi } from '../services/api';
+import { authApi, storeApi } from '../services/api';
+import { readTrackingTokens, clearTrackingTokens } from '../utils/guestTracking';
+import { useLoginFlowStore } from '../store/loginFlowStore';
 import { useCartStore } from '../store/cartStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { printReceipt } from '../utils/printReceipt';
@@ -237,15 +239,28 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
   const [activeTab, setActiveTab] = useState<'current' | 'past'>('current');
   const [pastSearch, setPastSearch] = useState('');
   const [pastFilter, setPastFilter] = useState<'all' | 'delivered' | 'cancelled'>('all');
+  const [guestLoading, setGuestLoading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartX = useRef<number | null>(null);
   const { addItem } = useCartStore();
-  const { name: customerName, phone: customerPhone } = useCustomerAuthStore();
+  const { name: customerName, phone: customerPhone, isLoggedIn } = useCustomerAuthStore();
 
   const fetchOrders = async (silent = false) => {
     if (!silent) setRefreshing(true);
     try { const r = await authApi.getOrders(); setOrders(r.data.data || []); }
     catch {} finally { setRefreshing(false); setLoading(false); }
+  };
+
+  // Guests have no session, so authApi.getOrders() can only ever 401 here.
+  const fetchGuestOrders = async (silent = false) => {
+    if (!silent) setGuestLoading(true);
+    try {
+      const tokens = readTrackingTokens();
+      if (!tokens.length) { setOrders([]); return; }
+      const r = await storeApi.trackOrdersByTokens(tokens);
+      setOrders(r.data.data || []);
+    } catch { /* a token can be pruned server-side; keep whatever we have */ }
+    finally { if (!silent) setGuestLoading(false); setLoading(false); }
   };
 
   const handleCancel = async (orderId: string) => {
@@ -269,14 +284,27 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
     setTimeout(() => setReorderToast(''), 3000);
   };
 
-  useEffect(() => { fetchOrders(); }, []);
+  // Guests load from device tokens; there is no reason to spend a round trip on
+  // an authenticated call that is guaranteed to 401 for them.
+  useEffect(() => {
+    if (isLoggedIn) fetchOrders();
+    else fetchGuestOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]);
+
+  // Live updates for both audiences, but only while something is actually open.
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
-    // Keep polling while any order is not fully closed
     const hasLive = orders.some(o => !ALL_CLOSED.includes(o.status));
-    if (hasLive) pollRef.current = setInterval(() => fetchOrders(true), 10000);
+    if (hasLive) {
+      pollRef.current = setInterval(() => {
+        if (isLoggedIn) fetchOrders(true);
+        else fetchGuestOrders(true);
+      }, 10000);
+    }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [orders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, isLoggedIn]);
 
   const activeOrders = orders.filter(o => !ALL_CLOSED.includes(o.status));
   const deliveredOrders = orders.filter(o => isRecentlyDelivered(o));
@@ -313,6 +341,155 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
       <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
+
+  if (!isLoggedIn) {
+    // readTrackingTokens swallows a corrupt payload. A bare JSON.parse here runs
+    // during render, and with no error boundary in the tree a throw blanks the
+    // whole app rather than falling back to the sign-in prompt.
+    const hasLocalTokens = readTrackingTokens().length > 0;
+
+    if (loading || guestLoading) return (
+      <div className="flex justify-center items-center py-24">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+
+    if (!hasLocalTokens) {
+      return (
+        <div className="max-w-lg mx-auto px-4 py-16 text-center pb-36">
+          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ShoppingBag className="w-9 h-9 text-gray-300" />
+          </div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Your orders, right here</h2>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
+            Sign in with your phone number to see all your past orders and track current ones.
+          </p>
+          <button
+            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm mb-3"
+          >
+            Track My Orders →
+          </button>
+          <button
+            onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-2xl transition-colors"
+          >
+            Continue Shopping
+          </button>
+        </div>
+      );
+    }
+
+    if (orders.length === 0) {
+      return (
+        <div className="max-w-lg mx-auto px-4 py-16 text-center pb-36">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
+            <ShoppingBag className="w-7 h-7 text-gray-300" />
+          </div>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No orders found</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mb-6">No recent orders on this device</p>
+          <button
+            onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-2xl transition-colors"
+          >
+            Continue Shopping
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-36">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">My Orders</h2>
+          <button
+            onClick={() => { clearTrackingTokens(); setOrders([]); }}
+            className="text-xs font-semibold text-gray-500 hover:text-emerald-600 transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+        {orders.map(order => {
+          const curStep = STEPS.indexOf(STATUS_TO_STEP[order.status] || order.status);
+          return (
+            <div key={order.id} className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-md border border-emerald-100 dark:border-emerald-900">
+              <div className="bg-emerald-500 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-white font-bold text-sm">{STATUS_LABELS[order.status]}</p>
+                  {order.deliveryPreference && (
+                    <p className="text-emerald-100 text-xs mt-0.5">
+                      {order.deliveryPreference === 'within_15' ? '⚡ Expected in 10-15 mins'
+                        : order.deliveryPreference === 'within_30' ? '🕐 Expected in ~30 mins'
+                        : '🕑 Expected in ~1 hour'}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="text-emerald-100 text-xs font-semibold">Order #{order.orderNumber}</span>
+                  {order.fulfilledBy && (
+                    <p className="text-emerald-200 text-[10px] mt-0.5">🏪 {order.fulfilledBy}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-4 pt-5 pb-4">
+                <div className="relative flex justify-between items-start">
+                  <div className="absolute top-4 left-4 right-4 h-0.5 bg-gray-100 dark:bg-slate-700" />
+                  <div className="absolute top-4 left-4 h-0.5 bg-emerald-500 transition-all duration-700"
+                    style={{ width: curStep >= 0 ? `calc(${(curStep / (STEPS.length - 1)) * 100}%)` : '0%' }} />
+                  {STEPS.map((step, i) => (
+                    <div key={step} className="flex flex-col items-center gap-1.5 z-10" style={{ width: '20%' }}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 bg-white dark:bg-slate-800 transition-all ${
+                        i < curStep ? 'border-emerald-500' :
+                        i === curStep ? 'border-emerald-500 shadow-md shadow-emerald-200 scale-110' :
+                        'border-gray-200 dark:border-slate-600'
+                      }`}>
+                        {i <= curStep
+                          ? <span className={i === curStep ? 'animate-bounce' : ''}>{STEP_ICONS[i]}</span>
+                          : <span className="w-2 h-2 rounded-full bg-gray-200 dark:bg-slate-600 block" />}
+                      </div>
+                      <span className={`text-[9px] font-semibold text-center leading-tight ${
+                        i <= curStep ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'
+                      }`}>{STEP_LABELS[i]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="px-4 pb-3">
+                <ItemThumbnails items={order.items || []} />
+              </div>
+
+              <div className="mx-4 pt-3 border-t border-gray-100 dark:border-slate-700 space-y-1.5 pb-4">
+                <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white">
+                  <span>{(order.items || []).length} items</span><span>₹{order.total}</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <MapPin className="w-3 h-3 text-gray-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-[11px] text-gray-500 leading-tight">{order.guestAddress}</p>
+                </div>
+              </div>
+
+              <div className="px-4 pb-4">
+                <button onClick={() => { handleOrderAgain(order); }}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">
+                  <RotateCcw className="w-4 h-4" /> Order Again
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        <div className="text-center">
+          <button
+            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+          >
+            Track a different order →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (orders.length === 0) return (
     <div className="flex flex-col items-center justify-center py-24 px-6 text-center">

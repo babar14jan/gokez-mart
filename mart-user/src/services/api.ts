@@ -136,7 +136,7 @@ export const storeApi = {
     /** Closes the cart funnel. Optional; the server ignores a malformed value. */
     funnelSessionId?: string;
   }, idempotencyKey: string) => api.post('/orders', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
-  trackOrders: () => api.get('/orders/track'),
+  trackOrdersByTokens: (tokens: string[]) => api.get('/orders/track/tokens', { params: { tokens: tokens.join(',') } }),
 };
 
 // ── Feedback ────────────────────────────────────────────────────────────────────────────────
@@ -147,6 +147,9 @@ export const feedbackApi = {
 
 // ── Campaigns (public) ────────────────────────────────────────────────────────────────────────────────
 export const campaignApi = {
+  /** Pre-login welcome teaser. Includes coupon-code offers; grants no authority. */
+  getWelcome: (cartTotal: number, storeId: string) =>
+    api.get("/campaigns/welcome", { params: { cartTotal, storeId } }),
   getEligible: (cartTotal: number, storeId: string) =>
     api.get("/campaigns/eligible", { params: { cartTotal, storeId } }),
   validateCode: (code: string, cartTotal: number, storeId: string) =>

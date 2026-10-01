@@ -390,6 +390,53 @@ export class CampaignService {
     return replacement;
   }
 
+  // ── Public: welcome offers a guest may be shown before signing in ──────────
+
+  /**
+   * mart_campaigns.store_id is a uuid, but callers legitimately have no store
+   * context yet (the post-login welcome step queries with an empty storeId).
+   * Comparing a uuid column to '' makes Postgres raise "invalid input syntax",
+   * so an absent store is normalised to NULL and the predicate falls back to
+   * global campaigns only.
+   */
+  private static normalizeStoreId(storeId?: string | null): string | null {
+    const s = (storeId || '').trim();
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ? s : null;
+  }
+
+  /**
+   * The welcome offer is the one campaign a shopper is meant to see *before*
+   * they have an account, so it cannot come from getEligible(): that query
+   * excludes coupon_code rows, which is exactly how a code-style welcome offer
+   * ("FIRST50") is stored.
+   *
+   * This is a teaser, never an authority. It returns a whitelisted projection
+   * (no targeting lists, limits, admin notes or internal flags) and nothing
+   * here is trusted at checkout — redemption goes through validateCode() and
+   * then the server re-checks everything in create().
+   */
+  static async getPublicWelcomeOffers(cartTotal: number, storeId: string): Promise<any[]> {
+    const now = new Date().toISOString();
+    const result = await query(
+      `SELECT id, title, subtitle, description, badge_text, coupon_code,
+              discount_type, discount_value, max_discount, min_order_amount,
+              eligibility_type, carousel_gradient, valid_until
+         FROM mart_campaigns
+        WHERE status = 'active'
+          AND (store_id IS NULL OR store_id = $1::uuid)
+          AND (valid_from IS NULL OR valid_from <= $2)
+          AND (valid_until IS NULL OR valid_until >= $2)
+          AND (usage_limit IS NULL OR usage_count < usage_limit)
+          AND min_order_amount <= $3
+          AND COALESCE(eligibility_type, CASE WHEN new_customers_only THEN 'first_order' ELSE 'all' END)
+              IN ('first_order', 'all')
+        ORDER BY priority DESC, discount_value DESC
+        LIMIT 5`,
+      [this.normalizeStoreId(storeId), now, cartTotal]
+    );
+    return result.rows;
+  }
+
   // ── Public: eligible campaigns for a customer + cart ─────────────────────────
 
   static async getEligible(customerId: string | null, cartTotal: number, storeId: string): Promise<any[]> {
@@ -397,25 +444,44 @@ export class CampaignService {
 
     // Get all active campaigns for this store
     const result = await query(
-      `SELECT * FROM mart_campaigns
-       WHERE status IN ('active', 'scheduled')
+      // Whitelisted projection: this route is reachable without auth, so it must
+      // not hand out targeting lists, per-customer limits or admin-only fields.
+      `SELECT id, title, subtitle, description, badge_text, coupon_code,
+              discount_type, discount_value, max_discount, min_order_amount,
+              eligibility_type, carousel_gradient, valid_until,
+              -- Needed for per-customer enforcement below; stripped before return.
+              per_customer_limit, inactive_days
+         FROM mart_campaigns
+        WHERE status IN ('active', 'scheduled')
          AND (status = 'active' OR (valid_from IS NOT NULL AND valid_from <= $2))
          AND coupon_code IS NULL
-         AND (store_id = $1 OR store_id IS NULL)
+         AND (store_id IS NULL OR store_id = $1::uuid)
          AND (valid_from IS NULL OR valid_from <= $2)
          AND (valid_until IS NULL OR valid_until >= $2)
           AND (usage_limit IS NULL OR usage_count < usage_limit)
           AND (min_order_amount <= $3
                OR (min_order_previous IS NOT NULL AND min_order_grace_until > $2 AND min_order_previous <= $3))
        ORDER BY priority DESC, discount_value DESC`,
-      [storeId, now, cartTotal]
+      [this.normalizeStoreId(storeId), now, cartTotal]
     );
+
+    // Enforcement fields are selected for the checks below but must never reach
+    // an anonymous caller.
+    const stripInternal = (c: any) => {
+      const { per_customer_limit, inactive_days, ...pub } = c;
+      return pub;
+    };
 
     const campaigns = result.rows;
     if (campaigns.length === 0) return campaigns;
-    // Automatic offers can have first-order, inactive, targeted, or per-customer
-    // limits, so only expose them once the customer identity is verified.
-    if (!customerId) return [];
+    // Guests can see new_customer_only campaigns (read-only) to entice login,
+    // but other eligibility types require verified customer identity.
+    if (!customerId) {
+      return campaigns.filter(c => {
+        const eligibilityType = c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all');
+        return eligibilityType === 'first_order' || eligibilityType === 'all';
+      }).map(stripInternal);
+    }
 
     // Filter by customer eligibility
     const eligible: any[] = [];
@@ -447,7 +513,7 @@ export class CampaignService {
         [c.id, customerId]
       );
       if (parseInt(uses.rows[0].cnt) >= c.per_customer_limit) continue;
-      eligible.push(c);
+      eligible.push(stripInternal(c));
     }
     return eligible;
   }

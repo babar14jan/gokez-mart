@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronUp, Clock, User } from 'lucide-react';
+import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi } from '../services/api';
 import type { PublicSettings, Product } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
+import { useLoginFlowStore } from '../store/loginFlowStore';
 import AddressForm from '../components/AddressForm';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 
@@ -14,7 +15,7 @@ interface CheckoutPageProps {
   storeId?: string;
   onBack: () => void;
   onHome: () => void;
-  onSuccess: (orderNumber: string, preference: string, storeName?: string, savedAmount?: number) => void;
+  onSuccess: (orderNumber: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => void;
   /**
    * Awaited before the order is sent. Resolves false to abandon the submission
    * without losing the basket. Owned by App so a single dialog serves both the
@@ -25,7 +26,7 @@ interface CheckoutPageProps {
    * Opens the login modal from inside checkout. Guests use it to unlock offers
    * (and order history); the OTP step stays fully optional for placing an order.
    */
-  onLogin?: () => void;
+  onLogin?: (campaign?: any) => void;
 }
 
 const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
@@ -136,6 +137,12 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const [couponSuccess, setCouponSuccess] = useState('');
   const [showCouponField, setShowCouponField] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
+  const [offerNotice, setOfferNotice] = useState('');
+  // sessionStorage writes do not re-render, so the offers block needs its own
+  // state mirror or "Hide" appears to do nothing until some unrelated update.
+  const [offersHidden, setOffersHidden] = useState(
+    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem('guest_offers_dismissed') === '1'
+  );
 
   useEffect(() => {
     // Offers are explicitly selected for each checkout; never restore an old cart selection.
@@ -143,18 +150,62 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   }, []);
 
   useEffect(() => {
-    // Offer eligibility is a verified-customer perk. Guests skip the fetch:
-    // both campaign endpoints are auth-gated server-side and would 401.
-    if (!storeId || !isLoggedIn) return;
-    campaignApi.getEligible(cartSubtotal, storeId)
-      .then(r => {
-        const campaigns = r.data.data || [];
-        setEligibleCampaigns(campaigns);
-        if (appliedCampaign && !appliedCouponCode && !campaigns.some((campaign: any) => campaign.id === appliedCampaign.id)) {
-          removeCampaign();
+    if (!storeId) return;
+    let cancelled = false;
+
+    const load = async () => {
+      // The welcome teaser is public and carries coupon codes, so a code-style
+      // offer like FIRST50 can be shown before login. Untargeted automatic
+      // offers stay identity-gated behind /campaigns/eligible.
+      const [welcomeRes, eligibleRes] = await Promise.allSettled([
+        campaignApi.getWelcome(cartSubtotal, storeId),
+        isLoggedIn ? campaignApi.getEligible(cartSubtotal, storeId) : Promise.resolve(null),
+      ]);
+      if (cancelled) return;
+
+      const welcome: any[] = welcomeRes.status === 'fulfilled' ? (welcomeRes.value?.data?.data || []) : [];
+      const eligible: any[] = eligibleRes.status === 'fulfilled' && eligibleRes.value
+        ? (eligibleRes.value?.data?.data || []) : [];
+      const merged = [...eligible, ...welcome.filter(w => !eligible.some((e: any) => e.id === w.id))];
+      setEligibleCampaigns(merged);
+
+      if (appliedCampaign && !appliedCouponCode && !eligible.some((c: any) => c.id === appliedCampaign.id)) {
+        removeCampaign();
+      }
+
+      const flow = useLoginFlowStore.getState();
+      if (!isLoggedIn || !flow.pendingCouponApply || !storeId) return;
+
+      // Apply the offer the shopper actually tapped. Falling back to the first
+      // row would silently apply whichever offer sorts first by priority.
+      const target = flow.pendingCampaignId
+        ? merged.find((c: any) => c.id === flow.pendingCampaignId)
+        : null;
+      flow.setPendingCouponApply(false, null);
+
+      if (!target) { setOfferNotice("That offer isn't available for this cart anymore."); return; }
+
+      if (target.coupon_code) {
+        // The teaser is not authority. Redeem the code through the authenticated
+        // endpoint so first-order status and per-customer limits are re-checked
+        // against a verified identity before anything is discounted.
+        try {
+          const res = await campaignApi.validateCode(target.coupon_code, cartSubtotal, storeId);
+          if (cancelled) return;
+          const campaign = res.data.data.campaign;
+          applyCampaign(campaign, target.coupon_code);
+        } catch (e: any) {
+          if (cancelled) return;
+          setOfferNotice(e?.response?.data?.error || 'This offer could not be applied.');
         }
-      }).catch(() => {});
-  }, [storeId, cartSubtotal, appliedCampaign, appliedCouponCode]);
+      } else {
+        applyCampaign(target);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [storeId, cartSubtotal, appliedCampaign, appliedCouponCode, isLoggedIn]);
 
   const calcDiscount = (campaign: any, cartTotal: number): number => {
     if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), cartTotal);
@@ -252,8 +303,19 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         funnelSessionId: getFunnelSessionId(),
       }, orderRequestKey.current);
       track('order_completed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
+      const orderData = {
+        orderNumber: res.data.data.orderNumber,
+        trackingToken: res.data.data.trackingToken,
+        items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, photoUrl: i.photoUrl || null })),
+        total: res.data.data.total,
+        guestAddress: resolvedAddress,
+        guestName: isLoggedIn ? (authName || guestName) : guestName,
+        guestPhone: isLoggedIn ? (authPhone || guestPhone) : guestPhone,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+      };
       clearCart();
-      onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined);
+      onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined, orderData);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to place order. Please try again.');
     } finally { setLoading(false); }
@@ -261,10 +323,38 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   const card = 'bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden';
 
+  // Reachable from the Orders "Track My Orders" login and the account page, so
+  // an empty basket is a real entry state. Without this the page renders a
+  // permanently disabled Place Order button and no explanation.
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col">
+        <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
+          <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-slate-400">
+            <ChevronUp className="w-4 h-4 rotate-90" /> Back
+          </button>
+          <span className="text-sm font-bold text-gray-900 dark:text-white">Checkout</span>
+          <span className="w-8" />
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+            <ShoppingBag className="w-7 h-7 text-gray-300" />
+          </div>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Your cart is empty</h2>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">Add a few items to start your order.</p>
+          <button type="button" onClick={onHome}
+            className="w-full max-w-xs py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">
+            Browse products
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 py-3 flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
         <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
         <button onClick={onBack} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
           <X className="w-5 h-5 text-gray-500" />
@@ -524,9 +614,61 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   <Tag className="w-4 h-4 text-violet-500" />
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
                 </div>
-                <button type="button" onClick={onLogin}
-                  className="text-xs font-bold text-violet-600 dark:text-violet-400 whitespace-nowrap">Log in to unlock</button>
+                {eligibleCampaigns.length > 0 && !offersHidden && (
+                  <button type="button" onClick={() => { sessionStorage.setItem('guest_offers_dismissed', '1'); setOffersHidden(true); }}
+                    className="text-xs font-semibold text-gray-400 hover:text-gray-500 transition-colors">
+                    Hide
+                  </button>
+                )}
               </div>
+              {eligibleCampaigns.length > 0 && !offersHidden && (
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+                  {offerNotice && (
+                    <p className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                      {offerNotice}
+                    </p>
+                  )}
+                  {eligibleCampaigns.map((campaign: any) => {
+                    const amount = campaign.discount_type === 'flat' ? `₹${campaign.discount_value} off` : campaign.discount_type === 'percent' ? `${campaign.discount_value}% off` : 'Free delivery';
+                    const description = campaign.description || campaign.subtitle || `${amount}${campaign.min_order_amount > 0 ? ` on orders above ₹${campaign.min_order_amount}` : ''}`;
+                    return (
+                      <div key={campaign.id} className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-2xl p-3 mb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-violet-700 dark:text-violet-300">
+                              {campaign.badge_text ? `${campaign.badge_text} ` : ''}{campaign.title}
+                            </p>
+                            <p className="text-[11px] text-violet-600 dark:text-violet-400 mt-0.5">{description}</p>
+                          </div>
+                          <button type="button" onClick={() => { setOfferNotice(''); onLogin?.(campaign); }}
+                            className="flex-shrink-0 px-3 py-1.5 text-[11px] font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors">
+                            Apply &amp; Save
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="text-[10px] text-gray-400 dark:text-slate-500 text-center">
+                    Log in via OTP to apply · No password needed
+                  </p>
+                </div>
+              )}
+              {eligibleCampaigns.length === 0 && !offersHidden && (
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+                  {offerNotice && (
+                    <p className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                      {offerNotice}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">
+                    Log in to unlock exclusive offers and discounts on your order.
+                  </p>
+                  <button type="button" onClick={() => { setOfferNotice(''); onLogin?.(); }}
+                    className="w-full py-2.5 text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 rounded-xl transition-colors">
+                    Log in for offers →
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -694,13 +836,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{deliveryAddress ? 'Change' : 'Add'}</span>
           </button>
 
-          <div className="px-4 pb-4">
+          <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {!canCheckout && sub < minOrder && (
               <p className="text-xs text-red-500 text-center mb-2">Minimum order ₹{minOrder}. Add ₹{(minOrder - sub).toFixed(0)} more.</p>
             )}
-            {!resolvedAddress && canCheckout && (
-              <p className="text-xs text-red-500 text-center mb-2">Add a delivery address to continue</p>
-            )}
+
             {!isLoggedIn && (!guestName?.trim() || !guestPhone?.trim()) && canCheckout && resolvedAddress && (
               <p className="text-xs text-red-500 text-center mb-2">Fill in your name and phone number</p>
             )}

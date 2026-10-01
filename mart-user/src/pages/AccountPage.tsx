@@ -7,6 +7,7 @@ import { useThemeStore } from '../store/themeStore';
 import { getLocationPermission } from '../services/push';
 import AddressForm from '../components/AddressForm';
 import { useLoginFlowStore } from '../store/loginFlowStore';
+import { useCartStore } from '../store/cartStore';
 
 interface AccountPageProps {
   onBack?: () => void;
@@ -20,6 +21,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
   const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
   const { } = useThemeStore();
+  const cartCount = useCartStore(s => s.items.length);
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(name || '');
@@ -79,6 +81,11 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
       login(token, customer);
       syncName(customer.name || '');
       if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
+      // Honour the redirect intent recorded before opening this page; Orders is
+      // the default because /account is reached from the "Track My Orders" CTA.
+      const redirect = useLoginFlowStore.getState().postLoginPath || '/orders';
+      useLoginFlowStore.getState().setPostLoginPath(null);
+      navigate(redirect);
     } catch (err: any) {
       setLoginError(err?.response?.data?.error || 'Invalid OTP');
     } finally { setLoginLoading(false); }
@@ -195,9 +202,8 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
             {!otpSent ? (
               <div className="space-y-3">
                 {loginError && <p className="text-sm text-red-600 dark:text-red-400 text-center">{loginError}</p>}
-                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-700/60">
-                  <span className="text-sm font-semibold text-gray-500 dark:text-slate-400">+91</span>
-                  <span className="h-4 w-px bg-slate-300 dark:bg-slate-500" />
+                <div className="flex items-center rounded-2xl border border-black/20 dark:border-white/20 bg-slate-50 dark:bg-slate-700/60">
+                  <span className="text-sm font-semibold text-white bg-black dark:bg-black dark:text-white px-3 py-3 rounded-l-2xl">+91</span>
                   <input
                     type="tel"
                     value={loginPhone}
@@ -205,7 +211,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
                     placeholder="10-digit mobile number"
                     inputMode="numeric"
                     autoComplete="tel"
-                    className="flex-1 bg-transparent py-3 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 focus:outline-none"
+                    className="flex-1 bg-transparent py-3 pl-3 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 focus:outline-none"
                   />
                 </div>
                 <button
@@ -247,8 +253,8 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
             )}
             <div className="text-center">
               <button
-                onClick={() => navigate('/')}
-                className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                onClick={() => navigate(cartCount > 0 ? '/checkout' : '/')}
+                className="text-base font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
               >
                 Continue as guest →
               </button>

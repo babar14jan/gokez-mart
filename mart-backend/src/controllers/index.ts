@@ -212,13 +212,24 @@ export const trackOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   res.json({ success: true, data: orders });
 });
 
-export const trackGuestOrder = asyncHandler(async (req: Request, res: Response) => {
-  const { phone } = req.query;
-  if (!phone || typeof phone !== 'string' || phone.replace(/\D/g, '').length < 10) {
-    res.status(400).json({ success: false, error: 'Valid phone number required' });
+// Removed: the public phone-only lookup (GET /orders/track/guest). It returned
+// up to 10 orders for any phone number with no proof of ownership, so anyone
+// could read another shopper's addresses, items and totals. Guests now track via
+// unguessable per-order tracking tokens in GET /orders/track/tokens, and
+// cross-device history requires OTP via authenticateCustomer on /orders/track.
+
+export const trackGuestOrdersByTokens = asyncHandler(async (req: Request, res: Response) => {
+  const { tokens } = req.query;
+  if (!tokens || typeof tokens !== 'string') {
+    res.status(400).json({ success: false, error: 'Tokens required' });
     return;
   }
-  const orders = await OrderService.trackByPhone(phone.replace(/\D/g, ''));
+  const tokenList = tokens.split(',').map((t: string) => t.trim()).filter(Boolean).slice(0, 20);
+  if (!tokenList.length) {
+    res.status(400).json({ success: false, error: 'Valid tokens required' });
+    return;
+  }
+  const orders = await OrderService.trackByTokens(tokenList);
   res.json({ success: true, data: orders });
 });
 
@@ -1552,11 +1563,23 @@ export const adminReorderCarouselSlides = asyncHandler(async (req: AdminRequest,
 export const getEligibleCampaigns = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const { cartTotal, storeId } = req.query;
   const campaigns = await CampaignService.getEligible(
-    req.customer!.id,
+    req.customer?.id || null,
     parseFloat(cartTotal as string) || 0,
     (storeId as string) || ''
   );
   res.json({ success: true, data: campaigns });
+});
+
+// Public by design: this is the pre-login welcome teaser. It returns a
+// whitelisted projection (see CampaignService.getPublicWelcomeOffers) and grants
+// no authority — an offer can only actually be redeemed after OTP.
+export const getPublicWelcomeOffers = asyncHandler(async (req: Request, res: Response) => {
+  const { cartTotal, storeId } = req.query;
+  const offers = await CampaignService.getPublicWelcomeOffers(
+    parseFloat(cartTotal as string) || 0,
+    (storeId as string) || ''
+  );
+  res.json({ success: true, data: offers });
 });
 
 export const validateCouponCode = asyncHandler(async (req: CustomerRequest, res: Response) => {
