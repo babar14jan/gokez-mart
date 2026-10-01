@@ -179,6 +179,24 @@ export default function App() {
   // mechanism covers both iOS and Android.
   useKeyboardInset();
 
+  // Views are swapped by React, but scroll position lives on the DOCUMENT, so
+  // nothing resets it when the view changes. That produced inconsistent behaviour
+  // that looked deliberate: switching to a short page (Orders) shrank the
+  // document, the browser clamped scrollY down and it appeared to reset, while
+  // switching to tall Home or Categories left the old offset untouched and the
+  // customer landed halfway down a page they had never scrolled.
+  //
+  // `showingSuccess` is in the deps because the success screen is an early return
+  // that replaces the whole tree -- leaving or entering it changes the scroll
+  // context without `view` changing at all.
+  //
+  // Checkout deliberately does NOT reset: it is an overlay over the current view,
+  // so opening and closing it leaves `view` untouched and the offset survives.
+  const showingSuccess = Boolean(successData);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view, showingSuccess]);
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');

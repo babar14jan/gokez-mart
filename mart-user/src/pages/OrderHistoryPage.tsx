@@ -155,6 +155,32 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
 // ── Main Page ─────────────────────────────────────────────────────────────────
 interface Props { onBack?: () => void; whatsappNumber?: string; }
 
+/* One header for both the guest and signed-in lists, so the two Orders pages do
+   not drift apart visually again.
+
+   `onClear` is intentionally injected rather than duplicated. The two meanings are
+   NOT the same and must not be conflated:
+
+     guest  -> the list IS device state, so clearing tokens empties it. Obvious.
+     signed -> the list is the ACCOUNT's order history, served from the API.
+               Deleting it is not something this button may do, so it only drops
+               the leftover guest tokens on the device and says so in a toast.
+
+   Same label and position in both; the toast is what keeps the second honest. */
+function OrdersHeader({ onClear }: { onClear: () => void }) {
+  return (
+    <div className="flex items-center justify-between">
+      <h2 className="text-lg font-bold text-gray-900 dark:text-white">My Orders</h2>
+      <button
+        onClick={onClear}
+        className="text-xs font-semibold text-gray-500 hover:text-emerald-600 transition-colors"
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
 export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Props) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,6 +189,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const [reorderToast, setReorderToast] = useState('');
+  const [clearToast, setClearToast] = useState('');
   const [activeTab, setActiveTab] = useState<'current' | 'past'>('current');
   const [pastSearch, setPastSearch] = useState('');
   const [pastFilter, setPastFilter] = useState<'all' | 'delivered' | 'cancelled'>('all');
@@ -351,15 +378,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
 
     return (
       <div className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-36">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">My Orders</h2>
-          <button
-            onClick={() => { clearTrackingTokens(); setOrders([]); }}
-            className="text-xs font-semibold text-gray-500 hover:text-emerald-600 transition-colors"
-          >
-            Clear
-          </button>
-        </div>
+        <OrdersHeader onClear={() => { clearTrackingTokens(); setOrders([]); }} />
         {/* Same three cards the signed-in view uses. The only guest-specific
             input is canCancel: cancelling needs the order's tracking token, and
             an order whose token is missing cannot be proven to belong to this
@@ -425,10 +444,24 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
   return (
     <div className="max-w-lg mx-auto px-3 py-4 space-y-4 pb-36" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
+      <OrdersHeader onClear={() => {
+        // Device-local only. The visible list is the account's history and is
+        // deliberately left alone -- see OrdersHeader.
+        clearTrackingTokens();
+        setClearToast('Cleared guest orders saved on this device. Your account orders are unchanged.');
+        setTimeout(() => setClearToast(''), 4000);
+      }} />
+
       {/* Reorder toast */}
       {reorderToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg">
           🛒 {reorderToast}
+        </div>
+      )}
+
+      {clearToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg max-w-[90vw] text-center">
+          {clearToast}
         </div>
       )}
 

@@ -40,6 +40,249 @@ const PREFERENCES = [
 
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
+/* ── Offers & coupons ─────────────────────────────────────────────────────────
+   One panel for both the guest and the signed-in checkout. These used to be two
+   independently maintained blocks, which is how the guest copy ended up with a
+   "Hide" button that could never be undone while the signed-in copy applied an
+   offer the instant a radio was touched. Both now render from here, so they
+   cannot drift apart again.
+
+   Nothing in this file invents an offer or a code. Every field below comes from
+   the whitelisted projection that /campaigns/welcome and /campaigns/eligible
+   return, which is populated by campaigns created in super admin -- so a new
+   offer shows its own terms with no change here. */
+
+type OfferCampaign = {
+  id: string;
+  title?: string | null;
+  subtitle?: string | null;
+  description?: string | null;
+  badge_text?: string | null;
+  coupon_code?: string | null;
+  discount_type?: string | null;
+  discount_value?: number | string | null;
+  max_discount?: number | string | null;
+  min_order_amount?: number | string | null;
+  valid_until?: string | null;
+};
+
+/* The admin stores these as NUMERIC, so they arrive as "50.00" and would otherwise
+   print as a bare \u20b950.00 next to prose that says "Rs50". */
+function money(v: number | string | null | undefined): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '0';
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '');
+}
+
+function offerHeadline(c: OfferCampaign): string {
+  if (c.discount_type === 'flat') return `\u20b9${money(c.discount_value)} off`;
+  if (c.discount_type === 'percent') return `${money(c.discount_value)}% off`;
+  return 'Free delivery';
+}
+
+/* The terms the customer is agreeing to. Assembled only from fields the admin
+   actually set, so an offer with no minimum and no expiry shows neither. */
+function offerDetailBits(c: OfferCampaign): string[] {
+  const bits: string[] = [];
+  if (Number(c.min_order_amount) > 0) bits.push(`Min order \u20b9${money(c.min_order_amount)}`);
+  if (c.discount_type === 'percent' && Number(c.max_discount) > 0) bits.push(`up to \u20b9${money(c.max_discount)}`);
+  if (c.valid_until) {
+    // Year only when it is not the current one: a welcome offer valid until 2027
+    // rendered as a bare "Ends 1 Oct", which reads like next month.
+    const until = new Date(c.valid_until);
+    const sameYear = until.getFullYear() === new Date().getFullYear();
+    bits.push(`Ends ${until.toLocaleDateString('en-IN', sameYear
+      ? { day: 'numeric', month: 'short' }
+      : { day: 'numeric', month: 'short', year: 'numeric' })}`);
+  }
+  if (c.coupon_code) bits.push(`Code ${c.coupon_code}`);
+  return bits;
+}
+
+type OffersPanelProps = {
+  cardClass: string;
+  campaigns: OfferCampaign[];
+  applied: OfferCampaign | null;
+  appliedCode: string | null;
+  discount: number;
+  notice: string;
+  locked: boolean;               // guest: applying needs an OTP login first
+  hidden: boolean;
+  onToggleHidden: () => void;
+  codeInput: string;
+  onCodeInput: (v: string) => void;
+  codeLoading: boolean;
+  codeError: string;
+  codeSuccess: string;
+  onValidateCode: () => void;
+  onApply: (c: OfferCampaign) => void;
+  onClearCode: () => void;
+  onRemoveOffer: () => void;
+};
+
+function OffersPanel(props: OffersPanelProps) {
+  const { cardClass, campaigns, applied, appliedCode, discount, notice, locked,
+    hidden, onToggleHidden, codeInput, onCodeInput, codeLoading, codeError,
+    codeSuccess, onValidateCode, onApply, onClearCode, onRemoveOffer } = props;
+
+  return (
+    <div className={cardClass}>
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
+            {campaigns.length > 0 && (
+              <span className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 rounded-full px-1.5 py-0.5">
+                {campaigns.length}
+              </span>
+            )}
+          </div>
+          {/* Two-way. The old Hide set a sessionStorage flag with nothing to clear
+              it, so hiding was permanent for the rest of the tab session. */}
+          {campaigns.length > 0 && (
+            <button type="button" onClick={onToggleHidden}
+              className="text-xs font-semibold text-gray-400 hover:text-emerald-600 transition-colors flex-shrink-0">
+              {hidden ? 'Show' : 'Hide'}
+            </button>
+          )}
+        </div>
+
+        {/* Collapsed state still advertises what is on offer, so hiding is never
+            a dead end -- the customer can always see there is something to claim. */}
+        {campaigns.length > 0 && hidden && (
+          <button type="button" onClick={onToggleHidden}
+            className="mt-3 w-full text-left rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-3 py-2.5">
+            <p className="text-[11px] font-bold text-violet-700 dark:text-violet-300">
+              {campaigns.length} offer{campaigns.length > 1 ? 's' : ''} available
+            </p>
+            <p className="text-[10px] text-violet-600 dark:text-violet-400 mt-0.5">Tap Show to view and apply</p>
+          </button>
+        )}
+
+        {campaigns.length > 0 && !hidden && (
+          <div className="mt-3 space-y-2">
+            {notice && (
+              <p className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                {notice}
+              </p>
+            )}
+            <p className="text-[11px] leading-tight text-gray-500 dark:text-slate-400">
+              Apply one offer. Coupon codes cannot be combined with another offer.
+            </p>
+
+            {campaigns.map((c) => {
+              const isApplied = applied?.id === c.id && !appliedCode;
+              const isAppliedByCode = applied?.id === c.id && !!appliedCode;
+              const headline = offerHeadline(c);
+              const desc = c.description || c.subtitle || headline;
+              const bits = offerDetailBits(c);
+              const done = isApplied || isAppliedByCode;
+              return (
+                <div key={c.id}
+                  className={`rounded-xl border px-3 py-2.5 transition-colors ${
+                    done ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
+                         : 'border-violet-200 bg-violet-50 dark:bg-violet-900/20 dark:border-violet-800'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className={`text-xs font-bold break-words ${done ? 'text-emerald-700 dark:text-emerald-300' : 'text-violet-700 dark:text-violet-300'}`}>
+                        {c.badge_text ? `${c.badge_text} ` : ''}{c.title}
+                      </p>
+                      <p className={`text-[11px] mt-0.5 break-words ${done ? 'text-emerald-600 dark:text-emerald-400' : 'text-violet-600 dark:text-violet-400'}`}>
+                        {desc}
+                      </p>
+                      {bits.length > 0 && (
+                        <p className="text-[10px] mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-gray-500 dark:text-slate-400">
+                          {bits.map((b) => (
+                            <span key={b} className="after:content-['\00b7'] after:ml-1.5 last:after:content-['']">{b}</span>
+                          ))}
+                        </p>
+                      )}
+                    </div>
+                    {/* Explicit Apply. The old signed-in list applied the moment the
+                        radio was touched, which read as the app grabbing a discount
+                        the customer had not chosen. */}
+                    <button
+                      type="button"
+                      disabled={done}
+                      onClick={() => onApply(c)}
+                      className={`flex-shrink-0 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
+                        done ? 'bg-emerald-200 text-emerald-700 dark:bg-emerald-800 dark:text-emerald-300 cursor-default'
+                             : 'bg-violet-500 hover:bg-violet-600 text-white'}`}>
+                      {done ? 'Applied' : locked ? 'Apply & Save' : 'Apply'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {locked && (
+              <p className="text-[10px] text-gray-400 dark:text-slate-500 text-center">
+                Log in via OTP to apply · No password needed
+              </p>
+            )}
+          </div>
+        )}
+
+        {campaigns.length === 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+            {notice && (
+              <p className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                {notice}
+              </p>
+            )}
+            <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">
+              {locked
+                ? 'Log in to unlock exclusive offers and discounts on your order.'
+                : 'No offers are available for this cart right now. You can still enter a coupon code below.'}
+            </p>
+            {locked && (
+              <button type="button" onClick={() => onApply(null as any)}
+                className="w-full py-2.5 text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 rounded-xl transition-colors">
+                Log in for offers →
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Signed-in only. /campaigns/validate requires auth, so a guest typing
+            here gets a bare "No token provided". Guests apply the campaign code
+            with Apply & Save, and the code is printed in the offer details. */}
+        {!locked && (
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Coupon code</label>
+          <div className="flex gap-2">
+            <input type="text" value={codeInput} onChange={e => onCodeInput(e.target.value)} placeholder="Enter coupon code"
+              className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
+            <button type="button" onClick={onValidateCode} disabled={codeLoading || !codeInput.trim()}
+              className="px-3 py-2 text-xs font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap">
+              {codeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Apply
+            </button>
+          </div>
+          {codeSuccess && <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">{codeSuccess}</p>}
+          {codeError && <p className="mt-1.5 text-xs text-red-500">{codeError}</p>}
+        </div>
+        )}
+
+        {applied && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 break-words">{applied.title}</p>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
+                {discount > 0 ? `-\u20b9${money(discount)} saved` : 'Free delivery applied'}
+                {appliedCode ? ` \u00b7 ${appliedCode}` : ''}
+              </p>
+            </div>
+            <button type="button" onClick={appliedCode ? onClearCode : onRemoveOffer}
+              className="p-1 text-emerald-600 hover:text-red-500 flex-shrink-0" aria-label="Remove offer">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
   const finePointer = useFinePointer();
   const orderRequestKey = useRef(crypto.randomUUID());
@@ -137,14 +380,24 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [couponSuccess, setCouponSuccess] = useState('');
-  const [showCouponField, setShowCouponField] = useState(false);
   const [billExpanded, setBillExpanded] = useState(false);
   const [offerNotice, setOfferNotice] = useState('');
   // sessionStorage writes do not re-render, so the offers block needs its own
   // state mirror or "Hide" appears to do nothing until some unrelated update.
+  const OFFERS_HIDDEN_KEY = 'checkout_offers_hidden';
   const [offersHidden, setOffersHidden] = useState(
-    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem('guest_offers_dismissed') === '1'
+    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem(OFFERS_HIDDEN_KEY) === '1'
   );
+  // Symmetric on purpose: the previous version only ever set the flag, so once a
+  // customer hid the offers there was no way back for the rest of the tab session.
+  const toggleOffersHidden = () => setOffersHidden(h => {
+    const next = !h;
+    try {
+      if (next) sessionStorage.setItem(OFFERS_HIDDEN_KEY, '1');
+      else sessionStorage.removeItem(OFFERS_HIDDEN_KEY);
+    } catch { /* private mode: the toggle still works for this render */ }
+    return next;
+  });
 
   useEffect(() => {
     // Offers are explicitly selected for each checkout; never restore an old cart selection.
@@ -236,19 +489,26 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     setCouponSuccess('');
   };
 
-  const validateCoupon = async () => {
-    if (!couponInput.trim() || !storeId) return;
-    setCouponLoading(true); setCouponError('');
+  /* The single server-side redemption path. A typed code and an offer row that
+     carries its own code both come through here, so a discount is never taken on
+     the client's word: the server re-checks eligibility, expiry, usage limits and
+     minimum order before the figure on screen is allowed to stand. */
+  const applyCode = async (raw: string) => {
+    const code = raw.trim().toUpperCase();
+    if (!code || !storeId) return;
+    setCouponLoading(true); setCouponError(''); setCouponSuccess('');
     try {
-      const res = await campaignApi.validateCode(couponInput.trim(), sub, storeId);
+      const res = await campaignApi.validateCode(code, sub, storeId);
       const { campaign } = res.data.data;
-      applyCampaign(campaign, couponInput.trim().toUpperCase());
+      applyCampaign(campaign, code);
       setCouponSuccess('Coupon applied');
     } catch (e: any) {
       setCouponSuccess('');
       setCouponError(e?.response?.data?.error || 'Invalid coupon');
     } finally { setCouponLoading(false); }
   };
+
+  const validateCoupon = () => applyCode(couponInput);
 
   const deliveryCharge = parseFloat(settings.delivery_charge || '15');
   const freeAbove = parseFloat(settings.free_delivery_above || '150');
@@ -553,126 +813,40 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
           </div>
 
           {/* ── Offers / Coupons ── */}
-          {isLoggedIn ? (
-            <div className={card}>
-              <div className="px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                {eligibleCampaigns.length > 0 && <div className="flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-violet-500" />
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Available offers</span>
-                </div>}
-                <button type="button" onClick={() => setShowCouponField(true)} className={`${eligibleCampaigns.length > 0 ? '' : 'w-full text-left'} text-xs font-semibold text-violet-600 dark:text-violet-400 whitespace-nowrap`}>
-                  Have coupon code?
-                </button>
-              </div>
+          <OffersPanel
+            cardClass={card}
+            campaigns={eligibleCampaigns}
+            applied={appliedCampaign}
+            appliedCode={appliedCouponCode}
+            discount={campaignDiscount}
+            notice={offerNotice}
+            locked={!isLoggedIn}
+            hidden={offersHidden}
+            onToggleHidden={toggleOffersHidden}
+            codeInput={couponInput}
+            onCodeInput={(v) => { setCouponInput(v.toUpperCase()); setCouponError(''); setCouponSuccess(''); }}
+            codeLoading={couponLoading}
+            codeError={couponError}
+            codeSuccess={couponSuccess}
+            onValidateCode={validateCoupon}
+            onApply={(c) => {
+              setOfferNotice('');
+              // null means the empty state: a guest tapping "Log in for offers"
+              // wants the offers themselves, not one particular offer.
+              if (!c) { onLogin?.(); return; }
+              // A guest has no server-side identity yet, so the offer is applied
+              // once the OTP login returns (see the pendingCouponApply effect).
+              if (!isLoggedIn) { onLogin?.(c); return; }
+              // A campaign carrying a code must still be redeemed server-side even
+              // when the customer is signed in: /campaigns/welcome hands coded
+              // offers to logged-in shoppers too.
+              if (c.coupon_code) { applyCode(c.coupon_code); return; }
+              applyCampaign(c);
+            }}
+            onClearCode={removeCampaign}
+            onRemoveOffer={removeCampaign}
+          />
 
-              {eligibleCampaigns.length > 0 && <div className="mt-3 space-y-2">
-                <p className="text-[11px] leading-tight text-gray-500 dark:text-slate-400">Choose one offer. Coupon codes cannot be combined with another offer.</p>
-                <label className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${!appliedCampaign ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'}`}>
-                  <input type="radio" name="checkout-offer" checked={!appliedCampaign} onChange={removeCampaign} className="mt-0.5 accent-emerald-500" />
-                  <span className="text-xs text-gray-700 dark:text-slate-300">No offer</span>
-                </label>
-                {eligibleCampaigns.map((campaign: any) => {
-                  const isSelected = appliedCampaign?.id === campaign.id && !appliedCouponCode;
-                  const amount = campaign.discount_type === 'flat' ? `₹${campaign.discount_value} off` : campaign.discount_type === 'percent' ? `${campaign.discount_value}% off` : 'Free delivery';
-                  const description = campaign.description || campaign.subtitle || `${amount}${campaign.min_order_amount > 0 ? ` on orders above ₹${campaign.min_order_amount}` : ''}`;
-                  return (
-                    <label key={campaign.id} className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'}`}>
-                      <input type="radio" name="checkout-offer" checked={isSelected} onChange={() => applyCampaign(campaign)} className="mt-0.5 accent-emerald-500" />
-                      <span className="min-w-0">
-                        <span className="block text-xs font-bold text-gray-900 dark:text-white break-words">{campaign.badge_text ? `${campaign.badge_text} ` : ''}{campaign.title}</span>
-                        <span className="block mt-0.5 text-[11px] leading-tight text-gray-500 dark:text-slate-400 break-words">{description}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>}
-
-              {showCouponField && <div className="mt-3 border-t border-gray-100 dark:border-slate-700 pt-3">
-                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Coupon code</label>
-                <div className="flex gap-2">
-                  <input type="text" value={couponInput} onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError(''); setCouponSuccess(''); }} placeholder="Enter coupon code" className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
-                  <button type="button" onClick={validateCoupon} disabled={couponLoading || !couponInput.trim()} className="px-3 py-2 text-xs font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap">
-                    {couponLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Apply
-                  </button>
-                </div>
-                {couponSuccess && <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">{couponSuccess}</p>}
-                {couponError && <p className="mt-1.5 text-xs text-red-500">{couponError}</p>}
-              </div>}
-
-              {appliedCampaign && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 break-words">{appliedCampaign.title}</p>
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-500">{campaignDiscount > 0 ? `-₹${campaignDiscount.toFixed(0)} saved` : 'Free delivery applied'}</p>
-                </div>
-                <button type="button" onClick={removeCampaign} className="p-1 text-emerald-600 hover:text-red-500 flex-shrink-0" aria-label="Remove offer"><X className="w-3.5 h-3.5" /></button>
-              </div>}
-              </div>
-            </div>
-          ) : (
-            <div className={card}>
-              <div className="px-4 py-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-violet-500" />
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
-                </div>
-                {eligibleCampaigns.length > 0 && !offersHidden && (
-                  <button type="button" onClick={() => { sessionStorage.setItem('guest_offers_dismissed', '1'); setOffersHidden(true); }}
-                    className="text-xs font-semibold text-gray-400 hover:text-gray-500 transition-colors">
-                    Hide
-                  </button>
-                )}
-              </div>
-              {eligibleCampaigns.length > 0 && !offersHidden && (
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-                  {offerNotice && (
-                    <p className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                      {offerNotice}
-                    </p>
-                  )}
-                  {eligibleCampaigns.map((campaign: any) => {
-                    const amount = campaign.discount_type === 'flat' ? `₹${campaign.discount_value} off` : campaign.discount_type === 'percent' ? `${campaign.discount_value}% off` : 'Free delivery';
-                    const description = campaign.description || campaign.subtitle || `${amount}${campaign.min_order_amount > 0 ? ` on orders above ₹${campaign.min_order_amount}` : ''}`;
-                    return (
-                      <div key={campaign.id} className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-2xl p-3 mb-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-violet-700 dark:text-violet-300">
-                              {campaign.badge_text ? `${campaign.badge_text} ` : ''}{campaign.title}
-                            </p>
-                            <p className="text-[11px] text-violet-600 dark:text-violet-400 mt-0.5">{description}</p>
-                          </div>
-                          <button type="button" onClick={() => { setOfferNotice(''); onLogin?.(campaign); }}
-                            className="flex-shrink-0 px-3 py-1.5 text-[11px] font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors">
-                            Apply &amp; Save
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <p className="text-[10px] text-gray-400 dark:text-slate-500 text-center">
-                    Log in via OTP to apply · No password needed
-                  </p>
-                </div>
-              )}
-              {eligibleCampaigns.length === 0 && !offersHidden && (
-                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-                  {offerNotice && (
-                    <p className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                      {offerNotice}
-                    </p>
-                  )}
-                  <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">
-                    Log in to unlock exclusive offers and discounts on your order.
-                  </p>
-                  <button type="button" onClick={() => { setOfferNotice(''); onLogin?.(); }}
-                    className="w-full py-2.5 text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 rounded-xl transition-colors">
-                    Log in for offers →
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ── USP: Delivery time + Note in one card ── */}
           <div className={card}>
