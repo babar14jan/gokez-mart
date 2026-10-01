@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -8,6 +8,7 @@ import { getLocationPermission } from '../services/push';
 import AddressForm from '../components/AddressForm';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { useCartStore } from '../store/cartStore';
+import LoginFlow from '../components/LoginFlow';
 
 interface AccountPageProps {
   onBack?: () => void;
@@ -40,67 +41,10 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
   const [addressMenuId, setAddressMenuId] = useState<string | null>(null);
   const [addressPendingDelete, setAddressPendingDelete] = useState<string | null>(null);
   const [addressDeleting, setAddressDeleting] = useState(false);
-  const [loginPhone, setLoginPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState('');
-  const [resendTimer, setResendTimer] = useState(0);
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
-  useEffect(() => {
-    if (resendTimer <= 0) return;
-    const t = setTimeout(() => setResendTimer(s => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendTimer]);
 
-  const handleSendOtp = async () => {
-    const cleaned = loginPhone.replace(/\D/g, '');
-    if (cleaned.length !== 10) { setLoginError('Enter a valid 10-digit number'); return; }
-    setLoginLoading(true); setLoginError('');
-    try {
-      await authApi.sendOtp(cleaned);
-      useLoginFlowStore.getState().beginOtp(cleaned, false);
-      setOtpSent(true);
-      setResendTimer(30);
-    } catch (err: any) {
-      setLoginError(err?.response?.data?.error || 'Failed to send OTP');
-    } finally { setLoginLoading(false); }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (otp.length !== 6) { setLoginError('Enter the 6-digit OTP'); return; }
-    setLoginLoading(true); setLoginError('');
-    try {
-      const cleaned = loginPhone.replace(/\D/g, '');
-      const res = await authApi.verifyOtp(cleaned, otp);
-      const { token, customer } = res.data.data;
-      useLoginFlowStore.getState().clear();
-      const { login } = useCustomerAuthStore.getState();
-      login(token, customer);
-      syncName(customer.name || '');
-      if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
-      // Honour the redirect intent recorded before opening this page; Orders is
-      // the default because /account is reached from the "Track My Orders" CTA.
-      const redirect = useLoginFlowStore.getState().postLoginPath || '/orders';
-      useLoginFlowStore.getState().setPostLoginPath(null);
-      navigate(redirect);
-    } catch (err: any) {
-      setLoginError(err?.response?.data?.error || 'Invalid OTP');
-    } finally { setLoginLoading(false); }
-  };
-
-  const handleResend = async () => {
-    if (resendTimer > 0) return;
-    setLoginLoading(true); setLoginError('');
-    try {
-      await authApi.sendOtp(loginPhone.replace(/\D/g, ''));
-      setResendTimer(30);
-    } catch (err: any) {
-      setLoginError(err?.response?.data?.error || 'Failed to resend OTP');
-    } finally { setLoginLoading(false); }
-  };
 
   const handleSaveAddress = async (label: string, val: string, coordinates: { latitude: number; longitude: number } | null) => {
     setAddressSaving(true);
@@ -197,60 +141,35 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
     return (
       <div className="min-h-screen bg-white dark:bg-slate-900 font-sans">
         <div className="w-full sm:max-w-sm sm:mx-auto bg-white dark:bg-slate-800 sm:rounded-3xl sm:shadow-xl overflow-hidden">
+          {/* The logged-out account page is a real destination (both guest "Track
+              My Orders" CTAs deep-link to /account), so it needs a way back out.
+              Previously the only exit was the guest link below. */}
+          <div className="flex border-b border-gray-100 bg-white px-2 py-2 dark:border-slate-700 dark:bg-slate-800">
+            <button type="button" onClick={() => onBack?.()}
+              className="-ml-1 flex min-h-[44px] items-center gap-1 rounded-xl px-3 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-300 dark:hover:bg-slate-700">
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Back
+            </button>
+          </div>
           <img src="/Guest_page.webp" alt="Welcome to Gokez Mart" className="w-full block" />
           <div className="px-5 py-6 space-y-4">
-            {!otpSent ? (
-              <div className="space-y-3">
-                {loginError && <p className="text-sm text-red-600 dark:text-red-400 text-center">{loginError}</p>}
-                <div className="flex items-center rounded-2xl border border-black/20 dark:border-white/20 bg-slate-50 dark:bg-slate-700/60">
-                  <span className="text-sm font-semibold text-white bg-black dark:bg-black dark:text-white px-3 py-3 rounded-l-2xl">+91</span>
-                  <input
-                    type="tel"
-                    value={loginPhone}
-                    onChange={e => setLoginPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="10-digit mobile number"
-                    inputMode="numeric"
-                    autoComplete="tel"
-                    className="flex-1 bg-transparent py-3 pl-3 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 focus:outline-none"
-                  />
-                </div>
-                <button
-                  onClick={handleSendOtp}
-                  disabled={loginLoading || loginPhone.length !== 10}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 py-3 text-[15px] font-bold text-white shadow-sm transition-colors hover:bg-emerald-800 disabled:opacity-50"
-                >
-                  {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Continue with OTP</>}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {loginError && <p className="text-sm text-red-600 dark:text-red-400 text-center">{loginError}</p>}
-                <input
-                  type="tel"
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="6-digit OTP"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                />
-                <button
-                  onClick={handleVerifyOtp}
-                  disabled={loginLoading || otp.length !== 6}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 py-3 text-[15px] font-bold text-white shadow-sm transition-colors hover:bg-emerald-800 disabled:opacity-50"
-                >
-                  {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Verify & Sign In</>}
-                </button>
-                <button
-                  onClick={handleResend}
-                  disabled={resendTimer > 0 || loginLoading}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-2xl py-2 text-sm text-gray-500 transition-colors hover:text-emerald-700 disabled:opacity-50 dark:text-slate-400"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
-                </button>
-              </div>
-            )}
+<LoginFlow
+              variant="page"
+              // Deliberately NOT pendingCheckout={cartCount > 0}. That flag is
+              // persisted by beginOtp and read back on boot to auto-open the
+              // overlay, so setting it here would turn any reload of /account
+              // mid-login into the checkout modal, and it would label the name
+              // step "Continue to Checkout" when this page actually navigates to
+              // postLoginPath (/orders).
+              onGuest={() => navigate(cartCount > 0 ? '/checkout' : '/')}
+              onSuccess={() => {
+                // Honour the redirect intent recorded before this page was opened.
+                // "/orders" is the default because /account is reached from the
+                // guest "Track My Orders" CTA.
+                const redirect = useLoginFlowStore.getState().postLoginPath || '/orders';
+                useLoginFlowStore.getState().setPostLoginPath(null);
+                navigate(redirect);
+              }}
+            />
             <div className="text-center">
               <button
                 onClick={() => navigate(cartCount > 0 ? '/checkout' : '/')}

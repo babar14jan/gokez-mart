@@ -664,14 +664,25 @@ describe('K. The public settings endpoint reports whether the store is open', ()
 describe('K. Login copy states the real delivery channel', () => {
   const read = (p: string) => require('fs').readFileSync(require('path').resolve(__dirname, '../..', p), 'utf8');
 
+  // The web login surface is split across two files: LoginModal holds the overlay
+  // chrome (max-w-md, the scroll container, the dialog semantics) and LoginFlow
+  // holds the steps, copy and controls. Login used to be one file; splitting it
+  // meant these guards were reading a 28-line wrapper and passing/vailing on the
+  // wrong thing. Assertions below may legitimately target either, so read both.
+  const WEB_LOGIN_FILES = [
+    'mart-user/src/components/LoginModal.tsx',
+    'mart-user/src/components/LoginFlow.tsx',
+  ];
+  const readWebLogin = () => WEB_LOGIN_FILES.map(read).join('\n');
+
   const APPS = [
-    ['web', 'mart-user/src/components/LoginModal.tsx'],
-    ['native', 'mart-mobile/app/(auth)/login.tsx'],
+    ['web', readWebLogin],
+    ['native', () => read('mart-mobile/app/(auth)/login.tsx')],
   ] as const;
 
   test('both apps promise the code arrives by call', () => {
-    for (const [name, file] of APPS) {
-      const src = read(file);
+    for (const [name, getSrc] of APPS) {
+      const src = getSrc();
       assert.ok(/send you a 6-digit code via call/i.test(src),
         `${name}: the login screens no longer say the code arrives by call`);
     }
@@ -681,8 +692,8 @@ describe('K. Login copy states the real delivery channel', () => {
     // This is the one that matters. If someone drops the qualifier to ship
     // "SMS OTP enabled" before the backend routes an SMS, the promise is a lie
     // on exactly the screen a customer is waiting on.
-    for (const [name, file] of APPS) {
-      const src = read(file);
+    for (const [name, getSrc] of APPS) {
+      const src = getSrc();
       if (!/sms/i.test(src)) continue;
       assert.ok(/sms otp coming soon/i.test(src),
         `${name}: mentions SMS without the "coming soon" qualifier - SMS is not live yet`);
@@ -701,8 +712,8 @@ describe('K. Login copy states the real delivery channel', () => {
     // Layout decision: the phone step is a single input, and a second block
     // there competed with it. The promise belongs next to the empty code field,
     // where the customer is actually waiting for the call.
-    for (const [name, file] of APPS) {
-      const src = read(file);
+    for (const [name, getSrc] of APPS) {
+      const src = getSrc();
       const heading = src.search(/Enter (the verification code|OTP)/i);
       const promise = src.search(/send you a 6-digit code via call/i);
       assert.ok(heading >= 0, `${name}: no code-entry heading found`);
@@ -715,8 +726,8 @@ describe('K. Login copy states the real delivery channel', () => {
   test('the copy does not imply the call confirms the customer', () => {
     // A voice OTP is read out to be typed. "Confirm your number" makes customers
     // wait for a call that ends without them typing anything.
-    for (const [name, file] of APPS) {
-      assert.ok(!/confirm your number/i.test(read(file)),
+    for (const [name, getSrc] of APPS) {
+      assert.ok(!/confirm your number/i.test(getSrc()),
         `${name}: the copy implies the call confirms the customer instead of delivering a code`);
     }
   });
@@ -724,8 +735,8 @@ describe('K. Login copy states the real delivery channel', () => {
   test('neither screen claims the code is good for a single attempt', () => {
     // 2Factor allows three OTP attempts. "only this once" invents scarcity and
     // strands customers mid-auth when the code expires.
-    for (const [name, file] of APPS) {
-      assert.ok(!/\bonly this once\b/i.test(read(file)),
+    for (const [name, getSrc] of APPS) {
+      assert.ok(!/\bonly this once\b/i.test(getSrc()),
         `${name}: claims the code works once, but the provider allows retries`);
     }
   });
@@ -736,8 +747,8 @@ describe('K. Login copy states the real delivery channel', () => {
   // to your phone +91-...". Asserting a fixed phrase here would fail on correct
   // copy, so this checks the structure instead.
   test('both apps present a recognisable code-entry step', () => {
-    for (const [name, file] of APPS) {
-      const src = read(file);
+    for (const [name, getSrc] of APPS) {
+      const src = getSrc();
       assert.ok(/Enter (the verification code|OTP)/i.test(src),
         `${name}: the code-entry screen has no heading`);
       // Both apps show the destination number; mobile labels it ("Sent to
@@ -779,7 +790,18 @@ describe('K. Login copy states the real delivery channel', () => {
 // decorative block that pushes the sign-in button below the fold.
 describe('L. Login panel stays compact enough for small screens', () => {
   const read = (p: string) => require('fs').readFileSync(require('path').resolve(__dirname, '../..', p), 'utf8');
-  const src = read('mart-user/src/components/LoginModal.tsx');
+
+  // The web login surface is split across two files: LoginModal holds the overlay
+  // chrome (max-w-md, the scroll container, the dialog semantics) and LoginFlow
+  // holds the steps, copy and controls. Login used to be one file; splitting it
+  // meant these guards were reading a 28-line wrapper and passing/vailing on the
+  // wrong thing. Assertions below may legitimately target either, so read both.
+  const WEB_LOGIN_FILES = [
+    'mart-user/src/components/LoginModal.tsx',
+    'mart-user/src/components/LoginFlow.tsx',
+  ];
+  const readWebLogin = () => WEB_LOGIN_FILES.map(read).join('\n');
+  const src = readWebLogin();
 
   test('the brand mark is not oversized', () => {
     assert.ok(!/h-20/.test(src),
@@ -819,8 +841,10 @@ describe('L. Login panel stays compact enough for small screens', () => {
 
     assert.ok(/min-h-\[44px\]/.test(buttonWith('onClick={handleResend}')),
       'the resend control dropped below the 44px touch-target floor');
-    assert.ok(/h-11 w-11/.test(buttonWith('onClick={handleClose}')),
-      'the close control dropped below the 44px touch-target floor');
+    // The cross was removed: "Continue as guest" is now the only way out of the
+    // flow on every step, so the floor belongs to it instead.
+    assert.ok(/min-h-\[44px\]/.test(buttonWith('onClick={handleGuest}')),
+      'the continue-as-guest control dropped below the 44px touch-target floor');
     assert.ok(/min-h-\[44px\]|min-w-\[44px\]/.test(buttonWith('{maskedPhone}')),
       'the edit-number control dropped below the 44px touch-target floor');
 

@@ -188,6 +188,12 @@ export default function App() {
       else if (path === '/notification-settings') setView('notification-settings');
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
+      // Needed because the login redirect lands here: AccountPage navigates to
+      // postLoginPath, which is '/orders' for the guest "Track My Orders" CTA.
+      // Without this branch the pushState fell through to setView('home'), so a
+      // customer who signed in from the account page was dumped on the home
+      // screen instead of their order history.
+      else if (path === '/orders') setView('orders');
       else if (path === '/checkout') { setView('home'); setCheckoutActive(true); }
       else setView('home');
     };
@@ -321,11 +327,6 @@ export default function App() {
     setView(v);
   };
 
-  // Expose nav to footer quick links
-  useEffect(() => {
-    (window as any).__navToOrders = () => handleNavChange('orders');
-    (window as any).__navToAccount = () => handleNavChange('account');
-  });
 
   // Escape hatch from inside the login modal: drop the OTP flow and keep the
   // shopper moving. Checkout opened the modal, so dropping out must land back
