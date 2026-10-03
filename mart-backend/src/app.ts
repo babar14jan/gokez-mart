@@ -129,6 +129,17 @@ app.use('/api/v1/orders/track/:id/cancel', rateLimit({
   message: { success: false, error: 'Too many cancellation attempts. Please wait a few minutes.' },
 }));
 
+// 6. Public token tracking — tokens are unguessable, but this endpoint still
+// needs a tighter budget than general API traffic because it returns order data.
+app.use('/api/v1/orders/track/tokens', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 20 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many order lookups. Please try again in a few minutes.' },
+  skip: (req) => req.method !== 'GET',
+}));
+
 // 5. Order placement — 10 orders / 5 min per IP (prevent order spam)
 app.use('/api/v1/orders', rateLimit({
   windowMs: 5 * 60 * 1000,

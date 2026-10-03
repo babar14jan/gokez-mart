@@ -122,7 +122,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
         <Field label="Building / Tower" value={fields.building} onChange={update('building')} placeholder="e.g. Block B" />
       </div>
       <Field label="Street / Locality" required value={fields.locality} onChange={update('locality')} placeholder="e.g. New Town" />
-      <Field label="Landmark" value={fields.landmark} onChange={update('landmark')} placeholder="Optional" />
+      <Field label="Landmark (optional)" value={fields.landmark} onChange={update('landmark')} placeholder="e.g. Near City Centre" />
       <div className="grid grid-cols-2 gap-2">
         <Field label="City" required value={fields.city} onChange={update('city')} placeholder="e.g. Kolkata" />
         <Field label="Pincode" required value={fields.pincode} onChange={update('pincode')} placeholder="700102" inputMode="numeric" />

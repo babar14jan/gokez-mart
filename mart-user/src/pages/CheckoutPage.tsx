@@ -7,7 +7,7 @@ import type { PublicSettings, Product } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
-import AddressForm from '../components/AddressForm';
+import AddressForm, { type AddressCoordinates } from '../components/AddressForm';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 
 interface CheckoutPageProps {
@@ -39,6 +39,16 @@ const PREFERENCES = [
 ] as const;
 
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
+
+const isValidGuestName = (name: string) => {
+  const normalized = name.trim();
+  return normalized.length >= 2 && normalized.length <= 80 && /\p{L}/u.test(normalized);
+};
+const isValidIndianMobile = (phone: string) => /^[6-9]\d{9}$/.test(phone.replace(/\D/g, ''));
+const isValidDeliveryAddress = (address: string | null) => {
+  const normalized = address?.trim() || '';
+  return normalized.length >= 10 && normalized.length <= 500;
+};
 
 /* ── Offers & coupons ─────────────────────────────────────────────────────────
    One panel for both the guest and the signed-in checkout. These used to be two
@@ -286,6 +296,8 @@ function OffersPanel(props: OffersPanelProps) {
 export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
   const finePointer = useFinePointer();
   const orderRequestKey = useRef(crypto.randomUUID());
+  const guestNameInput = useRef<HTMLInputElement>(null);
+  const guestPhoneInput = useRef<HTMLInputElement>(null);
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn } = useCustomerAuthStore();
@@ -315,6 +327,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     return '';
   });
   const [guestAddressLabel, setGuestAddressLabel] = useState('Home');
+  const [guestAddressCoordinates, setGuestAddressCoordinates] = useState<AddressCoordinates | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !isLoggedIn && guestAddress) {
@@ -519,7 +532,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
-  const canSubmit = canCheckout && !!resolvedAddress && (!!guestName?.trim() || isLoggedIn) && (!!guestPhone?.trim() || isLoggedIn);
+  const missingCheckoutDetails = [
+    !isValidDeliveryAddress(resolvedAddress) && 'delivery address',
+    !isLoggedIn && !isValidGuestName(guestName) && 'name',
+    !isLoggedIn && !isValidIndianMobile(guestPhone) && 'valid mobile number',
+  ].filter(Boolean) as string[];
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
   const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
   const selectedPref = PREFERENCES.find(p => p.value === deliveryPreference)!;
@@ -538,9 +555,23 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     e.preventDefault();
     const name = isLoggedIn ? (authName || guestName) : guestName;
     const phone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
-    if (!name?.trim() || !phone?.trim()) { setError('Please fill in your name and phone number'); return; }
-    if (phone.replace(/\D/g, '').length < 10) { setError('Enter a valid 10-digit phone number'); return; }
-    if (!resolvedAddress) { setError('Please add a delivery address'); return; }
+    if (!isValidDeliveryAddress(resolvedAddress)) {
+      setError('Add a complete delivery address to continue');
+      setAddingNew(!isLoggedIn || addresses.length === 0);
+      setShowAddressList(true);
+      return;
+    }
+    const orderAddress = resolvedAddress!.trim();
+    if (!name?.trim() || !isValidGuestName(name)) {
+      setError('Please enter your name using at least 2 characters');
+      guestNameInput.current?.focus();
+      return;
+    }
+    if (!phone?.trim() || !isValidIndianMobile(phone)) {
+      setError('Enter a valid 10-digit Indian mobile number');
+      guestPhoneInput.current?.focus();
+      return;
+    }
     // After validation, before the request: a customer with a form problem
     // should be told about that, not asked to confirm a delay they have not
     // reached yet. Defaulting to "proceed" keeps checkout working if this page
@@ -550,10 +581,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     try {
       const res = await storeApi.placeOrder({
         guestName: name, guestPhone: phone.replace(/\D/g, ''),
-        guestAddress: resolvedAddress,
+        guestAddress: orderAddress,
         guestAddressLabel: isLoggedIn ? undefined : guestAddressLabel,
-        latitude: selectedAddress?.latitude ?? null,
-        longitude: selectedAddress?.longitude ?? null,
+        latitude: selectedAddress?.latitude ?? guestAddressCoordinates?.latitude ?? null,
+        longitude: selectedAddress?.longitude ?? guestAddressCoordinates?.longitude ?? null,
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
         paymentMethod, zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
@@ -570,7 +601,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         trackingToken: res.data.data.trackingToken,
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, photoUrl: i.photoUrl || null })),
         total: res.data.data.total,
-        guestAddress: resolvedAddress,
+        guestAddress: orderAddress,
         guestName: isLoggedIn ? (authName || guestName) : guestName,
         guestPhone: isLoggedIn ? (authPhone || guestPhone) : guestPhone,
         createdAt: new Date().toISOString(),
@@ -711,7 +742,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[80vh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">Choose delivery address</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{addingNew ? 'Add delivery address' : 'Choose delivery address'}</p>
                   <button onClick={() => { setShowAddressList(false); setAddingNew(!deliveryAddress); }} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
                     <X className="w-4 h-4 text-gray-500" />
                   </button>
@@ -746,6 +777,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   </>
                 ) : (
                   <div className="px-5 py-4">
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Fields marked * are needed to deliver your order. A landmark is optional but helpful.</p>
                     <AddressForm saving={addressSaving} onCancel={() => setAddingNew(false)}
                       onSave={async (label, address, coordinates) => {
                         setAddressSaving(true);
@@ -758,6 +790,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                             // in the book server-side.
                             setGuestAddress(address);
                             setGuestAddressLabel(label.trim() || 'Home');
+                            setGuestAddressCoordinates(coordinates);
                           }
                           setAddingNew(false);
                           setShowAddressList(false);
@@ -797,16 +830,16 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
                     Name <span className="text-emerald-600" aria-hidden="true">*</span>
                   </label>
-                  <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)}
-                    placeholder="Your name" className={inp} required aria-required="true" />
+                  <input ref={guestNameInput} type="text" value={guestName} onChange={e => setGuestName(e.target.value)}
+                    placeholder="e.g. Priya Das" autoComplete="name" className={inp} required aria-required="true" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
                     Phone number <span className="text-emerald-600" aria-hidden="true">*</span>
                   </label>
-                  <input type="tel" inputMode="numeric" value={guestPhone}
+                  <input ref={guestPhoneInput} type="tel" inputMode="numeric" value={guestPhone}
                     onChange={e => setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="10-digit mobile number" className={inp} required aria-required="true" />
+                    placeholder="e.g. 9876543210" autoComplete="tel" className={inp} required aria-required="true" />
                 </div>
               </div>
             )}
@@ -1017,15 +1050,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               <p className="text-xs text-red-500 text-center mb-2">Minimum order ₹{minOrder}. Add ₹{(minOrder - sub).toFixed(0)} more.</p>
             )}
 
-            {!isLoggedIn && (!guestName?.trim() || !guestPhone?.trim()) && canCheckout && resolvedAddress && (
-              <p className="text-xs text-red-500 text-center mb-2">Fill in your name and phone number</p>
+            {canCheckout && missingCheckoutDetails.length > 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 text-center mb-2">Before placing your order, add: {missingCheckoutDetails.join(', ')}</p>
             )}
             <div className="flex items-center gap-3">
               <div className="w-16 flex-shrink-0 text-center">
                 <p className="text-[10px] text-gray-500 dark:text-slate-400">To pay</p>
                 <p className="text-lg font-bold text-gray-900 dark:text-white">₹{total.toFixed(0)}</p>
               </div>
-              <button type="submit" form="checkout-form" disabled={loading || !canSubmit}
+              <button type="submit" form="checkout-form" disabled={loading || !canCheckout}
                 className="flex-1 h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight">
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <>

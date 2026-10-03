@@ -18,7 +18,6 @@ import LoginModal from './components/LoginModal';
 import CheckoutPage from './pages/CheckoutPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
-import InstallPrompt from './components/InstallPrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
@@ -423,6 +422,11 @@ export default function App() {
     if (!token) return;
     saveTrackingToken(token);
   }, [successData?.trackingToken]);
+
+  useEffect(() => {
+    if (!successData) return;
+    window.dispatchEvent(new Event('gokez:first-order-completed'));
+  }, [successData]);
 
   // Success screen
   if (successData) {
@@ -957,9 +961,6 @@ export default function App() {
 
       {/* Floating cart bar — mobile only */}
       <FloatingCart onOpen={handleCheckout} hidden={checkoutActive} />
-
-      {/* Install prompt — Android native / iOS guide */}
-      <InstallPrompt />
 
       {/* Bottom nav — mobile only */}
       <div className="sm:hidden">

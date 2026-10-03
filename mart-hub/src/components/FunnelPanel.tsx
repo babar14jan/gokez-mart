@@ -7,14 +7,40 @@ const RANGES: Array<{ id: FunnelRange; label: string }> = [
   { id: 'today', label: 'Today' },
   { id: '7d', label: '7 days' },
   { id: '30d', label: '30 days' },
-  { id: '90d', label: '90 days' },
+  { id: 'custom', label: 'Custom' },
   { id: 'all', label: 'All time' },
 ];
 
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 
-export default function FunnelPanel() {
-  const [range, setRange] = useState<FunnelRange>('30d');
+interface FunnelPanelProps {
+  range?: FunnelRange;
+  from?: string;
+  to?: string;
+  onRangeChange?: (range: FunnelRange) => void;
+  onDateRangeChange?: (from: string, to: string) => void;
+}
+
+const todayInIst = () => {
+  const parts = new Intl.DateTimeFormat('en', {
+  timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+};
+
+export default function FunnelPanel({ range: controlledRange, from: controlledFrom, to: controlledTo, onRangeChange, onDateRangeChange }: FunnelPanelProps) {
+  const [internalRange, setInternalRange] = useState<FunnelRange>('today');
+  const [internalFrom, setInternalFrom] = useState(todayInIst);
+  const [internalTo, setInternalTo] = useState(todayInIst);
+  const range = controlledRange ?? internalRange;
+  const setRange = onRangeChange ?? setInternalRange;
+  const from = controlledFrom ?? internalFrom;
+  const to = controlledTo ?? internalTo;
+  const setDates = (nextFrom: string, nextTo: string) => {
+    if (onDateRangeChange) onDateRangeChange(nextFrom, nextTo);
+    else { setInternalFrom(nextFrom); setInternalTo(nextTo); }
+  };
   const [summary, setSummary] = useState<FunnelSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,11 +48,11 @@ export default function FunnelPanel() {
   useEffect(() => {
     setLoading(true);
     setError('');
-    customerLeadsApi.getFunnel(range)
+    customerLeadsApi.getFunnel(range, from, to)
       .then(response => setSummary(response.data.data))
       .catch(() => setError('Could not load the funnel. Please try again.'))
       .finally(() => setLoading(false));
-  }, [range]);
+  }, [range, from, to]);
 
   const stages = summary?.stages ?? [];
   // Bars scale against the largest stage, not the first one. Keying off
@@ -57,17 +83,34 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Login &amp; purchase funnel</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Customer journey</h2>
         </div>
         <div className="inline-flex w-full rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40 sm:w-auto">
           {RANGES.map(item => (
-            <button key={item.id} type="button" onClick={() => setRange(item.id)}
+            <button key={item.id} type="button" onClick={() => {
+              if (item.id === 'custom' && (!from || !to)) {
+                const today = todayInIst();
+                setDates(today, today);
+              }
+              setRange(item.id);
+            }}
               className={`min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors sm:flex-none ${range === item.id ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>
               {item.label}
             </button>
           ))}
         </div>
       </div>
+
+      {range === 'custom' && (
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <label className="text-xs font-medium text-gray-600 dark:text-slate-300">From
+            <input type="date" value={from} max={to} onChange={event => setDates(event.target.value, to)} className="mt-1 block rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+          </label>
+          <label className="text-xs font-medium text-gray-600 dark:text-slate-300">To
+            <input type="date" value={to} min={from} max={todayInIst()} onChange={event => setDates(from, event.target.value)} className="mt-1 block rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+          </label>
+        </div>
+      )}
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
 
@@ -122,7 +165,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
             <div className="mt-4">
               <div className="mb-1.5 flex items-center justify-between">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-                  Visits, numbers entered vs ordered, by day
+                  Traffic, OTP starts and orders, by day
                 </p>
                 <p className="flex items-center gap-3 text-[10px] text-gray-500 dark:text-slate-400">
                   <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-blue-400 dark:bg-blue-600" />Visits</span>
@@ -144,8 +187,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                 ))}
               </div>
               <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
-                A visit is an anonymous session; nobody has entered a number yet,
-                so it is never counted as a lead.
+                Traffic is anonymous sessions, while OTP starts are phone numbers. They are shown together for context, not as one person-by-person funnel. All dates use India time.
               </p>
             </div>
           )}

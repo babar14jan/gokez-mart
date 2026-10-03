@@ -83,7 +83,7 @@ export const customersApi = {
   getAll: () => api.get('/admin/customers'),
 };
 
-export type FunnelRange = 'today' | '7d' | '30d' | '90d' | 'all';
+export type FunnelRange = 'today' | '7d' | '30d' | 'custom' | 'all';
 
 export interface FunnelStage {
   key: string;
@@ -116,8 +116,8 @@ export interface FunnelSummary {
 }
 
 export const customerLeadsApi = {
-  getAll: (status: 'all' | 'unverified' | 'verified' | 'guest') => api.get('/admin/customer-leads', { params: { status } }),
-  getFunnel: (range: FunnelRange) => api.get('/admin/customer-funnel/extended', { params: { range } }),
+  getAll: (status: 'all' | 'unverified' | 'verified' | 'guest', range: FunnelRange, from?: string, to?: string) => api.get('/admin/customer-leads', { params: { status, range, from, to } }),
+  getFunnel: (range: FunnelRange, from?: string, to?: string) => api.get('/admin/customer-funnel/extended', { params: { range, from, to } }),
   downloadMarketingCsv: () => api.get('/admin/customer-leads/export', { responseType: 'blob' }),
 };
 

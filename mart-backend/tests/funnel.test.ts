@@ -349,8 +349,16 @@ describe('G. The "Today" range is its own window, not "All time"', () => {
     // Treating "today" as days=1 would spill yesterday evening into the panel
     // at 00:01. The panel must mean what the label promises.
     const src = read('mart-backend/src/services/funnel.service.ts');
-    assert.ok(/date_trunc\('day', NOW\(\)\)/.test(src),
+    assert.ok(/date_trunc\('day', NOW\(\) AT TIME ZONE 'Asia\/Kolkata'\)/.test(src),
       '"today" is not anchored to the start of the calendar day');
+  });
+
+  test('daily chart buckets use IST calendar dates', () => {
+    const src = read('mart-backend/src/services/funnel.service.ts');
+    assert.ok(/DATE_TRUNC\('day', first_seen_at AT TIME ZONE 'Asia\/Kolkata'\)/.test(src),
+      'session activity is grouped using the database timezone instead of IST');
+    assert.ok(/DATE_TRUNC\('day', first_otp_requested_at AT TIME ZONE 'Asia\/Kolkata'\)/.test(src),
+      'lead activity is grouped using the database timezone instead of IST');
   });
 
   test('the admin controller keeps "today" distinct from "all"', () => {
@@ -360,8 +368,24 @@ describe('G. The "Today" range is its own window, not "All time"', () => {
     const extended = src.slice(src.indexOf('adminGetCustomerFunnelExtended'));
     assert.ok(/req\.query\.range === 'today'/.test(extended),
       'the extended funnel handler no longer recognises range=today');
-    assert.ok(new Set((extended.match(/'today'|'7d'|'30d'|'90d'/g) ?? [])).size >= 4,
+    assert.ok(new Set((extended.match(/'today'|'7d'|'30d'/g) ?? [])).size >= 3,
       'the extended funnel whitelist dropped part of the range set');
+  });
+
+  test('the legacy funnel endpoint rejects the removed 90-day range', () => {
+    const src = read('mart-backend/src/controllers/index.ts');
+    const start = src.indexOf('export const adminGetCustomerFunnel =');
+    const controller = src.slice(start, src.indexOf('\nfunction csvCell', start));
+    assert.equal(controller.includes("req.query.range === '90d'"), false,
+      'a 90-day request is accepted even though FunnelRange no longer supports it');
+  });
+
+  test('custom ranges use inclusive IST dates with an exclusive next-day bound', () => {
+    const src = read('mart-backend/src/services/funnel.service.ts');
+    assert.ok(/\$1::date::timestamp AT TIME ZONE 'Asia\/Kolkata'/.test(src),
+      'custom date ranges do not begin at IST midnight');
+    assert.ok(/\$2::date \+ 1/.test(src),
+      'custom date ranges do not include the selected end date');
   });
 
   test('a funnel session expires, so a returning device is counted again', () => {
@@ -511,7 +535,15 @@ describe('I. Guest checkouts flow through the lead funnel', () => {
     assert.ok(/=== 'guest'/.test(ctrl),
       'the admin leads controller no longer accepts status=guest');
     const hub = read('mart-hub/src/pages/CustomerLeadsPage.tsx');
-    assert.ok(/'Guest'/.test(hub),
+    assert.ok(/'Direct checkout'/.test(hub),
       'the super admin is never shown a guest bucket for checkout-only shoppers');
+  });
+
+  test('direct checkouts are excluded from the OTP-not-completed bucket', () => {
+    const svc = read('mart-backend/src/services/customerLead.service.ts');
+    assert.ok(/verified_at IS NULL AND l\.otp_request_count > 0/.test(svc),
+      'direct checkouts are listed as incomplete OTP attempts');
+    assert.ok(/verified_at IS NULL AND otp_request_count > 0/.test(svc),
+      'direct checkouts are counted as incomplete OTP attempts');
   });
 });

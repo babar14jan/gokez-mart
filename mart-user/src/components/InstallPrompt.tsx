@@ -3,32 +3,40 @@ import { X, Share, Plus } from 'lucide-react';
 
 type Platform = 'android' | 'ios' | null;
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 function detectPlatform(): Platform {
   const ua = navigator.userAgent.toLowerCase();
   const isIOS = /iphone|ipad|ipod/.test(ua);
+  const isIOSSafari = isIOS && /safari/.test(ua) && !/crios|fxios|edgios|opios/.test(ua);
   const isAndroid = /android/.test(ua);
   const isStandalone = (window.navigator as any).standalone === true
     || window.matchMedia('(display-mode: standalone)').matches;
   if (isStandalone) return null; // already installed
-  if (isIOS) return 'ios';
+  if (isIOSSafari) return 'ios';
   if (isAndroid) return 'android';
   return null;
 }
 
 const DISMISSED_KEY = 'mart_install_dismissed';
 const INSTALLED_KEY = 'mart_install_done';
-const DISMISSED_DAYS = 30;
+const DISMISSED_DAYS = 7;
 
 function wasDismissedRecently(): boolean {
   if (localStorage.getItem(INSTALLED_KEY)) return true;
   const ts = localStorage.getItem(DISMISSED_KEY);
   if (!ts) return false;
-  return Date.now() - parseInt(ts) < DISMISSED_DAYS * 86400000;
+  const dismissedAt = Number.parseInt(ts, 10);
+  return Number.isFinite(dismissedAt) && Date.now() - dismissedAt < DISMISSED_DAYS * 86400000;
 }
 
 export default function InstallPrompt() {
   const [platform, setPlatform] = useState<Platform>(null);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [orderCompleted, setOrderCompleted] = useState(false);
   const [show, setShow] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
 
@@ -40,14 +48,7 @@ export default function InstallPrompt() {
     if (p === 'android') {
       const handler = (e: Event) => {
         e.preventDefault();
-        setDeferredPrompt(e);
-        // Wait for SW to be active before showing prompt
-        const showPrompt = () => setTimeout(() => setShow(true), 30000);
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(showPrompt).catch(showPrompt);
-        } else {
-          showPrompt();
-        }
+        setDeferredPrompt(e as BeforeInstallPromptEvent);
       };
       // Mark as installed when OS confirms install
       const installedHandler = () => {
@@ -61,12 +62,20 @@ export default function InstallPrompt() {
         window.removeEventListener('appinstalled', installedHandler);
       };
     }
-
-    if (p === 'ios') {
-      // Show iOS banner after 30s
-      setTimeout(() => setShow(true), 30000);
-    }
   }, []);
+
+  useEffect(() => {
+    const handleFirstOrderCompleted = () => setOrderCompleted(true);
+    window.addEventListener('gokez:first-order-completed', handleFirstOrderCompleted);
+    return () => window.removeEventListener('gokez:first-order-completed', handleFirstOrderCompleted);
+  }, []);
+
+  useEffect(() => {
+    if (!orderCompleted || !platform || wasDismissedRecently()) return;
+    if (platform === 'android' && !deferredPrompt) return;
+
+    setShow(true);
+  }, [deferredPrompt, orderCompleted, platform]);
 
   const dismiss = () => {
     setShow(false);
@@ -76,13 +85,12 @@ export default function InstallPrompt() {
 
   const handleAndroidInstall = async () => {
     if (!deferredPrompt) return;
-    deferredPrompt.prompt();
+    await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      localStorage.setItem(INSTALLED_KEY, '1');
+    setDeferredPrompt(null);
+    if (outcome === 'dismissed') {
       dismiss();
     }
-    setDeferredPrompt(null);
   };
 
   if (!show) return null;
@@ -91,19 +99,21 @@ export default function InstallPrompt() {
   if (platform === 'android') {
     return (
       <div className="fixed bottom-24 left-3 right-3 z-50 animate-fade-in">
-        <div className="bg-slate-900 text-white rounded-2xl shadow-2xl p-4 flex items-center gap-3">
-          <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-12 h-12 rounded-xl flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold leading-tight">Install Gokez Mart</p>
-            <p className="text-xs text-slate-400 mt-0.5">Add to home screen for faster access & order notifications</p>
+        <div className="bg-slate-900 text-white rounded-2xl shadow-2xl p-4">
+          <div className="flex items-start gap-3">
+            <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-12 h-12 rounded-xl flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-tight">Add Gokez MART to Home Screen</p>
+              <p className="text-xs text-slate-400 mt-0.5">A simple browser shortcut for quicker access. No app store download needed.</p>
+            </div>
           </div>
-          <div className="flex flex-col gap-1.5 flex-shrink-0">
-            <button onClick={handleAndroidInstall}
-              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors">
-              Install
+          <div className="mt-3 flex items-center gap-2">
+            <button onClick={handleAndroidInstall} aria-label="Add Gokez MART to Home Screen"
+              className="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors">
+              Add to Home Screen
             </button>
             <button onClick={dismiss}
-              className="px-3 py-1.5 text-slate-400 text-xs font-medium text-center hover:text-white transition-colors">
+              className="px-3 py-2 text-slate-400 text-xs font-medium text-center hover:text-white transition-colors">
               Not now
             </button>
           </div>
@@ -116,17 +126,17 @@ export default function InstallPrompt() {
   if (platform === 'ios') {
     if (showIOSGuide) {
       return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="ios-install-title">
           <div className="bg-white dark:bg-slate-800 w-full rounded-t-3xl shadow-2xl p-6 pb-8">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-10 h-10 rounded-xl" />
                 <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">Add to Home Screen</p>
+                  <p id="ios-install-title" className="text-sm font-bold text-gray-900 dark:text-white">Add Gokez MART to Home Screen</p>
                   <p className="text-xs text-gray-500 dark:text-slate-400">3 quick steps</p>
                 </div>
               </div>
-              <button onClick={dismiss} className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
+              <button onClick={dismiss} aria-label="Close installation instructions" className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -175,7 +185,7 @@ export default function InstallPrompt() {
             </div>
 
             <p className="text-[10px] text-gray-500 dark:text-slate-400 text-center mt-5">
-              Once added, you'll get order notifications even when the app is closed
+              Then open Gokez MART directly from your Home Screen anytime.
             </p>
           </div>
         </div>
@@ -187,11 +197,11 @@ export default function InstallPrompt() {
         <div className="bg-slate-900 text-white rounded-2xl shadow-2xl p-4 flex items-center gap-3">
           <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-12 h-12 rounded-xl flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold leading-tight">Add to Home Screen</p>
-            <p className="text-xs text-slate-400 mt-0.5">Get order notifications on your iPhone</p>
+            <p className="text-sm font-bold leading-tight">Add Gokez MART to Home Screen</p>
+            <p className="text-xs text-slate-400 mt-0.5">A simple browser shortcut for quicker access. No app store download needed.</p>
           </div>
           <div className="flex flex-col gap-1.5 flex-shrink-0">
-            <button onClick={() => { localStorage.setItem(INSTALLED_KEY, '1'); setShowIOSGuide(true); }}
+            <button onClick={() => setShowIOSGuide(true)} aria-label="Show Home Screen instructions for Gokez MART"
               className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors">
               How to
             </button>

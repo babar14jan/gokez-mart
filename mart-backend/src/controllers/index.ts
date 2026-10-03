@@ -137,12 +137,20 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const { guestName, guestPhone, guestAddress, guestAddressLabel, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
-  if (!guestName || !guestPhone || !guestAddress || !items?.length || !paymentMethod) {
+  const normalizedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
+  const normalizedAddress = typeof guestAddress === 'string' ? guestAddress.trim() : '';
+  if (!normalizedName || !guestPhone || !normalizedAddress || !items?.length || !paymentMethod) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
   }
   const cleanPhone = String(guestPhone).replace(/\D/g, '');
-  if (cleanPhone.length !== 10) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  if (normalizedName.length < 2 || normalizedName.length > 80 || !/\p{L}/u.test(normalizedName)) {
+    res.status(400).json({ success: false, error: 'Enter a valid name' }); return;
+  }
+  if (!/^[6-9]\d{9}$/.test(cleanPhone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  if (normalizedAddress.length < 10 || normalizedAddress.length > 500) {
+    res.status(400).json({ success: false, error: 'Enter a complete delivery address' }); return;
+  }
   if (!['cod', 'upi', 'phonepay'].includes(paymentMethod)) { res.status(400).json({ success: false, error: 'Invalid payment method' }); return; }
   if (!Array.isArray(items) || !items.every((i: any) => i.productId && i.unit && Number.isInteger(i.quantity) && i.quantity > 0)) {
     res.status(400).json({ success: false, error: 'Invalid items' }); return;
@@ -173,7 +181,7 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
 
   const result = await OrderService.create({
-    guestName, guestPhone, guestAddress, items, paymentMethod, notes,
+    guestName: normalizedName, guestPhone: cleanPhone, guestAddress: normalizedAddress, items, paymentMethod, notes,
     guestAddressLabel: typeof guestAddressLabel === 'string' && guestAddressLabel.trim()
       ? guestAddressLabel.trim().slice(0, 24)
       : undefined,
@@ -665,28 +673,55 @@ export const adminGetCustomerLeads = asyncHandler(async (req: AdminRequest, res:
   const status = req.query.status === 'unverified' || req.query.status === 'verified' || req.query.status === 'guest'
     ? req.query.status
     : 'all';
+  const range = req.query.range === 'today' || req.query.range === '7d' || req.query.range === '30d' || req.query.range === 'custom'
+    ? req.query.range
+    : '30d';
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
+  }
   const [leads, counts] = await Promise.all([
-    CustomerLeadService.findAll(status as LeadStatus),
-    CustomerLeadService.getCounts(),
+    CustomerLeadService.findAll(status as LeadStatus, range, from, to),
+    CustomerLeadService.getCounts(range, from, to),
   ]);
-  res.json({ success: true, data: leads, counts });
+  res.json({ success: true, data: leads, counts, range, from, to, timezone: 'Asia/Kolkata' });
 });
 
 export const adminGetCustomerFunnelExtended = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const range = req.query.range === 'today' || req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
+  const range = req.query.range === 'today' || req.query.range === '7d' || req.query.range === '30d' || req.query.range === 'custom'
     ? req.query.range
     : 'all';
-  const summary = await FunnelService.getExtended(range as FunnelRange);
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
+  }
+  const summary = await FunnelService.getExtended(range as FunnelRange, from, to);
   res.json({ success: true, data: summary });
 });
 
 export const adminGetCustomerFunnel = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const range = req.query.range === 'today' || req.query.range === '7d' || req.query.range === '30d' || req.query.range === '90d'
+  const range = req.query.range === 'today' || req.query.range === '7d' || req.query.range === '30d' || req.query.range === 'custom'
     ? req.query.range
     : 'all';
-  const summary = await FunnelService.getSummary(range as FunnelRange);
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
+  }
+  const summary = await FunnelService.getSummary(range as FunnelRange, from, to);
   res.json({ success: true, data: summary });
 });
+
+function isValidReportDateRange(from: string | undefined, to: string | undefined): boolean {
+  const isValidDate = (value: string | undefined) => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(parsed.valueOf()) && parsed.toISOString().startsWith(value);
+  };
+  return isValidDate(from) && isValidDate(to) && from! <= to!;
+}
 
 function csvCell(value: string | null | undefined): string {
   return `"${String(value || '').replace(/"/g, '""')}"`;
