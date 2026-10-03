@@ -47,12 +47,13 @@ interface AddressFormProps {
   stored?: string | null;
   initialLabel?: string;
   initialCoordinates?: AddressCoordinates | null;
+  focusFirstField?: boolean;
   saving: boolean;
   onSave: (label: string, address: string, coordinates: AddressCoordinates | null) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function AddressForm({ stored = null, initialLabel = 'Home', initialCoordinates = null, saving, onSave, onCancel }: AddressFormProps) {
+export default function AddressForm({ stored = null, initialLabel = 'Home', initialCoordinates = null, focusFirstField = false, saving, onSave, onCancel }: AddressFormProps) {
   const [label, setLabel] = useState(initialLabel);
   const [fields, setFields] = useState<AddressFields>(() => parseAddress(stored));
   const [coordinates, setCoordinates] = useState<AddressCoordinates | null>(initialCoordinates);
@@ -118,7 +119,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
       </button>
       {locationMessage && <p className="text-xs text-gray-500 dark:text-slate-400">{locationMessage}</p>}
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Flat / House No." required value={fields.house} onChange={update('house')} placeholder="e.g. A-204" autoFocus />
+        <Field label="Flat / House No." required value={fields.house} onChange={update('house')} placeholder="e.g. A-204" autoFocus forceAutoFocus={focusFirstField} />
         <Field label="Building / Tower" value={fields.building} onChange={update('building')} placeholder="e.g. Block B" />
       </div>
       <Field label="Street / Locality" required value={fields.locality} onChange={update('locality')} placeholder="e.g. New Town" />
@@ -142,13 +143,14 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
   );
 }
 
-function Field({ label, required = false, value, onChange, placeholder, autoFocus = false, inputMode }: {
+function Field({ label, required = false, value, onChange, placeholder, autoFocus = false, forceAutoFocus = false, inputMode }: {
   label: string;
   required?: boolean;
   value: string;
   onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder: string;
   autoFocus?: boolean;
+  forceAutoFocus?: boolean;
   inputMode?: 'numeric';
 }) {
   const finePointer = useFinePointer();
@@ -156,7 +158,7 @@ function Field({ label, required = false, value, onChange, placeholder, autoFocu
     <div>
       <label className="block text-[10px] font-medium text-gray-500 mb-1">{label}{required ? ' *' : ''}</label>
       <input type="text" inputMode={inputMode} maxLength={inputMode === 'numeric' ? 6 : undefined} value={value} onChange={onChange}
-        className={inputClass} placeholder={placeholder} autoFocus={autoFocus && finePointer} />
+        className={inputClass} placeholder={placeholder} autoFocus={autoFocus && (finePointer || forceAutoFocus)} />
     </div>
   );
 }

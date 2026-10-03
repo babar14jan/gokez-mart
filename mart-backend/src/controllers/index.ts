@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
 import sharp from 'sharp';
+import { mkdir, writeFile } from 'fs/promises';
+import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
 import { ProductService } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
@@ -76,6 +78,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     storeId: (storeId as string) || SHAPOORJI_ID,
     categoryId: categoryId as string,
     excludeHidden: true,
+    activeCategoryOnly: true,
   });
   res.json({ success: true, data: products });
 });
@@ -136,10 +139,10 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, paymentMethod, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
+  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
   const normalizedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
   const normalizedAddress = typeof guestAddress === 'string' ? guestAddress.trim() : '';
-  if (!normalizedName || !guestPhone || !normalizedAddress || !items?.length || !paymentMethod) {
+  if (!normalizedName || !guestPhone || !normalizedAddress || !items?.length) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
   }
@@ -151,7 +154,6 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   if (normalizedAddress.length < 10 || normalizedAddress.length > 500) {
     res.status(400).json({ success: false, error: 'Enter a complete delivery address' }); return;
   }
-  if (!['cod', 'upi', 'phonepay'].includes(paymentMethod)) { res.status(400).json({ success: false, error: 'Invalid payment method' }); return; }
   if (!Array.isArray(items) || !items.every((i: any) => i.productId && i.unit && Number.isInteger(i.quantity) && i.quantity > 0)) {
     res.status(400).json({ success: false, error: 'Invalid items' }); return;
   }
@@ -181,7 +183,7 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
 
   const result = await OrderService.create({
-    guestName: normalizedName, guestPhone: cleanPhone, guestAddress: normalizedAddress, items, paymentMethod, notes,
+    guestName: normalizedName, guestPhone: cleanPhone, guestAddress: normalizedAddress, items, notes,
     guestAddressLabel: typeof guestAddressLabel === 'string' && guestAddressLabel.trim()
       ? guestAddressLabel.trim().slice(0, 24)
       : undefined,
@@ -387,7 +389,9 @@ export const adminGetProducts = asyncHandler(async (req: AdminRequest, res: Resp
 
 export const adminCreateProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = resolveStoreId(req);
-  const product = await ProductService.create({ ...req.body, storeId });
+  const product = req.body.bundleComponents
+    ? await ProductService.createBundle({ ...req.body, storeId, components: req.body.bundleComponents })
+    : await ProductService.create({ ...req.body, storeId });
   res.status(201).json({ success: true, data: product });
 });
 
@@ -571,8 +575,11 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
 });
 
 export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { status, failureReason, cancellationReason, deliveryAssigneeId } = req.body;
-  const order = await OrderService.transitionStatus(req.params.id, status, req.admin!, deliveryAssigneeId, cancellationReason);
+  const { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod } = req.body;
+  if (paymentMethod !== undefined && paymentMethod !== 'cash' && paymentMethod !== 'upi') {
+    res.status(400).json({ success: false, error: 'Payment method must be Cash or UPI' }); return;
+  }
+  const order = await OrderService.transitionStatus(req.params.id, status, req.admin!, deliveryAssigneeId, cancellationReason, paymentMethod);
   if (status === 'failed_delivery' && failureReason) await query(`UPDATE mart_orders SET failure_reason = $1 WHERE id = $2`, [failureReason, req.params.id]);
   if (status === 'cancelled' && cancellationReason) await query(`UPDATE mart_orders SET cancellation_reason = $1 WHERE id = $2`, [cancellationReason, req.params.id]);
 
@@ -1376,6 +1383,16 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
   const image = await prepareImage(req.file.buffer, 1600);
   const baseName = req.file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
   const filename = `${Date.now()}-${baseName || 'image'}.${image.extension}`;
+
+  if (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+    const uploadsDir = path.resolve(__dirname, '../../uploads');
+    await mkdir(uploadsDir, { recursive: true });
+    await writeFile(path.join(uploadsDir, filename), image.buffer);
+    const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+    res.json({ success: true, data: { url: publicUrl } });
+    return;
+  }
+
   const uploadUrl = `${config.supabase.url}/storage/v1/object/${bucket}/${filename}`;
 
   const uploadRes = await fetch(uploadUrl, {

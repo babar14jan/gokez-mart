@@ -131,7 +131,7 @@ export const storeApi = {
     zoneName?: string; storeId?: string;
     deliveryPreference?: string; deliveryNote?: string;
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
-    paymentMethod: 'cod' | 'upi' | 'phonepay'; notes?: string;
+    paymentMethod?: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;
     /** Closes the cart funnel. Optional; the server ignores a malformed value. */
     funnelSessionId?: string;

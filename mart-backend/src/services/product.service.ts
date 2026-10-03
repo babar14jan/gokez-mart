@@ -1,5 +1,6 @@
-import { query } from '../database/db';
+import { query, transaction } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
+import { badRequest } from '../utils/apiError';
 
 export interface MartProduct {
   id: string;
@@ -15,6 +16,7 @@ export interface MartProduct {
   discountPercent: number;
   isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
+  isBundle: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -28,6 +30,7 @@ const PRODUCT_SELECT = `
          sp.discount_percent::float as "discountPercent",
          sp.is_available as "isAvailable",
          sp.availability_status as "availabilityStatus",
+         p.is_bundle as "isBundle",
          sp.sort_order as "sortOrder",
          sp.stock_quantity::float as "stockQuantity",
          sp.low_stock_threshold::float as "lowStockThreshold",
@@ -37,6 +40,7 @@ const PRODUCT_SELECT = `
   JOIN mart_store_products sp ON sp.product_id = p.id
   LEFT JOIN mart_categories c ON c.id = p.category_id
 `;
+const BUNDLE_DEDUCTION_UNITS = new Set(['kg', 'g', 'pcs', 'dozen', 'litre', 'ml', 'bunch', 'packet']);
 
 export class ProductService {
   static async findAll(filters?: {
@@ -44,6 +48,7 @@ export class ProductService {
     categoryId?: string;
     available?: boolean;
     excludeHidden?: boolean;
+    activeCategoryOnly?: boolean;
   }): Promise<MartProduct[]> {
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -63,6 +68,10 @@ export class ProductService {
     }
     if (filters?.excludeHidden) {
       conditions.push(`sp.availability_status != 'hidden'`);
+    }
+    if (filters?.activeCategoryOnly) {
+      conditions.push(`p.category_id IS NOT NULL`);
+      conditions.push(`c.is_active = true`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -109,6 +118,67 @@ export class ProductService {
        data.isAvailable !== false,
        data.sortOrder || 0]
     );
+    return (await this.findById(id, data.storeId))!;
+  }
+
+  static async createBundle(data: Partial<MartProduct> & {
+    storeId: string;
+    components: Array<{ productId: string; quantity: number; unit: string }>;
+  }): Promise<MartProduct> {
+    const name = data.name?.trim();
+    const unit = data.unit?.trim();
+    if (!name || !data.categoryId) throw badRequest('A combo name and category are required');
+    if (!Number.isFinite(Number(data.price)) || Number(data.price) < 0 || !unit) {
+      throw badRequest('Enter a valid combo price and quantity');
+    }
+    if (!Array.isArray(data.components) || data.components.length < 2) {
+      throw badRequest('Choose at least two products for this combo');
+    }
+    const componentIds = new Set<string>();
+    for (const component of data.components) {
+      const componentUnit = component?.unit?.trim().toLowerCase();
+      if (!component?.productId || !Number.isFinite(Number(component.quantity)) || Number(component.quantity) <= 0 || !componentUnit) {
+        throw badRequest('Every combo item needs a quantity and measure');
+      }
+      if (!BUNDLE_DEDUCTION_UNITS.has(componentUnit)) throw badRequest('Use a supported inventory measure for every combo item');
+      if (componentIds.has(component.productId)) throw badRequest('Add each product only once to a combo');
+      componentIds.add(component.productId);
+    }
+
+    const id = uuidv4();
+    await transaction(async client => {
+      const components: Array<{ productId: string; quantity: number; unit: string }> = [];
+      for (const component of data.components) {
+        const result = await client.query(
+          `SELECT p.is_bundle as "isBundle"
+           FROM mart_store_products sp JOIN mart_products p ON p.id = sp.product_id
+           WHERE sp.store_id = $1 AND sp.product_id = $2
+           FOR SHARE`,
+          [data.storeId, component.productId]
+        );
+        const row = result.rows[0] as { isBundle: boolean } | undefined;
+        if (!row || row.isBundle) throw badRequest('Combo items must be existing standard products in this store');
+        components.push({ productId: component.productId, quantity: Number(component.quantity), unit: component.unit.trim().toLowerCase() });
+      }
+      await client.query(
+        `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, is_bundle)
+         VALUES ($1,$2,$3,$4,$5,$6,true)`,
+        [id, data.categoryId, name, data.localName || null, data.description || null, data.photoUrl || null]
+      );
+      await client.query(
+        `INSERT INTO mart_store_products
+           (store_id, product_id, price, unit, discount_percent, availability_status, is_available, sort_order)
+         VALUES ($1,$2,$3,$4,0,$5,$6,$7)`,
+        [data.storeId, id, Number(data.price), unit, data.availabilityStatus || 'available', data.availabilityStatus !== 'hidden', data.sortOrder || 0]
+      );
+      for (const component of components) {
+        await client.query(
+          `INSERT INTO mart_bundle_components (store_id, bundle_product_id, component_product_id, quantity, deduction_unit)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [data.storeId, id, component.productId, component.quantity, component.unit]
+        );
+      }
+    });
     return (await this.findById(id, data.storeId))!;
   }
 

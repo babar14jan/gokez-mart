@@ -27,7 +27,7 @@ export interface CreateOrderDto {
   deliveryPreference?: 'within_15' | 'within_30' | 'within_60';
   deliveryNote?: string;
   items: OrderItem[];
-  paymentMethod: 'cod' | 'upi' | 'phonepay';
+  paymentMethod?: 'cod' | 'upi' | 'phonepay' | null;
   notes?: string;
   campaignId?: string | null;
   campaignDiscount?: number;
@@ -46,7 +46,7 @@ export interface CreateOrderDto {
 const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.guest_name as "guestName",
               o.guest_phone as "guestPhone", o.guest_address as "guestAddress",
               o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
-              o.total::float, o.payment_method as "paymentMethod",
+              o.total::float, o.payment_method as "paymentMethod", o.payment_collected_at as "paymentCollectedAt",
               o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
               o.delivery_latitude::float as "deliveryLatitude", o.delivery_longitude::float as "deliveryLongitude",
               o.termination_reason as "terminationReason",
@@ -201,11 +201,14 @@ export class OrderService {
 
       const productIds = new Set<string>();
       const resolvedItems: OrderItem[] = [];
+      const bundleComponentsByProduct = new Map<string, Array<{
+        productId: string; name: string; unit: string; quantity: number;
+      }>>();
       for (const item of data.items) {
         if (productIds.has(item.productId)) throw badRequest('Each product can only be included once per order');
         productIds.add(item.productId);
         const product = await client.query(
-          `SELECT p.name, sp.price::float AS price, sp.unit
+          `SELECT p.name, p.is_bundle as "isBundle", sp.price::float AS price, sp.unit
            FROM mart_store_products sp
            JOIN mart_products p ON p.id = sp.product_id
            WHERE sp.store_id = $1 AND sp.product_id = $2
@@ -213,9 +216,28 @@ export class OrderService {
            FOR SHARE`,
           [data.storeId, item.productId]
         );
-        const catalogItem = product.rows[0] as { name: string; price: number; unit: string } | undefined;
+        const catalogItem = product.rows[0] as { name: string; isBundle: boolean; price: number; unit: string } | undefined;
         if (!catalogItem || catalogItem.unit !== item.unit) {
           throw new Error('One or more products are unavailable or have changed');
+        }
+        if (catalogItem.isBundle) {
+          const components = await client.query(
+            `SELECT bc.component_product_id as "productId", p.name,
+                    COALESCE(bc.deduction_unit, sp.unit) as unit, bc.quantity::float as quantity
+             FROM mart_bundle_components bc
+             JOIN mart_store_products sp
+               ON sp.store_id = bc.store_id AND sp.product_id = bc.component_product_id
+             JOIN mart_products p ON p.id = bc.component_product_id
+             WHERE bc.store_id = $1 AND bc.bundle_product_id = $2
+               AND sp.is_available = true AND sp.availability_status = 'available'
+             FOR SHARE`,
+            [data.storeId, item.productId]
+          );
+          if (components.rows.length < 2) throw new Error('This combo is no longer available');
+          const componentRows = components.rows as Array<{
+            productId: string; name: string; unit: string; quantity: number;
+          }>;
+          bundleComponentsByProduct.set(item.productId, componentRows);
         }
         resolvedItems.push({
           productId: item.productId,
@@ -342,7 +364,7 @@ export class OrderService {
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
 [orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
           data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
-         data.paymentMethod, data.notes || null,
+         data.paymentMethod || null, data.notes || null,
          data.deliveryPreference || 'within_15',
          data.deliveryNote || 'Ring the bell',
          data.storeName || null,
@@ -364,13 +386,23 @@ export class OrderService {
 
       // Create order items
       for (const item of resolvedItems) {
+        const orderItemId = uuidv4();
         await client.query(
           `INSERT INTO mart_order_items
              (id, order_id, product_id, product_name, unit, price, quantity, total)
-           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)`,
-          [orderId, item.productId, item.productName, item.unit,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [orderItemId, orderId, item.productId, item.productName, item.unit,
            item.price, item.quantity, item.price * item.quantity]
         );
+        const components = bundleComponentsByProduct.get(item.productId) || [];
+        for (const component of components) {
+          await client.query(
+            `INSERT INTO mart_order_item_bundle_components
+               (order_item_id, component_product_id, product_name, unit, quantity_per_bundle)
+             VALUES ($1,$2,$3,$4,$5)`,
+            [orderItemId, component.productId, component.name, component.unit, component.quantity]
+          );
+        }
       }
 
       if (campaign) {
@@ -421,7 +453,7 @@ export class OrderService {
           guestPhone: data.guestPhone, // display format for WhatsApp
           guestAddress: data.guestAddress,
           items: resolvedItems, subtotal, deliveryCharge: actualDelivery,
-          total, paymentMethod: data.paymentMethod,
+          total, paymentMethod: data.paymentMethod || null,
           storeName: settings.store_name || 'Gokez Mart',
           upiPhone: settings.upi_phone || '',
           upiId: settings.upi_id || '',
@@ -435,18 +467,14 @@ export class OrderService {
   static buildWhatsAppMessage(data: {
     orderNumber: string; guestName: string; guestPhone: string;
     guestAddress: string; items: OrderItem[]; subtotal: number;
-    deliveryCharge: number; total: number; paymentMethod: string;
+    deliveryCharge: number; total: number; paymentMethod: string | null;
     storeName: string; upiPhone: string; upiId: string; zoneName?: string;
   }): string {
     const itemLines = data.items
       .map(i => `• ${i.productName} (${i.unit}) × ${i.quantity} — ₹${(i.price * i.quantity).toFixed(0)}`)
       .join('\n');
 
-    const paymentLine = data.paymentMethod === 'cod'
-      ? 'Cash on Delivery'
-      : data.paymentMethod === 'upi'
-      ? `UPI${data.upiId ? ` — ${data.upiId}` : data.upiPhone ? ` — ${data.upiPhone}` : ''}`
-      : 'PhonePe QR';
+    const paymentLine = 'Payment: collect on delivery';
 
     const deliveryLine = data.deliveryCharge === 0
       ? 'Delivery: FREE 🎉'
@@ -465,8 +493,32 @@ export class OrderService {
       `*Items:*\n${itemLines}\n\n` +
       `${deliveryLine}\n` +
       `*Total: ₹${data.total.toFixed(0)}*\n\n` +
-      `💳 *Payment:* ${paymentLine}\n` +
+      `💳 *${paymentLine}*\n` +
       `🕐 *Ordered:* ${timeStr}, ${dateStr}`;
+  }
+
+  private static async getInventoryItemsForOrder(orderId: string, client?: any) {
+    const db = client || { query };
+    const result = await db.query(
+      `SELECT product_id as "productId", unit as "sellingUnit", SUM(quantity)::float AS quantity
+       FROM (
+         SELECT oi.product_id, oi.unit, oi.quantity::numeric AS quantity
+         FROM mart_order_items oi
+         WHERE oi.order_id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM mart_order_item_bundle_components bc WHERE bc.order_item_id = oi.id
+           )
+         UNION ALL
+         SELECT bc.component_product_id AS product_id, bc.unit,
+                (oi.quantity * bc.quantity_per_bundle)::numeric AS quantity
+         FROM mart_order_items oi
+         JOIN mart_order_item_bundle_components bc ON bc.order_item_id = oi.id
+         WHERE oi.order_id = $1
+       ) inventory_items
+       GROUP BY product_id, unit`,
+      [orderId]
+    );
+    return result.rows as Array<{ productId: string; sellingUnit: string; quantity: number }>;
   }
 
   static async reverseCampaignRedemption(orderId: string, reason: string, client?: any): Promise<void> {
@@ -531,17 +583,14 @@ export class OrderService {
     // Deduct inventory when order is delivered
     if (order && status === 'delivered') {
       try {
-        const itemsRes = await query<{ product_id: string; quantity: number; unit: string }>(
-          `SELECT product_id, quantity, unit FROM mart_order_items WHERE order_id = $1`,
-          [id]
-        );
+        const items = await this.getInventoryItemsForOrder(id);
         const settings = await SettingsService.getPublic(order.storeId);
         const autoOutOfStock = (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero';
         const threshold = parseFloat(settings.low_stock_threshold ?? '5');
         await InventoryService.deductForOrder(
           id,
           order.storeId,
-          itemsRes.rows.map(r => ({ productId: r.product_id, quantity: r.quantity, sellingUnit: r.unit })),
+          items,
           autoOutOfStock,
           threshold
         );
@@ -556,8 +605,12 @@ export class OrderService {
     status: string,
     actor: { id: string; username: string; role: string; storeId: string | null },
     deliveryAssigneeId?: string,
-    cancellationReason?: string
+    cancellationReason?: string,
+    paymentMethod?: 'cash' | 'upi'
   ) {
+    if (status === 'delivered' && !['cash', 'upi'].includes(paymentMethod || '')) {
+      throw badRequest('Record Cash or UPI payment before marking this order delivered');
+    }
     const order = await transaction(async client => {
       const current = await client.query(
         `SELECT o.id, o.status, o.store_id as "storeId", o.customer_id as "customerId",
@@ -618,15 +671,17 @@ export class OrderService {
         [status, handler?.id || null, handler?.name || null, handler?.phone || null, id]
       );
       if (status === 'delivered') {
-        const items = await client.query(
-          `SELECT product_id, quantity, unit FROM mart_order_items WHERE order_id = $1`, [id]
+        await client.query(
+          `UPDATE mart_orders SET payment_method = $1, payment_collected_at = NOW() WHERE id = $2`,
+          [paymentMethod === 'cash' ? 'cod' : 'upi', id]
         );
+      }
+      if (status === 'delivered') {
+        const items = await this.getInventoryItemsForOrder(id, client);
         await InventoryService.deductForOrder(
           id,
           existing.storeId,
-          items.rows.map((item: { product_id: string; quantity: number; unit: string }) => ({
-            productId: item.product_id, quantity: item.quantity, sellingUnit: item.unit,
-          })),
+          items,
           (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
           parseFloat(settings.low_stock_threshold ?? '5'),
           client

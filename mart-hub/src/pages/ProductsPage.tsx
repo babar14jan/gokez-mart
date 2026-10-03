@@ -22,6 +22,7 @@ interface Product {
   localName: string | null;
   price: number; unit: string; discountPercent: number;
   isAvailable: boolean;
+  isBundle: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
   photoUrl: string | null; description: string | null;
   sortOrder: number;
@@ -62,6 +63,16 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showComboModal, setShowComboModal] = useState(false);
+  const [comboSaving, setComboSaving] = useState(false);
+  const [comboName, setComboName] = useState('');
+  const [comboLocalName, setComboLocalName] = useState('');
+  const [comboCategoryId, setComboCategoryId] = useState('');
+  const [comboPrice, setComboPrice] = useState('');
+  const [comboUnit, setComboUnit] = useState('1 combo');
+  const [comboPhotoFile, setComboPhotoFile] = useState<File | null>(null);
+  const [comboPhotoPreview, setComboPhotoPreview] = useState<string | null>(null);
+  const [comboComponents, setComboComponents] = useState<Array<{ productId: string; quantity: string; unit: string }>>([]);
   const [editing, setEditing] = useState<Product | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -295,6 +306,18 @@ export default function ProductsPage() {
     setPhotoFile(file); setPhotoPreview(URL.createObjectURL(file));
   };
 
+  const handleComboPhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      alert('Use a JPEG, PNG, or WebP image for the combo photo.');
+      event.target.value = '';
+      return;
+    }
+    setComboPhotoFile(file);
+    setComboPhotoPreview(URL.createObjectURL(file));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -322,6 +345,39 @@ export default function ProductsPage() {
     setShowModal(false);
     showToast('Product deleted');
     await load();
+  };
+
+  const comboCandidates = products.filter(product => !product.isBundle && product.availabilityStatus === 'available');
+  const openCombo = () => {
+    setComboName('');
+    setComboLocalName('');
+    setComboCategoryId(categories[0]?.id || '');
+    setComboPrice('');
+    setComboUnit('1 combo');
+    setComboPhotoFile(null);
+    setComboPhotoPreview(null);
+    setComboComponents([]);
+    setShowComboModal(true);
+  };
+  const saveCombo = async () => {
+    if (!comboName.trim() || !comboCategoryId || !(parseFloat(comboPrice) >= 0) || !comboUnit.trim() || comboComponents.length < 2 || comboComponents.some(component => !component.productId || !(parseFloat(component.quantity) > 0) || !component.unit)) return;
+    setComboSaving(true);
+    try {
+      let photoUrl: string | null = null;
+      if (comboPhotoFile) {
+        const upload = await productsApi.uploadPhoto(comboPhotoFile);
+        photoUrl = upload.data.data.url;
+      }
+      await productsApi.create({
+        storeId, name: comboName.trim(), localName: comboLocalName.trim() || null, categoryId: comboCategoryId, price: parseFloat(comboPrice), unit: comboUnit.trim(), photoUrl, availabilityStatus: 'available',
+        bundleComponents: comboComponents.map(component => ({ productId: component.productId, quantity: parseFloat(component.quantity), unit: component.unit })),
+      });
+      setShowComboModal(false);
+      showToast('Combo created');
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Could not create combo');
+    } finally { setComboSaving(false); }
   };
 
   const setAvailability = async (p: Product, status: 'available' | 'out_of_stock' | 'hidden') => {
@@ -567,12 +623,22 @@ export default function ProductsPage() {
           <BookOpen className="w-3.5 h-3.5" /> Bulk from Catalog
         </button>
 
+        <button onClick={openCombo}
+          className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 text-xs font-semibold rounded-xl transition-colors">
+          <Plus className="w-3.5 h-3.5" /> Combo
+        </button>
+
         {/* + Product — desktop only */}
         <button onClick={openCreate}
           className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
           <Plus className="w-3.5 h-3.5" /> Product
         </button>
       </div>
+
+      <button onClick={openCombo}
+        className="lg:hidden w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+        <Plus className="w-4 h-4" /> Create Combo
+      </button>
 
       {/* Active filter summary */}
       {filterActive && (
@@ -875,6 +941,35 @@ export default function ProductsPage() {
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Product'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showComboModal && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-slate-900/50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90dvh] flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
+              <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Create Combo</h2><p className="text-[11px] text-gray-500 mt-0.5">One customer product, with linked inventory deductions.</p></div>
+              <button onClick={() => setShowComboModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-2.5">
+              <div className="flex items-center gap-2.5">
+                <label className="w-12 h-12 shrink-0 rounded-lg overflow-hidden border-2 border-dashed border-gray-300 dark:border-slate-600 flex items-center justify-center cursor-pointer bg-gray-50 dark:bg-slate-700">
+                  {comboPhotoPreview ? <img src={comboPhotoPreview} alt="" className="w-full h-full object-cover" /> : <Camera className="w-5 h-5 text-gray-400" />}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleComboPhoto} />
+                </label>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400">Add a separate combo image.</p>
+              </div>
+              <input value={comboName} onChange={event => setComboName(event.target.value)} className={inp} placeholder="Combo name" />
+              <input value={comboLocalName} onChange={event => setComboLocalName(event.target.value)} className={inp} placeholder="Hindi / local subtitle (optional)" />
+              <select value={comboCategoryId} onChange={event => setComboCategoryId(event.target.value)} className={inp}><option value="">Choose a category</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+              <div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.5" value={comboPrice} onChange={event => setComboPrice(event.target.value)} className={inp} placeholder="Selling price (₹)" /><input value={comboUnit} onChange={event => setComboUnit(event.target.value)} className={inp} placeholder="Quantity, e.g. 1 combo" /></div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between"><div><p className="text-xs font-bold text-gray-700 dark:text-slate-300">Inventory deduction</p><p className="text-[10px] text-gray-500">Each amount is removed when one combo is delivered.</p></div><button onClick={() => setComboComponents(items => [...items, { productId: '', quantity: '1', unit: '' }])} className="text-xs font-semibold text-emerald-600">+ Add item</button></div>
+                {comboComponents.map((component, index) => { const selected = products.find(product => product.id === component.productId); return <div key={index} className="rounded-lg bg-gray-50 dark:bg-slate-700/50 p-2 space-y-1.5"><select value={component.productId} onChange={event => { const product = products.find(candidate => candidate.id === event.target.value); setComboComponents(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, productId: event.target.value, unit: product?.stockUnit || item.unit || 'pcs' } : item)); }} className={`${inp} py-2.5 font-medium`}><option value="">Select inventory product</option>{comboCandidates.filter(product => !comboComponents.some((item, itemIndex) => itemIndex !== index && item.productId === product.id)).map(product => <option key={product.id} value={product.id}>{product.name}{product.localName ? ` (${product.localName})` : ''}</option>)}</select>{selected && <div className="rounded-md bg-white dark:bg-slate-800 px-2.5 py-1.5"><p className="text-xs font-semibold text-gray-800 dark:text-slate-100">Selected: {selected.name}{selected.localName ? ` · ${selected.localName}` : ''}</p><p className="text-[10px] text-gray-500">Stock: {selected.stockQuantity === null || !selected.stockUnit ? 'Not tracked' : formatStock(selected.stockQuantity, selected.stockUnit)} · Unit: {selected.unit}</p></div>}<div className="flex items-center gap-2"><input value={component.quantity} onChange={event => setComboComponents(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: event.target.value } : item))} className={`${inp} flex-1 py-2`} inputMode="decimal" placeholder="Amount" /><select value={component.unit} onChange={event => setComboComponents(items => items.map((item, itemIndex) => itemIndex === index ? { ...item, unit: event.target.value } : item))} className={`${inp} w-24 py-2`} aria-label="Deduction measure"><option value="">Unit</option>{UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}</select><button onClick={() => setComboComponents(items => items.filter((_, itemIndex) => itemIndex !== index))} className="p-2 text-gray-400 hover:text-red-500" aria-label="Remove inventory product"><X className="w-4 h-4" /></button></div>{selected && <p className="text-[10px] text-gray-500 px-1">Deduct {component.quantity || '0'} {component.unit || 'units'} on delivery.</p>}</div>})}
+              </div>
+            </div>
+            <div className="shrink-0 px-4 py-3 border-t border-gray-100 dark:border-slate-700 flex gap-3"><button onClick={() => setShowComboModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 dark:bg-slate-700 rounded-xl">Cancel</button><button onClick={saveCombo} disabled={comboSaving || !comboName.trim() || !comboCategoryId || !(parseFloat(comboPrice) >= 0) || !comboUnit.trim() || comboComponents.length < 2 || comboComponents.some(component => !component.productId || !(parseFloat(component.quantity) > 0) || !component.unit)} className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl disabled:opacity-50">{comboSaving ? 'Creating...' : 'Create Combo'}</button></div>
           </div>
         </div>
       )}

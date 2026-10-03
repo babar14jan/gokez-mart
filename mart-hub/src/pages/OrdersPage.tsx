@@ -255,10 +255,10 @@ export default function OrdersPage() {
     finally { setBatching(false); }
   };
 
-  const updateStatus = async (id: string, status: string, e?: React.MouseEvent, failureReason?: string) => {
+  const updateStatus = async (id: string, status: string, e?: React.MouseEvent, failureReason?: string, paymentMethod?: 'cash' | 'upi') => {
     e?.stopPropagation();
     setUpdating(id);
-    try { await ordersApi.updateStatus(id, status, failureReason); await load(); }
+    try { await ordersApi.updateStatus(id, status, failureReason, undefined, undefined, paymentMethod); await load(); }
     finally { setUpdating(null); }
   };
 
@@ -495,9 +495,11 @@ export default function OrdersPage() {
                     <div>
                       <p className="text-sm font-bold text-gray-900 dark:text-white">{order.guestName}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className={`text-xs font-semibold ${PAYMENT_COLORS[order.paymentMethod] || 'text-gray-500'}`}>
-                          {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}
-                        </span>
+                        {order.status === 'delivered' && order.paymentCollectedAt && (
+                          <span className={`text-xs font-semibold ${PAYMENT_COLORS[order.paymentMethod] || 'text-gray-500'}`}>
+                            {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}
+                          </span>
+                        )}
                         <span className="text-[10px] text-gray-500 dark:text-slate-400 flex items-center gap-1">
                           <Clock className="w-3 h-3" />{timeStr}
                         </span>
@@ -860,8 +862,8 @@ export default function OrdersPage() {
       {paymentOrder && (
         <PaymentConfirmDialog
           orderTotal={paymentOrder.total}
-          onConfirm={async (_method, _cashAmount, _upiAmount) => {
-            await updateStatus(paymentOrder.id, 'delivered');
+          onConfirm={async (method) => {
+            await updateStatus(paymentOrder.id, 'delivered', undefined, undefined, method);
             setPaymentOrder(null);
           }}
           onCancel={() => setPaymentOrder(null)}

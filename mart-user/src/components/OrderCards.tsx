@@ -1,4 +1,8 @@
-import { X, Phone, MapPin, RotateCcw, MessageCircle } from 'lucide-react';
+import {
+  AlertCircle, Bike, CheckCircle, ChefHat, MapPin, MessageCircle,
+  Phone, RotateCcw, ShoppingCart, X, type LucideIcon,
+  XCircle,
+} from 'lucide-react';
 
 /**
  * Shared order cards.
@@ -15,7 +19,12 @@ import { X, Phone, MapPin, RotateCcw, MessageCircle } from 'lucide-react';
 
 const STEPS = ['pending', 'preparing', 'out_for_delivery', 'delivered'];
 const STEP_LABELS = ['Order Placed', 'Being Prepared', 'On the Way', 'Delivered'];
-const STEP_ICONS = ['🛒', '🍳', '🛵', '🎉'];
+const STEP_ICONS: Record<string, LucideIcon> = {
+  pending: ShoppingCart,
+  preparing: ChefHat,
+  out_for_delivery: Bike,
+  delivered: CheckCircle,
+};
 
 const STATUS_TO_STEP: Record<string, string> = {
   pending: 'pending',
@@ -48,8 +57,11 @@ const CANCELLATION_MESSAGES: Record<string, string> = {
   other: 'Your order was cancelled. You will not be charged.',
 };
 
-const STATUS_EMOJI: Record<string, string> = {
-  delivered: '✅', cancelled: '❌', failed_delivery: '😔', terminated: '❌',
+const STATUS_ICONS: Record<string, LucideIcon> = {
+  delivered: CheckCircle,
+  cancelled: XCircle,
+  failed_delivery: AlertCircle,
+  terminated: XCircle,
 };
 
 export const CLOSED = ['cancelled', 'failed_delivery', 'terminated'];
@@ -149,9 +161,10 @@ export function ActiveOrderCard({
                 i === curStep ? 'border-emerald-500 shadow-md shadow-emerald-200 scale-110' :
                 'border-gray-200 dark:border-slate-600'
               }`}>
-                {i <= curStep
-                  ? <span className={i === curStep ? 'animate-bounce' : ''}>{STEP_ICONS[i]}</span>
-                  : <span className="w-2 h-2 rounded-full bg-gray-200 dark:bg-slate-600 block" />}
+                {i <= curStep ? (() => {
+                  const StepIcon = STEP_ICONS[step];
+                  return <StepIcon className={`w-4 h-4 text-emerald-600 dark:text-emerald-400 ${i === curStep ? 'animate-bounce' : ''}`} />;
+                })() : <span className="w-2 h-2 rounded-full bg-gray-200 dark:bg-slate-600 block" />}
               </div>
               <span className={`text-[9px] font-semibold text-center leading-tight ${
                 i <= curStep ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'
@@ -256,9 +269,8 @@ export function DeliveredOrderCard({ order, onViewDetails, onOrderAgain }: Share
         <div className="flex items-start justify-between mb-3">
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-bold text-gray-900 dark:text-white">
-                🎉 Order Delivered!
-              </p>
+              <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Order Delivered!</p>
               <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                 {(order.items || []).length} items
               </span>
@@ -291,7 +303,7 @@ export function ClosedOrderCard({ order, onViewDetails, onOrderAgain }: SharedCa
   onViewDetails: (order: any) => void;
   onOrderAgain: (order: any) => void;
 }) {
-  const emoji = STATUS_EMOJI[order.status] || '❌';
+  const StatusIcon = STATUS_ICONS[order.status] || XCircle;
   const termMsg = order.terminationReason ? TERMINATION_MESSAGES[order.terminationReason] : null;
   const cancelMsg = order.cancellationReason ? CANCELLATION_MESSAGES[order.cancellationReason] : null;
 
@@ -303,9 +315,10 @@ export function ClosedOrderCard({ order, onViewDetails, onOrderAgain }: SharedCa
         <div className="flex items-start justify-between mb-3">
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-bold text-gray-900 dark:text-white">
-                {emoji} {STATUS_LABELS[order.status]}
-              </p>
+              <StatusIcon className={`w-4 h-4 ${
+                order.status === 'failed_delivery' ? 'text-amber-500' : 'text-red-500'
+              }`} />
+              <p className="text-sm font-bold text-gray-900 dark:text-white">{STATUS_LABELS[order.status]}</p>
               <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                 {(order.items || []).length} items
               </span>

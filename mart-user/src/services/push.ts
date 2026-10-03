@@ -11,6 +11,22 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export async function registerServiceWorker(): Promise<void> {
   if (!('serviceWorker' in navigator)) return;
+
+  // The production worker caches scripts cache-first. Keeping it active under
+  // Vite can make local UI edits appear unchanged after a server restart.
+  const isLocalDevelopment = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+  if (isLocalDevelopment) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(registration => registration.unregister()));
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames
+        .filter(name => name.startsWith('gokez-mart-'))
+        .map(name => caches.delete(name)));
+    } catch (e) { console.warn('[SW] Development cleanup failed:', e); }
+    return;
+  }
+
   try { await navigator.serviceWorker.register(SW_URL); }
   catch (e) { console.warn('[SW] Registration failed:', e); }
 }

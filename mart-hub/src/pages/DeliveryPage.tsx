@@ -73,10 +73,10 @@ export default function DeliveryPage() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  const updateStatus = async (orderId: string, status: string) => {
+  const updateStatus = async (orderId: string, status: string, paymentMethod?: 'cash' | 'upi') => {
     setUpdating(orderId);
     try {
-      await ordersApi.updateStatus(orderId, status);
+      await ordersApi.updateStatus(orderId, status, undefined, undefined, undefined, paymentMethod);
       await load(true);
     } catch { alert('Failed to update status'); }
     finally { setUpdating(null); }
@@ -232,8 +232,8 @@ export default function DeliveryPage() {
       {paymentOrder && (
         <PaymentConfirmDialog
           orderTotal={paymentOrder.total}
-          onConfirm={async (_method, _cashAmount, _upiAmount) => {
-            await updateStatus(paymentOrder.id, 'delivered');
+          onConfirm={async (method) => {
+            await updateStatus(paymentOrder.id, 'delivered', method);
             setPaymentOrder(null);
           }}
           onCancel={() => setPaymentOrder(null)}

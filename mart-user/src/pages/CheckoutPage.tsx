@@ -50,6 +50,8 @@ const isValidDeliveryAddress = (address: string | null) => {
   return normalized.length >= 10 && normalized.length <= 500;
 };
 
+type CheckoutValidationField = 'address' | 'name' | 'phone' | null;
+
 /* ── Offers & coupons ─────────────────────────────────────────────────────────
    One panel for both the guest and the signed-in checkout. These used to be two
    independently maintained blocks, which is how the guest copy ended up with a
@@ -309,10 +311,22 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     if (!storeId) return;
     storeApi.getProducts(undefined, storeId).then(r => {
       const cartIds = new Set(items.map(i => i.productId));
-      const all = (r.data.data || []).filter(p => p.availabilityStatus === 'available' && !cartIds.has(p.id));
+      const all = (r.data.data || []).filter(p =>
+        p.availabilityStatus === 'available'
+        && p.isAvailable
+        && Boolean(p.categoryId && p.categoryName)
+        && !cartIds.has(p.id)
+      );
       setSuggestions(all.slice(0, 8));
     }).catch(() => {});
   }, [storeId]);
+
+  const visibleSuggestions = suggestions.filter(product =>
+    product.availabilityStatus === 'available'
+    && product.isAvailable
+    && Boolean(product.categoryId && product.categoryName)
+    && !items.some(item => item.productId === product.id)
+  );
 
   const defaultAddr = getDefaultAddress();
 
@@ -377,11 +391,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const [showCustomNote, setShowCustomNote] = useState(false);
   const [customNote, setCustomNote] = useState('');
 
-  // Payment — fixed COD/UPI on delivery, no method picker (matches mobile app)
-  const paymentMethod: 'cod' = 'cod';
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationField, setValidationField] = useState<CheckoutValidationField>(null);
+  const [showMissingDetails, setShowMissingDetails] = useState(false);
 
   // Campaign / coupon
   const cartSubtotal = subtotal(); // early calc for useEffect
@@ -395,22 +409,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const [couponSuccess, setCouponSuccess] = useState('');
   const [billExpanded, setBillExpanded] = useState(false);
   const [offerNotice, setOfferNotice] = useState('');
-  // sessionStorage writes do not re-render, so the offers block needs its own
-  // state mirror or "Hide" appears to do nothing until some unrelated update.
-  const OFFERS_HIDDEN_KEY = 'checkout_offers_hidden';
-  const [offersHidden, setOffersHidden] = useState(
-    () => typeof sessionStorage !== 'undefined' && sessionStorage.getItem(OFFERS_HIDDEN_KEY) === '1'
-  );
-  // Symmetric on purpose: the previous version only ever set the flag, so once a
-  // customer hid the offers there was no way back for the rest of the tab session.
-  const toggleOffersHidden = () => setOffersHidden(h => {
-    const next = !h;
-    try {
-      if (next) sessionStorage.setItem(OFFERS_HIDDEN_KEY, '1');
-      else sessionStorage.removeItem(OFFERS_HIDDEN_KEY);
-    } catch { /* private mode: the toggle still works for this render */ }
-    return next;
-  });
+  // Offers are optional at checkout. Start collapsed on every new checkout so
+  // they do not interrupt the delivery and payment path.
+  const [offersHidden, setOffersHidden] = useState(true);
+  const toggleOffersHidden = () => setOffersHidden(hidden => !hidden);
 
   useEffect(() => {
     // Offers are explicitly selected for each checkout; never restore an old cart selection.
@@ -532,10 +534,12 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
-  const missingCheckoutDetails = [
+  const checkoutName = isLoggedIn ? (authName || guestName) : guestName;
+  const checkoutPhone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
+  const incompleteCheckoutDetails = [
+    !isValidGuestName(checkoutName) && 'name',
+    !isValidIndianMobile(checkoutPhone) && 'mobile number',
     !isValidDeliveryAddress(resolvedAddress) && 'delivery address',
-    !isLoggedIn && !isValidGuestName(guestName) && 'name',
-    !isLoggedIn && !isValidIndianMobile(guestPhone) && 'valid mobile number',
   ].filter(Boolean) as string[];
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
   const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
@@ -553,31 +557,38 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const name = isLoggedIn ? (authName || guestName) : guestName;
-    const phone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
-    if (!isValidDeliveryAddress(resolvedAddress)) {
-      setError('Add a complete delivery address to continue');
-      setAddingNew(!isLoggedIn || addresses.length === 0);
-      setShowAddressList(true);
-      return;
-    }
-    const orderAddress = resolvedAddress!.trim();
+    const name = checkoutName;
+    const phone = checkoutPhone;
     if (!name?.trim() || !isValidGuestName(name)) {
-      setError('Please enter your name using at least 2 characters');
+      setError('');
+      setShowMissingDetails(true);
+      setValidationField('name');
       guestNameInput.current?.focus();
       return;
     }
     if (!phone?.trim() || !isValidIndianMobile(phone)) {
-      setError('Enter a valid 10-digit Indian mobile number');
+      setError('');
+      setShowMissingDetails(true);
+      setValidationField('phone');
       guestPhoneInput.current?.focus();
       return;
     }
+    if (!isValidDeliveryAddress(resolvedAddress)) {
+      setError('');
+      setShowMissingDetails(true);
+      setValidationField('address');
+      setAddingNew(!isLoggedIn || addresses.length === 0);
+      setShowAddressList(true);
+      return;
+    }
+    if (!canCheckout) return;
+    const orderAddress = resolvedAddress!.trim();
     // After validation, before the request: a customer with a form problem
     // should be told about that, not asked to confirm a delay they have not
     // reached yet. Defaulting to "proceed" keeps checkout working if this page
     // is ever rendered without the prop.
     if (confirmOrder && !(await confirmOrder())) return;
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setValidationField(null); setShowMissingDetails(false);
     try {
       const res = await storeApi.placeOrder({
         guestName: name, guestPhone: phone.replace(/\D/g, ''),
@@ -586,7 +597,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         latitude: selectedAddress?.latitude ?? guestAddressCoordinates?.latitude ?? null,
         longitude: selectedAddress?.longitude ?? guestAddressCoordinates?.longitude ?? null,
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
-        paymentMethod, zoneName: zoneName || undefined, storeId: storeId || undefined,
+        zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
         campaignId: appliedCouponCode ? undefined : appliedCampaign?.id || undefined,
@@ -610,7 +621,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       clearCart();
       onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined, orderData);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to place order. Please try again.');
+      console.error('[checkout] order placement failed', err);
+      if (!err?.response) {
+        setError('We could not connect right now. Check your internet connection and try again.');
+      } else if (err.response.status >= 500) {
+        setError('We could not place your order right now. Your cart is still saved. Please try again shortly.');
+      } else {
+        setError(err.response.data?.error || 'We could not place your order. Please review your details and try again.');
+      }
     } finally { setLoading(false); }
   };
 
@@ -690,10 +708,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               ))}
             </div>
             {/* Free delivery nudge */}
-            {actualDelivery > 0 && (
+            {canCheckout && actualDelivery > 0 && (
               <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 border-t border-emerald-100 dark:border-emerald-900">
                 <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium text-center">
-                  🎉 Add ₹{(freeAbove - sub).toFixed(0)} more for free delivery
+                  🎉 Add ₹{(freeAbove - sub).toFixed(0)} more in items for free delivery at ₹{freeAbove.toFixed(0)}
                 </p>
               </div>
             )}
@@ -708,11 +726,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
           </div>
 
           {/* ── You may also like ── */}
-          {suggestions.length > 0 && (
+          {visibleSuggestions.length > 0 && (
             <div>
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">You may also like</p>
               <div className="flex gap-2.5 overflow-x-auto scrollbar-hide pb-1">
-                {suggestions.map(p => (
+                {visibleSuggestions.map(p => (
                   <div key={p.id} className="w-28 flex-shrink-0 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
                     {p.photoUrl
                       ? <img src={p.photoUrl} alt={p.name} className="w-28 h-20 object-cover" />
@@ -755,7 +773,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                         const isSelected = addr.address === deliveryAddress;
                         return (
                           <button type="button" key={addr.id}
-                            onClick={() => { setDefaultAddress(addr.id); setShowAddressList(false); setAddingNew(false); }}
+                            onClick={() => { setDefaultAddress(addr.id); setValidationField(null); setShowAddressList(false); setAddingNew(false); }}
                             className="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700 text-left">
                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
                               <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-500' : 'text-gray-500'}`} />
@@ -778,7 +796,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 ) : (
                   <div className="px-5 py-4">
                     <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Fields marked * are needed to deliver your order. A landmark is optional but helpful.</p>
-                    <AddressForm saving={addressSaving} onCancel={() => setAddingNew(false)}
+                    <AddressForm saving={addressSaving} focusFirstField={validationField === 'address'} onCancel={() => setAddingNew(false)}
                       onSave={async (label, address, coordinates) => {
                         setAddressSaving(true);
                         try {
@@ -792,6 +810,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                             setGuestAddressLabel(label.trim() || 'Home');
                             setGuestAddressCoordinates(coordinates);
                           }
+                          setValidationField(null);
                           setAddingNew(false);
                           setShowAddressList(false);
                         } finally { setAddressSaving(false); }
@@ -817,29 +836,35 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 </div>
               </div>
 ) : (
-              <div className="px-4 py-3 space-y-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-emerald-600" />
-                  <p className="text-xs font-bold text-gray-900 dark:text-white">Who's ordering?</p>
-                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">Required</span>
+              <div className="px-4 py-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-slate-700">
+                      <User className="h-4 w-4 text-gray-600 dark:text-slate-300" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">Guest checkout</p>
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">Your delivery details</p>
+                    </div>
+                  </div>
+                  {onLogin && <button type="button" onClick={() => onLogin()} title="Log in to use your saved details" className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:bg-rose-950/50">Log in</button>}
                 </div>
-                <p className="text-[11px] leading-snug text-emerald-700 dark:text-emerald-400 -mt-1.5">
-                  No login needed — we'll use these details for delivery.
-                </p>
                 <div>
                   <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
                     Name <span className="text-emerald-600" aria-hidden="true">*</span>
                   </label>
-                  <input ref={guestNameInput} type="text" value={guestName} onChange={e => setGuestName(e.target.value)}
-                    placeholder="e.g. Priya Das" autoComplete="name" className={inp} required aria-required="true" />
+                  <input ref={guestNameInput} type="text" value={guestName} onChange={e => { setGuestName(e.target.value); if (validationField === 'name') setValidationField(null); }}
+                    placeholder="Enter your name" autoComplete="name" className={`${inp} h-11 px-3 py-2.5 ${validationField === 'name' ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`} required aria-required="true" aria-invalid={validationField === 'name'} aria-describedby={validationField === 'name' ? 'guest-name-error' : undefined} />
+                  {validationField === 'name' && <p id="guest-name-error" className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">Enter your name using at least 2 characters.</p>}
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
                     Phone number <span className="text-emerald-600" aria-hidden="true">*</span>
                   </label>
                   <input ref={guestPhoneInput} type="tel" inputMode="numeric" value={guestPhone}
-                    onChange={e => setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    placeholder="e.g. 9876543210" autoComplete="tel" className={inp} required aria-required="true" />
+                    onChange={e => { setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); if (validationField === 'phone') setValidationField(null); }}
+                    placeholder="10-digit mobile number" autoComplete="tel" className={`${inp} h-11 px-3 py-2.5 ${validationField === 'phone' ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`} required aria-required="true" aria-invalid={validationField === 'phone'} aria-describedby={validationField === 'phone' ? 'guest-phone-error' : undefined} />
+                  {validationField === 'phone' && <p id="guest-phone-error" className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">Enter a valid 10-digit Indian mobile number.</p>}
                 </div>
               </div>
             )}
@@ -1029,8 +1054,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
           {/* Address row — tappable, opens sheet */}
-          <button type="button" onClick={() => setShowAddressList(true)}
-            className="w-full flex items-center gap-2.5 px-4 pt-3 pb-2 text-left">
+          <button type="button" onClick={() => setShowAddressList(true)} aria-invalid={validationField === 'address'}
+            className={`w-full flex items-center gap-2.5 px-4 pt-3 pb-2 text-left ${validationField === 'address' ? 'bg-red-50 dark:bg-red-950/20' : ''}`}>
             <ChevronUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
@@ -1039,7 +1064,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               </div>
               {deliveryAddress
                 ? <p className="text-xs text-gray-500 dark:text-slate-400 truncate mt-0.5">{deliveryAddress}</p>
-                : <p className="text-xs text-red-500 font-semibold mt-0.5">Add delivery address</p>
+                : <p className="text-xs text-red-600 dark:text-red-400 font-semibold mt-0.5">Add a complete delivery address</p>
               }
             </div>
             <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{deliveryAddress ? 'Change' : 'Add'}</span>
@@ -1047,18 +1072,21 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
           <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {!canCheckout && sub < minOrder && (
-              <p className="text-xs text-red-500 text-center mb-2">Minimum order ₹{minOrder}. Add ₹{(minOrder - sub).toFixed(0)} more.</p>
+              <p className="text-xs text-red-500 text-center mb-2">Just ₹{(minOrder - sub).toFixed(0)} more to place your order.</p>
             )}
 
-            {canCheckout && missingCheckoutDetails.length > 0 && (
-              <p className="text-xs text-amber-700 dark:text-amber-400 text-center mb-2">Before placing your order, add: {missingCheckoutDetails.join(', ')}</p>
+            {canCheckout && showMissingDetails && incompleteCheckoutDetails.length > 0 && (
+              <p className="mb-2 text-center text-xs font-medium text-amber-700 dark:text-amber-400" role="status">
+                Still needed: {incompleteCheckoutDetails.join(', ')}
+              </p>
             )}
+
             <div className="flex items-center gap-3">
               <div className="w-16 flex-shrink-0 text-center">
                 <p className="text-[10px] text-gray-500 dark:text-slate-400">To pay</p>
                 <p className="text-lg font-bold text-gray-900 dark:text-white">₹{total.toFixed(0)}</p>
               </div>
-              <button type="submit" form="checkout-form" disabled={loading || !canCheckout}
+              <button type="submit" form="checkout-form" disabled={loading}
                 className="flex-1 h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight">
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <>

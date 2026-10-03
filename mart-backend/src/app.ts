@@ -6,6 +6,7 @@ import mongoSanitize from 'express-mongo-sanitize';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
 import * as Sentry from '@sentry/node';
 import { config } from './config';
 import routes from './routes';
@@ -173,6 +174,9 @@ if (config.env !== 'test') {
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+if (config.env !== 'production') {
+  app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+}
 app.get('/', (_req, res) => res.json({ name: 'Gokez Mart API', status: 'running', health: '/api/v1/health' }));
 app.use('/api/v1', routes);
 
