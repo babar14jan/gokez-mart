@@ -258,7 +258,14 @@ export default function OrdersPage() {
   const updateStatus = async (id: string, status: string, e?: React.MouseEvent, failureReason?: string, paymentMethod?: 'cash' | 'upi') => {
     e?.stopPropagation();
     setUpdating(id);
-    try { await ordersApi.updateStatus(id, status, failureReason, undefined, undefined, paymentMethod); await load(); }
+    try {
+      await ordersApi.updateStatus(id, status, failureReason, undefined, undefined, paymentMethod);
+      await load();
+      return true;
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Failed to update order status');
+      return false;
+    }
     finally { setUpdating(null); }
   };
 
@@ -863,8 +870,9 @@ export default function OrdersPage() {
         <PaymentConfirmDialog
           orderTotal={paymentOrder.total}
           onConfirm={async (method) => {
-            await updateStatus(paymentOrder.id, 'delivered', undefined, undefined, method);
-            setPaymentOrder(null);
+            if (await updateStatus(paymentOrder.id, 'delivered', undefined, undefined, method)) {
+              setPaymentOrder(null);
+            }
           }}
           onCancel={() => setPaymentOrder(null)}
         />

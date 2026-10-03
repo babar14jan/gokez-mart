@@ -78,7 +78,11 @@ export default function DeliveryPage() {
     try {
       await ordersApi.updateStatus(orderId, status, undefined, undefined, undefined, paymentMethod);
       await load(true);
-    } catch { alert('Failed to update status'); }
+      return true;
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Failed to update status');
+      return false;
+    }
     finally { setUpdating(null); }
   };
 
@@ -233,8 +237,9 @@ export default function DeliveryPage() {
         <PaymentConfirmDialog
           orderTotal={paymentOrder.total}
           onConfirm={async (method) => {
-            await updateStatus(paymentOrder.id, 'delivered', method);
-            setPaymentOrder(null);
+            if (await updateStatus(paymentOrder.id, 'delivered', method)) {
+              setPaymentOrder(null);
+            }
           }}
           onCancel={() => setPaymentOrder(null)}
         />
