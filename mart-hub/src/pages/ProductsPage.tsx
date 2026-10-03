@@ -635,10 +635,20 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      <button onClick={openCombo}
-        className="lg:hidden w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-        <Plus className="w-4 h-4" /> Create Combo
-      </button>
+      <div className="lg:hidden grid grid-cols-3 gap-2">
+        <button onClick={() => openCatalogBrowser('bulk')}
+          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold text-gray-700 dark:text-slate-200 shadow-sm">
+          <BookOpen className="w-4 h-4" /> Bulk Upload
+        </button>
+        <button onClick={openCombo}
+          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-sm font-bold text-emerald-700 dark:text-emerald-400 shadow-sm">
+          <Plus className="w-4 h-4" /> Combo
+        </button>
+        <button onClick={openCreate}
+          className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-sm font-bold text-white shadow-sm">
+          <Plus className="w-4 h-4" /> Product
+        </button>
+      </div>
 
       {/* Active filter summary */}
       {filterActive && (

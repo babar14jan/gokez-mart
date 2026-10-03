@@ -242,7 +242,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex-1" />
 
             {/* Mobile-only header action slot — injected by pages */}
-            {onAction && (
+            {onAction && pathname !== '/products' && (
               <button onClick={onAction}
                 className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm flex-shrink-0">
                 {label}
