@@ -14,6 +14,58 @@ const normalizedCouponCodeOrThrow = (value: unknown) => {
   return code;
 };
 
+const numericValue = (value: unknown, label: string, options: { nullable?: boolean; integer?: boolean } = {}): number | null => {
+  if (options.nullable && (value === null || value === undefined || value === '')) return null;
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number) || (options.integer && !Number.isInteger(number))) {
+    throw new Error(`${label} must be a ${options.integer ? 'whole ' : ''}number`);
+  }
+  return number;
+};
+
+const validateCampaignTerms = (data: any): void => {
+  const discountType = data.discountType ?? data.discount_type ?? 'flat';
+  if (!['flat', 'percent', 'free_delivery', 'none'].includes(discountType)) {
+    throw new Error('Invalid discount type');
+  }
+
+  const discountValue = numericValue(data.discountValue ?? data.discount_value ?? 0, 'Discount value')!;
+  const maxDiscount = numericValue(data.maxDiscount ?? data.max_discount, 'Maximum discount', { nullable: true });
+  const minOrderAmount = numericValue(data.minOrderAmount ?? data.min_order_amount ?? 0, 'Minimum order amount')!;
+  const perCustomerLimit = numericValue(data.perCustomerLimit ?? data.per_customer_limit ?? 1, 'Per-customer limit', { integer: true })!;
+  const usageLimit = numericValue(data.usageLimit ?? data.usage_limit, 'Usage limit', { nullable: true, integer: true });
+
+  if (discountValue < 0 || maxDiscount !== null && maxDiscount < 0 || minOrderAmount < 0) {
+    throw new Error('Campaign amounts cannot be negative');
+  }
+  if (discountType === 'percent' && (discountValue <= 0 || discountValue > 100)) {
+    throw new Error('Percentage discount must be greater than 0 and no more than 100');
+  }
+  if ((discountType === 'flat' || discountType === 'free_delivery') && discountValue < 0) {
+    throw new Error('Discount value cannot be negative');
+  }
+  if (perCustomerLimit < 1 || usageLimit !== null && usageLimit < 1) {
+    throw new Error('Campaign usage limits must be positive whole numbers');
+  }
+
+  const eligibilityType = data.eligibilityType ?? data.eligibility_type ?? 'all';
+  if (!['all', 'first_order', 'inactive_customers', 'targeted_customers'].includes(eligibilityType)) {
+    throw new Error('Invalid campaign eligibility type');
+  }
+  if (eligibilityType === 'first_order' && perCustomerLimit !== 1) {
+    throw new Error('First-order campaigns must have a per-customer limit of 1');
+  }
+
+  const validFrom = data.validFrom ?? data.valid_from;
+  const validUntil = data.validUntil ?? data.valid_until;
+  if (validFrom && Number.isNaN(new Date(validFrom).getTime()) || validUntil && Number.isNaN(new Date(validUntil).getTime())) {
+    throw new Error('Campaign validity dates are invalid');
+  }
+  if (validFrom && validUntil && new Date(validUntil) <= new Date(validFrom)) {
+    throw new Error('Campaign end time must be after its start time');
+  }
+};
+
 export class CampaignService {
 
   // ── Admin CRUD ────────────────────────────────────────────────────────────────
@@ -48,6 +100,7 @@ export class CampaignService {
   }
 
   static async create(data: any, adminId: string): Promise<any> {
+    validateCampaignTerms(data);
     if (data.eligibilityType === 'inactive_customers' && (!Number.isInteger(Number(data.inactiveDays)) || Number(data.inactiveDays) < 1)) {
       throw new Error('Inactive customer campaigns require a positive inactivity period');
     }
@@ -66,8 +119,8 @@ export class CampaignService {
       [
         data.title, data.subtitle || null, data.description || null, data.badgeText || null,
         data.discountType || 'flat', data.discountValue || 0, data.maxDiscount || null, data.minOrderAmount || 0,
-        data.couponCode?.trim().toUpperCase() || null, data.eligibilityType === 'first_order',
-        data.perCustomerLimit || 1, data.usageLimit || null,
+        typeof data.couponCode === 'string' ? data.couponCode.trim().toUpperCase() || null : null, data.eligibilityType === 'first_order',
+        data.perCustomerLimit ?? 1, data.usageLimit === '' ? null : data.usageLimit ?? null,
         data.storeId || null, data.showInCarousel || false,
         data.carouselImageUrl || null, data.carouselGradient || 'from-emerald-500 via-teal-500 to-cyan-500',
         data.carouselSortOrder || 0,
@@ -106,6 +159,18 @@ export class CampaignService {
     const existingResult = await query(`SELECT * FROM mart_campaigns WHERE id = $1`, [id]);
     const existing = existingResult.rows[0];
     if (!existing) return null;
+
+    validateCampaignTerms({
+      discountType: data.discountType ?? existing.discount_type,
+      discountValue: data.discountValue ?? existing.discount_value,
+      maxDiscount: data.maxDiscount !== undefined ? data.maxDiscount : existing.max_discount,
+      minOrderAmount: data.minOrderAmount ?? existing.min_order_amount,
+      perCustomerLimit: data.perCustomerLimit ?? existing.per_customer_limit,
+      usageLimit: data.usageLimit !== undefined ? data.usageLimit : existing.usage_limit,
+      eligibilityType: data.eligibilityType ?? existing.eligibility_type,
+      validFrom: data.validFrom !== undefined ? data.validFrom : existing.valid_from,
+      validUntil: data.validUntil !== undefined ? data.validUntil : existing.valid_until,
+    });
 
     // A coupon code is the one field that is already published to customers
     // (live carousel, banners, shared links), so it is never mutated in place.

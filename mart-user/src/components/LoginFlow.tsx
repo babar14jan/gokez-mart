@@ -21,6 +21,8 @@ export interface LoginFlowProps {
    * customer sees the same action twice.
    */
   showGuestLink?: boolean;
+  /** Keeps a page host mounted after OTP verification until the required name saves. */
+  onProfileRequired?: () => void;
   /**
    * Reports the visible step so a host that renders its OWN guest exit can emit
    * login_abandoned for the right step. AccountPage does exactly that, and without
@@ -47,7 +49,7 @@ export type Step = 'phone' | 'otp' | 'profile' | 'offer';
  * cancels its py-6 instead. Everything else -- steps, OTP, analytics, the guest
  * exit and the login art -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onStepChange }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onProfileRequired, onStepChange }: LoginFlowProps) {
   const isModal = variant === 'modal';
   // See useFinePointer: auto-focusing a field on a phone opens the keyboard on
   // arrival and the browser scrolls to it, which is the page shake we are avoiding.
@@ -140,7 +142,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
           }
         }).catch(() => { onSuccess?.(); onClose?.(); });
       } else {
-        // New customer — collect name + address
+        onProfileRequired?.();
         setStep('profile');
       }
     } catch (err: any) {
@@ -164,12 +166,16 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim()) { setError('Please enter your name'); return; }
+    const normalizedName = newName.trim().replace(/\s+/g, ' ');
+    if (normalizedName.length < 2 || normalizedName.length > 80 || !/\p{L}/u.test(normalizedName)) {
+      setError('Enter a valid name using at least 2 characters.');
+      return;
+    }
     setSavingProfile(true); setError('');
     try {
-      await authApi.updateProfile({ name: newName.trim() });
-      useCustomerAuthStore.getState().updateProfile({ name: newName.trim() });
-      setName(newName.trim());
+      await authApi.updateProfile({ name: normalizedName });
+      useCustomerAuthStore.getState().updateProfile({ name: normalizedName });
+      setName(normalizedName);
       onSuccess?.();
       onClose?.();
     } catch {
@@ -202,7 +208,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
    * so binding Escape there would hijack the key for the whole page.
    */
   useEffect(() => {
-    if (!isModal) return;
+    if (!isModal || step === 'profile') return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -304,11 +310,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     : <><ArrowRight className="h-4 w-4" aria-hidden="true" /> {pendingCheckout ? 'Continue to Checkout' : 'Continue'}</>
                   }
                 </button>
-                <button type="button" onClick={() => { onSuccess?.(); onClose?.(); }}
-                  className="w-full text-sm text-gray-500 hover:text-gray-600 dark:text-slate-300 py-1 transition-colors">
-                  Skip for now
-                </button>
-                <GuestLink />
               </form>
             </>
           ) : step === 'phone' ? (

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
 import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
-import { storeApi, campaignApi } from '../services/api';
+import { storeApi, campaignApi, authApi } from '../services/api';
 import type { PublicSettings, Product } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
@@ -302,7 +302,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const guestPhoneInput = useRef<HTMLInputElement>(null);
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
-  const { phone: authPhone, name: authName, address: authAddress, isLoggedIn } = useCustomerAuthStore();
+  const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile } = useCustomerAuthStore();
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
@@ -357,6 +357,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     }
     return (isLoggedIn ? authName : savedName) || '';
   });
+  const [profileNameDraft, setProfileNameDraft] = useState(() => authName || '');
   const [guestPhone, setGuestPhone] = useState(() => {
     if (typeof window !== 'undefined' && !isLoggedIn) {
       return localStorage.getItem('guest_phone') || '';
@@ -371,6 +372,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   }, [guestName, isLoggedIn]);
 
   useEffect(() => {
+    if (authName) setProfileNameDraft(authName);
+  }, [authName]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined' && !isLoggedIn && guestPhone) {
       localStorage.setItem('guest_phone', guestPhone);
     }
@@ -380,6 +385,26 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const [showAddressList, setShowAddressList] = useState(false);
   const [addingNew, setAddingNew] = useState(false);
   const [addressSaving, setAddressSaving] = useState(false);
+
+  const saveProfileNameIfProvided = async () => {
+    const normalizedName = profileNameDraft.trim().replace(/\s+/g, ' ');
+    if (!normalizedName || normalizedName === 'Customer') return true;
+    if (!isValidGuestName(normalizedName)) {
+      setValidationField('name');
+      setError('Enter a valid name using at least 2 characters.');
+      return false;
+    }
+    try {
+      await authApi.updateProfile({ name: normalizedName });
+      updateProfile({ name: normalizedName });
+      setProfileNameDraft(normalizedName);
+      setValidationField(null);
+      return true;
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'We could not save your name. Please try again.');
+      return false;
+    }
+  };
 
   // Delivery preference
   const [deliveryPreference, setDeliveryPreference] = useState<'within_15' | 'within_30' | 'within_60'>('within_15');
@@ -534,10 +559,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
-  const checkoutName = isLoggedIn ? (authName || guestName) : guestName;
+  const checkoutName = isLoggedIn ? (authName || 'Customer') : guestName;
   const checkoutPhone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
   const incompleteCheckoutDetails = [
-    !isValidGuestName(checkoutName) && 'name',
+    !isLoggedIn && !isValidGuestName(checkoutName) && 'name',
     !isValidIndianMobile(checkoutPhone) && 'mobile number',
     !isValidDeliveryAddress(resolvedAddress) && 'delivery address',
   ].filter(Boolean) as string[];
@@ -559,7 +584,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     e.preventDefault();
     const name = checkoutName;
     const phone = checkoutPhone;
-    if (!name?.trim() || !isValidGuestName(name)) {
+    if (!isLoggedIn && (!name?.trim() || !isValidGuestName(name))) {
       setError('');
       setShowMissingDetails(true);
       setValidationField('name');
@@ -766,6 +791,22 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   </button>
                 </div>
 
+                {isLoggedIn && !authName && (
+                  <div className="border-b border-gray-100 px-5 py-4 dark:border-slate-700">
+                    <label htmlFor="address-sheet-name" className="mb-1 block text-xs font-bold text-gray-800 dark:text-slate-200">Your name</label>
+                    <input
+                      id="address-sheet-name"
+                      type="text"
+                      value={profileNameDraft}
+                      onChange={event => { setProfileNameDraft(event.target.value); setError(''); }}
+                      placeholder="Customer"
+                      autoComplete="name"
+                      className={`${inp} h-10 px-3 py-2 ${validationField === 'name' ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                    />
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">Leave blank to order as Customer, or save your name with this address.</p>
+                  </div>
+                )}
+
                 {!addingNew ? (
                   <>
                     <div className="divide-y divide-gray-50 dark:divide-slate-700">
@@ -773,7 +814,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                         const isSelected = addr.address === deliveryAddress;
                         return (
                           <button type="button" key={addr.id}
-                            onClick={() => { setDefaultAddress(addr.id); setValidationField(null); setShowAddressList(false); setAddingNew(false); }}
+                            onClick={async () => {
+                              if (!(await saveProfileNameIfProvided())) return;
+                              setDefaultAddress(addr.id); setValidationField(null); setShowAddressList(false); setAddingNew(false);
+                            }}
                             className="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700 text-left">
                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
                               <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-500' : 'text-gray-500'}`} />
@@ -798,6 +842,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                     <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Fields marked * are needed to deliver your order. A landmark is optional but helpful.</p>
                     <AddressForm saving={addressSaving} focusFirstField={validationField === 'address'} onCancel={() => setAddingNew(false)}
                       onSave={async (label, address, coordinates) => {
+                        if (!(await saveProfileNameIfProvided())) return;
                         setAddressSaving(true);
                         try {
                           if (isLoggedIn) {

@@ -148,6 +148,50 @@ describe('a redeemed campaign can be edited', () => {
   });
 });
 
+describe('financial campaign guardrails', () => {
+  test('rejects percentage discounts above 100 before updating the campaign', async () => {
+    await assert.rejects(
+      CampaignService.update('campaign-1', { discountValue: 101 }),
+      /no more than 100/i,
+    );
+    assert.ok(!ran(/^UPDATE mart_campaigns SET/), 'invalid terms never reach the database');
+  });
+
+  test('rejects negative campaign amounts and non-positive limits', async () => {
+    await assert.rejects(
+      CampaignService.update('campaign-1', { minOrderAmount: -1 }),
+      /cannot be negative/i,
+    );
+    await assert.rejects(
+      CampaignService.update('campaign-1', { usageLimit: 0 }),
+      /limits must be positive/i,
+    );
+  });
+
+  test('rejects campaign validity windows that end before they start', async () => {
+    await assert.rejects(
+      CampaignService.update('campaign-1', {
+        validFrom: '2026-10-05T10:00:00.000Z',
+        validUntil: '2026-10-05T09:00:00.000Z',
+      }),
+      /end time must be after/i,
+    );
+  });
+
+  test('locks a first-order campaign to one use per customer', async () => {
+    await assert.rejects(
+      CampaignService.update('campaign-1', { eligibilityType: 'first_order', perCustomerLimit: 2 }),
+      /per-customer limit of 1/i,
+    );
+  });
+
+  test('allows the existing FIRST50-style one-use campaign terms', async () => {
+    campaignRow = liveCampaign({ eligibility_type: 'first_order', new_customers_only: true });
+    const result = await CampaignService.update('campaign-1', { perCustomerLimit: 1 });
+    assert.ok(result, 'valid first-order campaign remains editable');
+  });
+});
+
 // ── Audit trail ──────────────────────────────────────────────────────────────
 describe('term changes are audited', () => {
   test('each changed field is recorded with its old and new value', async () => {

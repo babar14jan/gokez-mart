@@ -84,7 +84,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
             house: address.house || current.house,
             building: address.building || current.building,
             locality: address.locality || current.locality,
-            landmark: current.landmark,
+            landmark: address.landmark || current.landmark,
             city: address.city || current.city,
             pincode: address.pincode.match(/\d{6}/)?.[0] || current.pincode,
           }));
@@ -118,15 +118,16 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
         {locating ? 'Finding location...' : 'Use current location'}
       </button>
       {locationMessage && <p className="text-xs text-gray-500 dark:text-slate-400">{locationMessage}</p>}
+      <p className="text-xs text-gray-500 dark:text-slate-400">Fields marked <span className="font-bold text-red-500" aria-hidden="true">*</span> are required for delivery.</p>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Flat / House No." required value={fields.house} onChange={update('house')} placeholder="e.g. A-204" autoFocus forceAutoFocus={focusFirstField} />
-        <Field label="Building / Tower" value={fields.building} onChange={update('building')} placeholder="e.g. Block B" />
+        <Field label="Flat / House No." required value={fields.house} onChange={update('house')} placeholder="Enter house number" autoFocus forceAutoFocus={focusFirstField} />
+        <Field label="Building / Tower" value={fields.building} onChange={update('building')} placeholder="Building or tower" />
       </div>
-      <Field label="Street / Locality" required value={fields.locality} onChange={update('locality')} placeholder="e.g. New Town" />
-      <Field label="Landmark (optional)" value={fields.landmark} onChange={update('landmark')} placeholder="e.g. Near City Centre" />
+      <Field label="Street / Locality" required value={fields.locality} onChange={update('locality')} placeholder="Enter street or locality" />
+      <Field label="Landmark" value={fields.landmark} onChange={update('landmark')} placeholder="Nearby landmark (optional)" />
       <div className="grid grid-cols-2 gap-2">
-        <Field label="City" required value={fields.city} onChange={update('city')} placeholder="e.g. Kolkata" />
-        <Field label="Pincode" required value={fields.pincode} onChange={update('pincode')} placeholder="700102" inputMode="numeric" />
+        <Field label="City" required value={fields.city} onChange={update('city')} placeholder="Enter city" />
+        <Field label="Pincode" required value={fields.pincode} onChange={update('pincode')} placeholder="Enter 6-digit pincode" inputMode="numeric" />
       </div>
       <div className="flex gap-2 pt-2">
         <button type="button" onClick={onCancel}
@@ -156,9 +157,11 @@ function Field({ label, required = false, value, onChange, placeholder, autoFocu
   const finePointer = useFinePointer();
   return (
     <div>
-      <label className="block text-[10px] font-medium text-gray-500 mb-1">{label}{required ? ' *' : ''}</label>
+      <label className="block text-[10px] font-medium text-gray-500 mb-1">
+        {label}{required && <span className="ml-0.5 font-bold text-red-500" aria-hidden="true">*</span>}
+      </label>
       <input type="text" inputMode={inputMode} maxLength={inputMode === 'numeric' ? 6 : undefined} value={value} onChange={onChange}
-        className={inputClass} placeholder={placeholder} autoFocus={autoFocus && (finePointer || forceAutoFocus)} />
+        className={inputClass} placeholder={placeholder} autoFocus={autoFocus && (finePointer || forceAutoFocus)} aria-required={required} />
     </div>
   );
 }

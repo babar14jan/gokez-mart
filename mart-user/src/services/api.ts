@@ -123,7 +123,7 @@ export const storeApi = {
   }),
   getZones: () => api.get<{ success: boolean; data: MartZone[] }>('/zones'),
   reverseGeocode: (latitude: number, longitude: number) =>
-    api.post<{ success: boolean; data: { house: string; building: string; locality: string; city: string; pincode: string } }>('/geocode/reverse', { latitude, longitude }),
+    api.post<{ success: boolean; data: { house: string; building: string; locality: string; landmark: string; city: string; pincode: string } }>('/geocode/reverse', { latitude, longitude }),
   placeOrder: (data: {
     guestName: string; guestPhone: string; guestAddress: string;
     guestAddressLabel?: string;

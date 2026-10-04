@@ -48,8 +48,6 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (
       config.cors.origins.includes(origin) ||
-      /\.gokez\.com$/i.test(origin) ||
-      /\.onrender\.com$/i.test(origin) ||
       (config.env === 'development' && /localhost/.test(origin))
     ) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
@@ -81,6 +79,15 @@ app.use('/api/v1', rateLimit({
 }));
 
 // 2. OTP send — 3 req / 15 min per phone number (falls back to IP)
+// The IP budget prevents an attacker from rotating phone numbers to spend SMS
+// credits while the per-phone limiter below protects an individual customer.
+app.use('/api/v1/auth/send-otp', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 10 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many OTP requests from this network. Please try again later.' },
+}));
 app.use('/api/v1/auth/send-otp', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: isProd ? 3 : 20,
@@ -107,6 +114,13 @@ app.use('/api/v1/auth/verify-otp', rateLimit({
 }));
 
 // 4. Admin login — 5 req / 15 min per IP + username combo
+app.use('/api/v1/admin/login', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 15 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many login attempts. Please try again in 15 minutes.' },
+}));
 app.use('/api/v1/admin/login', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: isProd ? 5 : 50,

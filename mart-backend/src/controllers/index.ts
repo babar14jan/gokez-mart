@@ -126,10 +126,11 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
     res.json({
       success: true,
       data: {
-        house: address.house_number || '',
-        building: address.building || '',
-        locality: address.road || address.neighbourhood || address.suburb || address.village || '',
-        city: address.city || address.town || address.village || address.county || '',
+        house: address.house_number || address.house_name || '',
+        building: address.building || address.residential || '',
+        locality: address.road || address.pedestrian || address.neighbourhood || address.quarter || address.suburb || address.village || '',
+        landmark: address.amenity || address.shop || address.office || address.leisure || address.tourism || '',
+        city: address.city || address.town || address.municipality || address.village || address.county || address.state_district || '',
         pincode: address.postcode || '',
       },
     });
@@ -140,7 +141,8 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
-  const normalizedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
+  const suppliedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
+  const normalizedName = suppliedName || (req.customer ? 'Customer' : '');
   const normalizedAddress = typeof guestAddress === 'string' ? guestAddress.trim() : '';
   if (!normalizedName || !guestPhone || !normalizedAddress || !items?.length) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
@@ -151,6 +153,9 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     res.status(400).json({ success: false, error: 'Enter a valid name' }); return;
   }
   if (!/^[6-9]\d{9}$/.test(cleanPhone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  if (req.customer && req.customer.phone !== cleanPhone) {
+    res.status(400).json({ success: false, error: 'Use your verified phone number to place this order' }); return;
+  }
   if (normalizedAddress.length < 10 || normalizedAddress.length > 500) {
     res.status(400).json({ success: false, error: 'Enter a complete delivery address' }); return;
   }
@@ -666,14 +671,48 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
   if (!req.admin || !allowedRoles.includes(req.admin.role)) {
     res.status(403).json({ success: false, error: 'Access denied' }); return;
   }
-  const result = await query(
-    `SELECT id, phone, name, address, order_count as "orderCount",
-            total_spent::float as "totalSpent", created_at as "createdAt"
-     FROM mart_customers
-     ORDER BY order_count DESC, created_at DESC
-     LIMIT 200`
-  );
-  res.json({ success: true, data: result.rows });
+  const identity = req.query.identity === 'signed_in' || req.query.identity === 'guest_checkout'
+    ? req.query.identity
+    : 'all';
+  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 50, 1), 100);
+  const offset = Math.max(Number.parseInt(String(req.query.offset), 10) || 0, 0);
+  const identitySql = `CASE WHEN EXISTS (
+    SELECT 1 FROM mart_customer_leads l
+    WHERE l.customer_id = c.id AND l.verified_at IS NOT NULL
+  ) THEN 'signed_in' ELSE 'guest_checkout' END`;
+  const [customers, counts] = await Promise.all([
+    query(
+      `WITH classified AS (
+         SELECT c.id, c.phone, c.name, c.address, c.order_count as "orderCount",
+                c.total_spent::float as "totalSpent", c.created_at as "createdAt",
+                ${identitySql} as "identityType"
+         FROM mart_customers c
+       )
+       SELECT * FROM classified
+       WHERE $1 = 'all' OR "identityType" = $1
+       ORDER BY "orderCount" DESC, "createdAt" DESC
+       LIMIT $2 OFFSET $3`,
+      [identity, limit, offset]
+    ),
+    query<{ total: number; signedIn: number; guestCheckout: number }>(
+      `SELECT COUNT(*)::int as total,
+              COUNT(*) FILTER (WHERE ${identitySql} = 'signed_in')::int as "signedIn",
+              COUNT(*) FILTER (WHERE ${identitySql} = 'guest_checkout')::int as "guestCheckout"
+       FROM mart_customers c`
+    ),
+  ]);
+  const count = counts.rows[0] || { total: 0, signedIn: 0, guestCheckout: 0 };
+  const filteredTotal = identity === 'signed_in'
+    ? count.signedIn
+    : identity === 'guest_checkout'
+      ? count.guestCheckout
+      : count.total;
+  res.json({
+    success: true,
+    data: customers.rows,
+    counts: count,
+    pagination: { limit, offset, total: filteredTotal, hasMore: offset + customers.rows.length < filteredTotal },
+  });
 });
 
 export const adminGetCustomerLeads = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -943,6 +982,14 @@ export const customerGetMe = asyncHandler(async (req: CustomerRequest, res: Resp
 });
 
 export const customerUpdateProfile = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  if (req.body.name !== undefined) {
+    const name = typeof req.body.name === 'string' ? req.body.name.trim().replace(/\s+/g, ' ') : '';
+    if (name.length < 2 || name.length > 80 || !/\p{L}/u.test(name)) {
+      res.status(400).json({ success: false, error: 'Enter a valid name' });
+      return;
+    }
+    req.body.name = name;
+  }
   const customer = await CustomerAuthService.updateProfile(req.customer!.id, req.body);
   res.json({ success: true, data: customer });
 });

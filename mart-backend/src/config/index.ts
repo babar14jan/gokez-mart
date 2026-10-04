@@ -5,16 +5,30 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+const jwtSecret = process.env.MART_JWT_SECRET;
+const configuredOrigins = (process.env.MART_CORS_ORIGIN || (isProduction ? '' : 'http://localhost:5177,http://localhost:5178'))
+  .split(',').map(origin => origin.trim()).filter(Boolean);
+
+if (isProduction) {
+  if (!jwtSecret || jwtSecret === 'mart-dev-secret-change-in-production' || jwtSecret === 'change_this_in_production' || jwtSecret.length < 32) {
+    throw new Error('MART_JWT_SECRET must be a unique secret of at least 32 characters in production');
+  }
+  if (configuredOrigins.length === 0 || configuredOrigins.some(origin => !/^https:\/\//.test(origin))) {
+    throw new Error('MART_CORS_ORIGIN must contain one or more HTTPS origins in production');
+  }
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3004', 10),
   env: process.env.NODE_ENV || 'development',
   jwt: {
     secret: (() => {
-      if (!process.env.MART_JWT_SECRET) {
-        if (process.env.NODE_ENV === 'production') throw new Error('MART_JWT_SECRET env var is required in production');
+      if (!jwtSecret) {
+        if (isProduction) throw new Error('MART_JWT_SECRET env var is required in production');
         return 'mart-dev-secret-change-in-prod';
       }
-      return process.env.MART_JWT_SECRET;
+      return jwtSecret;
     })(),
     expiresIn: process.env.MART_JWT_EXPIRES_IN || '90d',
   },
@@ -24,8 +38,7 @@ export const config = {
     bucket: process.env.SUPABASE_BUCKET || 'mart-products',
   },
   cors: {
-    origins: (process.env.MART_CORS_ORIGIN || 'http://localhost:5177,http://localhost:5178')
-      .split(',').map(o => o.trim()),
+    origins: configuredOrigins,
   },
   vapid: {
     publicKey:  process.env.VAPID_PUBLIC_KEY  || '',

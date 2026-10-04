@@ -146,9 +146,9 @@ export class OrderService {
       // client may name a campaign, but it never supplies the final discount.
       await client.query(
         `INSERT INTO mart_customers (id, phone, name, address, order_count, total_spent)
-         VALUES (gen_random_uuid(), $1, $2, $3, 0, 0)
+         VALUES (gen_random_uuid(), $1, NULLIF($2, 'Customer'), $3, 0, 0)
          ON CONFLICT (phone) DO UPDATE SET
-           name = COALESCE(EXCLUDED.name, mart_customers.name),
+           name = COALESCE(mart_customers.name, EXCLUDED.name),
            address = COALESCE(EXCLUDED.address, mart_customers.address),
            updated_at = NOW()`,
         [cleanPhone, data.guestName, data.guestAddress]

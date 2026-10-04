@@ -42,6 +42,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
   const [addressMenuId, setAddressMenuId] = useState<string | null>(null);
   const [addressPendingDelete, setAddressPendingDelete] = useState<string | null>(null);
   const [addressDeleting, setAddressDeleting] = useState(false);
+  const [profileRequired, setProfileRequired] = useState(false);
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
@@ -157,7 +158,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
     </div>
   );
 
-  if (!isLoggedIn) {
+  if (!isLoggedIn || profileRequired) {
     return (
       <div className="page-shell bg-white dark:bg-slate-900 font-sans">
         <div className="w-full sm:max-w-sm sm:mx-auto bg-white dark:bg-slate-800 sm:rounded-3xl sm:shadow-xl overflow-hidden">
@@ -175,6 +176,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
               // to avoid showing the same action twice. The hero image is NOT --
               // the flow supplies it, so both hosts share one login visual.
               showGuestLink={false}
+              onProfileRequired={() => setProfileRequired(true)}
               onStepChange={(s) => { loginStep.current = s; }}
               // The page owns the guest exit (the flow's own is switched off above), so it
               // has to do the flow's cleanup itself. LoginFlow.handleGuest normally
@@ -183,6 +185,7 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
               // which App reads on next boot and turns into a surprise modal.
               onGuest={leaveAsGuest}
               onSuccess={() => {
+                setProfileRequired(false);
                 // Honour the redirect intent recorded before this page was opened.
                 // "/orders" is the default because /account is reached from the
                 // guest "Track My Orders" CTA.
@@ -192,14 +195,14 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
                 navigate(redirect);
               }}
             />
-            <div className="text-center">
+            {!isLoggedIn && <div className="text-center">
               <button
                 onClick={leaveAsGuest}
                 className="text-base font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
               >
                 Continue as guest →
               </button>
-            </div>
+            </div>}
           </div>
           {footer}
         </div>
@@ -229,17 +232,21 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
             </div>
             <div className="flex-1 min-w-0">
               {editingName ? (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <input autoFocus={finePointer} type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
-                    className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500" placeholder="Your full name" />
-                  <button onClick={saveName} disabled={saving === 'name'}
-                    className="p-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg flex-shrink-0">
-                    {saving === 'name' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  </button>
-                  <button onClick={() => { setEditingName(false); setNameVal(name || ''); }}
-                    className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg flex-shrink-0">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                    className="min-w-0 w-full flex-1 px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500" placeholder="Your full name" />
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                    <button type="button" onClick={saveName} disabled={saving === 'name'}
+                      className="inline-flex min-h-11 items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 text-sm font-semibold disabled:opacity-60">
+                      {saving === 'name' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      <span className="sm:hidden">Save</span>
+                    </button>
+                    <button type="button" onClick={() => { setEditingName(false); setNameVal(name || ''); }}
+                      className="inline-flex min-h-11 items-center justify-center gap-1.5 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg px-3 text-sm font-semibold">
+                      <X className="w-4 h-4" />
+                      <span className="sm:hidden">Cancel</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">

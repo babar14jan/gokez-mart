@@ -80,7 +80,8 @@ export const ordersApi = {
 
 // ── Customers ─────────────────────────────────────────────────────────────────
 export const customersApi = {
-  getAll: () => api.get('/admin/customers'),
+  getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; limit?: number; offset?: number }) =>
+    api.get('/admin/customers', { params }),
 };
 
 export type FunnelRange = 'today' | '7d' | '30d' | 'custom' | 'all';

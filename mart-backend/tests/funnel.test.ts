@@ -491,12 +491,13 @@ describe('H. Guest checkouts persist like logged-in customers', () => {
     const auth = read('mart-backend/src/services/customerAuth.service.ts');
     assert.ok(/ON CONFLICT \(phone\) DO UPDATE SET last_seen_at/.test(auth),
       'OTP verification creates a new customer row instead of reusing the guest one');
-    // The same upsert path reuses the phone-derived row, so the address the
-    // guest saved (mart_customer_addresses.customer_id → that row) and the name
-    // they typed (mart_customers.name) both come back after login.
+    // A guest-provided name is retained, while the authenticated Customer
+    // fallback never replaces a real profile name with a placeholder.
     const order = read('mart-backend/src/services/order.service.ts');
-    assert.ok(/name = COALESCE\(EXCLUDED\.name/.test(order),
-      'the guest-supplied name is not kept on the customer row for later login');
+    assert.ok(/NULLIF\(\$2, 'Customer'\)/.test(order),
+      'the authenticated fallback Customer name is persisted as a real profile name');
+    assert.ok(/name = COALESCE\(mart_customers\.name, EXCLUDED\.name\)/.test(order),
+      'a later order can overwrite an existing customer profile name');
   });
 
   test('the storefronts keep a guest address instead of dropping it', () => {
@@ -535,7 +536,7 @@ describe('I. Guest checkouts flow through the lead funnel', () => {
     assert.ok(/=== 'guest'/.test(ctrl),
       'the admin leads controller no longer accepts status=guest');
     const hub = read('mart-hub/src/pages/CustomerLeadsPage.tsx');
-    assert.ok(/'Direct checkout'/.test(hub),
+    assert.ok(/'Guest checkout'/.test(hub),
       'the super admin is never shown a guest bucket for checkout-only shoppers');
   });
 
@@ -545,5 +546,43 @@ describe('I. Guest checkouts flow through the lead funnel', () => {
       'direct checkouts are listed as incomplete OTP attempts');
     assert.ok(/verified_at IS NULL AND otp_request_count > 0/.test(svc),
       'direct checkouts are counted as incomplete OTP attempts');
+  });
+});
+
+describe('J. Customer identity is protected and reportable', () => {
+  test('an authenticated order must use its verified phone number', () => {
+    const ctrl = read('mart-backend/src/controllers/index.ts');
+    assert.ok(/req\.customer && req\.customer\.phone !== cleanPhone/.test(ctrl),
+      'an authenticated caller can submit an order against another customer phone');
+  });
+
+  test('customer identity filters and counts are calculated server-side', () => {
+    const ctrl = read('mart-backend/src/controllers/index.ts');
+    assert.ok(/req\.query\.identity === 'signed_in'/.test(ctrl),
+      'the customer API cannot filter signed-in and guest checkout identities');
+    assert.ok(/COUNT\(\*\) FILTER/.test(ctrl),
+      'the customer API derives tab counts only from the loaded page');
+    assert.ok(/LIMIT \$2 OFFSET \$3/.test(ctrl),
+      'the customer API cannot paginate beyond the first customer page');
+  });
+});
+
+describe('K. First-order campaign redemption is single-use under retries', () => {
+  test('orders for one phone are serialized before campaign eligibility is checked', () => {
+    const order = read('mart-backend/src/services/order.service.ts');
+    const phoneLock = order.indexOf('customer-order:${cleanPhone}');
+    const campaignLookup = order.indexOf('SELECT * FROM mart_campaigns WHERE id = $1 FOR UPDATE');
+    assert.ok(phoneLock > -1, 'orders for one phone no longer take a transaction advisory lock');
+    assert.ok(campaignLookup > phoneLock,
+      'campaign eligibility can be read before competing orders for the phone are serialized');
+  });
+
+  test('the campaign row is locked and redemption has one ledger row per order', () => {
+    const order = read('mart-backend/src/services/order.service.ts');
+    assert.ok(/SELECT \* FROM mart_campaigns WHERE id = \$1 FOR UPDATE/.test(order),
+      'campaign terms and usage limit are no longer rechecked under a row lock');
+    const migration = read('mart-backend/src/database/migrations/045_idempotency_guards.sql');
+    assert.ok(/UNIQUE INDEX IF NOT EXISTS uq_campaign_uses_order ON mart_campaign_uses\(order_id\)/.test(migration),
+      'one order can now create more than one campaign redemption record');
   });
 });
