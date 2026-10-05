@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Search, X, CheckCircle } from 'lucide-react';
+import { Search, X, CheckCircle, Mail, Phone } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -27,6 +27,7 @@ import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
+import { GOKEZ_SUPPORT } from './constants/gokezSupport';
 
 type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
 
@@ -166,6 +167,7 @@ export default function App() {
   const [selectedZone, setSelectedZone] = useState<MartZone | null>(SHAPOORJI_ZONE);
   const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [isHomeSearchFocused, setIsHomeSearchFocused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogRequest, setCatalogRequest] = useState(0);
@@ -660,6 +662,8 @@ export default function App() {
           onCheckout={handleCheckout}
           search={search}
           onSearch={setSearch}
+          onSearchFocus={() => setIsHomeSearchFocused(true)}
+          onSearchBlur={() => setIsHomeSearchFocused(false)}
         />
       )}
 
@@ -741,6 +745,7 @@ export default function App() {
         <div className={PAGE_BOTTOM}>
           <DeferredPage><AccountPage
             onBack={() => setView('home')}
+            storeName={settings.store_name}
             supportName={settings.support_name}
             supportPhone={settings.support_phone}
             whatsappNumber={settings.whatsapp_number}
@@ -772,10 +777,13 @@ export default function App() {
             )}
           </div>
 
-          {/* Carousel */}
-          <HomeCarousel />
+          {/* Search intent takes priority over discovery on a phone. */}
+          <div className={isHomeSearchFocused || search.trim() ? 'hidden sm:block' : undefined}>
+            <HomeCarousel />
+          </div>
 
           {/* Category pills */}
+          <div className={isHomeSearchFocused || search.trim() ? 'hidden sm:block' : undefined}>
           {!loading && categories.length > 0 && (() => {
             const categoriesWithProducts = categories.filter(cat => products.some(p => p.categoryId === cat.id));
             if (categoriesWithProducts.length === 0) return null;
@@ -802,6 +810,7 @@ export default function App() {
             </div>
             );
           })()}
+          </div>
 
           {/* Products */}
           {loading ? (
@@ -893,7 +902,6 @@ export default function App() {
           <div className="mt-2 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
             <img src="/mart_brand_new.png" alt="Gokez Mart" className="h-10 w-auto object-contain mx-auto mb-1" />
             <p className="text-sm font-black text-gray-900 dark:text-white mb-4">SHOP LOCAL <span className="text-lg align-middle">&bull;</span> SUPPORT LOCAL</p>
-            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-3">Gokez Mart — Hyperlocal Commerce Platform</p>
             <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
               We bring local stores online — connecting you directly with neighbourhood vendors, no warehouses, no middlemen. Every order supports a real family business and keeps the trust they’ve built in your community over years.
             </p>
@@ -912,35 +920,18 @@ export default function App() {
           {/* Footer */}
           <div className="mt-8 pb-4 border-t border-gray-300 dark:border-slate-700 pt-5 space-y-3">
 
-            {/* Contact — store support */}
-            {(settings.support_phone || settings.whatsapp_number || settings.store_address) && (
-              <div className="flex items-center justify-center gap-4 flex-wrap">
-                {settings.support_phone && (
-                  <a href={`tel:${settings.support_phone}`}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 hover:text-blue-600 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.47 11.47 0 003.58.57 1 1 0 011 1V21a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1 11.47 11.47 0 00.57 3.58 1 1 0 01-.25 1.01l-2.2 2.2z"/>
-                    </svg>
-                    {settings.support_phone}
-                  </a>
-                )}
-                {settings.whatsapp_number && (
-                  <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 hover:text-green-600 transition-colors">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-4 h-4" />
-                    WhatsApp
-                  </a>
-                )}
-                {settings.store_address && (
-                  <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1112 6a2.5 2.5 0 010 5.5z"/>
-                    </svg>
-                    {settings.store_address}
-                  </span>
-                )}
-              </div>
-            )}
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`}
+                className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
+                <Phone className="w-4 h-4" />
+                {GOKEZ_SUPPORT.phone}
+              </a>
+              <a href={`mailto:${GOKEZ_SUPPORT.email}`}
+                className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 hover:text-emerald-600 transition-colors">
+                <Mail className="w-4 h-4" />
+                {GOKEZ_SUPPORT.email}
+              </a>
+            </div>
 
 
             {/* Copyright */}

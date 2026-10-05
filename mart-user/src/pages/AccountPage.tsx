@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check, Mail, Store } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -10,16 +10,18 @@ import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
 import { track } from '../utils/track';
 import { useFinePointer } from '../utils/useFinePointer';
+import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 
 interface AccountPageProps {
   onBack?: () => void;
+  storeName?: string;
   supportName?: string;
   supportPhone?: string;
   whatsappNumber?: string;
   onNavigate?: (view: string) => void;
 }
 
-export default function AccountPage({ onBack, supportName, supportPhone, whatsappNumber }: AccountPageProps) {
+export default function AccountPage({ onBack, storeName, supportName, supportPhone, whatsappNumber }: AccountPageProps) {
   const finePointer = useFinePointer();
   const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
@@ -395,67 +397,66 @@ export default function AccountPage({ onBack, supportName, supportPhone, whatsap
           );
         })()}
 
-        {(supportName || supportPhone) && (
+        {(supportPhone || whatsappNumber) && (
           <>
-            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-1">Contact Store</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-1">Store Support</p>
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
-                    {(supportName || 'S')[0].toUpperCase()}
-                  </span>
+                  <Store className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{supportName || 'Store Support'}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{supportPhone || ''}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {supportPhone && (
-                    <a href={`tel:${supportPhone}`}
-                      className="flex items-center justify-center w-9 h-9 bg-blue-50 dark:bg-blue-900/30 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-600 dark:text-blue-400" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.47 11.47 0 003.58.57 1 1 0 011 1V21a1 1 0 01-1 1A17 17 0 013 5a1 1 0 011-1h3.5a1 1 0 011 1 11.47 11.47 0 00.57 3.58 1 1 0 01-.25 1.01l-2.2 2.2z"/>
-                      </svg>
-                    </a>
-                  )}
-                  {(whatsappNumber || supportPhone) && (
-                    <a href={`https://wa.me/${(whatsappNumber || supportPhone)?.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I need help with my order on Gokez Mart.`)}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="flex items-center justify-center w-9 h-9 bg-green-50 dark:bg-green-900/20 rounded-xl hover:bg-green-100 transition-colors">
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-5 h-5" />
-                    </a>
-                  )}
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{storeName || 'Your delivery store'}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    {supportName ? `Support contact: ${supportName}` : 'Order and delivery help'}
+                  </p>
+                  {supportPhone && <p className="mt-0.5 text-xs font-medium text-gray-700 dark:text-slate-300">{supportPhone}</p>}
                 </div>
               </div>
+              {(supportPhone || whatsappNumber) && (
+                <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3 dark:border-slate-700">
+                  {supportPhone && (
+                    <a href={`tel:${supportPhone}`}
+                      className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50">
+                      <Phone className="w-4 h-4" /> Call store
+                    </a>
+                  )}
+                  {whatsappNumber && (
+                    <a href={`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I need help with my order on Gokez Mart.`)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 text-xs font-semibold text-green-700 transition-colors hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:hover:bg-green-900/30">
+                      <MessageCircle className="w-4 h-4" /> WhatsApp
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider px-4 pt-3 pb-1">Contact Gokez</p>
-          <a href="mailto:support@gokez.com"
+          <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider px-4 pt-3 pb-1">Gokez Support</p>
+          <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`}
+            className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+              <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Call Gokez</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">{GOKEZ_SUPPORT.phone}</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-300" />
+          </a>
+          <a href={`mailto:${GOKEZ_SUPPORT.email}`}
             className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
             <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-              </svg>
+              <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Email Support</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">support@gokez.com</p>
+              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Email Gokez</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">{GOKEZ_SUPPORT.email}</p>
             </div>
-            <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </a>
-          <a href="https://wa.me/918777376280?text=Hi%2C%20I%20need%20help%20with%20Gokez%20Mart." target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-            <div className="w-8 h-8 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center flex-shrink-0">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">WhatsApp Support</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">Chat with us on WhatsApp</p>
-            </div>
-            <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            <ChevronRight className="w-4 h-4 text-gray-300" />
           </a>
         </div>
 
