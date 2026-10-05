@@ -29,7 +29,7 @@ import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { GOKEZ_SUPPORT } from './constants/gokezSupport';
 
-type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'notification-settings';
+type View = 'home' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
 const SHAPOORJI_ZONE: MartZone = {
   id: 'shapoorji-default',
@@ -48,7 +48,6 @@ const TermsPage = lazy(() => import('./pages/TermsPage'));
 const GrievancePage = lazy(() => import('./pages/GrievancePage'));
 const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
-const NotificationSettingsPage = lazy(() => import('./pages/NotificationSettingsPage'));
 
 function DeferredPage({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="min-h-[12rem]" />}>{children}</Suspense>;
@@ -72,7 +71,10 @@ export default function App() {
     if (path === '/terms') return 'terms';
     if (path === '/grievance') return 'grievance';
     if (path === '/feedback') return 'feedback';
-    if (path === '/notification-settings') return 'notification-settings';
+    if (path === '/notification-settings') {
+      window.history.replaceState({}, '', '/account');
+      return 'account';
+    }
     if (path === '/delete-account') return 'delete-account';
     if (path === '/account') return 'account';
     if (path === '/categories') return 'categories';
@@ -86,7 +88,6 @@ export default function App() {
     home: '/', categories: '/categories', orders: '/orders', account: '/account',
     privacy: '/privacy', terms: '/terms', grievance: '/grievance',
     'delete-account': '/delete-account', feedback: '/feedback',
-    'notification-settings': '/notification-settings',
   };
   // Mirrored in state because writing sessionStorage alone does not re-render,
   // which made "Not now" look like it did nothing.
@@ -219,7 +220,10 @@ export default function App() {
       else if (path === '/terms') setView('terms');
       else if (path === '/grievance') setView('grievance');
       else if (path === '/feedback') setView('feedback');
-      else if (path === '/notification-settings') setView('notification-settings');
+      else if (path === '/notification-settings') {
+        window.history.replaceState({}, '', '/account');
+        setView('account');
+      }
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
       // Needed because the login redirect lands here: AccountPage navigates to
@@ -405,14 +409,6 @@ export default function App() {
 
   const handleCheckout = async () => {
     setPreCheckoutView(view);
-    if (!selectedZone) {
-      const loc = await getUserLocation();
-      if (loc) {
-        const match = findMatchingZone(loc.lat, loc.lng, zones);
-        if (match) setSelectedZone(match.zone);
-        else { setShowOutsideBlock(true); return; }
-      } else { setShowOutsideBlock(true); return; }
-    }
     setCheckoutActive(true);
   };
 
@@ -729,8 +725,6 @@ export default function App() {
         <div className={PAGE_BOTTOM}><DeferredPage><GrievancePage /></DeferredPage></div>
       ) : view === 'feedback' ? (
         <div className={PAGE_BOTTOM}><DeferredPage><FeedbackPage storeId={selectedZone?.storeId} /></DeferredPage></div>
-      ) : view === 'notification-settings' ? (
-        <div className={PAGE_BOTTOM}><DeferredPage><NotificationSettingsPage /></DeferredPage></div>
       ) : view === 'delete-account' ? (
         <div className={PAGE_BOTTOM}><DeferredPage><DeleteAccountPage /></DeferredPage></div>
       ) : view === 'privacy' ? (

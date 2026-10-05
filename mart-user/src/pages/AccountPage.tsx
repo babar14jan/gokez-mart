@@ -4,7 +4,7 @@ import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import { useThemeStore } from '../store/themeStore';
-import { getLocationPermission } from '../services/push';
+import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush } from '../services/push';
 import AddressForm from '../components/AddressForm';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
@@ -36,6 +36,9 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
   const [locationEnabled, setLocationEnabled] = useState(
     localStorage.getItem('mart_location_enabled') !== 'false'
   );
+  const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
+  const [notificationSubscribed, setNotificationSubscribed] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportReady, setExportReady] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -82,6 +85,18 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
     getLocationPermission().then(setLocationPermission);
   }, []);
 
+  useEffect(() => {
+    authApi.getMarketingConsent().then(response => setMarketingConsent(response.data.data.granted)).catch(() => {});
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.ready
+          .then(registration => registration.pushManager.getSubscription())
+          .then(subscription => setNotificationSubscribed(!!subscription))
+          .catch(() => {});
+      }
+    } catch {}
+  }, []);
+
   const handleLocationToggle = async () => {
     if (!locationEnabled) {
       if (locationPermission !== 'granted') {
@@ -97,6 +112,28 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
       setLocationEnabled(false);
       localStorage.setItem('mart_location_enabled', 'false');
     }
+  };
+
+  const handleOrderNotifications = async () => {
+    if (notificationPermission === 'granted') {
+      if (notificationSubscribed) {
+        await unsubscribeFromPush();
+        setNotificationSubscribed(false);
+      } else {
+        setNotificationSubscribed(await subscribeToPush());
+      }
+      return;
+    }
+    const permission = await requestNotificationPermission();
+    setNotificationPermission(permission);
+    if (permission === 'granted') setNotificationSubscribed(await subscribeToPush());
+  };
+
+  const handleMarketingNotifications = async () => {
+    const next = !marketingConsent;
+    setMarketingConsent(next);
+    try { await authApi.updateMarketingConsent(next); }
+    catch { setMarketingConsent(!next); }
   };
 
   const saveName = async () => {
@@ -483,16 +520,39 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               </button>
             )}
           </div>
-          <button
-            onClick={() => navigate('/notification-settings')}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+          <div className="flex items-center gap-3 px-4 py-3">
             <Bell className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Notifications</span>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">Order updates &amp; promotional alerts</p>
+              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Order Notifications</span>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">
+                {notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
+                 notificationPermission === 'denied' ? 'Blocked - enable in browser settings' :
+                 notificationPermission === 'unsupported' ? 'Not supported on this browser' :
+                 'Get delivery and order status alerts'}
+              </p>
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-300" />
-          </button>
+            {notificationPermission === 'denied' ? (
+              <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">Blocked</span>
+            ) : notificationPermission === 'unsupported' ? (
+              <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
+            ) : (
+              <button onClick={handleOrderNotifications} role="switch" aria-checked={notificationSubscribed}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notificationSubscribed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${notificationSubscribed ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <MessageCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Promotional Notifications</span>
+              <p className="text-[10px] text-gray-500 dark:text-slate-400">Offers, deals and new arrivals</p>
+            </div>
+            <button onClick={handleMarketingNotifications} role="switch" aria-checked={marketingConsent}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${marketingConsent ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${marketingConsent ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
