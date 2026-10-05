@@ -98,7 +98,7 @@ if (!/^<\?xml version="1\.0" encoding="UTF-8"\?>/.test(sitemap)) {
 }
 if (sitemap.charCodeAt(0) === 0xfeff) fail('public/sitemap.xml has a UTF-8 BOM');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
-const expected = ['/', '/about', '/privacy', '/terms', '/grievance', '/feedback']
+const expected = ['/', '/about/', '/privacy/', '/terms/', '/grievance/', '/feedback/']
   .map(p => (p === '/' ? `${ORIGIN}/` : `${ORIGIN}${p}`));
 if (JSON.stringify(locs) !== JSON.stringify(expected)) {
   fail(`public/sitemap.xml URL set is wrong.\n      expected: ${expected.join(', ')}\n      actual:   ${locs.join(', ')}`);
@@ -188,7 +188,7 @@ if (seo) {
   // absoluteUrl(). This is what catches the homepage trailing-slash regression.
   for (const expectedUrl of expected) {
     const path = expectedUrl.replace(`${ORIGIN}`, '');
-    const view = path === '/' ? 'home' : path.replace(/^\//, '');
+    const view = path === '/' ? 'home' : path.replace(/^\/+|\/+$/g, '');
     const rendered = seo.canonicalForView(view);
     if (rendered !== expectedUrl) {
       fail(`seo.ts canonicalForView('${view}') is "${rendered}" but index.html/sitemap use "${expectedUrl}" — the rendered DOM would hand Google a different canonical than the raw HTML`);

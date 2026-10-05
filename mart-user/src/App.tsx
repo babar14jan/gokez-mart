@@ -68,7 +68,7 @@ const DEFAULT_SETTINGS: PublicSettings = {
 export default function App() {
   const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
   const [view, setView] = useState<View>(() => {
-    const path = window.location.pathname;
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
     if (path === '/about') return 'about';
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
@@ -88,8 +88,8 @@ export default function App() {
   // which screen the shopper was on before opening the account login. Needed so
   // "Continue as guest" returns there instead of guessing from the basket.
   const VIEW_PATH: Record<View, string> = {
-    home: '/', about: '/about', categories: '/categories', orders: '/orders', account: '/account',
-    privacy: '/privacy', terms: '/terms', grievance: '/grievance',
+    home: '/', about: '/about/', categories: '/categories', orders: '/orders', account: '/account',
+    privacy: '/privacy/', terms: '/terms/', grievance: '/grievance/',
     'delete-account': '/delete-account', feedback: '/feedback',
   };
   // Mirrored in state because writing sessionStorage alone does not re-render,
@@ -218,7 +218,7 @@ export default function App() {
 
   useEffect(() => {
     const handlePop = () => {
-      const path = window.location.pathname;
+      const path = window.location.pathname.replace(/\/+$/, '') || '/';
       if (path === '/about') setView('about');
       else if (path === '/privacy') setView('privacy');
       else if (path === '/terms') setView('terms');
@@ -938,9 +938,9 @@ export default function App() {
                 <nav aria-label="Legal" className="flex flex-col items-center justify-center pt-4 sm:pl-5 sm:pt-0">
                   <p className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Legal</p>
                   <div className="flex items-center justify-center gap-3">
-                    <a href="/privacy" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Privacy Policy</a>
+                    <a href="/privacy/" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Privacy Policy</a>
                     <span className="text-[10px] text-gray-500 dark:text-slate-400">·</span>
-                    <a href="/terms" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Terms of Service</a>
+                    <a href="/terms/" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Terms of Service</a>
                   </div>
                 </nav>
                 </div>

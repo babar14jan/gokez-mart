@@ -183,9 +183,9 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
         App Version: v0.0.1
       </p>
       <div className="flex items-center justify-center gap-3">
-        <button onClick={() => navigate('/privacy')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Privacy Policy</button>
+        <button onClick={() => navigate('/privacy/')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Privacy Policy</button>
         <span className="text-gray-500 dark:text-slate-400 text-[10px]">·</span>
-        <button onClick={() => navigate('/terms')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Terms of Service</button>
+        <button onClick={() => navigate('/terms/')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Terms of Service</button>
       </div>
       <span className="text-[11px] text-gray-500 dark:text-slate-400">
         A product of{' '}
@@ -564,7 +564,7 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               <p className="text-[10px] text-gray-500 dark:text-slate-400">Complaint or concern about your data or service</p>
             </div>
             <button
-              onClick={() => navigate('/grievance')}
+              onClick={() => navigate('/grievance/')}
               className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 px-2.5 py-1 rounded-lg hover:bg-violet-100 transition-colors flex-shrink-0">
               Open
             </button>
@@ -603,7 +603,7 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
         </div>
 
         <button
-          onClick={() => navigate('/feedback')}
+          onClick={() => navigate('/feedback/')}
           className="w-full flex items-center justify-between px-4 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors">
           <div className="flex items-center gap-3">
             <span className="text-xl">⭐</span>

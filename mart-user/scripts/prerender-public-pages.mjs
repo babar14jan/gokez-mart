@@ -9,35 +9,35 @@ const source = readFileSync(join(dist, 'index.html'), 'utf8');
 
 const pages = [
   {
-    path: '/about',
+    path: '/about/',
     title: 'About Gokez Mart | Shop Local. Support Local.',
     description: 'About Gokez Mart, an online marketplace for ordering everyday essentials from nearby stores.',
     heading: 'About Gokez Mart',
     content: 'Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.',
   },
   {
-    path: '/privacy',
+    path: '/privacy/',
     title: 'Privacy Policy | Gokez Mart',
     description: 'How Gokez Mart collects, uses and protects your personal data when you shop with local stores.',
     heading: 'Privacy Policy',
     content: 'Read how Gokez Mart collects, uses and protects personal data for local shopping and delivery.',
   },
   {
-    path: '/terms',
+    path: '/terms/',
     title: 'Terms of Service | Gokez Mart',
     description: 'The terms that apply when you use Gokez Mart, the platform operated by Gokez Technologies that connects you with local stores.',
     heading: 'Terms of Service',
     content: 'Read the terms that apply when you use Gokez Mart for local shopping and delivery.',
   },
   {
-    path: '/grievance',
+    path: '/grievance/',
     title: 'Grievance Redressal | Gokez Mart',
     description: 'Raise a grievance with Gokez Mart about an order, delivery or store, and track the response from the company that operates the platform.',
     heading: 'Grievance Redressal',
     content: 'Raise a grievance with Gokez Mart about an order, delivery, or store.',
   },
   {
-    path: '/feedback',
+    path: '/feedback/',
     title: 'Feedback | Gokez Mart',
     description: 'Tell Gokez Mart about your shopping or delivery experience, so the platform connecting you with local stores can be improved.',
     heading: 'Feedback',

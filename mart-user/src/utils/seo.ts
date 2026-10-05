@@ -42,31 +42,31 @@ const ROUTES: Record<SeoView, RouteMeta> = {
   about: {
     title: `About ${BRAND} | ${SLOGAN}`,
     description: `About ${BRAND}, an online marketplace for ordering everyday essentials from nearby stores.`,
-    path: '/about',
+    path: '/about/',
     indexable: true,
   },
   privacy: {
     title: `Privacy Policy | ${BRAND}`,
     description: `How ${BRAND} collects, uses and protects your personal data when you shop with local stores on ${SITE_ORIGIN.replace('https://', '')}.`,
-    path: '/privacy',
+    path: '/privacy/',
     indexable: true,
   },
   terms: {
     title: `Terms of Service | ${BRAND}`,
     description: `The terms that apply when you use ${BRAND}, the platform operated by Gokez Technologies Pvt. Ltd. that connects you with local stores.`,
-    path: '/terms',
+    path: '/terms/',
     indexable: true,
   },
   grievance: {
     title: `Grievance Redressal | ${BRAND}`,
     description: `Raise a grievance with ${BRAND} about an order, delivery or store, and track the response from the company that operates the platform.`,
-    path: '/grievance',
+    path: '/grievance/',
     indexable: true,
   },
   feedback: {
     title: `Feedback | ${BRAND}`,
     description: `Tell ${BRAND} about your shopping or delivery experience, so the platform connecting you with local stores can be improved.`,
-    path: '/feedback',
+    path: '/feedback/',
     indexable: true,
   },
 
@@ -200,7 +200,11 @@ export function applySeo(view: SeoView, opts: { checkoutActive?: boolean } = {})
 export const indexableRoutes = (Object.keys(ROUTES) as SeoView[]).filter(v => ROUTES[v].indexable);
 
 /** The canonical path list the sitemap must match, for the build-time guard. */
-export const publicPaths = (): string[] => [...PUBLIC_PATHS].sort();
+export const publicPaths = (): string[] =>
+  (Object.values(ROUTES) as RouteMeta[])
+    .filter(route => route.indexable && route.path !== null)
+    .map(route => route.path as string)
+    .sort();
 
 /** Exposed so the guard can assert the homepage keeps its trailing slash. */
 export const canonicalFor = absoluteUrl;
