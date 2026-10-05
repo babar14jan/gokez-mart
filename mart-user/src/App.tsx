@@ -931,7 +931,7 @@ export default function App() {
                     </a>
                     <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
                       <Mail className="h-4 w-4" />
-                      <span>Email</span>
+                      <span className="break-all text-center">{GOKEZ_SUPPORT.email}</span>
                     </a>
                   </div>
                 </section>
