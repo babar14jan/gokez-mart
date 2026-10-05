@@ -18,11 +18,12 @@ ALTER TABLE mart_store_applications
 
 -- Gokez Mart is subscription-only. Existing monthly fee values are retained;
 -- the commission setting is retired and cannot be selected for new stores.
+ALTER TABLE mart_stores DROP CONSTRAINT IF EXISTS mart_stores_revenue_model_check;
+
 UPDATE mart_stores
 SET revenue_model = 'subscription', commission_percent = 0
 WHERE revenue_model IN ('commission', 'flat', 'both');
 
-ALTER TABLE mart_stores DROP CONSTRAINT IF EXISTS mart_stores_revenue_model_check;
 ALTER TABLE mart_stores
   ADD CONSTRAINT mart_stores_revenue_model_check
   CHECK (revenue_model = 'subscription');
