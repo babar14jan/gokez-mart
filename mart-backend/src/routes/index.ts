@@ -46,6 +46,8 @@ router.get('/admin/stores',                    authenticate, ctrl.adminGetStores
 router.post('/admin/stores',                   authenticate, requireSuperAdmin, ctrl.adminCreateStore);
 router.put('/admin/stores/:id',                authenticate, requireSuperAdmin, ctrl.adminUpdateStore);
 router.put('/admin/stores/:id/settings',       authenticate, ctrl.adminUpdateStoreSettings);
+router.get('/admin/store-subscriptions',       authenticate, requireSuperAdmin, ctrl.adminGetStoreSubscriptions);
+router.put('/admin/stores/:id/subscription',   authenticate, requireSuperAdmin, ctrl.adminUpdateStoreSubscription);
 
 // ── Store applications (public apply + super_admin manage) ───────────────────
 router.post('/store-applications',             ctrl.submitStoreApplication);

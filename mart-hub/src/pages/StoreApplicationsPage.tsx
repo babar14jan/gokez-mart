@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Store, CheckCircle, XCircle, Clock, Phone, MapPin, User, MessageSquare, Loader2 } from 'lucide-react';
+import { Store, CheckCircle, XCircle, Clock, Phone, MapPin, User, MessageSquare, Loader2, ShieldCheck } from 'lucide-react';
 import { storeApplicationsApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -10,6 +10,13 @@ interface Application {
   phone: string;
   area: string;
   message: string | null;
+  productCategories: string[];
+  gstStatus: string;
+  gstin: string | null;
+  fssaiStatus: string;
+  fssaiNumber: string | null;
+  localPermissionStatus: string;
+  agreementVersion: string | null;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }
@@ -132,6 +139,12 @@ export default function StoreApplicationsPage() {
                         <span className="italic">{app.message}</span>
                       </div>
                     )}
+                    <div className="sm:col-span-2 rounded-xl border border-gray-100 bg-gray-50 p-2.5 text-xs text-gray-600 dark:border-slate-700 dark:bg-slate-700/50 dark:text-slate-300">
+                      <div className="flex items-center gap-1.5 font-semibold text-gray-800 dark:text-white"><ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Compliance declaration</div>
+                      <p className="mt-1">Categories: {app.productCategories?.join(', ') || 'Not provided'}</p>
+                      <p>GST: {app.gstStatus}{app.gstin ? ` (${app.gstin})` : ''} · FSSAI: {app.fssaiStatus}{app.fssaiNumber ? ` (${app.fssaiNumber})` : ''}</p>
+                      <p>Local permission: {app.localPermissionStatus} · Agreement: {app.agreementVersion || 'Not recorded'}</p>
+                    </div>
                   </div>
 
                   {/* Actions — only for pending */}

@@ -18,6 +18,7 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
 const StoresPage = lazy(() => import('./pages/StoresPage'));
+const SubscriptionsPage = lazy(() => import('./pages/SubscriptionsPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const CompliancePage = lazy(() => import('./pages/CompliancePage'));
 const MorePage = lazy(() => import('./pages/MorePage'));
@@ -37,7 +38,7 @@ const CarouselPage = lazy(() => import('./pages/CarouselPage'));
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/settings', '/stores', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/settings', '/stores', '/subscriptions', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/customers', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -96,6 +97,7 @@ export default function App() {
         <Route path="/analytics"       element={<ProtectedRoute path="/analytics"><AnalyticsPage /></ProtectedRoute>} />
         <Route path="/settings"        element={<ProtectedRoute path="/settings"><SettingsPage /></ProtectedRoute>} />
         <Route path="/stores"          element={<ProtectedRoute path="/stores"><StoresPage /></ProtectedRoute>} />
+        <Route path="/subscriptions"   element={<ProtectedRoute path="/subscriptions"><SubscriptionsPage /></ProtectedRoute>} />
         <Route path="/users"           element={<ProtectedRoute path="/users"><UsersPage /></ProtectedRoute>} />
         <Route path="/compliance"      element={<ProtectedRoute path="/compliance"><CompliancePage /></ProtectedRoute>} />
         <Route path="/profile"         element={<ProtectedRoute path="/profile"><ProfilePage /></ProtectedRoute>} />

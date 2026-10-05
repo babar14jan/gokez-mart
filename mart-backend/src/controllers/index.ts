@@ -12,6 +12,7 @@ import { OrderService } from '../services/order.service';
 import { SettingsService } from '../services/settings.service';
 import { ZoneService } from '../services/zone.service';
 import { StoreService } from '../services/store.service';
+import { StoreSubscriptionService, StoreSubscriptionStatus } from '../services/storeSubscription.service';
 import { TeamService } from '../services/team.service';
 import { CustomerAuthService } from '../services/customerAuth.service';
 import { CustomerRequest } from '../middleware';
@@ -257,7 +258,11 @@ export const getZones = asyncHandler(async (_req: Request, res: Response) => {
 
 export const getStores = asyncHandler(async (_req: Request, res: Response) => {
   const stores = await StoreService.findAll();
-  res.json({ success: true, data: stores.filter(s => s.isActive) });
+  const activeStores = [];
+  for (const store of stores) {
+    if (store.isActive && await StoreSubscriptionService.isActive(store.id)) activeStores.push(store);
+  }
+  res.json({ success: true, data: activeStores });
 });
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
@@ -284,6 +289,10 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
   }
   if (!admin.is_active) {
     res.status(403).json({ success: false, error: 'Your account has been deactivated. Contact your administrator.' });
+    return;
+  }
+  if (admin.role !== 'super_admin' && !(await StoreSubscriptionService.adminHasActiveSubscription(admin.id))) {
+    res.status(403).json({ success: false, error: 'Your store subscription is not active. Contact your administrator.' });
     return;
   }
   await query(`UPDATE mart_admins SET last_login_at = NOW() WHERE id = $1`, [admin.id]);
@@ -850,6 +859,7 @@ export const adminGetStores = asyncHandler(async (req: AdminRequest, res: Respon
 
 export const adminCreateStore = asyncHandler(async (req: AdminRequest, res: Response) => {
   const store = await StoreService.create(req.body);
+  await StoreSubscriptionService.createPending(store.id, store.monthlyFee, req.admin!.id);
   // Set estimated_delivery setting for new store
   if (req.body.estimatedDelivery) {
     await SettingsService.update(store.id, 'estimated_delivery', req.body.estimatedDelivery);
@@ -858,12 +868,32 @@ export const adminCreateStore = asyncHandler(async (req: AdminRequest, res: Resp
 });
 
 export const adminUpdateStore = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (req.body.isLive === true && !(await StoreSubscriptionService.isActive(req.params.id))) {
+    res.status(400).json({ success: false, error: 'Activate the store subscription before taking the store live' }); return;
+  }
   const store = await StoreService.update(req.params.id, req.body);
   if (!store) { res.status(404).json({ success: false, error: 'Store not found' }); return; }
   if (req.body.estimatedDelivery) {
     await SettingsService.update(req.params.id, 'estimated_delivery', req.body.estimatedDelivery);
   }
   res.json({ success: true, data: store });
+});
+
+export const adminGetStoreSubscriptions = asyncHandler(async (_req: AdminRequest, res: Response) => {
+  const subscriptions = await StoreSubscriptionService.findAll();
+  res.json({ success: true, data: subscriptions });
+});
+
+export const adminUpdateStoreSubscription = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { planName, amount, status, startsAt, endsAt, paymentReference, notes } = req.body;
+  const validStatuses: StoreSubscriptionStatus[] = ['pending', 'active', 'suspended', 'expired', 'cancelled'];
+  if (typeof planName !== 'string' || !planName.trim() || !Number.isFinite(Number(amount)) || Number(amount) < 0 || !validStatuses.includes(status)) {
+    res.status(400).json({ success: false, error: 'Plan name, non-negative amount and valid status are required' }); return;
+  }
+  const subscription = await StoreSubscriptionService.save(req.params.id, {
+    planName, amount: Number(amount), status, startsAt: startsAt || null, endsAt: endsAt || null, paymentReference, notes,
+  }, req.admin!.id);
+  res.json({ success: true, data: subscription });
 });
 
 // Store manager updates their own store settings (hours, logo, support phone)

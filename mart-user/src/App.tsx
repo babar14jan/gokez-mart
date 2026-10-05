@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Search, X, CheckCircle, FileText, Info, Mail, Phone, ShieldCheck } from 'lucide-react';
+import { Search, X, CheckCircle, Mail, Phone } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -921,37 +921,29 @@ export default function App() {
           {/* Footer */}
           <footer className="mt-8 border-t-2 border-emerald-200 bg-white/80 pb-5 pt-6 dark:border-emerald-900/60 dark:bg-slate-900/70">
             <div className="mx-auto max-w-xl">
-              <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Support</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`}
-                  className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
-                  <Phone className="h-4 w-4" />
-                  <span>Call {GOKEZ_SUPPORT.phone}</span>
-                </a>
-                <a href={`mailto:${GOKEZ_SUPPORT.email}`}
-                  className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gray-900 px-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
-                  <Mail className="h-4 w-4" />
-                  <span>Email support</span>
-                </a>
-              </div>
-
-              <nav aria-label="Information" className="mt-5 border-t border-gray-200 pt-4 dark:border-slate-700">
-                <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Explore</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <a href="/about" className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-200 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400">
-                    <Info className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    About
-                  </a>
-                  <a href="/privacy" className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-200 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    Privacy
-                  </a>
-                  <a href="/terms" className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 dark:text-slate-200 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400">
-                    <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    Terms
-                  </a>
+              <div className="grid grid-cols-1 divide-y divide-gray-200 dark:divide-slate-700 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <section className="pb-5 sm:pr-5 sm:pb-0">
+                  <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Contact Gokez Technologies</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
+                      <Phone className="h-4 w-4" />
+                      <span>{GOKEZ_SUPPORT.phone}</span>
+                    </a>
+                    <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
+                      <Mail className="h-4 w-4" />
+                      <span>Email</span>
+                    </a>
+                  </div>
+                </section>
+                <nav aria-label="Legal" className="flex flex-col items-center justify-center pt-4 sm:pl-5 sm:pt-0">
+                  <p className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Legal</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <a href="/privacy" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Privacy Policy</a>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400">·</span>
+                    <a href="/terms" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Terms of Service</a>
+                  </div>
+                </nav>
                 </div>
-              </nav>
 
               <p className="mt-5 text-center text-[11px] text-gray-500 dark:text-slate-400">
                 &copy; {new Date().getFullYear()} {BRAND_NAME}{' · '}A product of{' '}

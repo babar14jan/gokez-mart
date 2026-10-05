@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { query } from '../database/db';
+import { StoreSubscriptionService } from '../services/storeSubscription.service';
 
 export interface AdminRequest extends Request {
   admin?: { id: string; username: string; role: string; storeId: string | null };
@@ -83,6 +84,10 @@ export const authenticate = async (req: AdminRequest, res: Response, next: NextF
   );
   if (sessionResult.rows.length === 0) {
     res.status(401).json({ success: false, error: 'Session expired or revoked' });
+    return;
+  }
+  if (payload.role !== 'super_admin' && !(await StoreSubscriptionService.adminHasActiveSubscription(payload.id))) {
+    res.status(403).json({ success: false, error: 'Your store subscription is not active. Contact your administrator.' });
     return;
   }
   req.admin = {

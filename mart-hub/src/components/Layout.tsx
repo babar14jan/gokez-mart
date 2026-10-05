@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, Tag, Image as ImageIcon, ClipboardList,
   Users, Settings, Shield, QrCode, Boxes,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
-  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare,
+  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
@@ -32,6 +32,7 @@ export const NAV_ALL = [
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
   { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Stores',             href: '/stores',              icon: LayoutDashboard, roles: ['super_admin'] },
+  { label: 'Subscriptions',      href: '/subscriptions',       icon: CreditCard,      roles: ['super_admin'] },
   { label: 'Store Requests', href: '/store-applications',  icon: Users,           roles: ['super_admin'] },
   { label: 'Users',              href: '/users',               icon: Users,           roles: ['super_admin'] },
   { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'] },

@@ -153,6 +153,12 @@ export const storesApi = {
     api.put(`/admin/stores/${id}/settings`, data),
 };
 
+export const subscriptionsApi = {
+  getAll: () => api.get('/admin/store-subscriptions'),
+  update: (storeId: string, data: { planName: string; amount: number; status: 'pending' | 'active' | 'suspended' | 'expired' | 'cancelled'; startsAt: string | null; endsAt: string | null; paymentReference?: string; notes?: string }) =>
+    api.put(`/admin/stores/${storeId}/subscription`, data),
+};
+
 export const storeApplicationsApi = {
   getAll: () => api.get('/admin/store-applications'),
   update: (id: string, status: 'approved' | 'rejected') => api.put(`/admin/store-applications/${id}`, { status }),

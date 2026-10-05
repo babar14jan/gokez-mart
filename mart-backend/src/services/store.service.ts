@@ -72,7 +72,13 @@ export class StoreService {
               s.created_at as "createdAt"
        FROM mart_stores s
        JOIN mart_zones z ON z.store_id = s.id
-       WHERE z.id = $1 AND s.is_active = true`,
+       WHERE z.id = $1 AND s.is_active = true
+         AND EXISTS (
+           SELECT 1 FROM mart_store_subscriptions ss
+           WHERE ss.store_id = s.id AND ss.status = 'active'
+             AND (ss.starts_at IS NULL OR ss.starts_at <= NOW())
+             AND (ss.ends_at IS NULL OR ss.ends_at > NOW())
+         )`,
       [zoneId]
     );
     return result.rows[0] || null;
