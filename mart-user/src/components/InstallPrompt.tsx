@@ -103,12 +103,12 @@ export default function InstallPrompt() {
           <div className="flex items-start gap-3">
             <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-12 h-12 rounded-xl flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-bold leading-tight">Add Gokez MART to Home Screen</p>
+              <p className="text-sm font-bold leading-tight">Add Gokez Mart to Home Screen</p>
               <p className="text-xs text-slate-400 mt-0.5">A simple browser shortcut for quicker access. No app store download needed.</p>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <button onClick={handleAndroidInstall} aria-label="Add Gokez MART to Home Screen"
+            <button onClick={handleAndroidInstall} aria-label="Add Gokez Mart to Home Screen"
               className="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors">
               Add to Home Screen
             </button>
@@ -132,7 +132,7 @@ export default function InstallPrompt() {
               <div className="flex items-center gap-3">
                 <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-10 h-10 rounded-xl" />
                 <div>
-                  <p id="ios-install-title" className="text-sm font-bold text-gray-900 dark:text-white">Add Gokez MART to Home Screen</p>
+                  <p id="ios-install-title" className="text-sm font-bold text-gray-900 dark:text-white">Add Gokez Mart to Home Screen</p>
                   <p className="text-xs text-gray-500 dark:text-slate-400">3 quick steps</p>
                 </div>
               </div>
@@ -185,7 +185,7 @@ export default function InstallPrompt() {
             </div>
 
             <p className="text-[10px] text-gray-500 dark:text-slate-400 text-center mt-5">
-              Then open Gokez MART directly from your Home Screen anytime.
+              Then open Gokez Mart directly from your Home Screen anytime.
             </p>
           </div>
         </div>
@@ -197,11 +197,11 @@ export default function InstallPrompt() {
         <div className="bg-slate-900 text-white rounded-2xl shadow-2xl p-4 flex items-center gap-3">
           <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-12 h-12 rounded-xl flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold leading-tight">Add Gokez MART to Home Screen</p>
+            <p className="text-sm font-bold leading-tight">Add Gokez Mart to Home Screen</p>
             <p className="text-xs text-slate-400 mt-0.5">A simple browser shortcut for quicker access. No app store download needed.</p>
           </div>
           <div className="flex flex-col gap-1.5 flex-shrink-0">
-            <button onClick={() => setShowIOSGuide(true)} aria-label="Show Home Screen instructions for Gokez MART"
+            <button onClick={() => setShowIOSGuide(true)} aria-label="Show Home Screen instructions for Gokez Mart"
               className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors">
               How to
             </button>

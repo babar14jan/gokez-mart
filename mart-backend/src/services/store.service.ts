@@ -11,7 +11,7 @@ export interface MartStore {
   supportPhone: string | null;
   openingHours: Record<string, { open: string; close: string; closed: boolean }> | null;
   ownerName: string | null;
-  revenueModel: 'commission' | 'flat' | 'both';
+  revenueModel: 'subscription';
   commissionPercent: number;
   monthlyFee: number;
   createdAt: string;
@@ -24,6 +24,17 @@ export interface MartStoreApplication {
   phone: string;
   area: string;
   message: string | null;
+  productCategories: string[];
+  gstStatus: 'registered' | 'not_registered' | 'not_applicable' | 'unknown';
+  gstin: string | null;
+  fssaiStatus: 'registered' | 'not_registered' | 'not_applicable' | 'unknown';
+  fssaiNumber: string | null;
+  localPermissionStatus: 'available' | 'not_available' | 'not_applicable' | 'unknown';
+  merchantDeliveryConfirmed: boolean;
+  directPaymentConfirmed: boolean;
+  agreementVersion: string | null;
+  agreementAcceptedAt: string | null;
+  complianceDeclarationAcceptedAt: string | null;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }
@@ -83,7 +94,7 @@ export class StoreService {
                  monthly_fee::float as "monthlyFee",
                  created_at as "createdAt"`,
       [id, data.name, data.address || null, data.ownerName || null,
-       data.revenueModel || 'commission', data.commissionPercent || 10, data.monthlyFee || 0]
+      'subscription', 0, data.monthlyFee || 0]
     );
     return result.rows[0];
   }
@@ -129,13 +140,30 @@ export class StoreService {
 
   static async createApplication(data: {
     storeName: string; ownerName: string; phone: string; area: string; message?: string;
+    productCategories: string[]; gstStatus: MartStoreApplication['gstStatus']; gstin?: string;
+    fssaiStatus: MartStoreApplication['fssaiStatus']; fssaiNumber?: string;
+    localPermissionStatus: MartStoreApplication['localPermissionStatus'];
   }): Promise<MartStoreApplication> {
     const result = await query<MartStoreApplication>(
-      `INSERT INTO mart_store_applications (store_name, owner_name, phone, area, message)
-       VALUES ($1,$2,$3,$4,$5)
+      `INSERT INTO mart_store_applications
+         (store_name, owner_name, phone, area, message, product_categories,
+          gst_status, gstin, fssai_status, fssai_number, local_permission_status,
+          merchant_delivery_confirmed, direct_payment_confirmed, agreement_version,
+          agreement_accepted_at, compliance_declaration_accepted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,true,'1.0',NOW(),NOW())
        RETURNING id, store_name as "storeName", owner_name as "ownerName",
-                 phone, area, message, status, created_at as "createdAt"`,
-      [data.storeName, data.ownerName, data.phone, data.area, data.message || null]
+               phone, area, message, product_categories as "productCategories",
+               gst_status as "gstStatus", gstin, fssai_status as "fssaiStatus",
+               fssai_number as "fssaiNumber", local_permission_status as "localPermissionStatus",
+               merchant_delivery_confirmed as "merchantDeliveryConfirmed",
+               direct_payment_confirmed as "directPaymentConfirmed",
+               agreement_version as "agreementVersion",
+               agreement_accepted_at as "agreementAcceptedAt",
+               compliance_declaration_accepted_at as "complianceDeclarationAcceptedAt",
+               status, created_at as "createdAt"`,
+      [data.storeName, data.ownerName, data.phone, data.area, data.message || null,
+       data.productCategories, data.gstStatus, data.gstin || null, data.fssaiStatus,
+       data.fssaiNumber || null, data.localPermissionStatus]
     );
     return result.rows[0];
   }
@@ -143,7 +171,15 @@ export class StoreService {
   static async findAllApplications(): Promise<MartStoreApplication[]> {
     const result = await query<MartStoreApplication>(
       `SELECT id, store_name as "storeName", owner_name as "ownerName",
-              phone, area, message, status, created_at as "createdAt"
+              phone, area, message, product_categories as "productCategories",
+              gst_status as "gstStatus", gstin, fssai_status as "fssaiStatus",
+              fssai_number as "fssaiNumber", local_permission_status as "localPermissionStatus",
+              merchant_delivery_confirmed as "merchantDeliveryConfirmed",
+              direct_payment_confirmed as "directPaymentConfirmed",
+              agreement_version as "agreementVersion",
+              agreement_accepted_at as "agreementAcceptedAt",
+              compliance_declaration_accepted_at as "complianceDeclarationAcceptedAt",
+              status, created_at as "createdAt"
        FROM mart_store_applications ORDER BY created_at DESC`
     );
     return result.rows;

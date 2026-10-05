@@ -98,7 +98,7 @@ if (!/^<\?xml version="1\.0" encoding="UTF-8"\?>/.test(sitemap)) {
 }
 if (sitemap.charCodeAt(0) === 0xfeff) fail('public/sitemap.xml has a UTF-8 BOM');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
-const expected = ['/', '/privacy', '/terms', '/grievance', '/feedback']
+const expected = ['/', '/about', '/privacy', '/terms', '/grievance', '/feedback']
   .map(p => (p === '/' ? `${ORIGIN}/` : `${ORIGIN}${p}`));
 if (JSON.stringify(locs) !== JSON.stringify(expected)) {
   fail(`public/sitemap.xml URL set is wrong.\n      expected: ${expected.join(', ')}\n      actual:   ${locs.join(', ')}`);
@@ -210,7 +210,7 @@ for (const block of ld) {
   let data;
   try { data = JSON.parse(block); } catch (err) { fail(`JSON-LD is not valid JSON: ${err.message}`); continue; }
   const types = (data['@graph'] || [data]).map(n => n['@type']);
-  for (const required of ['Organization', 'WebSite', 'WebApplication']) {
+  for (const required of ['Organization', 'OnlineStore', 'WebSite', 'WebApplication', 'WebPage']) {
     if (!types.includes(required)) fail(`JSON-LD is missing @type ${required}`);
   }
   // Fabrication guard: MART is a platform, not one physical shop.
@@ -259,8 +259,9 @@ for (const file of [join(ROOT, 'index.html'), join(PUBLIC, 'manifest.json'), joi
 }
 for (const ref of referenced) {
   if (ref === '/' || ref.startsWith('/assets/') || ref.startsWith('/src/')) continue;
-  // SPA routes are served by the fallback, and the sw.js logo mention is a comment.
-  if (['/privacy', '/terms', '/grievance', '/feedback', '/index.html'].includes(ref)) continue;
+  // Public routes are pages, not files copied from public/. They are served by
+  // the SPA in development and prerendered into dist for production.
+  if (expected.map(url => url.replace(ORIGIN, '')).includes(ref) || ref === '/index.html') continue;
   if (!exists(join(PUBLIC, ref))) fail(`referenced asset ${ref} does not exist in public/`);
 }
 ok('every referenced static asset exists');
@@ -272,6 +273,19 @@ if (exists(DIST)) {
   }
   const dSitemap = read(join(DIST, 'sitemap.xml'));
   if (dSitemap !== sitemap) fail('dist/sitemap.xml differs from public/sitemap.xml');
+  for (const publicUrl of expected) {
+    const routePath = publicUrl.replace(ORIGIN, '');
+    const file = routePath === '/' ? join(DIST, 'index.html') : join(DIST, routePath.slice(1), 'index.html');
+    if (!exists(file)) {
+      fail(`prerendered public page is missing: ${file}`);
+      continue;
+    }
+    const pageHtml = read(file);
+    if (!pageHtml.includes(`<link rel="canonical" href="${publicUrl}"`)) {
+      fail(`prerendered public page ${file} has no canonical ${publicUrl}`);
+    }
+    if (!/<h1>[^<]+<\/h1>/.test(pageHtml)) fail(`prerendered public page ${file} has no fallback H1`);
+  }
   ok('dist contains robots.txt, sitemap.xml, manifest.json, sw.js, favicon.ico and an identical sitemap');
 } else {
   ok('dist/ not present — skipped build-output checks (run npm run build first)');

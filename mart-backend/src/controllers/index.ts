@@ -881,11 +881,21 @@ export const adminUpdateStoreSettings = asyncHandler(async (req: AdminRequest, r
 
 // Public: submit store application
 export const submitStoreApplication = asyncHandler(async (req: Request, res: Response) => {
-  const { storeName, ownerName, phone, area, message } = req.body;
+  const { storeName, ownerName, phone, area, message, productCategories, gstStatus, gstin,
+    fssaiStatus, fssaiNumber, localPermissionStatus, agreementAccepted, complianceDeclarationAccepted } = req.body;
   if (!storeName?.trim() || !ownerName?.trim() || !phone?.trim() || !area?.trim()) {
     res.status(400).json({ success: false, error: 'storeName, ownerName, phone and area are required' }); return;
   }
-  const app = await StoreService.createApplication({ storeName, ownerName, phone, area, message });
+  if (!Array.isArray(productCategories) || productCategories.length === 0 || !agreementAccepted || !complianceDeclarationAccepted) {
+    res.status(400).json({ success: false, error: 'Product category, agreement acceptance and compliance declaration are required' }); return;
+  }
+  if (!['registered', 'not_registered', 'not_applicable', 'unknown'].includes(gstStatus) ||
+      !['registered', 'not_registered', 'not_applicable', 'unknown'].includes(fssaiStatus) ||
+      !['available', 'not_available', 'not_applicable', 'unknown'].includes(localPermissionStatus)) {
+    res.status(400).json({ success: false, error: 'Invalid compliance status' }); return;
+  }
+  const app = await StoreService.createApplication({ storeName, ownerName, phone, area, message,
+    productCategories, gstStatus, gstin, fssaiStatus, fssaiNumber, localPermissionStatus });
   res.status(201).json({ success: true, data: app, message: 'Application submitted. We will review and contact you within 2-3 business days.' });
 });
 

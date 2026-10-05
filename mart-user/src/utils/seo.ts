@@ -11,14 +11,14 @@
 // exist in index.html, so nothing here depends on a new library or a router
 // change. robots.txt, manifest.json and the PWA start_url are untouched.
 
+import { BRAND_DESCRIPTION, BRAND_NAME as BRAND, BRAND_SLOGAN as SLOGAN } from '../constants/brand';
+
 const SITE_ORIGIN = 'https://mart.gokez.com';
-const BRAND = 'Gokez MART';
-const SLOGAN = 'Shop Local. Support Local.';
 
 // Matches the `View` union in App.tsx. Only the five public views are indexable;
 // everything else in this app is an authenticated or transactional surface.
 export type SeoView =
-  | 'home' | 'categories' | 'grievance' | 'feedback' | 'privacy' | 'terms'
+  | 'home' | 'about' | 'categories' | 'grievance' | 'feedback' | 'privacy' | 'terms'
   | 'notification-settings' | 'delete-account' | 'account' | 'orders' | 'checkout';
 
 interface RouteMeta {
@@ -30,14 +30,19 @@ interface RouteMeta {
   indexable: boolean;
 }
 
-const HOME_DESCRIPTION =
-  'Gokez MART connects you with nearby local stores. Shop from neighbourhood vendors, support local businesses, and order from the stores around you in Kolkata.';
+const HOME_DESCRIPTION = BRAND_DESCRIPTION;
 
 const ROUTES: Record<SeoView, RouteMeta> = {
   home: {
-    title: `${BRAND} | ${SLOGAN}`,
+    title: `${BRAND} – ${SLOGAN}`,
     description: HOME_DESCRIPTION,
     path: '/',
+    indexable: true,
+  },
+  about: {
+    title: `About ${BRAND} | ${SLOGAN}`,
+    description: `About ${BRAND}, an online marketplace for ordering everyday essentials from nearby stores.`,
+    path: '/about',
     indexable: true,
   },
   privacy: {

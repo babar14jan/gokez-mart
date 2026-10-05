@@ -1,5 +1,5 @@
 """
-Branded (logo-backed) QR generator for the Gokez MART print assets.
+Branded (logo-backed) QR generator for the Gokez Mart print assets.
 
 Encoding target: https://mart.gokez.com/?ch=qr
 

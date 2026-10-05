@@ -22,6 +22,7 @@ const UsersPage = lazy(() => import('./pages/UsersPage'));
 const CompliancePage = lazy(() => import('./pages/CompliancePage'));
 const MorePage = lazy(() => import('./pages/MorePage'));
 const ApplyPage = lazy(() => import('./pages/ApplyPage'));
+const MerchantTermsPage = lazy(() => import('./pages/MerchantTermsPage'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const StoreApplicationsPage = lazy(() => import('./pages/StoreApplicationsPage'));
 const CatalogPage = lazy(() => import('./pages/CatalogPage'));
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="/change-password" element={<ProtectedRoute path="/change-password"><ChangePasswordPage /></ProtectedRoute>} />
         <Route path="/more"             element={<ProtectedRoute path="/more"><MorePage /></ProtectedRoute>} />
         <Route path="/apply"            element={<ApplyPage />} />
+        <Route path="/merchant-terms"   element={<MerchantTermsPage />} />
         <Route path="/hub"              element={<LandingPage />} />
         <Route path="/landing"          element={<LandingPage />} />
         <Route path="/store-applications" element={<ProtectedRoute path="/store-applications"><StoreApplicationsPage /></ProtectedRoute>} />

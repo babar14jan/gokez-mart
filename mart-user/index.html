@@ -23,27 +23,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Gokez MART" />
+    <meta name="apple-mobile-web-app-title" content="Gokez Mart" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     <!-- Google Search Console Verification -->
     <meta name="google-site-verification" content="dLZncxjl6u3SsqYnWF8tX9bqGkso5LTe1B9G0FHSJC4" />
 
     <!-- Primary SEO -->
-    <!-- Brand: "Gokez MART" (all caps MART) with the slogan "Shop Local. Support Local."
+    <!-- Brand: "Gokez Mart" (all caps MART) with the slogan "Shop Local. Support Local."
          is the single public SEO identity for this site. gokez.com is the parent
          company and is referenced, never substituted for, this site's identity.
          Keep in sync with: public/sitemap.xml, public/manifest.json, title below. -->
-    <title>Gokez MART | Shop Local. Support Local.</title>
-    <meta name="description" content="Gokez MART connects you with nearby local stores. Shop from neighbourhood vendors, support local businesses, and order from the stores around you in Kolkata." />
+    <title>Gokez Mart – Shop Local. Support Local.</title>
+    <meta name="description" content="Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores." />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://mart.gokez.com/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Gokez MART" />
-    <meta property="og:title" content="Gokez MART | Shop Local. Support Local." />
-    <meta property="og:description" content="Gokez MART connects you with nearby local stores. Shop from neighbourhood vendors, support local businesses, and order from the stores around you in Kolkata." />
+    <meta property="og:site_name" content="Gokez Mart" />
+    <meta property="og:title" content="Gokez Mart – Shop Local. Support Local." />
+    <meta property="og:description" content="Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores." />
     <meta property="og:url" content="https://mart.gokez.com/" />
     <!-- Social card: 1000x1000 JPEG recompressed from mart_logo_new.png (679 KB -> 62 KB).
          The logo artwork itself is untouched. JPEG is used because WebP is not
@@ -52,25 +52,18 @@
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1000" />
     <meta property="og:image:height" content="1000" />
-    <meta property="og:image:alt" content="Gokez MART" />
+    <meta property="og:image:alt" content="Gokez Mart" />
     <meta property="og:locale" content="en_IN" />
 
     <!-- Twitter/X -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Gokez MART | Shop Local. Support Local." />
-    <meta name="twitter:description" content="Gokez MART connects you with nearby local stores. Shop from neighbourhood vendors, support local businesses, and order from the stores around you." />
+    <meta name="twitter:title" content="Gokez Mart – Shop Local. Support Local." />
+    <meta name="twitter:description" content="Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores." />
     <meta name="twitter:image" content="https://mart.gokez.com/mart_og.jpg" />
-    <meta name="twitter:image:alt" content="Gokez MART" />
+    <meta name="twitter:image:alt" content="Gokez Mart" />
 
-    <!-- Structured data.
-         Gokez MART is a platform that connects customers with independent local
-         stores, not a single physical grocery shop. The previous GroceryStore node
-         described one store (implied address, priceRange, servesCuisine,
-         hasOfferCatalog), which misrepresented the entity, so it is replaced by a
-         WebSite + WebApplication + Organization graph that reflects what the page
-         actually is. No address, telephone, opening hours, ratings, review counts,
-         prices or awards are asserted, because none are authoritative here.
-         gokez.com is referenced as the parent organization, not as this site. -->
+        <!-- Gokez Mart is a commerce platform, not a claim about a single physical
+          shop. This graph contains only verified parent-company and product data. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -79,29 +72,59 @@
           "@type": "Organization",
           "@id": "https://gokez.com/#organization",
           "name": "Gokez Technologies Pvt. Ltd.",
-          "url": "https://gokez.com/"
+          "legalName": "Gokez Technologies Pvt. Ltd.",
+          "url": "https://gokez.com/",
+          "description": "Gokez Technologies builds focused technology products for everyday life in India.",
+          "sameAs": [
+            "https://instagram.com/gokez.app",
+            "https://linkedin.com/company/gokez"
+          ]
+        },
+        {
+          "@type": "OnlineStore",
+          "@id": "https://mart.gokez.com/#organization",
+          "name": "Gokez Mart",
+          "alternateName": ["Gokez Mart", "Gokezmart"],
+          "url": "https://mart.gokez.com/",
+          "logo": "https://mart.gokez.com/mart_logo_new.png",
+          "description": "Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.",
+          "parentOrganization": { "@id": "https://gokez.com/#organization" },
+          "brand": {
+            "@type": "Brand",
+            "@id": "https://mart.gokez.com/#brand",
+            "name": "Gokez Mart"
+          }
         },
         {
           "@type": "WebSite",
           "@id": "https://mart.gokez.com/#website",
-          "name": "Gokez MART",
-          "alternateName": "Gokez MART",
+          "name": "Gokez Mart",
+          "alternateName": ["Gokez Mart", "Gokezmart"],
           "url": "https://mart.gokez.com/",
           "inLanguage": "en-IN",
-          "publisher": { "@id": "https://gokez.com/#organization" }
+          "publisher": { "@id": "https://mart.gokez.com/#organization" }
         },
         {
           "@type": "WebApplication",
           "@id": "https://mart.gokez.com/#application",
-          "name": "Gokez MART",
+          "name": "Gokez Mart",
           "url": "https://mart.gokez.com/",
-          "description": "Gokez MART connects customers with nearby local stores, letting people shop from neighbourhood vendors and support local businesses.",
+          "description": "Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.",
           "applicationCategory": "ShoppingApplication",
           "operatingSystem": "Any",
           "browserRequirements": "Requires JavaScript",
           "inLanguage": "en-IN",
-          "publisher": { "@id": "https://gokez.com/#organization" },
+          "publisher": { "@id": "https://mart.gokez.com/#organization" },
           "parentOrganization": { "@id": "https://gokez.com/#organization" }
+        },
+        {
+          "@type": "WebPage",
+          "@id": "https://mart.gokez.com/#webpage",
+          "name": "Gokez Mart – Shop Local. Support Local.",
+          "url": "https://mart.gokez.com/",
+          "description": "Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.",
+          "isPartOf": { "@id": "https://mart.gokez.com/#website" },
+          "about": { "@id": "https://mart.gokez.com/#organization" }
         }
       ]
     }
@@ -131,21 +154,22 @@
   <body>
     <!-- Static crawlable content for crawlers that do not execute JavaScript.
          It carries the site identity (h1), the one-line explanation of what
-         Gokez MART is, and the parent-company link. The React app takes over
+         Gokez Mart is, and the parent-company link. The React app takes over
          immediately: the .js class above hides this block before first paint, and
          src/main.tsx removes it from the DOM before the app renders, so a rendered
          page never contains this text or a second h1. -->
     <div class="seo-static" id="seo-static">
-      <h1>Gokez MART &mdash; Shop Local. Support Local.</h1>
-      <p>Gokez MART connects customers with nearby local stores, letting people shop from neighbourhood vendors and support the businesses in their own area.</p>
-      <p>Browse products from local stores, place an order, and have it delivered from a store near you in Kolkata.</p>
+      <h1>Gokez Mart</h1>
+      <p>Shop Local. Support Local.</p>
+      <p>Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.</p>
       <nav>
+        <a href="/about">About Gokez Mart</a>
         <a href="/privacy">Privacy Policy</a>
         <a href="/terms">Terms of Service</a>
         <a href="/grievance">Grievance Redressal</a>
         <a href="/feedback">Feedback</a>
       </nav>
-      <p>Gokez MART is a product of <a href="https://gokez.com/" rel="noopener">Gokez Technologies</a>.</p>
+      <p>Gokez Mart is a product of <a href="https://gokez.com/" rel="noopener">Gokez Technologies</a>.</p>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

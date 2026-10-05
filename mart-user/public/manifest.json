@@ -1,7 +1,7 @@
 {
-  "name": "Gokez MART",
-  "short_name": "Gokez MART",
-  "description": "Shop Local. Support Local. Gokez MART connects you with nearby local stores, letting you shop from neighbourhood vendors and support local businesses.",
+  "name": "Gokez Mart",
+  "short_name": "Gokez Mart",
+  "description": "Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

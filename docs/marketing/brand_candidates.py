@@ -1,7 +1,7 @@
 """
 Small-mark branded QR candidates for visual selection.
 
-Design goal: the Gokez MART wordmark must be *complete and legible* while
+Design goal: the Gokez Mart wordmark must be *complete and legible* while
 occupying as little of the code as possible.
 
 Why a small mark needs a tight white margin at all

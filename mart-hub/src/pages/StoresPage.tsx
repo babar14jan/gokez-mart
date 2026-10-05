@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, X, Loader2, Store, Clock, Upload, TrendingUp, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
+import { Plus, Pencil, X, Loader2, Store, Clock, Upload, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
 import { storesApi, productsApi, usersApi, teamApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -30,7 +30,7 @@ export default function StoresPage() {
   const [form, setForm] = useState({
     name: '', address: '', ownerName: '', supportPhone: '',
     estimatedDelivery: '10-15 mins', logoUrl: '',
-    revenueModel: 'commission', commissionPercent: '10', monthlyFee: '0',
+    monthlyFee: '0',
     openingHours: DEFAULT_HOURS as any,
   });
 
@@ -93,7 +93,7 @@ export default function StoresPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', address: '', ownerName: '', supportPhone: '', estimatedDelivery: '10-15 mins', logoUrl: '', revenueModel: 'commission', commissionPercent: '10', monthlyFee: '0', openingHours: DEFAULT_HOURS });
+    setForm({ name: '', address: '', ownerName: '', supportPhone: '', estimatedDelivery: '10-15 mins', logoUrl: '', monthlyFee: '0', openingHours: DEFAULT_HOURS });
     setManagerSearch(''); setManagerResults([]); setSelectedManager(null);
     setNewManager({ username: '', password: '', name: '', phone: '' });
     setManagerMode('search'); setCreatedStoreId(null);
@@ -105,8 +105,7 @@ export default function StoresPage() {
     setForm({
       name: s.name, address: s.address || '', ownerName: s.ownerName || '',
       supportPhone: s.supportPhone || '', estimatedDelivery: s.estimatedDelivery || '10-15 mins',
-      logoUrl: s.logoUrl || '', revenueModel: s.revenueModel || 'commission',
-      commissionPercent: String(s.commissionPercent || 10), monthlyFee: String(s.monthlyFee || 0),
+      logoUrl: s.logoUrl || '', monthlyFee: String(s.monthlyFee || 0),
       openingHours: s.openingHours || DEFAULT_HOURS,
     });
     setTab('details'); setShowModal(true);
@@ -130,8 +129,6 @@ export default function StoresPage() {
         ownerName: form.ownerName.trim() || undefined,
         supportPhone: form.supportPhone.trim() || undefined,
         logoUrl: form.logoUrl || undefined,
-        revenueModel: form.revenueModel,
-        commissionPercent: parseFloat(form.commissionPercent) || 10,
         monthlyFee: parseFloat(form.monthlyFee) || 0,
         openingHours: form.openingHours,
         estimatedDelivery: form.estimatedDelivery.trim(),
@@ -194,7 +191,7 @@ export default function StoresPage() {
                     {!s.isActive && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">Inactive</span>}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                    {s.revenueModel === 'commission' ? s.commissionPercent + '% commission' : s.revenueModel === 'flat' ? '₹' + s.monthlyFee + '/month' : s.commissionPercent + '% + ₹' + s.monthlyFee + '/month'}
+                    Subscription plan: ₹{s.monthlyFee}/month
                   </p>
                 </div>
                 {/* Live toggle */}
@@ -337,7 +334,7 @@ export default function StoresPage() {
 
             {/* Tabs */}
             <div className="flex border-b border-gray-100 dark:border-slate-700 flex-shrink-0 px-1">
-              {([['details', 'Details', Store], ['hours', 'Hours', Clock], ['revenue', 'Revenue', TrendingUp], ['manager', 'Manager', User]] as const).map(([id, label, Icon]) => (
+              {([['details', 'Details', Store], ['hours', 'Hours', Clock], ['revenue', 'Plan', CheckCircle], ['manager', 'Manager', User]] as const).map(([id, label, Icon]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors border-b-2 ${
                     tab === id
@@ -439,39 +436,17 @@ export default function StoresPage() {
               {/* ── Revenue tab ── */}
               {tab === 'revenue' && (
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    {[
-                      { id: 'commission', label: 'Commission per order', sub: 'Take % of each order', icon: '📊' },
-                      { id: 'flat', label: 'Flat monthly fee', sub: 'Fixed monthly subscription', icon: '📅' },
-                      { id: 'both', label: 'Commission + Monthly', sub: 'Both models combined', icon: '💰' },
-                    ].map(opt => (
-                      <label key={opt.id} className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${form.revenueModel === opt.id ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700 hover:border-gray-200'}`}>
-                        <span className="text-xl">{opt.icon}</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">{opt.label}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400">{opt.sub}</p>
-                        </div>
-                        <input type="radio" name="revenueModel" value={opt.id} checked={form.revenueModel === opt.id} onChange={() => setForm(f => ({ ...f, revenueModel: opt.id }))} className="accent-emerald-500" />
-                      </label>
-                    ))}
+                  <div className="rounded-2xl border-2 border-emerald-500 bg-emerald-50 p-4 dark:bg-emerald-900/20">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Monthly subscription</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Gokez Mart charges the merchant a fixed platform fee. Customer order payments remain with the merchant.</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(form.revenueModel === 'commission' || form.revenueModel === 'both') && (
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Commission %</label>
-                        <input type="number" value={form.commissionPercent} onChange={e => setForm(f => ({ ...f, commissionPercent: e.target.value }))} className={inp} placeholder="10" min="0" max="100" step="0.5" />
-                      </div>
-                    )}
-                    {(form.revenueModel === 'flat' || form.revenueModel === 'both') && (
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Monthly Fee (₹)</label>
-                        <input type="number" value={form.monthlyFee} onChange={e => setForm(f => ({ ...f, monthlyFee: e.target.value }))} className={inp} placeholder="0" min="0" />
-                      </div>
-                    )}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Monthly Fee (₹)</label>
+                    <input type="number" value={form.monthlyFee} onChange={e => setForm(f => ({ ...f, monthlyFee: e.target.value }))} className={inp} placeholder="0" min="0" />
                   </div>
                   <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-700 dark:text-blue-400">Store owner sees earnings after platform fee deduction in their dashboard.</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">This plan does not create a payout, settlement or commission arrangement for customer orders.</p>
                   </div>
                 </div>
               )}

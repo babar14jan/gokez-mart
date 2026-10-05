@@ -7,27 +7,34 @@ const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 round
 const BENEFITS = [
   { icon: '📱', title: 'Your store on every phone', sub: 'Customers order from you without leaving home' },
   { icon: '🏘️', title: 'Zone exclusivity', sub: 'Your area is yours — no competing store in your zone' },
-  { icon: '💰', title: 'Keep majority revenue', sub: 'Small platform fee, rest is yours' },
-  { icon: '🤝', title: 'Your customers stay yours', sub: 'We never use your customer data for other stores' },
+  { icon: '💰', title: 'Subscription access', sub: 'A fixed plan to use Gokez Mart' },
+  { icon: '🤝', title: 'Store-scoped dashboard', sub: 'Manage your store and its orders' },
   { icon: '⚡', title: 'Go live in minutes', sub: 'Simple setup — no tech knowledge needed' },
   { icon: '📊', title: 'Real-time dashboard', sub: 'Track orders, revenue and customers live' },
 ];
 
 export default function ApplyPage() {
-  const [form, setForm] = useState({ storeName: '', ownerName: '', phone: '', area: '', message: '' });
+  const [form, setForm] = useState({
+    storeName: '', ownerName: '', phone: '', area: '', message: '', productCategory: '',
+    gstStatus: 'unknown', gstin: '', fssaiStatus: 'unknown', fssaiNumber: '',
+    localPermissionStatus: 'unknown', agreementAccepted: false, complianceDeclarationAccepted: false,
+  });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.storeName.trim() || !form.ownerName.trim() || !form.phone.trim() || !form.area.trim()) {
+    if (!form.storeName.trim() || !form.ownerName.trim() || !form.phone.trim() || !form.area.trim() || !form.productCategory) {
       setError('Please fill all required fields'); return;
     }
     if (form.phone.replace(/\D/g, '').length < 10) { setError('Enter a valid 10-digit phone number'); return; }
+    if (!form.agreementAccepted || !form.complianceDeclarationAccepted) {
+      setError('Accept the merchant agreement and compliance declaration to continue.'); return;
+    }
     setLoading(true); setError('');
     try {
-      await api.post('/store-applications', form);
+      await api.post('/store-applications', { ...form, productCategories: [form.productCategory] });
       setSubmitted(true);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to submit. Please try again.');
@@ -135,6 +142,56 @@ export default function ApplyPage() {
             </div>
 
             <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Primary product category *</label>
+              <select value={form.productCategory} onChange={e => setForm(f => ({ ...f, productCategory: e.target.value }))} className={inp} required>
+                <option value="">Select a category</option>
+                <option value="fresh_vegetables">Fresh vegetables</option>
+                <option value="fresh_fruit">Fresh fruit</option>
+                <option value="grocery">Grocery and packaged goods</option>
+                <option value="dairy">Dairy</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">GST status *</label>
+                <select value={form.gstStatus} onChange={e => setForm(f => ({ ...f, gstStatus: e.target.value }))} className={inp}>
+                  <option value="unknown">Needs review</option>
+                  <option value="registered">GST registered</option>
+                  <option value="not_registered">Not GST registered</option>
+                  <option value="not_applicable">Declared not applicable</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">FSSAI status *</label>
+                <select value={form.fssaiStatus} onChange={e => setForm(f => ({ ...f, fssaiStatus: e.target.value }))} className={inp}>
+                  <option value="unknown">Needs review</option>
+                  <option value="registered">Registered/licensed</option>
+                  <option value="not_registered">Not registered</option>
+                  <option value="not_applicable">Declared not applicable</option>
+                </select>
+              </div>
+            </div>
+
+            {(form.gstStatus === 'registered' || form.fssaiStatus === 'registered') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {form.gstStatus === 'registered' && <input type="text" value={form.gstin} onChange={e => setForm(f => ({ ...f, gstin: e.target.value }))} className={inp} placeholder="GSTIN" />}
+                {form.fssaiStatus === 'registered' && <input type="text" value={form.fssaiNumber} onChange={e => setForm(f => ({ ...f, fssaiNumber: e.target.value }))} className={inp} placeholder="FSSAI registration/licence no." />}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Local trade/establishment permission status *</label>
+              <select value={form.localPermissionStatus} onChange={e => setForm(f => ({ ...f, localPermissionStatus: e.target.value }))} className={inp}>
+                <option value="unknown">Needs review</option>
+                <option value="available">Available</option>
+                <option value="not_available">Not currently available</option>
+                <option value="not_applicable">Declared not applicable</option>
+              </select>
+            </div>
+
+            <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                 <MessageSquare className="w-3.5 h-3.5" /> Tell us about your store (optional)
               </label>
@@ -143,15 +200,24 @@ export default function ApplyPage() {
                 placeholder="What do you sell? How long have you been running? Any questions?" />
             </div>
 
+            <div className="space-y-3 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/40 p-3">
+              <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={form.agreementAccepted} onChange={e => setForm(f => ({ ...f, agreementAccepted: e.target.checked }))} className="mt-0.5 accent-emerald-500" />
+                <span>I accept the <a href="/merchant-terms" target="_blank" rel="noopener noreferrer" className="text-emerald-600 dark:text-emerald-400 underline">Merchant Platform Agreement</a>, including merchant-direct payment and merchant delivery responsibilities.</span>
+              </label>
+              <label className="flex items-start gap-2 text-xs text-gray-600 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={form.complianceDeclarationAccepted} onChange={e => setForm(f => ({ ...f, complianceDeclarationAccepted: e.target.checked }))} className="mt-0.5 accent-emerald-500" />
+                <span>I confirm that the details supplied are accurate and that I will maintain every registration, licence, permission, tax obligation and product restriction applicable to my store.</span>
+              </label>
+            </div>
+
             <button type="submit" disabled={loading}
               className="w-full flex items-center justify-center gap-2 py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm text-sm">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</> : <>Submit Application <ArrowRight className="w-4 h-4" /></>}
             </button>
 
             <p className="text-[10px] text-gray-500 text-center">
-              By applying you agree to our{' '}
-              <a href="https://gokez.com" target="_blank" rel="noopener noreferrer" className="underline">Terms</a>.
-              We'll never share your information.
+              Applications are manually reviewed. Gokez Mart does not determine whether a particular licence, registration or tax status applies to your store.
             </p>
           </form>
         </div>

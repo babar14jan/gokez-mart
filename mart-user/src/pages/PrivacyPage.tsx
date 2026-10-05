@@ -1,5 +1,5 @@
 export default function PrivacyPage({ embed = false }: { embed?: boolean } = {}) {
-  const updated = 'September 2026';
+  const updated = 'October 2026';
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       {!embed && (
@@ -18,7 +18,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">1. Who We Are</h2>
-            <p>GokezMart is operated by <strong className="text-gray-800 dark:text-slate-200">Gokez Technologies Pvt. Ltd.</strong>, a company registered in India. We provide a hyperlocal grocery delivery service in Kolkata. This policy explains how we collect, use, and protect your personal data when you use our app or website.</p>
+            <p>Gokez Mart is operated by <strong className="text-gray-800 dark:text-slate-200">Gokez Technologies Pvt. Ltd.</strong>. We provide marketplace technology that connects customers with independent local stores. This policy explains how we collect, use and disclose personal data when you use our app or website.</p>
           </section>
 
           <section>
@@ -26,9 +26,9 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
             <ul className="list-disc list-inside space-y-1.5">
               <li><strong className="text-gray-700 dark:text-slate-300">Mobile number</strong> — used for OTP login and order communication</li>
               <li><strong className="text-gray-700 dark:text-slate-300">Name & address</strong> — used for delivery</li>
-              <li><strong className="text-gray-700 dark:text-slate-300">Location (GPS)</strong> — used only to detect your delivery zone. Never stored or tracked continuously</li>
-              <li><strong className="text-gray-700 dark:text-slate-300">Order history</strong> — items ordered, payment method, delivery address</li>
-              <li><strong className="text-gray-700 dark:text-slate-300">Device info</strong> — browser type, for push notification delivery</li>
+              <li><strong className="text-gray-700 dark:text-slate-300">Location and address</strong> — address and, when supplied, location coordinates used for zone checks, saved addresses and order delivery</li>
+              <li><strong className="text-gray-700 dark:text-slate-300">Order data</strong> — selected merchant, items, delivery preference, contact details, address, order status and stated payment method</li>
+              <li><strong className="text-gray-700 dark:text-slate-300">Device and usage data</strong> — browser/device information, notification subscription data, cookies or local storage, cart and attribution information</li>
             </ul>
           </section>
 
@@ -45,16 +45,16 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">4. Location Data</h2>
-            <p>We request location permission to automatically detect which delivery zone you are in (e.g. your area). We do <strong className="text-gray-700 dark:text-slate-300">not</strong> store your GPS coordinates. Location is used only at the moment of zone detection and during checkout. You can disable location access at any time from your Account → Settings.</p>
+            <p>Location permission is optional. If you grant it, we use your approximate or precise device location to check delivery-zone availability and may save coordinates submitted with an address or order to support delivery. We do not use the app for continuous background location tracking. You can decline permission or remove it in your device or browser settings.</p>
           </section>
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">5. Data Sharing</h2>
             <p>We do <strong className="text-gray-700 dark:text-slate-300">not</strong> sell your personal data. We share data only with:</p>
             <ul className="list-disc list-inside space-y-1.5 mt-2">
-              <li>Our delivery staff — name, phone, address for order fulfilment</li>
-              <li>Payment processors — only what is required to process your payment</li>
-              <li>Cloud infrastructure (Supabase, Render, Cloudflare) — for app hosting</li>
+              <li>The selected merchant and its authorised store or delivery personnel — the information necessary to accept, fulfil and deliver your order</li>
+              <li>Service providers that host, secure, support or send communications for the platform, under applicable contractual or legal safeguards</li>
+              <li>Authorities or others where required by law or necessary to protect users, merchants or the platform</li>
             </ul>
           </section>
 
@@ -105,7 +105,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">9. Security</h2>
-            <p>All data is encrypted in transit (HTTPS/TLS). OTPs expire in 10 minutes. JWT tokens expire in 90 days. We use Supabase (SOC 2 compliant) for database storage.</p>
+            <p>We use reasonable technical and organisational measures designed to protect personal data, including transport encryption where supported. No internet service can guarantee absolute security. Please keep OTPs and account access credentials confidential.</p>
           </section>
 
           <section>
@@ -114,7 +114,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
               <p className="font-semibold text-gray-800 dark:text-white mb-2">Gokez Technologies Pvt. Ltd.</p>
               <p className="text-gray-600 dark:text-slate-400">Email: <a href="mailto:support@gokez.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">support@gokez.com</a></p>
               <p className="text-gray-600 dark:text-slate-400">Kolkata, West Bengal, India</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">We acknowledge grievances within 24 hours and resolve within 30 days as required under DPDP Act, 2023.</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">Please include your contact details and a clear description of your request. We will review and respond in accordance with applicable law.</p>
             </div>
           </section>
 
