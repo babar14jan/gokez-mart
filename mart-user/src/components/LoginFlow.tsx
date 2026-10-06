@@ -102,7 +102,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     setLoading(true); setError('');
     try {
       await authApi.sendOtp(cleaned);
-      track('otp_requested');
+      track('otp_requested', { otpChannel: 'phone_call' });
       loginFlow.beginOtp(cleaned, !!pendingCheckout);
       setPhone(cleaned);
       setStep('otp');
@@ -118,6 +118,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     if (otp.length !== 6) { setError('Enter the 6-digit OTP'); return; }
     setLoading(true); setError('');
     try {
+      track('otp_entered', { otpChannel: 'phone_call' });
       const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp, getFunnelSessionId());
       track('login_verified');
       const { token, customer } = res.data.data;
@@ -146,6 +147,10 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
         setStep('profile');
       }
     } catch (err: any) {
+      track('otp_verification_failed', {
+        otpChannel: 'phone_call',
+        reason: err?.response?.status === 401 ? 'incorrect' : 'request_failed',
+      });
       if (!err?.response) setError('No internet connection. Please try again.');
       else setError(err?.response?.data?.error || 'Invalid OTP. Try again.');
     } finally { setLoading(false); }

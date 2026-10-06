@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Filter, TrendingDown } from 'lucide-react';
+import { AlertTriangle, Filter, Repeat2, TrendingDown, UserPlus } from 'lucide-react';
 import { customerLeadsApi } from '../services/api';
 import type { FunnelRange, FunnelSummary } from '../services/api';
 
@@ -54,7 +54,18 @@ export default function FunnelPanel({ range: controlledRange, from: controlledFr
       .finally(() => setLoading(false));
   }, [range, from, to]);
 
-  const stages = summary?.stages ?? [];
+  const canonical = summary?.analytics;
+  const stages = canonical?.sessionFunnel ?? summary?.stages ?? [];
+  const newVisitorShare = canonical ? pct(canonical.acquisition.newVisitors, canonical.acquisition.uniqueVisitors) : 0;
+  const returningVisitorShare = canonical ? pct(canonical.acquisition.returningVisitors, canonical.acquisition.uniqueVisitors) : 0;
+  const deliveredCustomers = canonical
+    ? canonical.customerLifecycle.newCustomers + canonical.customerLifecycle.returningCustomers
+    : 0;
+  const newCustomerShare = canonical ? pct(canonical.customerLifecycle.newCustomers, deliveredCustomers) : 0;
+  const returningCustomerShare = canonical ? pct(canonical.customerLifecycle.returningCustomers, deliveredCustomers) : 0;
+  const channelRows = canonical
+    ? canonical.channels.map(row => ({ channel: `${row.source} / ${row.medium}`, sessions: row.sessions, carts: row.cartSessions, ordered: row.orders }))
+    : (summary?.channels ?? []).map(row => ({ ...row, carts: null as number | null }));
   // Bars scale against the largest stage, not the first one. Keying off
   // stages[0] collapses every bar to its 6% floor on a period where nobody
   // requested an OTP but later stages still have counts.
@@ -71,7 +82,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
   const hasActivity = Boolean(
     summary &&
     (stages.some(s => s.count > 0) ||
-     summary.channels.some(c => c.sessions > 0) ||
+    channelRows.some(c => c.sessions > 0) ||
      summary.eventStages.some(s => s.sessions > 0) ||
      summary.cart.carts > 0 ||
      summary.cart.reachedCheckout > 0 ||
@@ -120,6 +131,62 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
         <p className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">No activity in this period yet.</p>
       ) : (
         <>
+          {canonical && (
+            <>
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { label: 'Sessions', value: canonical.acquisition.sessions, definition: 'Unique browsing sessions during the selected period.' },
+                { label: 'Unique visitors', value: canonical.acquisition.uniqueVisitors, definition: 'Distinct anonymous browser visitors during the selected period.' },
+                { label: 'Orders placed', value: canonical.orders.placed, definition: 'Orders created during the selected period.' },
+                { label: 'Orders delivered', value: canonical.orders.delivered, definition: 'Orders currently recorded as delivered from this order cohort.' },
+                { label: 'Orders paid', value: canonical.orders.paid, definition: 'Orders with cash or UPI payment collected on delivery.' },
+                { label: 'GMV', value: `₹${canonical.orders.gmv.toFixed(0)}`, definition: 'Non-cancelled order value from the authoritative orders table.' },
+              ].map(metric => (
+                <div key={metric.label} title={metric.definition} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40">
+                  <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{metric.value}</p>
+                  <p className="text-[10px] leading-tight text-gray-500 dark:text-slate-400">{metric.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mb-5 grid grid-cols-2 gap-2" aria-label="Visitor mix in the selected period">
+              <div title="New visitors: their first recorded visit was in the selected period." className="flex items-center gap-2 rounded-md border border-sky-100 bg-sky-50 px-3 py-2 dark:border-sky-900/60 dark:bg-sky-950/25">
+                <UserPlus className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{canonical.acquisition.newVisitors} <span className="text-xs font-semibold text-sky-700 dark:text-sky-300">{newVisitorShare}%</span></p>
+                  <p className="text-[10px] leading-tight text-gray-600 dark:text-slate-300">New visitors</p>
+                </div>
+              </div>
+              <div title="Returning visitors: they visited before the selected period and returned during it." className="flex items-center gap-2 rounded-md border border-violet-100 bg-violet-50 px-3 py-2 dark:border-violet-900/60 dark:bg-violet-950/25">
+                <Repeat2 className="h-4 w-4 shrink-0 text-violet-700 dark:text-violet-300" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{canonical.acquisition.returningVisitors} <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">{returningVisitorShare}%</span></p>
+                  <p className="text-[10px] leading-tight text-gray-600 dark:text-slate-300">Returning visitors</p>
+                </div>
+              </div>
+            </div>
+            <div className="mb-5">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Delivered customer mix</p>
+              <div className="grid grid-cols-2 gap-2" aria-label="New and returning delivered customers in the selected period">
+                <div title="New customers: their first delivered order was in the selected period. Guest checkouts are excluded because they cannot be reliably identified across orders." className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950/25">
+                  <UserPlus className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{canonical.customerLifecycle.newCustomers} <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{newCustomerShare}%</span></p>
+                    <p className="text-[10px] leading-tight text-gray-600 dark:text-slate-300">New customers</p>
+                  </div>
+                </div>
+                <div title="Returning customers: they had a delivered order before the selected period and another delivery in it. Guest checkouts are excluded because they cannot be reliably identified across orders." className="flex items-center gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 dark:border-indigo-900/60 dark:bg-indigo-950/25">
+                  <Repeat2 className="h-4 w-4 shrink-0 text-indigo-700 dark:text-indigo-300" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{canonical.customerLifecycle.returningCustomers} <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">{returningCustomerShare}%</span></p>
+                    <p className="text-[10px] leading-tight text-gray-600 dark:text-slate-300">Returning customers</p>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">Based on identified customers with a delivered order in the selected period.</p>
+            </div>
+            </>
+          )}
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Customer funnel · unique sessions</p>
           <div className="space-y-2">
             {stages.map((stage, i) => {
               const prev = i === 0 ? stage.count : stages[i - 1].count;
@@ -146,7 +213,54 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
             })}
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {canonical && canonical.reconciliation.unattributedOrderCount > 0 && (
+            <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/25 dark:text-amber-200">
+              {canonical.reconciliation.unattributedOrderCount} of {canonical.reconciliation.orderTableCount} orders cannot be linked to a session. They are retained in order totals but excluded from channel conversion until attribution is available.
+            </p>
+          )}
+
+          {canonical && (
+            <>
+              <div className="mt-5">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">OTP funnel</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Mobile interactions', value: canonical.otp.mobileInteractions },
+                    { label: 'OTP requests', value: canonical.otp.otpRequests },
+                    { label: 'OTP verified', value: canonical.otp.otpVerified },
+                  ].map(metric => (
+                    <div key={metric.label} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40">
+                      <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{metric.value}</p>
+                      <p className="text-[10px] leading-tight text-gray-500 dark:text-slate-400">{metric.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">Mobile interactions and verified are unique sessions; OTP requests are attempts.</p>
+              </div>
+
+              <div className="mt-5">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Order fulfilment · authoritative orders</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    { label: 'Orders placed', value: canonical.orders.placed },
+                    { label: 'Accepted', value: canonical.orders.accepted },
+                    { label: 'Preparing', value: canonical.orders.preparing },
+                    { label: 'Out for delivery', value: canonical.orders.outForDelivery },
+                    { label: 'Delivered', value: canonical.orders.delivered },
+                    { label: 'Paid', value: canonical.orders.paid },
+                    { label: 'Cancelled', value: canonical.orders.cancelled },
+                  ].map(metric => (
+                    <div key={metric.label} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40">
+                      <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{metric.value}</p>
+                      <p className="text-[10px] leading-tight text-gray-500 dark:text-slate-400">{metric.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {!canonical && <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-800/60 dark:bg-amber-950/25">
               <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700 dark:text-amber-400" />
               <p className="text-xs leading-snug text-amber-900 dark:text-amber-200">
@@ -159,9 +273,9 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                 <span className="font-bold">{summary.dropoff.verifiedNeverOrdered}</span> verified the number but never placed an order
               </p>
             </div>
-          </div>
+          </div>}
 
-          {summary.daily.length > 0 && (
+          {!canonical && summary.daily.length > 0 && (
             <div className="mt-4">
               <div className="mb-1.5 flex items-center justify-between">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
@@ -192,10 +306,10 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
             </div>
           )}
 
-          {summary.channels.length > 0 && (
+          {channelRows.length > 0 && (
             <div className="mt-4">
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-                Where visits came from
+                Marketing attribution · unique sessions
               </p>
               <div className="overflow-hidden rounded-lg border border-gray-100 dark:border-slate-700">
                 <table className="w-full text-left text-xs">
@@ -203,16 +317,18 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                     <tr>
                       <th className="px-3 py-2 font-semibold">Channel</th>
                       <th className="px-3 py-2 text-right font-semibold">Visits</th>
+                      <th className="px-3 py-2 text-right font-semibold">Carts</th>
                       <th className="px-3 py-2 text-right font-semibold">Ordered</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                    {summary.channels.map(row => (
+                    {channelRows.map(row => (
                       <tr key={row.channel}>
                         <td className="px-3 py-2 font-medium text-gray-800 dark:text-slate-200">
-                          {row.channel === 'unattributed' ? 'Direct / QR (unattributed)' : row.channel}
+                          {row.channel === 'unattributed' ? 'URL (unattributed)' : row.channel}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.sessions}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.carts ?? '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.ordered}</td>
                       </tr>
                     ))}
@@ -220,17 +336,12 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                 </table>
               </div>
               <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
-                A visit is an anonymous session, not a unique person. Reprints carrying{' '}
-                <code className="rounded bg-gray-100 px-1 dark:bg-slate-700">?ch=</code> split out automatically.
-                <span className="mt-0.5 block">
-                  Ordered counts only orders tied to a signed-in customer, so guest
-                  checkouts do not appear against the channel they came from.
-                </span>
+                Visits and orders are unique sessions. Orders without a linked session are shown in reconciliation rather than assigned to a channel.
               </p>
             </div>
           )}
 
-          {summary.eventStages.some(stage => stage.sessions > 0) && (
+          {!canonical && summary.eventStages.some(stage => stage.sessions > 0) && (
             <div className="mt-4">
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                 Tracked journey, by session
@@ -250,7 +361,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
             </div>
           )}
 
-          {summary.cart.carts > 0 && (
+          {!canonical && summary.cart.carts > 0 && (
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
                 { label: 'Carts started', value: summary.cart.carts },
@@ -266,7 +377,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
             </div>
           )}
 
-          {summary.attribution.length > 0 && (
+          {!canonical && summary.attribution.length > 0 && (
             <div className="mt-4">
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                 Campaign attribution

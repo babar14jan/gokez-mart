@@ -23,6 +23,7 @@ import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
 import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
 import { FunnelService, FunnelRange } from '../services/funnel.service';
+import { CustomerAnalyticsService } from '../services/customerAnalytics.service';
 import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.service';
 import { FunnelCartService } from '../services/funnelCart.service';
 import { evaluateStoreOpen } from '../utils/storeHours';
@@ -752,8 +753,11 @@ export const adminGetCustomerFunnelExtended = asyncHandler(async (req: AdminRequ
   if (range === 'custom' && !isValidReportDateRange(from, to)) {
     res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
   }
-  const summary = await FunnelService.getExtended(range as FunnelRange, from, to);
-  res.json({ success: true, data: summary });
+  const [summary, analytics] = await Promise.all([
+    FunnelService.getExtended(range as FunnelRange, from, to),
+    CustomerAnalyticsService.getReport(range as FunnelRange, from, to),
+  ]);
+  res.json({ success: true, data: { ...summary, analytics } });
 });
 
 export const adminGetCustomerFunnel = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -969,13 +973,15 @@ export const customerVerifyOtp = asyncHandler(async (req: Request, res: Response
 });
 
 export const postFunnelEvent = asyncHandler(async (req: Request, res: Response) => {
-  const { sessionId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign } = req.body ?? {};
+  const { sessionId, visitorId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign,
+    source, medium, content, term, qrCodeId } = req.body ?? {};
   if (!sessionId || !eventName) {
     res.status(400).json({ success: false, error: 'sessionId and eventName required' });
     return;
   }
   const recorded = await FunnelEventService.recordEvent({
-    sessionId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign,
+    sessionId, visitorId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign,
+    source, medium, content, term, qrCodeId,
   });
   res.json({ success: true, data: { recorded } });
 });

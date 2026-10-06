@@ -18,15 +18,30 @@ export const FUNNEL_EVENTS = [
   'login_field_focused',
   'login_number_entered',
   'otp_requested',
+  'otp_entered',
+  'otp_verification_failed',
+  'otp_call_initiated',
+  'otp_call_ringing',
+  'otp_call_answered',
+  'otp_call_completed',
+  'otp_call_failed',
   'otp_viewed',
   'login_verified',
   'login_abandoned',
   'product_viewed',
+  'product_search',
+  'category_viewed',
+  'cart_started',
   'cart_added',
   'cart_updated',
   'cart_removed',
   'cart_cleared',
   'checkout_started',
+  'checkout_address_started',
+  'checkout_address_completed',
+  'checkout_reviewed',
+  'order_placed',
+  'order_cancelled',
   'order_completed',
 ] as const;
 
@@ -40,7 +55,7 @@ export type FunnelEventName = typeof FUNNEL_EVENTS[number];
 const ALLOWED_PROP_KEYS = new Set([
   'productId', 'productName', 'unit', 'quantity', 'itemCount', 'subtotal',
   'orderId', 'orderNumber', 'step', 'campaignId', 'code', 'channel', 'value',
-  'hasItems', 'source', 'attempt', 'reason',
+  'hasItems', 'source', 'attempt', 'reason', 'otpChannel', 'status', 'categoryId',
 ]);
 
 const MAX_PROPS_BYTES = 1024;
@@ -128,34 +143,68 @@ export class FunnelEventService {
    */
   static async touchSession(params: {
     sessionId: string;
+    visitorId?: string;
     channel?: string;
     landingPath?: string;
     referrer?: string;
     utmSource?: string;
     utmMedium?: string;
     utmCampaign?: string;
+    source?: string;
+    medium?: string;
+    content?: string;
+    term?: string;
+    qrCodeId?: string;
   }): Promise<void> {
     const sessionId = sanitiseString(params.sessionId, MAX_SESSION_ID_LENGTH);
     if (!sessionId) return;
     await query(
       `INSERT INTO mart_funnel_sessions
-         (session_id, channel, landing_path, referrer, utm_source, utm_medium, utm_campaign)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (session_id, visitor_id, channel, landing_path, referrer, utm_source, utm_medium, utm_campaign,
+          source, medium, content, term, qr_code_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (session_id) DO UPDATE SET last_seen_at = NOW()`,
       [
         sessionId,
+        sanitiseString(params.visitorId, MAX_SESSION_ID_LENGTH),
         normaliseChannel(params.channel, params.referrer, params.utmSource),
         sanitiseString(params.landingPath, MAX_PATH_LENGTH),
         sanitiseString(params.referrer, MAX_PATH_LENGTH),
         sanitiseString(params.utmSource, 120),
         sanitiseString(params.utmMedium, 120),
         sanitiseString(params.utmCampaign, 120),
+        sanitiseString(params.source, 120),
+        sanitiseString(params.medium, 120),
+        sanitiseString(params.content, 120),
+        sanitiseString(params.term, 120),
+        sanitiseString(params.qrCodeId, 120),
       ]
+    );
+
+    const visitorId = sanitiseString(params.visitorId, MAX_SESSION_ID_LENGTH);
+    if (!visitorId) return;
+    const source = sanitiseString(params.source, 120) ?? normaliseChannel(params.channel, params.referrer, params.utmSource);
+    const medium = sanitiseString(params.medium, 120) ?? (source === 'qr' ? 'qr' : source === 'unattributed' ? 'none' : null);
+    const campaign = sanitiseString(params.utmCampaign, 120);
+    const qrCodeId = sanitiseString(params.qrCodeId, 120);
+    await query(
+      `INSERT INTO mart_visitor_attribution
+         (visitor_id, first_source, first_medium, first_campaign, first_qr_code_id,
+          last_source, last_medium, last_campaign, last_qr_code_id)
+       VALUES ($1, $2, $3, $4, $5, $2, $3, $4, $5)
+       ON CONFLICT (visitor_id) DO UPDATE SET
+         last_source = EXCLUDED.last_source,
+         last_medium = EXCLUDED.last_medium,
+         last_campaign = EXCLUDED.last_campaign,
+         last_qr_code_id = EXCLUDED.last_qr_code_id,
+         last_seen_at = NOW()`,
+      [visitorId, source, medium, campaign, qrCodeId]
     );
   }
 
   static async recordEvent(params: {
     sessionId: string;
+    visitorId?: string;
     eventName: string;
     path?: string;
     props?: unknown;
@@ -164,6 +213,11 @@ export class FunnelEventService {
     utmSource?: string;
     utmMedium?: string;
     utmCampaign?: string;
+    source?: string;
+    medium?: string;
+    content?: string;
+    term?: string;
+    qrCodeId?: string;
   }): Promise<boolean> {
     const sessionId = sanitiseString(params.sessionId, MAX_SESSION_ID_LENGTH);
     if (!sessionId) return false;
@@ -173,12 +227,18 @@ export class FunnelEventService {
     // orphan that no aggregation could ever join back to a visitor.
     await FunnelEventService.touchSession({
       sessionId,
+      visitorId: params.visitorId,
       channel: params.channel,
       landingPath: params.path,
       referrer: params.referrer,
       utmSource: params.utmSource,
       utmMedium: params.utmMedium,
       utmCampaign: params.utmCampaign,
+      source: params.source,
+      medium: params.medium,
+      content: params.content,
+      term: params.term,
+      qrCodeId: params.qrCodeId,
     });
     await query(
       `INSERT INTO mart_funnel_events (session_id, event_name, path, props)

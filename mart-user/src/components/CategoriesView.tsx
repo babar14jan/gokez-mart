@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import ProductCard from './ProductCard';
 import CategoryIcon from './CategoryIcon';
+import { track, trackOnce } from '../utils/track';
 
 interface CategoriesViewProps {
   categories: Category[];
@@ -29,7 +30,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
         {visibleCategories.map(cat => (
           <button
             key={cat.id}
-            onClick={() => setActiveCatId(cat.id)}
+            onClick={() => { setActiveCatId(cat.id); track('category_viewed', { categoryId: cat.id }); }}
             className={`w-full flex flex-col items-center gap-1 py-3 px-1 border-l-2 transition-colors ${
               activeCatId === cat.id
                 ? 'border-emerald-500 bg-white dark:bg-slate-800'
@@ -53,6 +54,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onBlur={() => { if (search.trim()) trackOnce('product_search'); }}
               placeholder="Search in this category..."
               className="w-full pl-9 pr-9 py-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white dark:focus:bg-slate-700 transition-all border-0"
             />

@@ -527,12 +527,10 @@ export default function OrdersPage() {
                           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 transition-colors">
                           <IndianRupee className="w-3 h-3" /> Receipt
                         </button>
-                        {['store_owner', 'store_manager'].includes(role || '') && (
-                          <button onClick={e => { e.stopPropagation(); setDetailsOrder(order); }}
-                            className="px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600 transition-colors">
-                            View details
-                          </button>
-                        )}
+                        <button onClick={e => { e.stopPropagation(); setDetailsOrder(order); }}
+                          className="px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-600 border border-gray-200 dark:border-slate-600 transition-colors">
+                          View journey
+                        </button>
                       </div>
                     ) : null}
                   </div>
@@ -587,6 +585,13 @@ export default function OrdersPage() {
                     Current state set by {order.statusEvents[order.statusEvents.length - 1].actorName}
                   </p>
                 )}
+
+                <div className="px-4 pb-2">
+                  <button onClick={e => { e.stopPropagation(); setDetailsOrder(order); }}
+                    className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300">
+                    View journey
+                  </button>
+                </div>
 
                 {/* Action bar */}
                 {order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'terminated' && (

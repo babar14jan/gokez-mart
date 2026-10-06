@@ -608,6 +608,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     }
     if (!canCheckout) return;
     const orderAddress = resolvedAddress!.trim();
+    track('checkout_address_completed', { itemCount: items.length });
+    track('checkout_reviewed', { itemCount: items.length, subtotal: sub });
     // After validation, before the request: a customer with a form problem
     // should be told about that, not asked to confirm a delay they have not
     // reached yet. Defaulting to "proceed" keeps checkout working if this page
@@ -631,6 +633,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         // that produced it, and the funnel reports every checkout as abandoned.
         funnelSessionId: getFunnelSessionId(),
       }, orderRequestKey.current);
+      track('order_placed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
       track('order_completed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
       const orderData = {
         orderNumber: res.data.data.orderNumber,
@@ -1099,7 +1102,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
           {/* Address row — tappable, opens sheet */}
-          <button type="button" onClick={() => setShowAddressList(true)} aria-invalid={validationField === 'address'}
+          <button type="button" onClick={() => { track('checkout_address_started'); setShowAddressList(true); }} aria-invalid={validationField === 'address'}
             className={`w-full flex items-center gap-2.5 px-4 pt-3 pb-2 text-left ${validationField === 'address' ? 'bg-red-50 dark:bg-red-950/20' : ''}`}>
             <ChevronUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <div className="flex-1 min-w-0">

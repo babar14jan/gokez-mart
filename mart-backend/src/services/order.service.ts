@@ -158,6 +158,18 @@ export class OrderService {
         `SELECT id FROM mart_customers WHERE phone = $1`, [cleanPhone]
       );
       const customerId = customerResult.rows[0]?.id || null;
+      const attributionResult = data.funnelSessionId
+        ? await client.query(
+          `SELECT s.session_id, s.visitor_id, s.source, s.medium, s.utm_campaign, s.qr_code_id,
+                  v.first_source, v.first_medium, v.first_campaign, v.first_qr_code_id,
+                  v.last_source, v.last_medium, v.last_campaign, v.last_qr_code_id
+           FROM mart_funnel_sessions s
+           LEFT JOIN mart_visitor_attribution v ON v.visitor_id = s.visitor_id
+           WHERE s.session_id = $1`,
+          [data.funnelSessionId]
+        )
+        : { rows: [] as Array<Record<string, string | null>> };
+      const attribution = attributionResult.rows[0];
       if ((data.campaignId || data.couponCodeUsed) && data.customerId !== customerId) {
         throw forbidden('Sign in with the ordering phone number to redeem this offer');
       }
@@ -360,8 +372,11 @@ export class OrderService {
             subtotal, delivery_charge, total, payment_method, notes,
             delivery_preference, delivery_note, fulfilled_by,
             campaign_id, campaign_discount, coupon_code_used, idempotency_key,
-            placed_outside_hours, closed_reason, scheduled_for, tracking_token)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+            placed_outside_hours, closed_reason, scheduled_for, tracking_token,
+            funnel_session_id, funnel_visitor_id, attribution_source, attribution_medium, attribution_campaign, attribution_qr_code_id,
+            first_touch_source, first_touch_medium, first_touch_campaign, first_touch_qr_code_id,
+            last_touch_source, last_touch_medium, last_touch_campaign, last_touch_qr_code_id)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)`,
 [orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
           data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod || null, data.notes || null,
@@ -374,7 +389,21 @@ export class OrderService {
         // A manual closure has no reopening time to promise, so it stays null
         // rather than carrying a guess the owner never made.
         openState.nextOpenAt,
-        trackingToken]
+        trackingToken,
+        attribution?.session_id ?? null,
+        attribution?.visitor_id ?? null,
+        attribution?.source ?? null,
+        attribution?.medium ?? null,
+        attribution?.utm_campaign ?? null,
+        attribution?.qr_code_id ?? null,
+        attribution?.first_source ?? null,
+        attribution?.first_medium ?? null,
+        attribution?.first_campaign ?? null,
+        attribution?.first_qr_code_id ?? null,
+        attribution?.last_source ?? null,
+        attribution?.last_medium ?? null,
+        attribution?.last_campaign ?? null,
+        attribution?.last_qr_code_id ?? null]
       );
 
       await client.query(
@@ -672,7 +701,7 @@ export class OrderService {
       );
       if (status === 'delivered') {
         await client.query(
-          `UPDATE mart_orders SET payment_method = $1, payment_collected_at = NOW() WHERE id = $2`,
+          `UPDATE mart_orders SET payment_method = $1, payment_collected_at = NOW(), delivered_at = COALESCE(delivered_at, NOW()) WHERE id = $2`,
           [paymentMethod === 'cash' ? 'cod' : 'upi', id]
         );
       }

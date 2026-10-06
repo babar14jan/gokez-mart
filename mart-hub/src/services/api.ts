@@ -114,6 +114,17 @@ export interface FunnelSummary {
     lastTouchOrders: number;
   }[];
   cart: { carts: number; reachedCheckout: number; converted: number; abandoned: number };
+  analytics?: {
+    timezone: 'Asia/Kolkata';
+    acquisition: { sessions: number; uniqueVisitors: number; newVisitors: number; returningVisitors: number };
+    customerLifecycle: { newCustomers: number; returningCustomers: number };
+    sessionFunnel: { key: string; label: string; count: number }[];
+    eventTotals: { key: string; count: number }[];
+    otp: { mobileInteractions: number; otpRequests: number; otpVerified: number };
+    orders: { placed: number; accepted: number; preparing: number; outForDelivery: number; delivered: number; paid: number; cancelled: number; gmv: number };
+    channels: { source: string; medium: string; campaign: string | null; sessions: number; cartSessions: number; checkoutSessions: number; orders: number }[];
+    reconciliation: { orderTableCount: number; attributedOrderCount: number; unattributedOrderCount: number; guestOrderCount: number; customerLinkedOrderCount: number };
+  };
 }
 
 export const customerLeadsApi = {

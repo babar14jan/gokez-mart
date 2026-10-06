@@ -24,6 +24,7 @@ const isDevelopment = Boolean((import.meta as any).env?.DEV);
 const SESSION_KEY = 'mart-funnel-session';
 const SESSION_AT = 'mart-funnel-session-at';
 const CHANNEL_KEY = 'mart-funnel-channel';
+const VISITOR_KEY = 'mart-funnel-visitor';
 
 /**
  * A funnel session ends after this much quiet time. Past the window a revisit
@@ -41,15 +42,25 @@ export type FunnelEvent =
   | 'login_field_focused'
   | 'login_number_entered'
   | 'otp_requested'
+  | 'otp_entered'
+  | 'otp_verification_failed'
   | 'otp_viewed'
   | 'login_verified'
   | 'login_abandoned'
   | 'product_viewed'
+  | 'product_search'
+  | 'category_viewed'
+  | 'cart_started'
   | 'cart_added'
   | 'cart_updated'
   | 'cart_removed'
   | 'cart_cleared'
   | 'checkout_started'
+  | 'checkout_address_started'
+  | 'checkout_address_completed'
+  | 'checkout_reviewed'
+  | 'order_placed'
+  | 'order_cancelled'
   | 'order_completed';
 
 const CHANNEL_ALLOW = /^[a-z0-9_-]{1,32}$/i;
@@ -116,6 +127,36 @@ export function getFunnelSessionId(): string {
   return stored;
 }
 
+/** A stable anonymous first-party browser identifier, distinct from a session. */
+export function getFunnelVisitorId(): string {
+  const store = safeLocalStorage();
+  if (!store) return randomId();
+  const stored = store.getItem(VISITOR_KEY);
+  if (stored && /^[a-f0-9]{32}$/i.test(stored)) return stored;
+  const id = randomId();
+  try { store.setItem(VISITOR_KEY, id); } catch { /* noop */ }
+  return id;
+}
+
+function attributionFromLocation(): Record<string, string | undefined> {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const channel = getFunnelChannel();
+    const qrCodeId = params.get('qr_code_id') || params.get('qr') || undefined;
+    const source = params.get('utm_source') || (channel === 'unattributed' ? 'direct' : channel === 'qr' ? 'offline' : channel);
+    const medium = params.get('utm_medium') || (channel === 'qr' ? 'qr' : source === 'direct' ? 'none' : undefined);
+    return {
+      source,
+      medium,
+      content: params.get('utm_content') || undefined,
+      term: params.get('utm_term') || undefined,
+      qrCodeId,
+    };
+  } catch {
+    return { source: 'direct', medium: 'none' };
+  }
+}
+
 function post(path: string, body: unknown): void {
   // In production the API is same-origin and API_URL is ''. In local dev it
   // points at the dev API host, so events must follow it rather than a
@@ -144,6 +185,7 @@ export function track(event: FunnelEvent, props?: Record<string, unknown>): void
     const urlParams = new URLSearchParams(window.location.search);
     post('/funnel/event', {
       sessionId: getFunnelSessionId(),
+      visitorId: getFunnelVisitorId(),
       eventName: event,
       channel: getFunnelChannel(),
       path: window.location.pathname,
@@ -151,6 +193,7 @@ export function track(event: FunnelEvent, props?: Record<string, unknown>): void
       utmSource: urlParams.get('utm_source') || undefined,
       utmMedium: urlParams.get('utm_medium') || undefined,
       utmCampaign: urlParams.get('utm_campaign') || undefined,
+      ...attributionFromLocation(),
       props: props ?? {},
     });
   } catch { /* noop */ }
