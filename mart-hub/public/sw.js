@@ -112,6 +112,7 @@ self.addEventListener('push', (e) => {
       badge: '/icons/icon-96.png',
       data: { url: payload.url || '/orders' },
       vibrate: [200, 100, 200],
+      silent: false,
       tag: payload.tag || 'gokez-admin-order',
       renotify: true,
     })
