@@ -358,11 +358,12 @@ export default function App() {
   }, [openState?.isOpen, openState?.nextOpenAt, selectedZone?.storeId]);
 
   const filteredProducts = products.filter(p => {
-    const matchCat = activeCategoryId === 'all' || p.categoryId === activeCategoryId;
-    const q = search.toLowerCase();
-    const matchSearch = !search ||
+    const q = search.trim().toLowerCase();
+    const matchCat = Boolean(q) || activeCategoryId === 'all' || p.categoryId === activeCategoryId;
+    const matchSearch = !q ||
       p.name.toLowerCase().includes(q) ||
-      (p.localName?.toLowerCase().includes(q) ?? false);
+      (p.localName?.toLowerCase().includes(q) ?? false) ||
+      (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q));
     return matchCat && matchSearch;
   });
 

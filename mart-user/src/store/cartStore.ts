@@ -35,6 +35,7 @@ export const useCartStore = create<CartState>()(
       addItem: (product, unit, price) => {
         const u = unit || product.unit;
         const p = price ?? product.price;
+        const isFirstCartInteraction = get().items.length === 0;
         set(state => {
           const existing = state.items.find(i => i.productId === product.id && i.unit === u);
           if (existing) {
@@ -42,6 +43,7 @@ export const useCartStore = create<CartState>()(
           }
           return { items: [...state.items, { productId: product.id, productName: product.name, unit: u, price: p, quantity: 1, photoUrl: product.photoUrl }] };
         });
+        if (isFirstCartInteraction) track('cart_started');
         track('cart_added', { productId: product.id, productName: product.name, unit: u, quantity: 1 });
         syncFunnelCart(get().items);
       },

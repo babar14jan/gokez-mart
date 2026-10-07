@@ -11,6 +11,7 @@ interface InventoryItem {
   productId: string;
   name: string;
   localName: string | null;
+  searchAliases: string[];
   photoUrl: string | null;
   sellingUnit: string;
   stockUnit: string | null;
@@ -91,8 +92,10 @@ export default function InventoryPage() {
   }, []);
 
   const sorted = useMemo(() => {
-    let list = searchQuery.trim()
-      ? items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()) || (i.localName || '').toLowerCase().includes(searchQuery.toLowerCase()))
+    const query = searchQuery.trim().toLowerCase();
+    let list = query
+      ? items.filter(i => i.name.toLowerCase().includes(query) || (i.localName || '').toLowerCase().includes(query)
+        || (i.searchAliases ?? []).some(alias => alias.toLowerCase().includes(query)))
       : [...items];
     if (!sortLowFirst) return list;
     const order = { out: 0, low: 1, ok: 2, untracked: 3 };

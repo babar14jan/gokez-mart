@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
+import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronDown, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi } from '../services/api';
 import type { PublicSettings, Product } from '../services/api';
@@ -8,6 +8,7 @@ import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import AddressForm, { type AddressCoordinates } from '../components/AddressForm';
+import ProductCard from '../components/ProductCard';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 
 interface CheckoutPageProps {
@@ -300,7 +301,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const orderRequestKey = useRef(crypto.randomUUID());
   const guestNameInput = useRef<HTMLInputElement>(null);
   const guestPhoneInput = useRef<HTMLInputElement>(null);
-  const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
+  const { items, updateQty, subtotal, clearCart } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile } = useCustomerAuthStore();
 
@@ -325,7 +326,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     product.availabilityStatus === 'available'
     && product.isAvailable
     && Boolean(product.categoryId && product.categoryName)
-    && !items.some(item => item.productId === product.id)
   );
 
   const defaultAddr = getDefaultAddress();
@@ -384,6 +384,16 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   // Address
   const [showAddressList, setShowAddressList] = useState(false);
   const [addingNew, setAddingNew] = useState(false);
+
+  const openAddressSheet = () => {
+    setAddingNew(!isLoggedIn || addresses.length === 0);
+    setShowAddressList(true);
+  };
+
+  const closeAddressSheet = () => {
+    setShowAddressList(false);
+    setAddingNew(false);
+  };
   const [addressSaving, setAddressSaving] = useState(false);
 
   const saveProfileNameIfProvided = async () => {
@@ -602,8 +612,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       setError('');
       setShowMissingDetails(true);
       setValidationField('address');
-      setAddingNew(!isLoggedIn || addresses.length === 0);
-      setShowAddressList(true);
+      openAddressSheet();
       return;
     }
     if (!canCheckout) return;
@@ -695,8 +704,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
         <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
-        <button onClick={onBack} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-          <X className="w-5 h-5 text-gray-500" />
+        <button type="button" onClick={onBack} aria-label="Return to shopping" className="flex h-11 w-11 items-center justify-center rounded-xl border border-pink-200 bg-pink-50 text-pink-700 shadow-sm transition-colors hover:bg-pink-100 dark:border-pink-900/60 dark:bg-pink-950/30 dark:text-pink-300 dark:hover:bg-pink-950/50">
+          <ChevronDown className="h-6 w-6" strokeWidth={3} />
         </button>
       </div>
 
@@ -757,24 +766,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
           {visibleSuggestions.length > 0 && (
             <div>
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">You may also like</p>
-              <div className="flex gap-2.5 overflow-x-auto scrollbar-hide pb-1">
-                {visibleSuggestions.map(p => (
-                  <div key={p.id} className="w-28 flex-shrink-0 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-                    {p.photoUrl
-                      ? <img src={p.photoUrl} alt={p.name} className="w-28 h-20 object-cover" />
-                      : <div className="w-28 h-20 bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center text-xl">🥦</div>
-                    }
-                    <div className="p-2">
-                      <p className="text-[11px] font-medium text-gray-900 dark:text-white leading-tight line-clamp-2">{p.name}</p>
-                      <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">{p.unit}</p>
-                      <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-xs font-bold text-emerald-600">₹{p.price}</span>
-                        <button type="button" onClick={() => addItem(p)}
-                          className="text-[10px] font-bold text-white bg-emerald-500 px-2 py-1 rounded-lg">
-                          ADD
-                        </button>
-                      </div>
-                    </div>
+              <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+                {visibleSuggestions.map(product => (
+                  <div key={product.id} className="w-32 shrink-0 snap-start">
+                    <ProductCard product={product} />
                   </div>
                 ))}
               </div>
@@ -783,13 +778,13 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
           {/* Address bottom sheet */}
           {showAddressList && (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
-              onClick={() => { setShowAddressList(false); setAddingNew(!deliveryAddress); }}>
-              <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[80vh] overflow-y-auto"
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:pb-0"
+              onClick={closeAddressSheet}>
+              <div className="max-h-[85dvh] w-full overflow-y-auto scrollbar-hide rounded-3xl bg-white shadow-2xl dark:bg-slate-800 sm:max-h-[80vh] sm:max-w-md"
                 onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
                   <p className="text-sm font-bold text-gray-900 dark:text-white">{addingNew ? 'Add delivery address' : 'Choose delivery address'}</p>
-                  <button onClick={() => { setShowAddressList(false); setAddingNew(!deliveryAddress); }} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
+                  <button onClick={closeAddressSheet} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
                     <X className="w-4 h-4 text-gray-500" />
                   </button>
                 </div>
@@ -843,7 +838,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 ) : (
                   <div className="px-5 py-4">
                     <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Fields marked * are needed to deliver your order. A landmark is optional but helpful.</p>
-                    <AddressForm saving={addressSaving} focusFirstField={validationField === 'address'} onCancel={() => setAddingNew(false)}
+                    <AddressForm saving={addressSaving} focusFirstField={validationField === 'address'} onCancel={() => addresses.length === 0 ? closeAddressSheet() : setAddingNew(false)}
                       onSave={async (label, address, coordinates) => {
                         if (!(await saveProfileNameIfProvided())) return;
                         setAddressSaving(true);
@@ -1102,7 +1097,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
           {/* Address row — tappable, opens sheet */}
-          <button type="button" onClick={() => { track('checkout_address_started'); setShowAddressList(true); }} aria-invalid={validationField === 'address'}
+          <button type="button" onClick={() => { track('checkout_address_started'); openAddressSheet(); }} aria-invalid={validationField === 'address'}
             className={`w-full flex items-center gap-2.5 px-4 pt-3 pb-2 text-left ${validationField === 'address' ? 'bg-red-50 dark:bg-red-950/20' : ''}`}>
             <ChevronUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <div className="flex-1 min-w-0">

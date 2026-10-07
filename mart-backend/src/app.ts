@@ -48,7 +48,7 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (
       config.cors.origins.includes(origin) ||
-      (config.env === 'development' && /localhost/.test(origin))
+      (config.env === 'development' && /^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin))
     ) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },

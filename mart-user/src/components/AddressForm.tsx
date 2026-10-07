@@ -103,7 +103,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pb-20">
       <div className="flex gap-2">
         {LABELS.map(option => (
           <button key={option} type="button" onClick={() => setLabel(option)}
@@ -129,7 +129,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
         <Field label="City" required value={fields.city} onChange={update('city')} placeholder="Enter city" />
         <Field label="Pincode" required value={fields.pincode} onChange={update('pincode')} placeholder="Enter 6-digit pincode" inputMode="numeric" />
       </div>
-      <div className="flex gap-2 pt-2">
+      <div className="sticky bottom-0 z-10 flex gap-2 border-t border-gray-100 bg-white py-3 dark:border-slate-700 dark:bg-slate-800">
         <button type="button" onClick={onCancel}
           className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl transition-colors">
           Cancel
@@ -161,7 +161,7 @@ function Field({ label, required = false, value, onChange, placeholder, autoFocu
         {label}{required && <span className="ml-0.5 font-bold text-red-500" aria-hidden="true">*</span>}
       </label>
       <input type="text" inputMode={inputMode} maxLength={inputMode === 'numeric' ? 6 : undefined} value={value} onChange={onChange}
-        className={inputClass} placeholder={placeholder} autoFocus={autoFocus && (finePointer || forceAutoFocus)} aria-required={required} />
+        className={`${inputClass} scroll-mb-28`} placeholder={placeholder} autoFocus={autoFocus && (finePointer || forceAutoFocus)} aria-required={required} />
     </div>
   );
 }

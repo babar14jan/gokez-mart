@@ -49,6 +49,7 @@ export type FunnelEvent =
   | 'login_abandoned'
   | 'product_viewed'
   | 'product_search'
+  | 'search_zero_results'
   | 'category_viewed'
   | 'cart_started'
   | 'cart_added'
@@ -143,7 +144,9 @@ function attributionFromLocation(): Record<string, string | undefined> {
     const params = new URLSearchParams(window.location.search);
     const channel = getFunnelChannel();
     const qrCodeId = params.get('qr_code_id') || params.get('qr') || undefined;
-    const source = params.get('utm_source') || (channel === 'unattributed' ? 'direct' : channel === 'qr' ? 'offline' : channel);
+    const hasCampaign = Boolean(params.get('utm_source') || params.get('utm_medium') || params.get('utm_campaign'));
+    const hasReferrer = Boolean(document.referrer);
+    const source = params.get('utm_source') || (channel === 'qr' ? 'offline' : channel !== 'unattributed' ? channel : !hasCampaign && !hasReferrer ? 'direct' : undefined);
     const medium = params.get('utm_medium') || (channel === 'qr' ? 'qr' : source === 'direct' ? 'none' : undefined);
     return {
       source,
@@ -153,7 +156,7 @@ function attributionFromLocation(): Record<string, string | undefined> {
       qrCodeId,
     };
   } catch {
-    return { source: 'direct', medium: 'none' };
+    return { source: 'unattributed' };
   }
 }
 

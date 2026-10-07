@@ -220,7 +220,8 @@ export class OrderService {
         if (productIds.has(item.productId)) throw badRequest('Each product can only be included once per order');
         productIds.add(item.productId);
         const product = await client.query(
-          `SELECT p.name, p.is_bundle as "isBundle", sp.price::float AS price, sp.unit
+            `SELECT p.name, p.is_bundle as "isBundle", sp.price::float AS price,
+              sp.discount_percent::float AS "discountPercent", sp.unit
            FROM mart_store_products sp
            JOIN mart_products p ON p.id = sp.product_id
            WHERE sp.store_id = $1 AND sp.product_id = $2
@@ -228,10 +229,15 @@ export class OrderService {
            FOR SHARE`,
           [data.storeId, item.productId]
         );
-        const catalogItem = product.rows[0] as { name: string; isBundle: boolean; price: number; unit: string } | undefined;
+        const catalogItem = product.rows[0] as {
+          name: string; isBundle: boolean; price: number; discountPercent: number; unit: string;
+        } | undefined;
         if (!catalogItem || catalogItem.unit !== item.unit) {
           throw new Error('One or more products are unavailable or have changed');
         }
+        const effectivePrice = catalogItem.discountPercent > 0
+          ? Math.round(catalogItem.price * (1 - catalogItem.discountPercent / 100))
+          : catalogItem.price;
         if (catalogItem.isBundle) {
           const components = await client.query(
             `SELECT bc.component_product_id as "productId", p.name,
@@ -255,7 +261,7 @@ export class OrderService {
           productId: item.productId,
           productName: catalogItem.name,
           unit: catalogItem.unit,
-          price: catalogItem.price,
+          price: effectivePrice,
           quantity: item.quantity,
         });
       }

@@ -7,6 +7,7 @@ interface CatalogProduct {
   id: string;
   name: string;
   localName: string | null;
+  searchAliases: string[];
   description: string | null;
   photoUrl: string | null;
   categoryId: string | null;
@@ -17,6 +18,7 @@ interface CatalogProduct {
 interface Category { id: string; name: string; icon: string; }
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
+const parseSearchAliases = (value: string) => value.split(',').map(alias => alias.trim()).filter(Boolean);
 
 export default function CatalogPage() {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -27,7 +29,7 @@ export default function CatalogPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<CatalogProduct | null>(null);
-  const [form, setForm] = useState({ name: '', localName: '', description: '', categoryId: '' });
+  const [form, setForm] = useState({ name: '', localName: '', searchAliases: '', description: '', categoryId: '' });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,20 +92,22 @@ export default function CatalogPage() {
 
   const filtered = useMemo(() => products.filter(p => {
     const matchCat = activeCat === 'all' || p.categoryId === activeCat;
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.localName || '').toLowerCase().includes(search.toLowerCase());
+    const query = search.trim().toLowerCase();
+    const matchSearch = !query || p.name.toLowerCase().includes(query) || (p.localName || '').toLowerCase().includes(query)
+      || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(query));
     return matchCat && matchSearch;
   }), [products, activeCat, search]);
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', localName: '', description: '', categoryId: categories[0]?.id || '' });
+    setForm({ name: '', localName: '', searchAliases: '', description: '', categoryId: categories[0]?.id || '' });
     setPhotoFile(null); setPhotoPreview(null);
     setShowModal(true);
   };
 
   const openEdit = (p: CatalogProduct) => {
     setEditing(p);
-    setForm({ name: p.name, localName: p.localName || '', description: p.description || '', categoryId: p.categoryId || '' });
+    setForm({ name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), description: p.description || '', categoryId: p.categoryId || '' });
     setPhotoFile(null); setPhotoPreview(p.photoUrl);
     setShowModal(true);
   };
@@ -122,7 +126,7 @@ export default function CatalogPage() {
         const res = await productsApi.uploadPhoto(photoFile);
         photoUrl = res.data.data.url;
       }
-      const data = { name: form.name.trim(), localName: form.localName || undefined, description: form.description || undefined, photoUrl, categoryId: form.categoryId || undefined };
+      const data = { name: form.name.trim(), localName: form.localName || undefined, searchAliases: parseSearchAliases(form.searchAliases), description: form.description || undefined, photoUrl, categoryId: form.categoryId || undefined };
       if (editing) await catalogApi.update(editing.id, data);
       else await catalogApi.create(data);
       setShowModal(false);
@@ -273,6 +277,10 @@ export default function CatalogPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Local / Hindi Name</label>
                 <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
+                <input type="text" value={form.searchAliases} onChange={e => setForm(f => ({ ...f, searchAliases: e.target.value }))} className={inp} placeholder="e.g. Piyaj, Peeyaz, Pyaz" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Category</label>

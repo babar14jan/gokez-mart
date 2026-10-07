@@ -64,8 +64,8 @@ export default function FunnelPanel({ range: controlledRange, from: controlledFr
   const newCustomerShare = canonical ? pct(canonical.customerLifecycle.newCustomers, deliveredCustomers) : 0;
   const returningCustomerShare = canonical ? pct(canonical.customerLifecycle.returningCustomers, deliveredCustomers) : 0;
   const channelRows = canonical
-    ? canonical.channels.map(row => ({ channel: `${row.source} / ${row.medium}`, sessions: row.sessions, carts: row.cartSessions, ordered: row.orders }))
-    : (summary?.channels ?? []).map(row => ({ ...row, carts: null as number | null }));
+    ? canonical.channels.map(row => ({ channel: `${row.source} / ${row.medium}`, campaign: row.campaign, sessions: row.sessions, carts: row.cartSessions, checkout: row.checkoutSessions, ordered: row.orders }))
+    : (summary?.channels ?? []).map(row => ({ ...row, campaign: null as string | null, carts: null as number | null, checkout: null as number | null }));
   // Bars scale against the largest stage, not the first one. Keying off
   // stages[0] collapses every bar to its 6% floor on a period where nobody
   // requested an OTP but later stages still have counts.
@@ -187,6 +187,20 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
             </>
           )}
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Customer funnel · unique sessions</p>
+          {canonical && (
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <div title="Sessions that started but had no category, search, product, cart, or checkout interaction." className="rounded-md border border-amber-100 bg-amber-50 px-3 py-2 dark:border-amber-900/60 dark:bg-amber-950/25">
+                <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{canonical.nonEngagedSessions}</p>
+                <p className="text-[10px] leading-tight text-amber-800 dark:text-amber-200">Non-engaged sessions</p>
+              </div>
+              {canonical.largestDrop && (
+                <div title={`${canonical.largestDrop.count} sessions dropped between these two stages.`} className="rounded-md border border-rose-100 bg-rose-50 px-3 py-2 dark:border-rose-900/60 dark:bg-rose-950/25">
+                  <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-white">{canonical.largestDrop.percent}% dropped</p>
+                  <p className="truncate text-[10px] leading-tight text-rose-800 dark:text-rose-200">Largest drop: {canonical.largestDrop.from} to {canonical.largestDrop.to}</p>
+                </div>
+              )}
+            </div>
+          )}
           <div className="space-y-2">
             {stages.map((stage, i) => {
               const prev = i === 0 ? stage.count : stages[i - 1].count;
@@ -221,6 +235,23 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
 
           {canonical && (
             <>
+              <div className="mt-5">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Product discovery</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  {[
+                    { label: 'Category interactions', value: canonical.productDiscovery.categoryInteractionSessions, definition: 'Unique sessions with a category interaction.' },
+                    { label: 'Search interactions', value: canonical.productDiscovery.searchInteractionSessions, definition: 'Unique sessions that searched.' },
+                    { label: 'Product view sessions', value: canonical.productDiscovery.productViewSessions, definition: 'Unique sessions with a product view.' },
+                    { label: 'Product view events', value: canonical.productDiscovery.productViewEvents, definition: 'Total product-view events; repeated views are included.' },
+                    { label: 'Zero-result searches', value: canonical.productDiscovery.zeroResultSearches, definition: 'Total searches that showed no matching product; search text is never recorded.' },
+                  ].map(metric => (
+                    <div key={metric.label} title={metric.definition} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40">
+                      <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{metric.value}</p>
+                      <p className="text-[10px] leading-tight text-gray-500 dark:text-slate-400">{metric.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="mt-5">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">OTP funnel</p>
                 <div className="grid grid-cols-3 gap-2">
@@ -311,13 +342,15 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                 Marketing attribution · unique sessions
               </p>
-              <div className="overflow-hidden rounded-lg border border-gray-100 dark:border-slate-700">
-                <table className="w-full text-left text-xs">
+              <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
+                <table className="min-w-[640px] w-full text-left text-xs">
                   <thead className="bg-gray-50 text-[11px] uppercase text-gray-500 dark:bg-slate-900/40 dark:text-slate-400">
                     <tr>
                       <th className="px-3 py-2 font-semibold">Channel</th>
+                      <th className="px-3 py-2 font-semibold">Campaign</th>
                       <th className="px-3 py-2 text-right font-semibold">Visits</th>
                       <th className="px-3 py-2 text-right font-semibold">Carts</th>
+                      <th className="px-3 py-2 text-right font-semibold">Checkout</th>
                       <th className="px-3 py-2 text-right font-semibold">Ordered</th>
                     </tr>
                   </thead>
@@ -325,10 +358,12 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                     {channelRows.map(row => (
                       <tr key={row.channel}>
                         <td className="px-3 py-2 font-medium text-gray-800 dark:text-slate-200">
-                          {row.channel === 'unattributed' ? 'URL (unattributed)' : row.channel}
+                          {row.channel}
                         </td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{row.campaign || '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.sessions}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.carts ?? '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.checkout ?? '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.ordered}</td>
                       </tr>
                     ))}
@@ -336,7 +371,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                 </table>
               </div>
               <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
-                Visits and orders are unique sessions. Orders without a linked session are shown in reconciliation rather than assigned to a channel.
+                Visits, carts, and checkout are unique sessions. Orders are attributed only when their linked session has attribution; genuinely unassigned orders remain in reconciliation.
               </p>
             </div>
           )}

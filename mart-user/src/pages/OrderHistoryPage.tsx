@@ -238,7 +238,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
         price: item.price, photoUrl: item.photoUrl || null,
         availabilityStatus: 'available', isAvailable: true,
         discountPercent: 0, categoryId: '', categoryName: '',
-        description: null, weightOptions: null, localName: null,
+        description: null, weightOptions: null, localName: null, searchAliases: [],
       });
     });
     setReorderToast(`${items.length} item${items.length > 1 ? 's' : ''} added to cart`);

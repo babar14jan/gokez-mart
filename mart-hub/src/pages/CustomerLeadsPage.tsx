@@ -35,7 +35,7 @@ interface StatusConfig {
 const STATUS_CONFIG: Record<LeadStatus, StatusConfig> = {
   verified: { label: 'Verified', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
   unverified: { label: 'Unverified', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
-  guest: { label: 'Guest checkout', className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' },
+  guest: { label: 'Checkout-only', className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' },
 };
 
 const getLeadStatus = (lead: Lead): LeadStatus => {
@@ -111,7 +111,7 @@ export default function CustomerLeadsPage() {
 
   const filters = useMemo(() => [
     { id: 'all' as LeadFilter, label: 'All', count: counts.total },
-    { id: 'guest' as LeadFilter, label: 'Guest checkout', count: counts.guest },
+    { id: 'guest' as LeadFilter, label: 'Checkout-only', count: counts.guest },
     { id: 'unverified' as LeadFilter, label: 'OTP not completed', count: counts.unverified },
     { id: 'verified' as LeadFilter, label: 'Verified', count: counts.verified },
   ], [counts]);
@@ -123,7 +123,7 @@ export default function CustomerLeadsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-900 dark:text-white">Customer Leads</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Guest checkout, OTP progress and conversion. Reporting uses India time.</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Checkout-only orders, OTP progress and conversion. A checkout-only order can still use a verified mobile number. Reporting uses India time.</p>
         </div>
         <button
           type="button"

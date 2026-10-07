@@ -8,6 +8,7 @@ export interface MartProduct {
   categoryName?: string;
   name: string;
   localName: string | null;
+  searchAliases: string[];
   description: string | null;
   photoUrl: string | null;
   price: number;
@@ -24,7 +25,8 @@ export interface MartProduct {
 
 const PRODUCT_SELECT = `
   SELECT p.id, p.category_id as "categoryId", c.name as "categoryName",
-         p.name, p.local_name as "localName", p.description, p.photo_url as "photoUrl",
+         p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
+         p.description, p.photo_url as "photoUrl",
          p.weight_options as "weightOptions",
          sp.price::float, sp.unit,
          sp.discount_percent::float as "discountPercent",
@@ -41,6 +43,22 @@ const PRODUCT_SELECT = `
   LEFT JOIN mart_categories c ON c.id = p.category_id
 `;
 const BUNDLE_DEDUCTION_UNITS = new Set(['kg', 'g', 'pcs', 'dozen', 'litre', 'ml', 'bunch', 'packet']);
+
+export function normalizeSearchAliases(value: unknown): string[] {
+  if (!Array.isArray(value)) throw badRequest('Search aliases must be a list of text values');
+  const aliases: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== 'string') throw badRequest('Search aliases must contain only text values');
+    const alias = entry.trim().replace(/\s+/g, ' ');
+    if (!alias) continue;
+    if (alias.length > 80) throw badRequest('Each search alias must be 80 characters or fewer');
+    const key = alias.toLocaleLowerCase();
+    if (!seen.has(key)) { seen.add(key); aliases.push(alias); }
+  }
+  if (aliases.length > 20) throw badRequest('Use at most 20 search aliases per product');
+  return aliases;
+}
 
 export class ProductService {
   static async findAll(filters?: {
@@ -101,11 +119,12 @@ export class ProductService {
   // Create global product + store_product entry
   static async create(data: Partial<MartProduct> & { storeId: string; isCatalog?: boolean }): Promise<MartProduct> {
     const id = uuidv4();
+    const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
     await query(
-      `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, weight_options, is_catalog)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [id, data.categoryId || null, data.name, data.localName || null, data.description || null,
-       data.photoUrl || null, data.weightOptions ? JSON.stringify(data.weightOptions) : null,
+      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, weight_options, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [id, data.categoryId || null, data.name, data.localName || null, searchAliases,
+       data.description || null, data.photoUrl || null, data.weightOptions ? JSON.stringify(data.weightOptions) : null,
        data.isCatalog === true]
     );
     await query(
@@ -191,6 +210,7 @@ export class ProductService {
     if (data.categoryId !== undefined) { globalFields.push(`category_id = $${gi++}`); globalParams.push(data.categoryId); }
     if (data.name !== undefined)       { globalFields.push(`name = $${gi++}`);        globalParams.push(data.name); }
     if (data.localName !== undefined)  { globalFields.push(`local_name = $${gi++}`);  globalParams.push(data.localName); }
+    if (data.searchAliases !== undefined) { globalFields.push(`search_aliases = $${gi++}`); globalParams.push(normalizeSearchAliases(data.searchAliases)); }
     if (data.description !== undefined){ globalFields.push(`description = $${gi++}`); globalParams.push(data.description); }
     if (data.photoUrl !== undefined)   { globalFields.push(`photo_url = $${gi++}`);   globalParams.push(data.photoUrl); }
     if (data.weightOptions !== undefined){ globalFields.push(`weight_options = $${gi++}`); globalParams.push(JSON.stringify(data.weightOptions)); }
@@ -271,14 +291,15 @@ export class ProductService {
   // Create catalog-only product (no store assignment)
   static async createCatalogProduct(data: {
     name: string; localName?: string; description?: string;
-    photoUrl?: string; categoryId?: string;
+    photoUrl?: string; categoryId?: string; searchAliases?: string[];
   }): Promise<{ id: string; name: string }> {
     const id = uuidv4();
+    const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
     const result = await query<{ id: string; name: string }>(
-      `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, is_catalog)
-       VALUES ($1,$2,$3,$4,$5,$6,true)
+      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,true)
        RETURNING id, name`,
-      [id, data.categoryId || null, data.name, data.localName || null,
+      [id, data.categoryId || null, data.name, data.localName || null, searchAliases,
        data.description || null, data.photoUrl || null]
     );
     return result.rows[0];

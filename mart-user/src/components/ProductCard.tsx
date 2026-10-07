@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Plus, Minus } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import ProductDetailSheet from './ProductDetailSheet';
+import CartQuantityControl from './CartQuantityControl';
 
 // Display name: English (Hindi) or just English or just Hindi — never empty brackets
 function displayName(product: Product): string {
@@ -63,27 +63,13 @@ export default function ProductCard({ product }: ProductCardProps) {
 
           {/* ADD / qty — stops propagation so card tap doesn't open sheet */}
           {!isOutOfStock && (
-            <div className="absolute bottom-0 right-0 z-10" onClick={e => e.stopPropagation()}>
-              {qty === 0 ? (
-                <button
-                  onClick={() => addItem(product, product.unit, discountedPrice)}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-tl-2xl rounded-br-2xl shadow-md active:scale-95 transition-all"
-                >
-                  ADD
-                </button>
-              ) : (
-                <div className="flex items-center bg-emerald-500 rounded-tl-2xl rounded-br-2xl shadow-lg overflow-hidden">
-                  <button onClick={() => updateQty(product.id, product.unit, qty - 1)}
-                    className="w-7 h-7 flex items-center justify-center text-white active:bg-emerald-600 transition-colors">
-                    <Minus className="w-3 h-3" strokeWidth={2.5} />
-                  </button>
-                  <span className="text-[11px] font-bold text-white w-4 text-center">{qty}</span>
-                  <button onClick={() => addItem(product, product.unit, discountedPrice)}
-                    className="w-7 h-7 flex items-center justify-center text-white active:bg-emerald-600 transition-colors">
-                    <Plus className="w-3 h-3" strokeWidth={2.5} />
-                  </button>
-                </div>
-              )}
+            <div className="absolute bottom-0 right-0 z-10">
+              <CartQuantityControl
+                variant="card"
+                quantity={qty}
+                onAdd={() => addItem(product, product.unit, discountedPrice)}
+                onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
+              />
             </div>
           )}
         </div>
@@ -93,7 +79,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1" style={{ minHeight: '2.2em' }}>{displayName(product)}</p>
           <div className="flex items-center justify-between gap-1 mt-auto">
             <div className="flex flex-col">
-              <span className="text-[15px] font-bold text-gray-900 dark:text-white leading-tight">₹{discountedPrice}</span>
+              <span className="inline-flex w-fit rounded-md bg-emerald-600 px-1.5 py-0.5 text-sm font-bold leading-tight text-white dark:bg-emerald-500">₹{discountedPrice}</span>
               {savings > 0 && (
                 <span className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 line-through leading-none">₹{product.price}</span>
               )}

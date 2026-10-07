@@ -17,9 +17,10 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
   const [search, setSearch] = useState('');
 
   const filteredProducts = products.filter(p => {
-    if (p.categoryId !== activeCatId) return false;
-    const q = search.toLowerCase();
-    return !search || p.name.toLowerCase().includes(q) || (p.localName ?? '').toLowerCase().includes(q);
+    const q = search.trim().toLowerCase();
+    if (!q) return p.categoryId === activeCatId;
+    return p.name.toLowerCase().includes(q) || (p.localName ?? '').toLowerCase().includes(q)
+      || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q));
   });
 
   return (
@@ -54,8 +55,12 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              onBlur={() => { if (search.trim()) trackOnce('product_search'); }}
-              placeholder="Search in this category..."
+              onBlur={() => {
+                if (!search.trim()) return;
+                trackOnce('product_search');
+                if (filteredProducts.length === 0) track('search_zero_results');
+              }}
+              placeholder="Search products..."
               className="w-full pl-9 pr-9 py-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white dark:focus:bg-slate-700 transition-all border-0"
             />
             {search && (

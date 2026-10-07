@@ -20,6 +20,7 @@ function formatStock(qty: number, unit: string): string {
 interface Product {
   id: string; name: string; categoryId: string | null; categoryName: string;
   localName: string | null;
+  searchAliases: string[];
   price: number; unit: string; discountPercent: number;
   isAvailable: boolean;
   isBundle: boolean;
@@ -47,6 +48,7 @@ type FilterStatus = 'all' | 'available' | 'out_of_stock' | 'low_stock' | 'hidden
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 const UNITS = ['kg', 'g', 'pcs', 'dozen', 'litre', 'ml', 'bunch', 'packet'];
 const STOCK_UNITS = ['kg', 'litre', 'pcs', 'bunch', 'packet'];
+const parseSearchAliases = (value: string) => value.split(',').map(alias => alias.trim()).filter(Boolean);
 
 function stockStatus(p: Product): 'untracked' | 'out' | 'low' | 'ok' {
   if (p.stockQuantity === null) return 'untracked';
@@ -78,7 +80,7 @@ export default function ProductsPage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [form, setForm] = useState({
-    name: '', localName: '', categoryId: '', price: '', unit: '1 kg',
+    name: '', localName: '', searchAliases: '', categoryId: '', price: '', unit: '1 kg',
     discountPercent: '0', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
     isCatalog: false,
@@ -127,7 +129,7 @@ export default function ProductsPage() {
   const { toasts, show: showToast } = useToast();
 
   // Catalog browser state
-  interface CatalogItem { id: string; name: string; localName: string | null; photoUrl: string | null; categoryId: string | null; categoryName: string | null; categoryIcon: string | null; }
+  interface CatalogItem { id: string; name: string; localName: string | null; searchAliases: string[]; photoUrl: string | null; categoryId: string | null; categoryName: string | null; categoryIcon: string | null; }
   const [showCatalogBrowser, setShowCatalogBrowser] = useState(false);
   const [catalogBrowserMode, setCatalogBrowserMode] = useState<'single' | 'bulk'>('single');
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -150,7 +152,9 @@ export default function ProductsPage() {
 
   const catalogFiltered = useMemo(() => catalogItems.filter(p => {
     const matchCat = catalogCat === 'all' || p.categoryId === catalogCat;
-    const matchSearch = !catalogSearch || p.name.toLowerCase().includes(catalogSearch.toLowerCase()) || (p.localName || '').toLowerCase().includes(catalogSearch.toLowerCase());
+    const query = catalogSearch.trim().toLowerCase();
+    const matchSearch = !query || p.name.toLowerCase().includes(query) || (p.localName || '').toLowerCase().includes(query)
+      || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(query));
     return matchCat && matchSearch;
   }), [catalogItems, catalogCat, catalogSearch]);
 
@@ -199,8 +203,9 @@ export default function ProductsPage() {
 
     // Search filter
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.localName || '').toLowerCase().includes(q));
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.localName || '').toLowerCase().includes(q)
+        || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q)));
     }
 
     // Category filter
@@ -270,7 +275,7 @@ export default function ProductsPage() {
   // ── Product CRUD ──────────────────────────────────────────────────────────
   const openCreate = useCallback(() => {
     setEditing(null);
-    setForm({ name: '', localName: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', discountPercent: '0', description: '', availabilityStatus: 'available', isCatalog: false });
+    setForm({ name: '', localName: '', searchAliases: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', discountPercent: '0', description: '', availabilityStatus: 'available', isCatalog: false });
     setPhotoFile(null); setPhotoPreview(null);
     setShowModal(true);
   }, [categories]);
@@ -283,7 +288,7 @@ export default function ProductsPage() {
   const openEdit = (p: Product) => {
     setEditing(p);
     setForm({
-      name: p.name, localName: p.localName || '', categoryId: p.categoryId || '', price: String(p.price),
+      name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '', price: String(p.price),
       unit: p.unit, discountPercent: String(p.discountPercent),
       description: p.description || '',
       availabilityStatus: p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock'),
@@ -329,7 +334,7 @@ export default function ProductsPage() {
           photoUrl = editing?.photoUrl || null;
         }
       }
-      const data = { ...form, price: parseFloat(form.price), discountPercent: parseFloat(form.discountPercent), photoUrl, isAvailable: form.availabilityStatus === 'available', isCatalog: isSuperAdmin ? form.isCatalog : undefined };
+      const data = { ...form, searchAliases: parseSearchAliases(form.searchAliases), price: parseFloat(form.price), discountPercent: parseFloat(form.discountPercent), photoUrl, isAvailable: form.availabilityStatus === 'available', isCatalog: isSuperAdmin ? form.isCatalog : undefined };
       if (editing) await productsApi.update(editing.id, { ...data, storeId });
       else await productsApi.create({ ...data, storeId });
       setShowModal(false); await load();
@@ -878,6 +883,10 @@ export default function ProductsPage() {
                   Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
                 </label>
                 <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo, Pyaaz" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
+                <input type="text" value={form.searchAliases} onChange={e => setForm(f => ({ ...f, searchAliases: e.target.value }))} className={inp} placeholder="e.g. Piyaj, Peeyaz, Pyaz" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Category</label>

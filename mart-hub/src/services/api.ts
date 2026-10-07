@@ -119,6 +119,9 @@ export interface FunnelSummary {
     acquisition: { sessions: number; uniqueVisitors: number; newVisitors: number; returningVisitors: number };
     customerLifecycle: { newCustomers: number; returningCustomers: number };
     sessionFunnel: { key: string; label: string; count: number }[];
+    nonEngagedSessions: number;
+    largestDrop: { from: string; to: string; count: number; percent: number } | null;
+    productDiscovery: { categoryInteractionSessions: number; searchInteractionSessions: number; productViewSessions: number; productViewEvents: number; zeroResultSearches: number };
     eventTotals: { key: string; count: number }[];
     otp: { mobileInteractions: number; otpRequests: number; otpVerified: number };
     orders: { placed: number; accepted: number; preparing: number; outForDelivery: number; delivered: number; paid: number; cancelled: number; gmv: number };
@@ -199,9 +202,9 @@ export const complianceApi = {
 export const catalogApi = {
   getAll: (params?: { categoryId?: string; search?: string }) =>
     api.get('/admin/catalog', { params }),
-  create: (data: { name: string; localName?: string; description?: string; photoUrl?: string; categoryId?: string }) =>
+  create: (data: { name: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; categoryId?: string }) =>
     api.post('/admin/catalog', data),
-  update: (id: string, data: { name?: string; localName?: string; description?: string; photoUrl?: string; categoryId?: string }) =>
+  update: (id: string, data: { name?: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; categoryId?: string }) =>
     api.put(`/admin/catalog/${id}`, data),
   delete: (id: string) => api.delete(`/admin/catalog/${id}`),
   bulkAddToStore: (productIds: string[], storeId?: string) =>

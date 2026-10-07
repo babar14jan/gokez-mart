@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
-import { ProductService } from '../services/product.service';
+import { ProductService, normalizeSearchAliases } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
 import { OrderService } from '../services/order.service';
 import { SettingsService } from '../services/settings.service';
@@ -433,7 +433,7 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
   if (categoryId) { conditions.push(`p.category_id = $${i++}`); params.push(categoryId); }
   if (search) { conditions.push(`p.name ILIKE $${i++}`); params.push(`%${search}%`); }
   const result = await query(
-    `SELECT p.id, p.name, p.local_name as "localName", p.description,
+    `SELECT p.id, p.name, p.local_name as "localName", p.search_aliases as "searchAliases", p.description,
             p.photo_url as "photoUrl", p.category_id as "categoryId",
             c.name as "categoryName", c.icon as "categoryIcon"
      FROM mart_products p
@@ -447,20 +447,21 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
 
 // Create catalog product — super_admin only (name + photo + category, no price/store)
 export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, localName, description, photoUrl, categoryId } = req.body;
+  const { name, localName, searchAliases, description, photoUrl, categoryId } = req.body;
   if (!name?.trim()) { res.status(400).json({ success: false, error: 'name is required' }); return; }
-  const product = await ProductService.createCatalogProduct({ name: name.trim(), localName, description, photoUrl, categoryId });
+  const product = await ProductService.createCatalogProduct({ name: name.trim(), localName, searchAliases, description, photoUrl, categoryId });
   res.status(201).json({ success: true, data: product });
 });
 
 // Update catalog product — super_admin only
 export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, localName, description, photoUrl, categoryId } = req.body;
+  const { name, localName, searchAliases, description, photoUrl, categoryId } = req.body;
   const fields: string[] = [];
   const params: unknown[] = [];
   let i = 1;
   if (name !== undefined)        { fields.push(`name = $${i++}`);        params.push(name); }
   if (localName !== undefined)   { fields.push(`local_name = $${i++}`);  params.push(localName); }
+  if (searchAliases !== undefined) { fields.push(`search_aliases = $${i++}`); params.push(normalizeSearchAliases(searchAliases)); }
   if (description !== undefined) { fields.push(`description = $${i++}`); params.push(description); }
   if (photoUrl !== undefined)    { fields.push(`photo_url = $${i++}`);   params.push(photoUrl); }
   if (categoryId !== undefined)  { fields.push(`category_id = $${i++}`); params.push(categoryId || null); }
@@ -469,7 +470,7 @@ export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, 
   params.push(req.params.id);
   const result = await query(
     `UPDATE mart_products SET ${fields.join(', ')} WHERE id = $${i} AND is_catalog = true
-     RETURNING id, name, local_name as "localName", description, photo_url as "photoUrl", category_id as "categoryId"`,
+    RETURNING id, name, local_name as "localName", search_aliases as "searchAliases", description, photo_url as "photoUrl", category_id as "categoryId"`,
     params
   );
   if (!result.rows[0]) { res.status(404).json({ success: false, error: 'Catalog product not found' }); return; }

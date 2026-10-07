@@ -30,6 +30,7 @@ export const FUNNEL_EVENTS = [
   'login_abandoned',
   'product_viewed',
   'product_search',
+  'search_zero_results',
   'category_viewed',
   'cart_started',
   'cart_added',
@@ -240,10 +241,14 @@ export class FunnelEventService {
       term: params.term,
       qrCodeId: params.qrCodeId,
     });
+    const props = sanitiseProps(params.props);
+    const otpChannel = props.otpChannel === 'phone_call' || props.otpChannel === 'sms'
+      ? props.otpChannel
+      : null;
     await query(
-      `INSERT INTO mart_funnel_events (session_id, event_name, path, props)
-       VALUES ($1, $2, $3, $4)`,
-      [sessionId, params.eventName, sanitiseString(params.path, MAX_PATH_LENGTH), JSON.stringify(sanitiseProps(params.props))]
+      `INSERT INTO mart_funnel_events (session_id, event_name, path, props, otp_channel)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [sessionId, params.eventName, sanitiseString(params.path, MAX_PATH_LENGTH), JSON.stringify(props), otpChannel]
     );
     return true;
   }

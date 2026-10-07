@@ -78,6 +78,10 @@ describe('A. The funnel event allowlist is enforced server-side', () => {
     }
   });
 
+  test('zero-result searches are a distinct allowed event', () => {
+    assert.ok(FUNNEL_EVENTS.includes('search_zero_results'));
+  });
+
   test('a missing session id stores nothing', async () => {
     assert.equal(await FunnelEventService.recordEvent({ sessionId: '', eventName: 'session_start' }), false);
     assert.equal(await FunnelEventService.recordEvent({ sessionId: '   ', eventName: 'session_start' }), false);
@@ -536,8 +540,8 @@ describe('I. Guest checkouts flow through the lead funnel', () => {
     assert.ok(/=== 'guest'/.test(ctrl),
       'the admin leads controller no longer accepts status=guest');
     const hub = read('mart-hub/src/pages/CustomerLeadsPage.tsx');
-    assert.ok(/'Guest checkout'/.test(hub),
-      'the super admin is never shown a guest bucket for checkout-only shoppers');
+    assert.ok(/'Checkout-only'/.test(hub),
+      'the super admin is never shown a checkout-only bucket for these shoppers');
   });
 
   test('direct checkouts are excluded from the OTP-not-completed bucket', () => {
@@ -549,7 +553,47 @@ describe('I. Guest checkouts flow through the lead funnel', () => {
   });
 });
 
-describe('J. Customer identity is protected and reportable', () => {
+describe('J. Canonical engagement and attribution definitions remain separate', () => {
+  test('the session funnel inserts engagement without replacing its existing stages', () => {
+    const src = read('mart-backend/src/services/customerAnalytics.service.ts');
+    assert.ok(/'engaged', 'Engaged Sessions'/.test(src), 'engaged sessions are absent from the canonical funnel');
+    assert.ok(/'productDiscovery', 'Product Discovery Sessions'/.test(src), 'product discovery was removed from the canonical funnel');
+    assert.ok(/nonEngagedSessions: Math\.max\(0, f\.sessions - f\.engaged\)/.test(src), 'non-engaged sessions are not derived from sessions minus engaged sessions');
+  });
+
+  test('engagement excludes PWA installation and uses meaningful shop interactions', () => {
+    const src = read('mart-backend/src/services/customerAnalytics.service.ts');
+    assert.ok(/'category_viewed', 'product_search', 'product_viewed'/.test(src), 'category, search, and product interactions no longer qualify engagement');
+    assert.ok(/'cart_started', 'cart_added'/.test(src), 'cart actions no longer qualify engagement');
+    assert.ok(/'checkout_started', 'checkout_address_started'/.test(src), 'checkout actions no longer qualify engagement');
+    assert.equal(/pwa|install/i.test(src), false, 'PWA installation is incorrectly treated as funnel engagement');
+  });
+
+  test('discovery preserves unique-session and raw-event measures separately', () => {
+    const src = read('mart-backend/src/services/customerAnalytics.service.ts');
+    assert.ok(/COUNT\(DISTINCT e\.session_id\).*product_viewed/s.test(src), 'product view sessions are not distinct sessions');
+    assert.ok(/COUNT\(\*\).*product_viewed/s.test(src), 'product view events are not raw events');
+    assert.ok(/search_zero_results/.test(src), 'zero-result searches are not reported');
+  });
+
+  test('unknown acquisition remains unattributed instead of being forced to direct', () => {
+    const analytics = read('mart-backend/src/services/customerAnalytics.service.ts');
+    const tracking = read('mart-user/src/utils/track.ts');
+    assert.ok(/THEN 'unattributed'/.test(analytics), 'the analytics query labels unknown channel traffic as direct');
+    assert.ok(/hasCampaign.*hasReferrer/s.test(tracking), 'the client no longer distinguishes a direct visit from unattributed traffic');
+  });
+
+  test('cart start and OTP channel are recorded without personal data', () => {
+    const cart = read('mart-user/src/store/cartStore.ts');
+    const events = read('mart-backend/src/services/funnelEvent.service.ts');
+    const migration = read('mart-backend/src/database/migrations/073_funnel_otp_channel.sql');
+    assert.ok(/track\('cart_started'\)/.test(cart), 'the first cart action does not record cart_started');
+    assert.ok(/otpChannel === 'phone_call' \|\| props\.otpChannel === 'sms'/.test(events), 'only supported OTP channels must be stored');
+    assert.ok(/otp_channel TEXT/.test(migration), 'OTP channel is not prepared in the event schema');
+  });
+});
+
+describe('K. Customer identity is protected and reportable', () => {
   test('an authenticated order must use its verified phone number', () => {
     const ctrl = read('mart-backend/src/controllers/index.ts');
     assert.ok(/req\.customer && req\.customer\.phone !== cleanPhone/.test(ctrl),
@@ -567,7 +611,7 @@ describe('J. Customer identity is protected and reportable', () => {
   });
 });
 
-describe('K. First-order campaign redemption is single-use under retries', () => {
+describe('L. First-order campaign redemption is single-use under retries', () => {
   test('orders for one phone are serialized before campaign eligibility is checked', () => {
     const order = read('mart-backend/src/services/order.service.ts');
     const phoneLock = order.indexOf('customer-order:${cleanPhone}');
