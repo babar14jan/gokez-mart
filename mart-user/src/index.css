@@ -40,7 +40,18 @@ body { background-color: #ffffff; color: #111827; }
 /* Keep fixed mobile navigation above the iOS home indicator while scrolling. */
 .mobile-bottom-nav {
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  transform: translateZ(0);
+  transform: translate3d(0, 0, 0);
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
+}
+
+/* A fixed bar is re-anchored above the keyboard by Android's resizes-content
+   viewport and newer iOS visual viewport handling. Keep it at its normal page
+   bottom while the phone input owns the screen; it returns after the keyboard
+   closes. */
+.login-field-focused .mobile-bottom-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + env(safe-area-inset-bottom, 0px)));
 }
 
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }

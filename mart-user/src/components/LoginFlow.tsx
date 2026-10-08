@@ -405,7 +405,11 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   <input
                     id="login-phone" name="phone" type="tel" value={phone} maxLength={10}
                     onChange={e => setPhone(e.target.value.replace(/\D/g,'').slice(0,10))}
-                    onFocus={() => trackOnce('login_field_focused')}
+                    onFocus={() => {
+                      trackOnce('login_field_focused');
+                      document.documentElement.classList.add('login-field-focused');
+                    }}
+                    onBlur={() => document.documentElement.classList.remove('login-field-focused')}
                     placeholder="Enter mobile number"
                     inputMode="numeric" autoComplete="tel"
                     aria-invalid={Boolean(error)}

@@ -86,6 +86,12 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
   }, []);
 
   useEffect(() => {
+    if (!isLoggedIn) {
+      setMarketingConsent(false);
+      setNotificationSubscribed(false);
+      return;
+    }
+
     authApi.getMarketingConsent().then(response => setMarketingConsent(response.data.data.granted)).catch(() => {});
     try {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
@@ -95,7 +101,7 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
           .catch(() => {});
       }
     } catch {}
-  }, []);
+  }, [isLoggedIn]);
 
   const handleLocationToggle = async () => {
     if (!locationEnabled) {
