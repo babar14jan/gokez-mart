@@ -16,7 +16,7 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
   if (variant === 'card') {
     if (quantity === 0) {
       return (
-        <button type="button" onClick={handle(onAdd)} className="h-7 rounded-lg border border-pink-600 bg-pink-600 px-2 text-xs font-bold text-white transition-colors hover:bg-pink-700 active:bg-pink-800" aria-label="Add to cart">
+        <button type="button" onClick={handle(onAdd)} className="h-7 rounded-lg border-2 border-pink-600 bg-white px-2 text-xs font-extrabold text-pink-700 transition-colors hover:bg-pink-50 active:bg-pink-100 dark:bg-slate-800 dark:text-pink-300 dark:hover:bg-pink-950/30" aria-label="Add to cart">
           ADD
         </button>
       );
@@ -25,11 +25,11 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
     return (
       <div className="flex h-7 items-center overflow-hidden rounded-lg border border-pink-600 bg-pink-600">
         <button type="button" onClick={handle(onDecrease)} className="flex h-7 w-6 items-center justify-center text-white transition-colors hover:bg-pink-700 active:bg-pink-800" aria-label="Remove one from cart">
-          <Minus className="h-3 w-3" strokeWidth={2.5} />
+          <Minus className="h-3.5 w-3.5" strokeWidth={3} />
         </button>
         <span className="min-w-4 px-0.5 text-center text-[10px] font-bold tabular-nums text-white" aria-live="polite">{quantity}</span>
         <button type="button" onClick={handle(onAdd)} className="flex h-7 w-6 items-center justify-center text-white transition-colors hover:bg-pink-700 active:bg-pink-800" aria-label="Add one more to cart">
-          <Plus className="h-3 w-3" strokeWidth={2.5} />
+          <Plus className="h-3.5 w-3.5" strokeWidth={3} />
         </button>
       </div>
     );
