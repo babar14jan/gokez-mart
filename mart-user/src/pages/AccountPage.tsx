@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, User, Camera, ChevronRight, MoreHorizontal, Trash2, Check, Mail, Store } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, MoreHorizontal, Trash2, Check, Mail, Store } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -8,6 +8,7 @@ import { getLocationPermission, getNotificationPermission, requestNotificationPe
 import AddressForm from '../components/AddressForm';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
+import NamePrompt from '../components/NamePrompt';
 import { track } from '../utils/track';
 import { useFinePointer } from '../utils/useFinePointer';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
@@ -21,7 +22,15 @@ interface AccountPageProps {
   onNavigate?: (view: string) => void;
 }
 
-export default function AccountPage({ onBack, storeName, supportName, supportPhone, whatsappNumber }: AccountPageProps) {
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M12.04 2a9.85 9.85 0 0 0-8.35 15.08L2.5 21.5l4.55-1.13A9.85 9.85 0 1 0 12.04 2Zm0 17.9a8 8 0 0 1-4.08-1.12l-.3-.18-2.7.67.72-2.62-.2-.32a8 8 0 1 1 6.56 3.57Zm4.4-5.98c-.24-.12-1.42-.7-1.64-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06a6.55 6.55 0 0 1-1.93-1.19 7.23 7.23 0 0 1-1.34-1.67c-.14-.24 0-.37.1-.49.1-.1.22-.26.32-.39.11-.12.14-.22.22-.36.07-.14.03-.27-.02-.38-.06-.1-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.4h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.57.25 1.02.4 1.37.51.58.18 1.1.15 1.51.09.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z" />
+    </svg>
+  );
+}
+
+export default function AccountPage({ onBack, storeName, supportPhone, whatsappNumber }: AccountPageProps) {
   const finePointer = useFinePointer();
   const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
@@ -47,7 +56,7 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
   const [addressMenuId, setAddressMenuId] = useState<string | null>(null);
   const [addressPendingDelete, setAddressPendingDelete] = useState<string | null>(null);
   const [addressDeleting, setAddressDeleting] = useState(false);
-  const [profileRequired, setProfileRequired] = useState(false);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
@@ -184,16 +193,15 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
   };
 
   const footer = (
-    <div className="flex flex-col items-center gap-1.5 pb-36">
-      <p className="text-xs text-gray-400 dark:text-slate-500">
-        App Version: v0.0.1
-      </p>
-      <div className="flex items-center justify-center gap-3">
+    <div className="mt-2 flex flex-col items-center gap-1.5 pb-36">
+      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
         <button onClick={() => navigate('/privacy/')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Privacy Policy</button>
         <span className="text-gray-500 dark:text-slate-400 text-[10px]">·</span>
         <button onClick={() => navigate('/terms/')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Terms of Service</button>
+        <span className="text-gray-500 dark:text-slate-400 text-[10px]">·</span>
+        <button onClick={() => navigate('/delete-account')} className="text-[10px] text-gray-500 transition-colors hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400">Delete my account</button>
       </div>
-      <span className="text-[11px] text-gray-500 dark:text-slate-400">
+      <span className="text-xs text-gray-500 dark:text-slate-400">
         A product of{' '}
         <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
           Gokez Technologies Pvt. Ltd.
@@ -203,7 +211,7 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
     </div>
   );
 
-  if (!isLoggedIn || profileRequired) {
+  if (!isLoggedIn) {
     return (
       <div className="page-shell bg-white dark:bg-slate-900 font-sans">
         <div className="w-full sm:max-w-sm sm:mx-auto bg-white dark:bg-slate-800 sm:rounded-3xl sm:shadow-xl overflow-hidden">
@@ -221,7 +229,6 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               // to avoid showing the same action twice. The hero image is NOT --
               // the flow supplies it, so both hosts share one login visual.
               showGuestLink={false}
-              onProfileRequired={() => setProfileRequired(true)}
               onStepChange={(s) => { loginStep.current = s; }}
               // The page owns the guest exit (the flow's own is switched off above), so it
               // has to do the flow's cleanup itself. LoginFlow.handleGuest normally
@@ -229,12 +236,11 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               // abandons login here leaves an unexpired OTP flow in sessionStorage,
               // which App reads on next boot and turns into a surprise modal.
               onGuest={leaveAsGuest}
+              onNameRequested={() => setShowNamePrompt(true)}
               onSuccess={() => {
-                setProfileRequired(false);
-                // Honour the redirect intent recorded before this page was opened.
-                // "/orders" is the default because /account is reached from the
-                // guest "Track My Orders" CTA.
-                const redirect = useLoginFlowStore.getState().postLoginPath || '/orders';
+                // Honour an explicit redirect intent (for example, Orders). A
+                // customer who began login from Account belongs back on Account.
+                const redirect = useLoginFlowStore.getState().postLoginPath || '/account';
                 useLoginFlowStore.getState().setPostLoginPath(null);
                 useLoginFlowStore.getState().setGuestReturnPath(null);
                 navigate(redirect);
@@ -248,12 +254,12 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
                 Continue as guest →
               </button>
             </div>}
-            <p className="text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
+            {!isLoggedIn && <p className="text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
               By continuing, you agree to our{' '}
               <button type="button" onClick={() => navigate('/terms/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Terms</button>{' '}
               and{' '}
               <button type="button" onClick={() => navigate('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
-            </p>
+            </p>}
           </div>
         </div>
       </div>
@@ -261,18 +267,18 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
   }
 
   return (
-    <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-3">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
+    <div className="page-shell bg-[#f7f8fa] dark:bg-slate-900 font-sans">
+      <div className="mx-auto max-w-2xl space-y-7 px-4 py-5 pb-10 sm:px-6 sm:py-7">
+        <div className="rounded-[20px] border border-[#e9edf2] bg-white p-5 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800">
           <div className="flex items-center gap-4">
             <div className="relative flex-shrink-0">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 border-2 border-emerald-200 dark:border-emerald-800 flex items-center justify-center overflow-hidden">
+              <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full border-2 border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30">
                 {photoUrl
                   ? <img src={photoUrl} alt={name || ''} className="w-full h-full object-cover" />
-                  : <span className="text-2xl font-black text-emerald-700 dark:text-emerald-400">{initial}</span>
+                  : <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{initial}</span>
                 }
               </div>
-              <label className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md cursor-pointer hover:bg-gray-100 transition-colors">
+              <label aria-label="Change profile photo" className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#e9edf2] bg-white shadow-sm transition-colors hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-700 dark:hover:bg-slate-600">
                 {photoUploading
                   ? <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
                   : <Camera className="w-3.5 h-3.5 text-emerald-600" />
@@ -282,37 +288,34 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
             </div>
             <div className="flex-1 min-w-0">
               {editingName ? (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2">
                   <input autoFocus={finePointer} type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
                     className="min-w-0 w-full flex-1 px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500" placeholder="Your full name" />
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
-                    <button type="button" onClick={saveName} disabled={saving === 'name'}
-                      className="inline-flex min-h-11 items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-3 text-sm font-semibold disabled:opacity-60">
+                  <div className="flex shrink-0 gap-1.5">
+                    <button type="button" onClick={saveName} disabled={saving === 'name'} aria-label="Save profile name" title="Save"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-white transition-colors hover:bg-emerald-600 disabled:opacity-60">
                       {saving === 'name' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      <span className="sm:hidden">Save</span>
                     </button>
-                    <button type="button" onClick={() => { setEditingName(false); setNameVal(name || ''); }}
-                      className="inline-flex min-h-11 items-center justify-center gap-1.5 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg px-3 text-sm font-semibold">
+                    <button type="button" onClick={() => { setEditingName(false); setNameVal(name || ''); }} aria-label="Cancel profile name editing" title="Cancel"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700">
                       <X className="w-4 h-4" />
-                      <span className="sm:hidden">Cancel</span>
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <p className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                    {name || <span className="font-normal text-gray-500 dark:text-slate-400 text-base">Add your name</span>}
+                  <p className="truncate text-[22px] font-bold leading-tight text-[#172033] dark:text-white">
+                    {name || <span className="text-base font-normal text-gray-500 dark:text-slate-400">Add your name</span>}
                   </p>
-                  <button onClick={() => setEditingName(true)}
-                    className="p-2 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
-                    <Pencil className="w-3.5 h-3.5" />
+                  <button onClick={() => setEditingName(true)} aria-label="Edit profile name"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700">
+                    <Pencil className="h-4 w-4" />
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-2 mt-0.5">
-                <Phone className="w-3 h-3 text-gray-500 dark:text-slate-400" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">+91 {phone}</span>
-                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="flex items-center gap-1 text-sm font-medium text-[#687386] dark:text-slate-300"><Phone className="h-3.5 w-3.5" />+91 {phone}</span>
+                <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
                   <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   Verified
                 </span>
@@ -323,34 +326,36 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-4 py-3">
-            <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Addresses</p>
+        <section>
+          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">My Gokez Mart</p>
+          <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+            <p className="text-[15px] font-semibold text-[#172033] dark:text-white">My addresses</p>
             <button onClick={() => setEditingAddressId('new')}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600">
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">
               <Plus className="w-3.5 h-3.5" /> Add address
             </button>
           </div>
           {addresses.length === 0 && (
-            <div className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
-              <p className="text-xs text-gray-500 dark:text-slate-400 italic mb-2">No saved addresses yet</p>
+            <div className="border-t border-[#e9edf2] px-4 py-4 dark:border-slate-700">
+              <p className="text-sm text-[#687386] dark:text-slate-400">Save an address for faster checkout.</p>
             </div>
           )}
           {addresses.map(addr => (
-            <div key={addr.id} className="px-4 pb-3 border-t border-gray-50 dark:border-slate-700 pt-3">
+            <div key={addr.id} className="border-t border-[#e9edf2] px-4 py-3.5 dark:border-slate-700">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 flex-1 min-w-0">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${addr.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
-                    <MapPin className={`w-3.5 h-3.5 ${addr.isDefault ? 'text-emerald-500' : 'text-gray-500'}`} />
+                  <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${addr.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
+                    <MapPin className={`h-4 w-4 ${addr.isDefault ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-[11px] font-bold text-gray-700 dark:text-slate-300">{addr.label}</span>
+                    <div className="mb-1 flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-[#172033] dark:text-slate-200">{addr.label}</span>
                       {addr.isDefault && (
-                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">Default</span>
+                        <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Default</span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-700 dark:text-slate-300 leading-snug">{addr.address}</p>
+                    <p className="line-clamp-2 text-[13px] leading-snug text-[#687386] dark:text-slate-400">{addr.address}</p>
                   </div>
                 </div>
                 <button onClick={() => setAddressMenuId(addr.id)} aria-label={`Manage ${addr.label} address`} title="Manage address"
@@ -360,7 +365,8 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        </section>
 
         {addressMenuId && (() => {
           const address = addresses.find(item => item.id === addressMenuId);
@@ -446,75 +452,86 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
         })()}
 
         {(supportPhone || whatsappNumber) && (
-          <>
-            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-1">Store Support</p>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
+          <section>
+            <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Your local store</p>
+            <div className="rounded-[18px] border border-[#e9edf2] bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
                   <Store className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{storeName || 'Your delivery store'}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
-                    {supportName ? `Support contact: ${supportName}` : 'Order and delivery help'}
-                  </p>
-                  {supportPhone && <p className="mt-0.5 text-xs font-medium text-gray-700 dark:text-slate-300">{supportPhone}</p>}
+                  <p className="text-[15px] font-semibold text-[#172033] dark:text-white">{storeName || 'Your delivery store'}</p>
+                  <p className="mt-0.5 text-[13px] text-[#687386] dark:text-slate-400">{storeName ? 'Your orders are fulfilled by this store.' : 'Order and delivery help'}</p>
                 </div>
               </div>
               {(supportPhone || whatsappNumber) && (
-                <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3 dark:border-slate-700">
+                <div className="mt-4 flex gap-2 border-t border-[#e9edf2] pt-3 dark:border-slate-700">
                   {supportPhone && (
                     <a href={`tel:${supportPhone}`}
-                      className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50">
+                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50">
                       <Phone className="w-4 h-4" /> Call store
                     </a>
                   )}
                   {whatsappNumber && (
                     <a href={`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I need help with my order on Gokez Mart.`)}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 text-xs font-semibold text-green-700 transition-colors hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:hover:bg-green-900/30">
-                      <MessageCircle className="w-4 h-4" /> WhatsApp
+                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 text-xs font-semibold text-green-700 transition-colors hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:hover:bg-green-900/30">
+                      <WhatsAppIcon className="h-4 w-4" /> WhatsApp
                     </a>
                   )}
                 </div>
               )}
             </div>
-          </>
+          </section>
         )}
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider px-4 pt-3 pb-1">Gokez Support</p>
+        <section>
+          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Contact Gokez</p>
+          <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
           <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`}
-            className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+            className="flex min-h-[64px] items-center gap-3 px-4 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
               <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Call Gokez</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">{GOKEZ_SUPPORT.phone}</p>
+              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">{GOKEZ_SUPPORT.phone}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300" />
           </a>
           <a href={`mailto:${GOKEZ_SUPPORT.email}`}
-            className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+            className="flex min-h-[64px] items-center gap-3 border-t border-[#e9edf2] px-4 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20">
               <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 dark:text-slate-200">Email Gokez</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">{GOKEZ_SUPPORT.email}</p>
+              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">{GOKEZ_SUPPORT.email}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300" />
           </a>
-        </div>
+          </div>
+        </section>
 
-        <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide px-1">Settings</p>
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
-          <div className="flex items-center gap-3 px-4 py-3">
+        <button
+          onClick={() => navigate('/feedback/')}
+          className="flex w-full items-center justify-between rounded-[18px] border border-amber-100 bg-amber-50/70 px-4 py-4 text-left transition-colors hover:bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 dark:hover:bg-amber-950/30">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-lg shadow-sm dark:bg-slate-800" aria-hidden="true">★</span>
+            <div>
+              <p className="text-[15px] font-semibold text-[#172033] dark:text-white">Share feedback</p>
+              <p className="mt-0.5 text-[13px] text-[#687386] dark:text-slate-400">Tell us how Gokez Mart can improve.</p>
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+        </button>
+
+        <section>
+        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Preferences</p>
+        <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800 divide-y divide-[#e9edf2] dark:divide-slate-700">
+          <div className="flex min-h-[64px] items-center gap-3 px-4">
             <Navigation className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Location</span>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">
+              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Location</span>
+              <p className="text-[12px] text-[#687386] dark:text-slate-400">
                 {locationPermission === 'denied'
                   ? 'Blocked in browser — enable in browser settings'
                   : locationEnabled
@@ -531,11 +548,11 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               </button>
             )}
           </div>
-          <div className="flex items-center gap-3 px-4 py-3">
+          <div className="flex min-h-[64px] items-center gap-3 px-4">
             <Bell className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Order Notifications</span>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">
+              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Order notifications</span>
+              <p className="text-[12px] text-[#687386] dark:text-slate-400">
                 {notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
                  notificationPermission === 'denied' ? 'Blocked - enable in browser settings' :
                  notificationPermission === 'unsupported' ? 'Not supported on this browser' :
@@ -553,11 +570,11 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               </button>
             )}
           </div>
-          <div className="flex items-center gap-3 px-4 py-3">
+          <div className="flex min-h-[64px] items-center gap-3 px-4">
             <MessageCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium text-gray-800 dark:text-slate-200">Promotional Notifications</span>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">Offers, deals and new arrivals</p>
+              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Promotional notifications</span>
+              <p className="text-[12px] text-[#687386] dark:text-slate-400">Offers, deals and new arrivals</p>
             </div>
             <button onClick={handleMarketingNotifications} role="switch" aria-checked={marketingConsent}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${marketingConsent ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
@@ -565,14 +582,16 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
             </button>
           </div>
         </div>
+        </section>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-4 pt-3 pb-1">Data &amp; Privacy</p>
-          <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
+        <section>
+        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Privacy &amp; data</p>
+        <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex min-h-[64px] items-center gap-3 px-4">
             <MessageCircle className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-700 dark:text-slate-300">Submit a Grievance</p>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">Complaint or concern about your data or service</p>
+              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-300">Submit a grievance</p>
+              <p className="text-[12px] text-[#687386] dark:text-slate-400">Complaint or concern about your data or service</p>
             </div>
             <button
               onClick={() => navigate('/grievance/')}
@@ -580,11 +599,11 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               Open
             </button>
           </div>
-          <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
-            <User className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          <div className="flex min-h-[64px] items-center gap-3 border-t border-[#e9edf2] px-4 dark:border-slate-700">
+            <Download className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-slate-400" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-700 dark:text-slate-300">Download My Data</p>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">Export your profile, orders &amp; history</p>
+              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-300">Download my data</p>
+              <p className="text-[12px] text-[#687386] dark:text-slate-400">Export your profile, orders &amp; history</p>
             </div>
             <button
               disabled={exportLoading}
@@ -611,38 +630,32 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
               {exportLoading ? 'Preparing...' : exportReady ? 'Downloaded ✓' : 'Export'}
             </button>
           </div>
+          <button onClick={() => navigate('/privacy/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#e9edf2] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+            <ShieldCheck className="h-4 w-4 text-gray-500 dark:text-slate-400" />
+            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Privacy policy</span>
+            <ChevronRight className="h-4 w-4 text-gray-300" />
+          </button>
+          <button onClick={() => navigate('/terms/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#e9edf2] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+            <FileText className="h-4 w-4 text-gray-500 dark:text-slate-400" />
+            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Terms of service</span>
+            <ChevronRight className="h-4 w-4 text-gray-300" />
+          </button>
         </div>
+        </section>
 
-        <button
-          onClick={() => navigate('/feedback/')}
-          className="w-full flex items-center justify-between px-4 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors">
-          <div className="flex items-center gap-3">
-            <span className="text-xl">⭐</span>
-            <div className="text-left">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">Share Feedback</p>
-              <p className="text-[10px] text-gray-500 dark:text-slate-400">Rate your experience with Gokez Mart</p>
-            </div>
-          </div>
-          <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-        </button>
-
-        <div className="flex flex-col items-center gap-2 pb-2">
+        <section className="pt-1 text-center">
           <button onClick={async () => {
             try { await authApi.logout(); } catch {}
             logout(); onBack?.();
           }}
-            className="flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-600 px-4 py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10">
             Sign Out
           </button>
-          <button
-            onClick={() => navigate('/delete-account')}
-            className="text-xs text-gray-500 dark:text-slate-400 hover:text-gray-500 dark:hover:text-slate-400 transition-colors">
-            Delete my account
-          </button>
-        </div>
-
-        {footer}
+          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.0.1</p>
+          {footer}
+        </section>
       </div>
+      {showNamePrompt && <NamePrompt onDone={() => setShowNamePrompt(false)} />}
     </div>
   );
 }

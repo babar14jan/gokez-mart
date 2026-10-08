@@ -15,21 +15,31 @@ export default function NamePrompt({ onDone }: NamePromptProps) {
   const { setName: syncName } = useCustomerStore();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSave = async () => {
-    const trimmed = name.trim();
+    if (saving) return;
+    const trimmed = name.trim().replace(/\s+/g, ' ');
     if (!trimmed) { onDone(); return; }
+    if (trimmed.length < 2 || trimmed.length > 80 || !/\p{L}/u.test(trimmed)) {
+      setError('Enter a name between 2 and 80 characters.');
+      return;
+    }
     setSaving(true);
+    setError('');
     try {
       await authApi.updateProfile({ name: trimmed });
       updateProfile({ name: trimmed });
       syncName(trimmed);
-    } catch {}
-    finally { setSaving(false); onDone(); }
+      onDone();
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.error || 'We could not save your name. Please try again.');
+    } finally { setSaving(false); }
   };
 
   const handleSkip = () => {
     // Don't save a fake name — just skip, name stays null
+    sessionStorage.setItem('mart_name_prompt_skipped', '1');
     onDone();
   };
 
@@ -53,18 +63,21 @@ export default function NamePrompt({ onDone }: NamePromptProps) {
           autoFocus={finePointer}
           type="text"
           value={name}
-          onChange={e => setName(e.target.value)}
+          onChange={e => { setName(e.target.value); setError(''); }}
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           placeholder="Your name"
+          aria-invalid={Boolean(error)}
           className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-500 mb-3"
         />
+
+        {error && <p className="-mt-1 mb-3 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
 
         <button
           onClick={handleSave}
           disabled={saving}
           className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-2xl disabled:opacity-50 transition-all mb-2"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continue'}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save name'}
         </button>
 
         <button

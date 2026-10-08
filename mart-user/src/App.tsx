@@ -1,10 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Search, X, CheckCircle, Mail, Phone } from 'lucide-react';
+import { Search, X, CheckCircle, Mail, Phone, BellRing, MapPin } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, MartZone } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
-import { subscribeToPush } from './services/push';
+import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush } from './services/push';
 import { getUserLocation, findMatchingZone } from './services/geofence';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
@@ -31,6 +31,23 @@ import { GOKEZ_SUPPORT } from './constants/gokezSupport';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
 type View = 'home' | 'about' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
+
+type PermissionPrompt = 'order-notifications' | 'location' | null;
+
+const PERMISSION_PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const ORDER_NOTIFICATION_PROMPT_KEY = 'mart_order_notification_prompted_at';
+const LOCATION_PROMPT_KEY = 'mart_location_prompted_at';
+const PERMISSION_PROMPT_SESSION_KEY = 'mart_permission_prompt_shown';
+
+function isPermissionPromptDue(storageKey: string): boolean {
+  const lastPromptedAt = Number(localStorage.getItem(storageKey) || 0);
+  return !lastPromptedAt || Date.now() - lastPromptedAt >= PERMISSION_PROMPT_COOLDOWN_MS;
+}
+
+function recordPermissionPrompt(storageKey: string, prompt: Exclude<PermissionPrompt, null>) {
+  localStorage.setItem(storageKey, String(Date.now()));
+  sessionStorage.setItem(PERMISSION_PROMPT_SESSION_KEY, prompt);
+}
 
 const SHAPOORJI_ZONE: MartZone = {
   id: 'shapoorji-default',
@@ -116,15 +133,12 @@ export default function App() {
   useEffect(() => {
     if (!isLoggedIn) return;
     useCustomerStore.getState().loadAddresses();
-    // Auto-subscribe to push if permission already granted
-    try {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        subscribeToPush().catch(() => {});
-      }
-    } catch {}
   }, [isLoggedIn]);
   const [showLoginModal, setShowLoginModal] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()));
   const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [permissionPrompt, setPermissionPrompt] = useState<PermissionPrompt>(null);
+  const [orderNotificationError, setOrderNotificationError] = useState('');
+  const [enablingOrderNotifications, setEnablingOrderNotifications] = useState(false);
 
   const [showOutsideWarning, setShowOutsideWarning] = useState(false);
   const [showOutsideBlock, setShowOutsideBlock] = useState(false);
@@ -288,23 +302,6 @@ export default function App() {
                     setSettings(sr.data.data || DEFAULT_SETTINGS);
                   }
                 }
-              } else if (result.state === 'prompt' && !localStorage.getItem('mart_location_asked')) {
-                // First visit — ask once
-                localStorage.setItem('mart_location_asked', '1');
-                const loc = await getUserLocation();
-                if (loc) {
-                  localStorage.setItem('mart_location_enabled', 'true');
-                  const match = findMatchingZone(loc.lat, loc.lng, fetchedZones);
-                  if (match) {
-                    setSelectedZone(match.zone);
-                    const [pr, sr] = await Promise.all([
-                      storeApi.getProducts(undefined, match.zone.storeId),
-                      storeApi.getSettings(match.zone.storeId),
-                    ]);
-                    setProducts(pr.data.data || []);
-                    setSettings(sr.data.data || DEFAULT_SETTINGS);
-                  } else setShowOutsideWarning(true);
-                }
               }
             }).catch(() => {});
           }
@@ -431,6 +428,80 @@ export default function App() {
     window.dispatchEvent(new Event('gokez:first-order-completed'));
   }, [successData]);
 
+  useEffect(() => {
+    if (!isLoggedIn || !successData || getNotificationPermission() !== 'default' || !isPermissionPromptDue(ORDER_NOTIFICATION_PROMPT_KEY)) return;
+    setPermissionPrompt('order-notifications');
+    setOrderNotificationError('');
+  }, [isLoggedIn, successData]);
+
+  useEffect(() => {
+    if (successData || permissionPrompt || sessionStorage.getItem(PERMISSION_PROMPT_SESSION_KEY)) return;
+    let cancelled = false;
+    getLocationPermission().then(permission => {
+      if (!cancelled && permission === 'prompt' && isPermissionPromptDue(LOCATION_PROMPT_KEY)) {
+        setPermissionPrompt('location');
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [permissionPrompt, successData]);
+
+  const dismissPermissionPrompt = () => {
+    if (permissionPrompt === 'order-notifications') {
+      recordPermissionPrompt(ORDER_NOTIFICATION_PROMPT_KEY, permissionPrompt);
+    } else if (permissionPrompt === 'location') {
+      recordPermissionPrompt(LOCATION_PROMPT_KEY, permissionPrompt);
+    }
+    setPermissionPrompt(null);
+    setOrderNotificationError('');
+  };
+
+  const enableOrderNotifications = async () => {
+    setEnablingOrderNotifications(true);
+    setOrderNotificationError('');
+    try {
+      const permission = await requestNotificationPermission();
+      if (permission !== 'granted') {
+        dismissPermissionPrompt();
+        return;
+      }
+      if (await subscribeToPush()) {
+        dismissPermissionPrompt();
+      } else {
+        setOrderNotificationError('We could not turn on order updates. Check your connection and try again.');
+      }
+    } finally {
+      setEnablingOrderNotifications(false);
+    }
+  };
+
+  const enableLocation = async () => {
+    const location = await getUserLocation();
+    if (!location) {
+      dismissPermissionPrompt();
+      return;
+    }
+    localStorage.setItem('mart_location_enabled', 'true');
+    try {
+      const availableZones = zones.length > 0 ? zones : (await storeApi.getZones()).data.data || [];
+      const match = findMatchingZone(location.lat, location.lng, availableZones);
+      if (match) {
+        setSelectedZone(match.zone);
+        const [productResponse, settingsResponse] = await Promise.all([
+          storeApi.getProducts(undefined, match.zone.storeId),
+          storeApi.getSettings(match.zone.storeId),
+        ]);
+        setProducts(productResponse.data.data || []);
+        setSettings(settingsResponse.data.data || DEFAULT_SETTINGS);
+      } else {
+        setShowOutsideWarning(true);
+      }
+    } catch {
+      // Permission remains enabled; the next catalog refresh can retry zone lookup.
+    } finally {
+      dismissPermissionPrompt();
+    }
+  };
+
   // Success screen
   if (successData) {
     const STEPS = ['pending', 'preparing', 'out_for_delivery', 'delivered'];
@@ -455,6 +526,23 @@ export default function App() {
               Order <span className="font-bold text-gray-900 dark:text-white">#{successData.num}</span>
             </p>
           </div>
+
+          {permissionPrompt === 'order-notifications' && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">
+              <div className="flex gap-3">
+                <BellRing className="mt-0.5 h-5 w-5 flex-none text-emerald-600 dark:text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Keep track of this order</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">Allow order updates for preparation and delivery. Promotional messages stay off.</p>
+                  {orderNotificationError && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{orderNotificationError}</p>}
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={enableOrderNotifications} disabled={enablingOrderNotifications} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">{enablingOrderNotifications ? 'Turning on...' : 'Allow updates'}</button>
+                    <button onClick={dismissPermissionPrompt} disabled={enablingOrderNotifications} className="rounded-xl px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-emerald-900/40">Not now</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-md border border-emerald-100 dark:border-emerald-900">
             <div className="bg-emerald-500 px-4 py-3 flex items-center justify-between">
@@ -577,7 +665,11 @@ export default function App() {
   return (
     <div className={`page-shell ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
-      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onGuest={handleLoginModalGuest} onClose={() => {
+      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNameRequested={() => {
+        // Checkout must resume immediately after authentication. Elsewhere, the
+        // optional sheet can ask once without changing the destination.
+        if (!pendingCheckout) setShowNamePrompt(true);
+      }} onGuest={handleLoginModalGuest} onClose={() => {
         useLoginFlowStore.getState().clear();
         useLoginFlowStore.getState().setPostLoginPath(null);
         setShowLoginModal(false);
@@ -597,7 +689,21 @@ export default function App() {
         }
       }} />}
 
-      {showNamePrompt && <NamePrompt onDone={() => { setShowNamePrompt(false); setView('home'); }} />}
+        {showNamePrompt && <NamePrompt onDone={() => setShowNamePrompt(false)} />}
+
+        {permissionPrompt === 'location' && (
+          <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/45 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby="location-permission-title">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800">
+              <MapPin className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              <h2 id="location-permission-title" className="mt-3 text-base font-bold text-gray-900 dark:text-white">Find the right store for you</h2>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-slate-300">Use your location while the app is open to check delivery availability. We do not track your location in the background.</p>
+              <div className="mt-5 flex gap-2">
+                <button onClick={enableLocation} className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-700">Use my location</button>
+                <button onClick={dismissPermissionPrompt} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700">Not now</button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Outside zone — soft warning */}
       {showOutsideWarning && (

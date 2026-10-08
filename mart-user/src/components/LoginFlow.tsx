@@ -3,7 +3,6 @@ import { RefreshCw, ArrowRight, Tag, PhoneCall } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useFinePointer } from '../utils/useFinePointer';
-import { subscribeToPush } from '../services/push';
 import { useCustomerStore } from '../store/customerStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../utils/track';
@@ -15,14 +14,14 @@ export interface LoginFlowProps {
   pendingCheckout?: boolean;
   onGuest?: () => void;
   variant?: 'modal' | 'page';
+  /** Invoked after a new customer signs in without a saved name. */
+  onNameRequested?: () => void;
   /**
    * The overlay has no other way out, so it needs the guest escape inline. A page
    * host that renders its own "Continue as guest" must switch this off, or the
    * customer sees the same action twice.
    */
   showGuestLink?: boolean;
-  /** Keeps a page host mounted after OTP verification until the required name saves. */
-  onProfileRequired?: () => void;
   /**
    * Reports the visible step so a host that renders its OWN guest exit can emit
    * login_abandoned for the right step. AccountPage does exactly that, and without
@@ -49,7 +48,7 @@ export type Step = 'phone' | 'otp' | 'profile' | 'offer';
  * cancels its py-6 instead. Everything else -- steps, OTP, analytics, the guest
  * exit and the login art -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onProfileRequired, onStepChange }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onNameRequested, onStepChange }: LoginFlowProps) {
   const isModal = variant === 'modal';
   // See useFinePointer: auto-focusing a field on a phone opens the keyboard on
   // arrival and the browser scrolls to it, which is the page shake we are avoiding.
@@ -127,7 +126,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
       savePhone(customer.phone);
       if (customer.name) setName(customer.name);
       if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
-      try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') subscribeToPush().catch(() => {}); } catch {}
       // If returning customer (has name) — check for offers then done
       if (customer.name) {
         // Check for eligible campaigns
@@ -143,8 +141,9 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
           }
         }).catch(() => { onSuccess?.(); onClose?.(); });
       } else {
-        onProfileRequired?.();
-        setStep('profile');
+        if (!sessionStorage.getItem('mart_name_prompt_skipped')) onNameRequested?.();
+        onSuccess?.();
+        onClose?.();
       }
     } catch (err: any) {
       track('otp_verification_failed', {
@@ -309,7 +308,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   <span className="text-2xl" aria-hidden="true">👋</span>
                 </div>
                 <h2 id="login-title" className="text-base font-bold text-gray-900 dark:text-white mb-1">Almost there!</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-500">Tell us your name so we can personalise your experience</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500">Add your name to finish setting up your account.</p>
               </div>
               <ErrorNote id="login-error" />
               <form onSubmit={handleSaveProfile} className="space-y-3">
