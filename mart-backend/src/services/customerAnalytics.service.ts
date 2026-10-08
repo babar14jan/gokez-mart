@@ -117,13 +117,16 @@ export class CustomerAnalyticsService {
              COUNT(*) FILTER (WHERE cart)::int AS cart_sessions,
              COUNT(*) FILTER (WHERE checkout)::int AS checkout_sessions
            FROM session_flags GROUP BY source, medium, campaign
-         ), order_metrics AS (
+         ), order_attribution AS (
            SELECT COALESCE(NULLIF(s.source, ''), CASE WHEN s.channel = 'unattributed' THEN 'unattributed' ELSE s.channel END) AS source,
              COALESCE(NULLIF(s.medium, ''), CASE WHEN s.channel = 'qr' THEN 'qr' WHEN s.channel = 'unattributed' THEN 'unattributed' WHEN s.channel = 'direct' THEN 'none' ELSE 'referral' END) AS medium,
-             NULLIF(s.utm_campaign, '') AS campaign, COUNT(*)::int AS orders
+             NULLIF(s.utm_campaign, '') AS campaign
            FROM mart_orders o
            JOIN mart_funnel_sessions s ON s.session_id = o.funnel_session_id
            WHERE ${orderWhere}
+         ), order_metrics AS (
+           SELECT source, medium, campaign, COUNT(*)::int AS orders
+           FROM order_attribution
            GROUP BY source, medium, campaign
          )
          SELECT COALESCE(sm.source, om.source) AS source, COALESCE(sm.medium, om.medium) AS medium,
