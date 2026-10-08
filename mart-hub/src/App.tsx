@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense, useEffect } from 'react';
+import { Component, lazy, Suspense, useEffect, type ErrorInfo, type ReactNode } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
@@ -33,6 +33,34 @@ const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazy(() => import('./pages/CarouselPage'));
+
+function RouteLoading() {
+  return <div className="flex min-h-screen items-center justify-center bg-white text-sm font-medium text-gray-500 dark:bg-slate-900 dark:text-slate-400">Loading...</div>;
+}
+
+class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Hub route failed to load', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-white px-6 text-center dark:bg-slate-900">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">A newer version is available.</p>
+          <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Reload app</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Roles mirror mart_admins_role_check in migration 056. store_manager is a real
 // role; it used to be listed here while the database still rejected it, which
@@ -85,7 +113,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<div className="min-h-screen bg-white dark:bg-slate-900" />}>
+      <RouteErrorBoundary>
+      <Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/"                element={<ProtectedRoute path="/"><DashboardPage /></ProtectedRoute>} />
@@ -118,6 +147,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>
+      </RouteErrorBoundary>
     </BrowserRouter>
   );
 }

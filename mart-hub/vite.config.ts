@@ -8,10 +8,9 @@ function versionPlugin() {
     name: 'version-json',
     closeBundle() {
       const v = Date.now().toString();
-      fs.writeFileSync(
-        path.resolve(__dirname, 'dist/version.json'),
-        JSON.stringify({ v })
-      );
+      const version = JSON.stringify({ v });
+      fs.writeFileSync(path.resolve(__dirname, 'dist/version.json'), version);
+      fs.writeFileSync(path.resolve(__dirname, 'dist/cache-version.json'), version);
     },
   };
 }
