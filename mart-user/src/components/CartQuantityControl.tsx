@@ -16,7 +16,7 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
   if (variant === 'card') {
     if (quantity === 0) {
       return (
-        <button type="button" onClick={handle(onAdd)} className="h-7 rounded-lg border-2 border-pink-600 bg-white px-2 text-xs font-extrabold text-pink-700 transition-colors hover:bg-pink-50 active:bg-pink-100 dark:bg-slate-800 dark:text-pink-300 dark:hover:bg-pink-950/30" aria-label="Add to cart">
+        <button type="button" onClick={handle(onAdd)} className="h-7 rounded-lg border-2 border-pink-600 bg-white px-2 text-xs font-extrabold text-pink-700 transition-colors hover:bg-pink-50 active:bg-pink-100" aria-label="Add to cart">
           ADD
         </button>
       );

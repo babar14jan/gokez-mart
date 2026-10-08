@@ -202,6 +202,15 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     onGuest?.();
   };
 
+  const handlePhoneBlur = () => {
+    document.documentElement.classList.remove('login-field-focused');
+
+    // iOS restores the visual viewport after blur, while Android first resizes
+    // the layout viewport. Wait for either keyboard animation to finish before
+    // restoring the page instead of leaving the login hero scrolled mid-page.
+    window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 240);
+  };
+
   /**
    * Keyboard exit for an aria-modal dialog. With the cross gone this is the only
    * non-pointer way out, and it routes through the guest path deliberately:
@@ -409,7 +418,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                       trackOnce('login_field_focused');
                       document.documentElement.classList.add('login-field-focused');
                     }}
-                    onBlur={() => document.documentElement.classList.remove('login-field-focused')}
+                    onBlur={handlePhoneBlur}
                     placeholder="Enter mobile number"
                     inputMode="numeric" autoComplete="tel"
                     aria-invalid={Boolean(error)}
