@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight } from 'lucide-react';
 import { authApi, storeApi } from '../services/api';
 import { readTrackingTokens } from '../utils/guestTracking';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -315,45 +315,27 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
       </div>
     );
 
-    if (!hasLocalTokens) {
+    if (!hasLocalTokens || orders.length === 0) {
       return (
-        <div className="max-w-lg mx-auto px-4 py-16 text-center pb-36">
-          <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ShoppingBag className="w-9 h-9 text-gray-300" />
+        <div className="mx-auto max-w-lg px-5 py-16 pb-36 text-center">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800">
+            <ShoppingBag className="h-9 w-9 text-gray-300 dark:text-slate-500" />
           </div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Your orders, right here</h2>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
-            Sign in with your phone number to see all your past orders and track current ones.
+          <h2 className="mb-2 text-lg font-bold text-gray-900 dark:text-white">No orders found</h2>
+          <p className="mx-auto mb-7 max-w-xs text-sm leading-relaxed text-gray-500 dark:text-slate-400">
+            No recent orders were found on this device. Log in to view your complete order history.
           </p>
           <button
             onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all shadow-sm mb-3"
+            className="mb-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
           >
-            Track My Orders →
+            <User className="h-4 w-4" /> Login to View Order
           </button>
           <button
             onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-2xl transition-colors"
+            className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           >
-            Continue Shopping
-          </button>
-        </div>
-      );
-    }
-
-    if (orders.length === 0) {
-      return (
-        <div className="max-w-lg mx-auto px-4 py-16 text-center pb-36">
-          <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
-            <ShoppingBag className="w-7 h-7 text-gray-300" />
-          </div>
-          <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No orders found</p>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mb-6">No recent orders on this device</p>
-          <button
-            onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-            className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-2xl transition-colors"
-          >
-            Continue Shopping
+            Continue as guest <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       );
@@ -414,15 +396,15 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
   }
 
   if (orders.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
-      <div className="w-20 h-20 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-        <ShoppingBag className="w-9 h-9 text-gray-300" />
+    <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
+      <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800">
+        <ShoppingBag className="h-9 w-9 text-gray-300 dark:text-slate-500" />
       </div>
-      <p className="text-base font-bold text-gray-900 dark:text-white mb-1">No orders yet</p>
-      <p className="text-sm text-gray-500 mb-6">Your order history will appear here.</p>
+      <p className="mb-2 text-lg font-bold text-gray-900 dark:text-white">Your order history is ready</p>
+      <p className="mb-7 max-w-xs text-sm leading-relaxed text-gray-500 dark:text-slate-400">Place your first order and its updates, receipt, and delivery status will appear here.</p>
       <button onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}
-        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-2xl transition-all">
-        Start Shopping
+        className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700">
+        <ShoppingBag className="h-4 w-4" /> Continue shopping
       </button>
     </div>
   );
