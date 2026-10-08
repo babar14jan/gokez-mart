@@ -237,13 +237,18 @@ export default function AccountPage({ onBack, storeName, supportName, supportPho
             {!isLoggedIn && <div className="text-center">
               <button
                 onClick={leaveAsGuest}
-                className="text-base font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                className="text-[13px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
               >
                 Continue as guest →
               </button>
             </div>}
+            <p className="text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
+              By continuing, you agree to our{' '}
+              <button type="button" onClick={() => navigate('/terms/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Terms</button>{' '}
+              and{' '}
+              <button type="button" onClick={() => navigate('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
+            </p>
           </div>
-          {footer}
         </div>
       </div>
     );

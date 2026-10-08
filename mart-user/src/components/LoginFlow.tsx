@@ -262,8 +262,10 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     </button>
   ) : null;
 
-  const primaryBtn =
-    'flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 py-3 text-[15px] font-bold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-800';
+  const primaryBtn = (enabled = true) =>
+    `flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[17px] font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800 ${enabled
+      ? 'bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600'
+      : 'bg-gray-200 text-gray-500 focus-visible:ring-gray-400 dark:bg-slate-700 dark:text-slate-400'}`;
 
   return (
     <>
@@ -287,7 +289,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   </div>
                 )}
               </div>
-              <button onClick={() => { onSuccess?.(); onClose?.(); }} className={primaryBtn}>
+                <button onClick={() => { onSuccess?.(); onClose?.(); }} className={primaryBtn()}>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" /> Start Shopping
               </button>
             </>
@@ -309,7 +311,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   aria-invalid={Boolean(error)}
                   className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   autoFocus={finePointer} />
-                <button type="submit" disabled={savingProfile || !newName.trim()} className={primaryBtn}>
+                <button type="submit" disabled={savingProfile || !newName.trim()} className={primaryBtn(Boolean(newName.trim()))}>
                   {savingProfile
                     ? <Spinner />
                     : <><ArrowRight className="h-4 w-4" aria-hidden="true" /> {pendingCheckout ? 'Continue to Checkout' : 'Continue'}</>
@@ -362,21 +364,56 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 <ErrorNote id="login-error" />
 
                 <label htmlFor="login-phone" className="sr-only">Mobile number</label>
-                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-700/60">
-                  <span className="text-sm font-semibold text-gray-500 dark:text-slate-400">+91</span>
+                <div className="flex items-center gap-3 rounded-2xl border border-gray-300 bg-slate-50 px-4 focus-within:border-gray-400 focus-within:ring-2 focus-within:ring-gray-200 dark:border-slate-600 dark:bg-slate-700/60 dark:focus-within:border-slate-400 dark:focus-within:ring-slate-500/30">
+                  <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-slate-200">
+                    <svg aria-hidden="true" viewBox="0 0 90 60" className="h-6 w-9 shrink-0 overflow-hidden rounded-[2px] border border-slate-300 shadow-sm">
+                      <rect width="90" height="20" fill="#ff9933" />
+                      <rect y="20" width="90" height="20" fill="#ffffff" />
+                      <rect y="40" width="90" height="20" fill="#138808" />
+                      <g stroke="#000080" strokeWidth="1.2" strokeLinecap="round">
+                        <circle cx="45" cy="30" r="8" fill="none" />
+                        <line x1="45" y1="22" x2="45" y2="29" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(15 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(30 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(45 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(60 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(75 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(90 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(105 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(120 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(135 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(150 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(165 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(180 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(195 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(210 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(225 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(240 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(255 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(270 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(285 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(300 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(315 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(330 45 30)" />
+                        <line x1="45" y1="22" x2="45" y2="29" transform="rotate(345 45 30)" />
+                        <circle cx="45" cy="30" r="1.4" fill="#000080" stroke="none" />
+                      </g>
+                    </svg>
+                    <span>+91</span>
+                  </span>
                   <span className="h-4 w-px bg-slate-300 dark:bg-slate-500" aria-hidden="true" />
                   <input
                     id="login-phone" name="phone" type="tel" value={phone} maxLength={10}
                     onChange={e => setPhone(e.target.value.replace(/\D/g,'').slice(0,10))}
                     onFocus={() => trackOnce('login_field_focused')}
-                    placeholder="10-digit mobile number"
+                    placeholder="Enter mobile number"
                     inputMode="numeric" autoComplete="tel"
                     aria-invalid={Boolean(error)}
                     className="flex-1 bg-transparent py-2.5 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
                     autoFocus={finePointer} />
                 </div>
 
-                <button type="submit" disabled={loading || !phoneValid} className={primaryBtn}>
+                <button type="submit" disabled={loading || !phoneValid} className={primaryBtn(phoneValid)}>
                   {loading ? <Spinner /> : <>Continue with OTP</>}
                 </button>
                 <GuestLink />
@@ -417,7 +454,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   aria-invalid={Boolean(error)}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   autoFocus={finePointer} />
-                <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn}>
+                <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn(otp.length === 6)}>
                   {loading ? <Spinner /> : <>Verify &amp; Sign In</>}
                 </button>
                 <button type="button" onClick={handleResend} disabled={resendTimer > 0 || loading}

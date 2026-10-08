@@ -79,6 +79,11 @@ body { background-color: #ffffff; color: #111827; }
     padding-bottom: 1rem;
   }
 
+  .login-art {
+    max-height: 100svh;
+    transition: max-height 200ms ease-out;
+  }
+
   /* The login hero is 45% of a phone viewport on its own, so with a keyboard up
      it left barely 128px for the phone field -- the customer had to scroll to
      reach a field they had just tapped. Capping it while the keyboard is open
