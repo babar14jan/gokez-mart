@@ -7,6 +7,15 @@
   Content-Type: application/manifest+json
   Cache-Control: no-cache
 
+# The update check must always see the deploy the edge is actually serving.
+# Each build rewrites these with a fresh id; a cached copy would hide the update
+# from useAppUpdate and from the service worker's install/activate handlers.
+/version.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/cache-version.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 

@@ -1,6 +1,8 @@
-// Cache version — controlled by /cache-version.json
-let CACHE_NAME = 'gokez-mart-v1';
-let IMAGE_CACHE_NAME = 'gokez-mart-images-v1';
+// Cache version — the __BUILD_VERSION__ token is replaced with a unique build id
+// by scripts/write-version.mjs on every build. That changed byte alone makes the
+// browser install this worker; the runtime fetch below then confirms the same id.
+let CACHE_NAME = 'gokez-mart-v__BUILD_VERSION__';
+let IMAGE_CACHE_NAME = 'gokez-mart-images-v__BUILD_VERSION__';
 const MAX_IMAGE_ENTRIES = 60;
 
 async function cacheImage(request, response) {

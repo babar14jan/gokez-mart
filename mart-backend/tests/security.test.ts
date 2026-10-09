@@ -683,7 +683,7 @@ describe('K. Login copy states the real delivery channel', () => {
   test('both apps promise the code arrives by call', () => {
     for (const [name, getSrc] of APPS) {
       const src = getSrc();
-      assert.ok(/send you a 6-digit code via call/i.test(src),
+      assert.ok(/call you with a 6-digit code/i.test(src),
         `${name}: the login screens no longer say the code arrives by call`);
     }
   });
@@ -715,7 +715,7 @@ describe('K. Login copy states the real delivery channel', () => {
     for (const [name, getSrc] of APPS) {
       const src = getSrc();
       const heading = src.search(/Enter (the verification code|OTP)/i);
-      const promise = src.search(/send you a 6-digit code via call/i);
+      const promise = src.search(/call you with a 6-digit code/i);
       assert.ok(heading >= 0, `${name}: no code-entry heading found`);
       assert.ok(promise > heading,
         `${name}: the delivery promise must render after the code-entry heading, ` +

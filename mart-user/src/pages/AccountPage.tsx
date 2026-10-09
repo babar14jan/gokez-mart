@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, MoreHorizontal, Trash2, Check, Mail, Store } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, Mail } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import { useThemeStore } from '../store/themeStore';
 import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush } from '../services/push';
-import AddressForm from '../components/AddressForm';
+import AddressSheet from '../components/AddressSheet';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
 import NamePrompt from '../components/NamePrompt';
@@ -52,33 +52,11 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   const [exportReady, setExportReady] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | 'new' | null>(null);
-  const [addressSaving, setAddressSaving] = useState(false);
-  const [addressMenuId, setAddressMenuId] = useState<string | null>(null);
-  const [addressPendingDelete, setAddressPendingDelete] = useState<string | null>(null);
-  const [addressDeleting, setAddressDeleting] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
 
-
-  const handleSaveAddress = async (label: string, val: string, coordinates: { latitude: number; longitude: number } | null) => {
-    setAddressSaving(true);
-    try {
-      if (editingAddressId && editingAddressId !== 'new') await updateAddress(editingAddressId, label, val, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
-      else await addAddress({ label, address: val, isDefault: addresses.length === 0, ...coordinates });
-      setEditingAddressId(null);
-    } finally { setAddressSaving(false); }
-  };
-
-  const handleDeleteAddress = async () => {
-    if (!addressPendingDelete) return;
-    setAddressDeleting(true);
-    try {
-      await removeAddress(addressPendingDelete);
-      setAddressPendingDelete(null);
-    } finally { setAddressDeleting(false); }
-  };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -230,6 +208,7 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
               // the flow supplies it, so both hosts share one login visual.
               showGuestLink={false}
               onStepChange={(s) => { loginStep.current = s; }}
+              onNavigateLegal={(path) => navigate(path)}
               // The page owns the guest exit (the flow's own is switched off above), so it
               // has to do the flow's cleanup itself. LoginFlow.handleGuest normally
               // calls loginFlow.clear() before leaving; without that, a shopper who
@@ -254,12 +233,6 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
                 Continue as guest →
               </button>
             </div>}
-            {!isLoggedIn && <p className="text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
-              By continuing, you agree to our{' '}
-              <button type="button" onClick={() => navigate('/terms/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Terms</button>{' '}
-              and{' '}
-              <button type="button" onClick={() => navigate('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
-            </p>}
           </div>
         </div>
       </div>
@@ -269,7 +242,7 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   return (
     <div className="page-shell bg-[#f7f8fa] dark:bg-slate-900 font-sans">
       <div className="mx-auto max-w-2xl space-y-7 px-4 py-5 pb-10 sm:px-6 sm:py-7">
-        <div className="rounded-[20px] border border-[#e9edf2] bg-white p-5 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800">
+        <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-[#e9edf2] bg-white p-5 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
           <div className="flex items-center gap-4">
             <div className="relative flex-shrink-0">
               <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full border-2 border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30">
@@ -332,8 +305,8 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <p className="text-[15px] font-semibold text-[#172033] dark:text-white">My addresses</p>
             <button onClick={() => setEditingAddressId('new')}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">
-              <Plus className="w-3.5 h-3.5" /> Add address
+              className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700">
+              <Plus className="w-3 h-3" /> {addresses.length > 0 ? 'Add new address' : 'Add address'}
             </button>
           </div>
           {addresses.length === 0 && (
@@ -342,122 +315,52 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
             </div>
           )}
           {addresses.map(addr => (
-            <div key={addr.id} className="border-t border-[#e9edf2] px-4 py-3.5 dark:border-slate-700">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-start gap-2 flex-1 min-w-0">
-                  <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${addr.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
-                    <MapPin className={`h-4 w-4 ${addr.isDefault ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="mb-1 flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-[#172033] dark:text-slate-200">{addr.label}</span>
-                      {addr.isDefault && (
-                        <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Default</span>
-                      )}
-                    </div>
-                    <p className="line-clamp-2 text-[13px] leading-snug text-[#687386] dark:text-slate-400">{addr.address}</p>
-                  </div>
-                </div>
-                <button onClick={() => setAddressMenuId(addr.id)} aria-label={`Manage ${addr.label} address`} title="Manage address"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700">
-                  <MoreHorizontal className="w-5 h-5" />
-                </button>
+            <button type="button" key={addr.id} onClick={() => setEditingAddressId(addr.id)}
+              className="flex w-full items-start gap-2 border-t border-[#e9edf2] px-4 py-3.5 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+              <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${addr.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
+                <MapPin className={`h-4 w-4 ${addr.isDefault ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`} />
               </div>
-            </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <span className="text-sm font-semibold text-[#172033] dark:text-slate-200">{addr.label}</span>
+                  {addr.isDefault && (
+                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Default</span>
+                  )}
+                </div>
+                <p className="line-clamp-2 text-[13px] leading-snug text-[#687386] dark:text-slate-400">{addr.address}</p>
+              </div>
+              <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-gray-300" />
+            </button>
           ))}
           </div>
         </section>
 
-        {addressMenuId && (() => {
-          const address = addresses.find(item => item.id === addressMenuId);
-          if (!address) return null;
-          const addr = address!;
-          return (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 sm:p-4">
-              <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl bg-white dark:bg-slate-800 shadow-2xl p-5">
-                <div className="mb-4">
-                  <p className="text-base font-bold text-gray-900 dark:text-white">Manage {addr.label} address</p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-400 line-clamp-2">{addr.address}</p>
-                </div>
-                <div className="space-y-2">
-                  <button onClick={() => { setAddressMenuId(null); setEditingAddressId(addr.id); }}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-700">
-                    <Pencil className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> Edit address
-                  </button>
-                  {!addr.isDefault && (
-                    <button onClick={() => { setDefaultAddress(addr.id); setAddressMenuId(null); }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-700">
-                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> Set as default
-                    </button>
-                  )}
-                  <button onClick={() => { setAddressMenuId(null); setAddressPendingDelete(addr.id); }}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
-                    <Trash2 className="w-4 h-4" /> Delete address
-                  </button>
-                </div>
-                <button onClick={() => setAddressMenuId(null)} className="mt-3 w-full rounded-xl bg-gray-100 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Cancel</button>
-              </div>
-            </div>
-          );
-        })()}
-
-        {addressPendingDelete && (() => {
-          const address = addresses.find(item => item.id === addressPendingDelete);
-          if (!address) return null;
-          const addr = address!;
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4">
-              <div role="alertdialog" aria-modal="true" aria-labelledby="delete-address-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/20"><Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" /></div>
-                <h2 id="delete-address-title" className="mt-3 text-base font-bold text-gray-900 dark:text-white">Delete this address?</h2>
-                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">This will remove your {addr.label.toLowerCase()} address from saved addresses.</p>
-                <div className="mt-5 flex gap-2">
-                  <button onClick={() => setAddressPendingDelete(null)} disabled={addressDeleting} className="flex-1 rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Keep address</button>
-                  <button onClick={handleDeleteAddress} disabled={addressDeleting} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50">{addressDeleting ? 'Deleting...' : 'Delete address'}</button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {editingAddressId && (() => {
-          const editingAddress = editingAddressId === 'new' ? null : addresses.find(a => a.id === editingAddressId);
-          const lat = editingAddress?.latitude;
-          const lng = editingAddress?.longitude;
-          const initialCoordinates = lat != null && lng != null
-            ? { latitude: lat as number, longitude: lng as number }
-            : null;
-          return (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-              <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">
-                    {editingAddressId === 'new' ? 'Add New Address' : 'Edit Address'}
-                  </p>
-                  <button onClick={() => setEditingAddressId(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                    <X className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
-                <AddressForm
-                  stored={editingAddress?.address ?? null}
-                  initialLabel={editingAddress?.label ?? 'Home'}
-                  initialCoordinates={initialCoordinates}
-                  onSave={handleSaveAddress}
-                  onCancel={() => setEditingAddressId(null)}
-                  saving={addressSaving}
-                />
-              </div>
-            </div>
-          );
-        })()}
+        {editingAddressId && (
+          <AddressSheet
+            mode="manage"
+            addresses={addresses}
+            initialEditingId={editingAddressId}
+            onClose={() => setEditingAddressId(null)}
+            onAddAddress={async (label, value, coordinates) => {
+              await addAddress({ label, address: value, isDefault: addresses.length === 0, ...coordinates });
+              return true;
+            }}
+            onUpdateAddress={async (id, label, value, coordinates) => {
+              await updateAddress(id, label, value, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
+              return true;
+            }}
+            onDeleteAddress={(id) => removeAddress(id)}
+            onSetDefaultAddress={(id) => setDefaultAddress(id)}
+          />
+        )}
 
         {(supportPhone || whatsappNumber) && (
           <section>
             <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Your local store</p>
             <div className="rounded-[18px] border border-[#e9edf2] bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
-                  <Store className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
+                <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
+                  <img src="/store_pic.webp" alt={storeName || 'Store'} className="h-full w-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-semibold text-[#172033] dark:text-white">{storeName || 'Your delivery store'}</p>

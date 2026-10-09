@@ -2,16 +2,23 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { addressApi } from '@/services/api';
+import { addressApi, authApi } from '@/services/api';
+import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/constants/theme';
 
 const LABELS = ['Home', 'Work', 'Other'];
 
 export default function AddressFormScreen() {
   const colors = useThemeColors();
+  const { customer, updateProfile } = useAuthStore();
   const { id, label: paramLabel, addressLine: paramAddressLine, returnToCheckout } = useLocalSearchParams<{ id?: string; label?: string; addressLine?: string; returnToCheckout?: string }>();
   const isEditing = !!id;
 
+  // Only ask a signed-in shopper who has no name on the account. Once a name is
+  // saved the field disappears, so this never nags returning customers.
+  const needsName = !!customer && !customer.name?.trim();
+
+  const [name,     setName]     = useState('');
   const [label,    setLabel]    = useState(paramLabel ?? 'Home');
   const [house,    setHouse]    = useState('');
   const [building, setBuilding] = useState('');
@@ -25,15 +32,28 @@ export default function AddressFormScreen() {
 
   const handleSave = async () => {
     if (!canSave) { Alert.alert('Complete address', 'Enter house or flat number, locality, city, and a valid 6-digit pincode.'); return; }
+    const trimmedName = name.trim().replace(/\s+/g, ' ');
+    if (needsName && trimmedName && (trimmedName.length < 2 || trimmedName.length > 80 || !/\p{L}/u.test(trimmedName))) {
+      Alert.alert('Enter a valid name', 'Your name should be 2–80 characters and include letters.'); return;
+    }
     const addressLine = [house.trim(), building.trim(), locality.trim(), landmark.trim(), city.trim(), pincode].filter(Boolean).join(', ');
     setSaving(true);
     try {
       if (isEditing) await addressApi.update(id!, label, addressLine);
       else await addressApi.add(label, addressLine);
+      // Save the name alongside the address so the order, hub and receipts use it
+      // instead of the 'Customer' placeholder. Optional: an order is never blocked.
+      if (needsName && trimmedName) {
+        // Fire-and-forget: the address is already saved, so a profile sync must
+        // never fail the save or block navigation (retrying would duplicate it).
+        authApi.updateProfile({ name: trimmedName })
+          .then(() => updateProfile({ name: trimmedName }))
+          .catch(() => {});
+      }
       if (returnToCheckout === 'true' && !isEditing) router.replace('/checkout');
       else router.back();
     } catch {
-      Alert.alert('Error', 'Failed to save address. Try again.');
+      Alert.alert('Error', 'Failed to save. Try again.');
     } finally { setSaving(false); }
   };
 
@@ -54,7 +74,11 @@ export default function AddressFormScreen() {
           })}
         </View>
 
-        <Field label="Flat / House Number" value={house} onChangeText={setHouse} placeholder="e.g. Flat 204 or House 12" required autoFocus={!isEditing} colors={colors} />
+        {needsName && (
+          <Field label="Your Name" value={name} onChangeText={setName} placeholder="e.g. Rahul Sharma" autoFocus colors={colors} />
+        )}
+
+        <Field label="Flat / House Number" value={house} onChangeText={setHouse} placeholder="e.g. Flat 204 or House 12" required autoFocus={!isEditing && !needsName} colors={colors} />
         <Field label="Building / Tower" value={building} onChangeText={setBuilding} placeholder="e.g. Orchid Tower" colors={colors} />
         <Field label="Street / Locality" value={locality} onChangeText={setLocality} placeholder="e.g. New Town, Action Area" required colors={colors} />
         <Field label="Landmark" value={landmark} onChangeText={setLandmark} placeholder="Optional, helps your rider" colors={colors} />

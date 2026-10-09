@@ -25,6 +25,14 @@ export default defineConfig({
   server: {
     port: 5177,
     proxy: { '/api': { target: 'http://localhost:3004', changeOrigin: true } },
+    // This repo lives on an external volume, where native FS events are dropped
+    // (partial HMR updates leave stale modules that keep re-throwing). Polling
+    // trades a little CPU for reliable change detection.
+    watch: {
+      usePolling: true,
+      interval: 300,
+      ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+    },
   },
   preview: { port: 5177 },
 });

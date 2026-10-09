@@ -7,7 +7,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { storeApi, campaignApi, addressApi, type PublicSettings, type Product, type Address } from '@/services/api';
+import { storeApi, campaignApi, addressApi, authApi, type PublicSettings, type Product, type Address } from '@/services/api';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { useZoneStore } from '@/store/zoneStore';
@@ -38,7 +38,7 @@ function SectionTitle({ icon, title }: { icon: string; title: string }) {
 
 export default function CheckoutScreen() {
   const colors = useThemeColors();
-  const { customer } = useAuthStore();
+  const { customer, updateProfile } = useAuthStore();
   const { items, updateQty, subtotal, clearCart, addItem } = useCartStore();
   const { selectedZone } = useZoneStore();
 
@@ -64,6 +64,10 @@ export default function CheckoutScreen() {
   // and a one-off address inline; the backend auto-creates the customer from
   // the phone (order.service.ts), exactly as it does for verified orders.
   const isGuest = !customer;
+  // A signed-in shopper with no name on file gets a one-off inline field so the
+  // order is not recorded as the 'Customer' placeholder. Never blocks checkout.
+  const needsName = !!customer && !customer.name?.trim();
+  const [accountName, setAccountName] = useState('');
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [guestAddrDraft, setGuestAddrDraft] = useState('');
@@ -167,7 +171,13 @@ export default function CheckoutScreen() {
 
   const handlePlace = async () => {
     if (sub < minOrder) { Alert.alert('Minimum order', `Add ₹${Math.ceil(minOrder - sub)} more to place order.`); return; }
-    const orderName = customer?.name ?? guestName.trim();
+    const orderName = customer?.name?.trim() || accountName.trim() || guestName.trim();
+    if (needsName && accountName.trim()) {
+      const candidate = accountName.trim().replace(/\s+/g, ' ');
+      if (candidate.length < 2 || candidate.length > 80 || !/\p{L}/u.test(candidate)) {
+        Alert.alert('Enter a valid name', 'Your name should be 2–80 characters and include letters.'); return;
+      }
+    }
     const orderPhone = customer?.phone ?? guestPhone.trim();
     if (isGuest && !orderName) {
       Alert.alert('Name required', 'Please enter your name to place the order.');
@@ -209,6 +219,12 @@ export default function CheckoutScreen() {
     }
     setPlacing(true);
     try {
+      // Sync a name typed inline to the account so future orders, the hub and
+      // receipts show it. Fire-and-forget: profile sync must never fail an order.
+      if (needsName && accountName.trim()) {
+        const savedName = accountName.trim().replace(/\s+/g, ' ');
+        authApi.updateProfile({ name: savedName }).then(() => updateProfile({ name: savedName })).catch(() => {});
+      }
       const res = await storeApi.placeOrder({
         guestName: orderName,
         guestPhone: orderPhone.replace(/\D/g, ''),
@@ -342,6 +358,23 @@ export default function CheckoutScreen() {
                   value={guestPhone} onChangeText={t => setGuestPhone(t.replace(/[^\d]/g, '').slice(0, 10))}
                   placeholder="10-digit mobile number" placeholderTextColor={colors.gray400}
                   keyboardType="number-pad" maxLength={10}
+                />
+              </View>
+            </View>
+          </Card>
+        )}
+
+        {/* Signed-in shoppers who never saved a name — captured once, optional */}
+        {!isGuest && needsName && (
+          <Card>
+            <SectionTitle icon="person-outline" title="Your details" />
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
+              <View style={{ gap: 4 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Name <Text style={{ color: colors.gray400, fontWeight: '400' }}>(optional)</Text></Text>
+                <TextInput
+                  style={{ borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
+                  value={accountName} onChangeText={setAccountName}
+                  placeholder="Your name" placeholderTextColor={colors.gray400}
                 />
               </View>
             </View>

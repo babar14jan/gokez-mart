@@ -1,3 +1,5 @@
+import { orderDisplayName } from './orderName';
+
 export function printReceipt(order: any) {
   const date = new Date(order.createdAt).toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: '2-digit',
@@ -30,7 +32,7 @@ export function printReceipt(order: any) {
       <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
       <div style="margin-bottom:8px;">
         <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Deliver to</div>
-        <div style="font-size:15px;font-weight:700;color:#111;">${order.guestName}</div>
+        <div style="font-size:15px;font-weight:700;color:#111;">${orderDisplayName(order)}</div>
         <div style="font-size:13px;color:#444;font-weight:500;margin-top:2px;line-height:1.4;">${order.guestAddress}</div>
       </div>
       <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>

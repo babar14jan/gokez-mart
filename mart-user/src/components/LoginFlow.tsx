@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, ArrowRight, Tag, PhoneCall } from 'lucide-react';
+import { ArrowRight, Tag } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useFinePointer } from '../utils/useFinePointer';
@@ -28,6 +28,12 @@ export interface LoginFlowProps {
    * this its button would silently drop the event the hub funnel counts.
    */
   onStepChange?: (step: Step) => void;
+  /**
+   * Opens a legal page (Terms/Privacy) from the consent line. The consent is part
+   * of the flow so both hosts show it on the same step; a host that does not
+   * supply this simply gets non-navigating buttons.
+   */
+  onNavigateLegal?: (path: string) => void;
 }
 
 export type Step = 'phone' | 'otp' | 'profile' | 'offer';
@@ -48,7 +54,7 @@ export type Step = 'phone' | 'otp' | 'profile' | 'offer';
  * cancels its py-6 instead. Everything else -- steps, OTP, analytics, the guest
  * exit and the login art -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onNameRequested, onStepChange }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onNameRequested, onStepChange, onNavigateLegal }: LoginFlowProps) {
   const isModal = variant === 'modal';
   // See useFinePointer: auto-focusing a field on a phone opens the keyboard on
   // arrival and the browser scrolls to it, which is the page shake we are avoiding.
@@ -232,24 +238,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   }, [step, onGuest, isModal]);
 
   const digits = phone.replace(/\D/g, '');
-  const maskedPhone = digits.length > 4 ? `${'•'.repeat(6)}${digits.slice(-4)}` : digits;
   const phoneValid = digits.length === 10;
-
-  // One size for both steps. The phone step used an 80px logo while the OTP
-  // step used 48px for the same asset, and stacked a 56px icon tile underneath
-  // it: 76px of decoration for one brand mark, which is what pushed the panel
-  // past a 667px viewport. Smaller and consistent costs nothing visually.
-  const BrandMark = () => (
-    <div className="flex flex-col items-center">
-      <img src="/mart_brand_new.png" alt="Gokez Mart"
-        className="h-16 w-auto object-contain dark:hidden" />
-      <img src="/mart_brand_dark.png" alt="Gokez Mart"
-        className="h-16 w-auto object-contain hidden dark:block" />
-      <p className="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-slate-900 dark:text-slate-100">
-        Shop Local <span className="align-middle">&bull;</span> Support Local
-      </p>
-    </div>
-  );
 
   const ErrorNote = ({ id }: { id: string }) => error ? (
     <p id={id} role="alert" aria-live="polite"
@@ -266,7 +255,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   const GuestLink = () => (onGuest && showGuestLink) ? (
     <button type="button" onClick={handleGuest}
       className="flex min-h-[44px] w-full items-center justify-center py-2 text-center text-[13px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors focus-visible:outline-none focus-visible:underline">
-      Continue as guest
+      Continue as guest →
     </button>
   ) : null;
 
@@ -430,29 +419,40 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 </button>
                 <GuestLink />
               </form>
+
+              <p className="mt-3 text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
+                By continuing, you agree to our{' '}
+                <button type="button" onClick={() => onNavigateLegal?.('/terms/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Terms</button>{' '}
+                and{' '}
+                <button type="button" onClick={() => onNavigateLegal?.('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
+              </p>
             </>
           ) : (
             <>
-              <div className="rounded-3xl bg-gradient-to-b from-amber-100 via-lime-50 to-emerald-50 px-5 pb-3 pt-3 dark:from-amber-950/40 dark:via-slate-800 dark:to-emerald-950/30">
-                <BrandMark />
+              <img src="/otp_page.webp" alt="Enter the verification code"
+                width={1254} height={654} decoding="async"
+                className={`login-art mb-4 block h-auto max-w-none -mx-5 w-[calc(100%_+_2.5rem)] rounded-none ${
+                  isModal
+                    ? '-mt-[max(1rem,env(safe-area-inset-top))] sm:-mx-7 sm:w-[calc(100%_+_3.5rem)]'
+                    : '-mt-6'}`} />
 
-                <h2 id="login-title" className="mt-3 text-center text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
-                  Enter the verification code
+              <div className="text-center">
+                <h2 id="login-title" className="text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
+                  OTP Verification
                 </h2>
-                <p className="mx-auto mt-1 flex max-w-[19rem] items-center justify-center gap-1.5 text-center text-[13px] text-gray-600 dark:text-slate-300">
-                  <PhoneCall className="h-3.5 w-3.5 flex-shrink-0 text-slate-500 dark:text-slate-400" aria-hidden="true" />
-                  <span>We'll send you a 6-digit code via call</span>
+                <p className="mx-auto mt-1 max-w-[22rem] text-center text-[11px] text-slate-500 dark:text-slate-400">
+                  We'll call you with a 6-digit code
                 </p>
-                <p className="mt-0.5 text-center text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                  SMS OTP Coming soon
-                </p>
-                <p className="mt-1.5 text-center text-sm text-slate-700 dark:text-slate-200">
-                  +91 {maskedPhone}
+                <div className="mt-2 flex flex-col items-center gap-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <p className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="text-slate-600 dark:text-slate-300">Sent to</span>
+                    <span>{digits}</span>
+                  </p>
                   <button type="button" onClick={() => { loginFlow.clear(); setStep('phone'); setOtp(''); setError(''); }}
-                    className="-my-2 ml-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded px-2 text-xs font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400">
-                    Edit
+                    className="-my-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded px-2 text-xs font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400">
+                    Change number
                   </button>
-                </p>
+                </div>
               </div>
 
               <form onSubmit={handleVerifyOtp} className="mt-3 space-y-2">
@@ -467,13 +467,15 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                   autoFocus={finePointer} />
                 <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn(otp.length === 6)}>
-                  {loading ? <Spinner /> : <>Verify &amp; Sign In</>}
+                  {loading ? <Spinner /> : <>Verify</>}
                 </button>
                 <button type="button" onClick={handleResend} disabled={resendTimer > 0 || loading}
-                  className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-2xl py-2 text-sm text-gray-500 transition-colors hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400">
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-2xl py-2 text-sm font-bold text-emerald-700 transition-colors hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300">
                   {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
                 </button>
+                <p className="!mt-0 text-center text-[10px] leading-4 text-slate-400 dark:text-slate-500">
+                  Do not share this code with anyone.
+                </p>
                 <GuestLink />
               </form>
             </>

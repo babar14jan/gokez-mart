@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ordersApi, teamApi } from '../services/api';
 import { printReceipt } from '../utils/printReceipt';
+import { orderDisplayName } from '../utils/orderName';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
@@ -305,9 +306,12 @@ export default function OrdersPage() {
       if (statusFilter && o.status !== statusFilter) return false;
       if (search.trim()) {
         const q = search.trim().toLowerCase();
-        const matchesName  = (o.guestName || '').toLowerCase().includes(q);
+        // Match what the row actually shows (real name, or the phone fallback for
+        // placeholder names), plus the phone and order identifiers.
+        const matchesName  = orderDisplayName(o).toLowerCase().includes(q);
+        const matchesPhone = String(o.guestPhone || '').toLowerCase().includes(q);
         const matchesOrder = String(o.orderNumber || '').toLowerCase().includes(q) || String(o.id || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesOrder) return false;
+        if (!matchesName && !matchesPhone && !matchesOrder) return false;
       }
       return true;
     });
@@ -510,7 +514,7 @@ export default function OrdersPage() {
                   {/* Row 2: Customer name + time */}
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{order.guestName}</p>
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">{orderDisplayName(order)}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         {order.status === 'delivered' && order.paymentCollectedAt && (
                           <span className={`text-xs font-semibold ${PAYMENT_COLORS[order.paymentMethod] || 'text-gray-500'}`}>
@@ -839,7 +843,7 @@ export default function OrdersPage() {
             </div>
             <div className="space-y-4 px-4 py-5">
               <div className="rounded-xl bg-gray-50 p-3 dark:bg-slate-700/50">
-                <p className="text-xs font-semibold text-gray-900 dark:text-white break-words">{detailsOrder.guestName}</p>
+                <p className="text-xs font-semibold text-gray-900 dark:text-white break-words">{orderDisplayName(detailsOrder)}</p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-slate-400 break-words">Delivered order total: ₹{detailsOrder.total}</p>
               </div>
               <div className="space-y-0">

@@ -294,7 +294,7 @@ export default function LoginScreen() {
               <View className="flex-row items-center gap-1.5">
                 <Ionicons name="call-outline" size={14} color={colors.primary} />
                 <Text className="flex-1 text-xs leading-5" style={{ fontFamily: 'Inter-SemiBold', color: colors.primaryDark }}>
-                  We'll send you a 6-digit code via call
+                  We'll call you with a 6-digit code
                 </Text>
               </View>
               <Text className="mt-1 text-[10px] leading-4" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>

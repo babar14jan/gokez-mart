@@ -101,14 +101,9 @@ export default function App() {
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
-  // The bottom tabs move `view` without pushing history, so nothing else records
-  // which screen the shopper was on before opening the account login. Needed so
-  // "Continue as guest" returns there instead of guessing from the basket.
-  const VIEW_PATH: Record<View, string> = {
-    home: '/', about: '/about/', categories: '/categories', orders: '/orders', account: '/account',
-    privacy: '/privacy/', terms: '/terms/', grievance: '/grievance/',
-    'delete-account': '/delete-account', feedback: '/feedback',
-  };
+  // The bottom tabs move `view` without pushing history. Tapping Account from any
+  // tab opens the login page, and "Continue as guest" from there exits to Home
+  // rather than bouncing back to the tab it was opened from (e.g. Categories).
   // Mirrored in state because writing sessionStorage alone does not re-render,
   // which made "Not now" look like it did nothing.
   const [signInPromptDismissed, setSignInPromptDismissed] = useState(
@@ -370,7 +365,7 @@ export default function App() {
       setPendingCheckout(false);
       // Re-tapping the Account tab must not record '/account' as the origin, or
       // the guest exit would navigate to the page it is already leaving.
-      if (view !== 'account') useLoginFlowStore.getState().setGuestReturnPath(VIEW_PATH[view]);
+      if (view !== 'account') useLoginFlowStore.getState().setGuestReturnPath('/');
     }
     setView(v);
   };
@@ -669,6 +664,14 @@ export default function App() {
         // Checkout must resume immediately after authentication. Elsewhere, the
         // optional sheet can ask once without changing the destination.
         if (!pendingCheckout) setShowNamePrompt(true);
+      }} onNavigateLegal={(path) => {
+        // Reading Terms/Privacy leaves the login behind: close the overlay so the
+        // page is not hidden under it, but keep the in-progress OTP flow so
+        // returning to Account restores where they were.
+        setShowLoginModal(false);
+        setPendingCheckout(false);
+        window.history.pushState({}, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
       }} onGuest={handleLoginModalGuest} onClose={() => {
         useLoginFlowStore.getState().clear();
         useLoginFlowStore.getState().setPostLoginPath(null);
@@ -1027,11 +1030,11 @@ export default function App() {
 
           {/* Footer */}
           <footer className="mt-8 border-t-2 border-emerald-200 bg-white/80 pb-5 pt-6 dark:border-emerald-900/60 dark:bg-slate-900/70">
-            <div className="mx-auto max-w-xl">
-              <div className="grid grid-cols-1 divide-y divide-gray-200 dark:divide-slate-700 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-                <section className="pb-5 sm:pr-5 sm:pb-0">
-                  <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Contact Gokez Technologies</p>
-                  <div className="grid grid-cols-2 gap-2">
+            <div className="mx-auto max-w-xl sm:max-w-4xl">
+              <div className="grid grid-cols-1 divide-y divide-gray-200 dark:divide-slate-700 sm:grid-cols-[1fr_auto] sm:items-center sm:divide-x sm:divide-y-0">
+                <section className="pb-5 sm:pb-0 sm:pr-8">
+                  <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 sm:text-left">Contact Gokez Technologies</p>
+                  <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
                     <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
                       <Phone className="h-4 w-4" />
                       <span>{GOKEZ_SUPPORT.phone}</span>
@@ -1042,11 +1045,10 @@ export default function App() {
                     </a>
                   </div>
                 </section>
-                <nav aria-label="Legal" className="flex flex-col items-center justify-center pt-4 sm:pl-5 sm:pt-0">
-                  <p className="mb-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Legal</p>
-                  <div className="flex items-center justify-center gap-3">
+                <nav aria-label="Legal" className="flex flex-col items-center justify-center pt-4 sm:items-end sm:pl-8 sm:pt-0">
+                  <div className="flex items-center justify-center gap-3 sm:flex-col sm:items-end sm:gap-1.5">
                     <a href="/privacy/" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Privacy Policy</a>
-                    <span className="text-[10px] text-gray-500 dark:text-slate-400">·</span>
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400 sm:hidden">·</span>
                     <a href="/terms/" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Terms of Service</a>
                   </div>
                 </nav>
@@ -1063,8 +1065,10 @@ export default function App() {
         </main>
       )}
 
-      {/* Floating cart bar — mobile only */}
-      <FloatingCart onOpen={handleCheckout} hidden={checkoutActive} />
+      {/* Floating cart bar — mobile only. Hidden in checkout, and on the account
+          page while signed out so it never competes with the login/OTP screens;
+          it reappears once the customer is signed in. */}
+      <FloatingCart onOpen={handleCheckout} hidden={checkoutActive || (view === 'account' && !isLoggedIn)} />
 
       {/* Bottom nav — mobile only */}
       <div className="sm:hidden">

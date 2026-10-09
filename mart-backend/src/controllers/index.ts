@@ -143,7 +143,24 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
-  const suppliedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
+  let suppliedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
+  // A signed-in order is identified by the verified phone, not by the name the
+  // client posts. An account that never saved a name sends the 'Customer'
+  // placeholder (or blank), which would otherwise be frozen into the order and
+  // shown on the hub. Prefer the name already on the account so a returning
+  // verified customer is never recorded as "Customer".
+  if (req.customer && (!suppliedName || suppliedName === 'Customer')) {
+    const nameRow = await query<{ name: string | null }>(
+      `SELECT name FROM mart_customers WHERE id = $1`,
+      [req.customer.id]
+    );
+    const storedName = nameRow.rows[0]?.name?.trim().replace(/\s+/g, ' ');
+    // Only adopt a stored name that would itself pass the validation below;
+    // otherwise a bad/legacy value would reject the order of a paying customer.
+    if (storedName && storedName.length >= 2 && storedName.length <= 80 && /\p{L}/u.test(storedName)) {
+      suppliedName = storedName;
+    }
+  }
   const normalizedName = suppliedName || (req.customer ? 'Customer' : '');
   const normalizedAddress = typeof guestAddress === 'string' ? guestAddress.trim() : '';
   if (!normalizedName || !guestPhone || !normalizedAddress || !items?.length) {

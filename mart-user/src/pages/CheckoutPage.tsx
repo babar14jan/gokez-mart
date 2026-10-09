@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { Loader2, Plus, Minus, Trash2, MapPin, PenLine, X, Tag, Check, MessageCircle, ChevronDown, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Minus, Trash2, MapPin, X, Tag, Check, MessageCircle, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi } from '../services/api';
 import type { PublicSettings, Product } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
-import AddressForm, { type AddressCoordinates } from '../components/AddressForm';
+import { type AddressCoordinates } from '../components/AddressForm';
+import AddressSheet from '../components/AddressSheet';
 import ProductCard from '../components/ProductCard';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 
@@ -301,6 +302,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const orderRequestKey = useRef(crypto.randomUUID());
   const guestNameInput = useRef<HTMLInputElement>(null);
   const guestPhoneInput = useRef<HTMLInputElement>(null);
+  const profileNameInput = useRef<HTMLInputElement>(null);
   const { items, updateQty, subtotal, clearCart } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile } = useCustomerAuthStore();
@@ -383,21 +385,19 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   // Address
   const [showAddressList, setShowAddressList] = useState(false);
-  const [addingNew, setAddingNew] = useState(false);
 
-  const openAddressSheet = () => {
-    setAddingNew(!isLoggedIn || addresses.length === 0);
-    setShowAddressList(true);
-  };
-
-  const closeAddressSheet = () => {
-    setShowAddressList(false);
-    setAddingNew(false);
-  };
-  const [addressSaving, setAddressSaving] = useState(false);
+  const openAddressSheet = () => setShowAddressList(true);
+  const closeAddressSheet = () => setShowAddressList(false);
 
   const saveProfileNameIfProvided = async () => {
     const normalizedName = profileNameDraft.trim().replace(/\s+/g, ' ');
+    // Required for a verified customer who has no name yet — blank is not an option.
+    if (isLoggedIn && !authName && (!normalizedName || normalizedName === 'Customer')) {
+      setValidationField('name');
+      setError('Please enter your name to continue.');
+      window.setTimeout(() => profileNameInput.current?.focus(), 50);
+      return false;
+    }
     if (!normalizedName || normalizedName === 'Customer') return true;
     if (!isValidGuestName(normalizedName)) {
       setValidationField('name');
@@ -569,10 +569,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
-  const checkoutName = isLoggedIn ? (authName || 'Customer') : guestName;
+  // A verified customer with no saved name must supply one (captured in the
+  // address sheet, just above "Flat / House No.") before they can order.
+  const requiresName = isLoggedIn && !authName;
+  const nameComplete = isLoggedIn ? (Boolean(authName) || isValidGuestName(profileNameDraft)) : isValidGuestName(guestName);
+  const checkoutName = isLoggedIn ? (authName || profileNameDraft.trim() || 'Customer') : guestName;
   const checkoutPhone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
   const incompleteCheckoutDetails = [
-    !isLoggedIn && !isValidGuestName(checkoutName) && 'name',
+    !nameComplete && 'name',
     !isValidIndianMobile(checkoutPhone) && 'mobile number',
     !isValidDeliveryAddress(resolvedAddress) && 'delivery address',
   ].filter(Boolean) as string[];
@@ -592,14 +596,23 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const name = checkoutName;
+    let name = checkoutName;
     const phone = checkoutPhone;
-    if (!isLoggedIn && (!name?.trim() || !isValidGuestName(name))) {
+    if (!nameComplete) {
       setError('');
       setShowMissingDetails(true);
       setValidationField('name');
-      guestNameInput.current?.focus();
+      if (isLoggedIn) {
+        openAddressSheet();
+        window.setTimeout(() => profileNameInput.current?.focus(), 50);
+      } else {
+        guestNameInput.current?.focus();
+      }
       return;
+    }
+    if (isLoggedIn && requiresName) {
+      if (!(await saveProfileNameIfProvided())) return;
+      name = profileNameDraft.trim();
     }
     if (!phone?.trim() || !isValidIndianMobile(phone)) {
       setError('');
@@ -671,6 +684,35 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   const card = 'bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden';
 
+  // Captured in the address sheet for a signed-in customer with no name yet.
+  // Rendered just above "Flat / House No." (via AddressForm's nameSlot).
+  const profileNameField = requiresName ? (
+    <div>
+      <label htmlFor="address-sheet-name" className="mb-1 block text-xs font-bold text-gray-800 dark:text-slate-200">
+        Your name <span className="font-bold text-red-500" aria-hidden="true">*</span>
+      </label>
+      <input
+        id="address-sheet-name"
+        ref={profileNameInput}
+        type="text"
+        value={profileNameDraft}
+        onChange={event => {
+          setProfileNameDraft(event.target.value);
+          setError('');
+          if (validationField === 'name') setValidationField(null);
+        }}
+        placeholder="Your full name"
+        autoComplete="name"
+        required
+        aria-required="true"
+        aria-invalid={validationField === 'name'}
+        aria-describedby={validationField === 'name' ? 'address-sheet-name-error' : undefined}
+        className={`${inp} h-10 px-3 py-2 ${validationField === 'name' ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+      />
+      {validationField === 'name' && <p id="address-sheet-name-error" className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">Please enter your name to continue.</p>}
+    </div>
+  ) : null;
+
   // Reachable from the Orders "Track My Orders" login and the account page, so
   // an empty basket is a real entry state. Without this the page renders a
   // permanently disabled Place Order button and no explanation.
@@ -702,11 +744,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
-        <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
-        <button type="button" onClick={onBack} aria-label="Return to shopping" className="flex h-11 w-11 items-center justify-center rounded-xl border border-pink-200 bg-pink-50 text-pink-700 shadow-sm transition-colors hover:bg-pink-100 dark:border-pink-900/60 dark:bg-pink-950/30 dark:text-pink-300 dark:hover:bg-pink-950/50">
-          <ChevronDown className="h-6 w-6" strokeWidth={3} />
+      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
+        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-800">
+          <ArrowLeft className="h-5 w-5" />
         </button>
+        <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
       </div>
 
       <form id="checkout-form" onSubmit={handleSubmit}>
@@ -776,92 +818,39 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             </div>
           )}
 
-          {/* Address bottom sheet */}
+          {/* Address sheet (shared with the account page) */}
           {showAddressList && (
-            <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:pb-0"
-              onClick={closeAddressSheet}>
-              <div className="max-h-[85dvh] w-full overflow-y-auto scrollbar-hide rounded-3xl bg-white shadow-2xl dark:bg-slate-800 sm:max-h-[80vh] sm:max-w-md"
-                onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{addingNew ? 'Add delivery address' : 'Choose delivery address'}</p>
-                  <button onClick={closeAddressSheet} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                    <X className="w-4 h-4 text-gray-500" />
-                  </button>
-                </div>
-
-                {isLoggedIn && !authName && (
-                  <div className="border-b border-gray-100 px-5 py-4 dark:border-slate-700">
-                    <label htmlFor="address-sheet-name" className="mb-1 block text-xs font-bold text-gray-800 dark:text-slate-200">Your name</label>
-                    <input
-                      id="address-sheet-name"
-                      type="text"
-                      value={profileNameDraft}
-                      onChange={event => { setProfileNameDraft(event.target.value); setError(''); }}
-                      placeholder="Customer"
-                      autoComplete="name"
-                      className={`${inp} h-10 px-3 py-2 ${validationField === 'name' ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`}
-                    />
-                    <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">Leave blank to order as Customer, or save your name with this address.</p>
-                  </div>
-                )}
-
-                {!addingNew ? (
-                  <>
-                    <div className="divide-y divide-gray-50 dark:divide-slate-700">
-                      {addresses.map(addr => {
-                        const isSelected = addr.address === deliveryAddress;
-                        return (
-                          <button type="button" key={addr.id}
-                            onClick={async () => {
-                              if (!(await saveProfileNameIfProvided())) return;
-                              setDefaultAddress(addr.id); setValidationField(null); setShowAddressList(false); setAddingNew(false);
-                            }}
-                            className="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700 text-left">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
-                              <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-500' : 'text-gray-500'}`} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-gray-700 dark:text-slate-300">{addr.label}</p>
-                              <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{addr.address}</p>
-                            </div>
-                            {isSelected && <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-1" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button type="button" onClick={() => setAddingNew(true)}
-                      className="w-full flex items-center gap-2.5 px-5 py-3.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border-t border-gray-100 dark:border-slate-700">
-                      <PenLine className="w-4 h-4" />
-                      <span className="text-sm font-semibold">Add new address</span>
-                    </button>
-                  </>
-                ) : (
-                  <div className="px-5 py-4">
-                    <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Fields marked * are needed to deliver your order. A landmark is optional but helpful.</p>
-                    <AddressForm saving={addressSaving} focusFirstField={validationField === 'address'} onCancel={() => addresses.length === 0 ? closeAddressSheet() : setAddingNew(false)}
-                      onSave={async (label, address, coordinates) => {
-                        if (!(await saveProfileNameIfProvided())) return;
-                        setAddressSaving(true);
-                        try {
-                          if (isLoggedIn) {
-                            await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
-                          } else {
-                            // Guests have no server address book yet; hold the
-                            // address for this checkout and let the order land it
-                            // in the book server-side.
-                            setGuestAddress(address);
-                            setGuestAddressLabel(label.trim() || 'Home');
-                            setGuestAddressCoordinates(coordinates);
-                          }
-                          setValidationField(null);
-                          setAddingNew(false);
-                          setShowAddressList(false);
-                        } finally { setAddressSaving(false); }
-                      }} />
-                  </div>
-                )}
-              </div>
-            </div>
+            <AddressSheet
+              mode="select"
+              addresses={addresses}
+              selectedAddress={deliveryAddress}
+              onClose={closeAddressSheet}
+              initialEditingId={!isLoggedIn || addresses.length === 0 ? 'new' : null}
+              nameSlot={profileNameField}
+              requiresName={requiresName}
+              focusFirstField={validationField === 'address'}
+              onSelectAddress={async (address) => {
+                if (!(await saveProfileNameIfProvided())) return false;
+                setDefaultAddress(address.id);
+                setValidationField(null);
+                return true;
+              }}
+              onAddAddress={async (label, address, coordinates) => {
+                if (!(await saveProfileNameIfProvided())) return false;
+                if (isLoggedIn) {
+                  await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
+                } else {
+                  // Guests have no server address book yet; hold the address
+                  // for this checkout and let the order land it in the book
+                  // server-side.
+                  setGuestAddress(address);
+                  setGuestAddressLabel(label.trim() || 'Home');
+                  setGuestAddressCoordinates(coordinates);
+                }
+                setValidationField(null);
+                return true;
+              }}
+            />
           )}
 
           {/* ── Who's ordering ── */}

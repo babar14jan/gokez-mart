@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Phone, MapPin, Navigation, RefreshCw, CheckCircle, Package, Clock } from 'lucide-react';
 import { ordersApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { orderDisplayName } from '../utils/orderName';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 
 const RIDER_STEPS = [
@@ -151,7 +152,7 @@ export default function DeliveryPage() {
                 {/* Customer info */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">{order.guestName}</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{orderDisplayName(order)}</p>
                     <div className="flex items-start gap-1.5 mt-1">
                       <MapPin className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-gray-500 dark:text-slate-400 leading-snug">{order.guestAddress}</p>
@@ -223,7 +224,7 @@ export default function DeliveryPage() {
               <div key={order.id} className="flex items-center gap-3 px-4 py-3">
                 <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{order.guestName}</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{orderDisplayName(order)}</p>
                   <p className="text-xs text-gray-500 break-words">{order.guestAddress}</p>
                 </div>
                 <span className="text-xs font-bold text-gray-500 dark:text-slate-400">₹{order.total}</span>

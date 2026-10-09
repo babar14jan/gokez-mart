@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ClipboardList, TrendingUp, Clock, CheckCircle, XCircle, Calendar, Store } from 'lucide-react';
 import { ordersApi, settingsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { orderDisplayName } from '../utils/orderName';
 import { getActiveStoreId } from '../utils/store';
 
 type Range = 'today' | '7d' | '30d' | 'all';
@@ -203,7 +204,7 @@ export default function DashboardPage() {
                         <p className="text-sm font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
                         <span className={`badge ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>{order.status.replace(/_/g, ' ')}</span>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{order.guestName} · {order.guestPhone} · {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{orderDisplayName(order)} · {order.guestPhone} · {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}</p>
                     </div>
                     <p className="text-sm font-bold text-gray-900 dark:text-white">₹{order.total}</p>
                   </div>
@@ -217,7 +218,7 @@ export default function DashboardPage() {
                     <span className={`badge ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>{order.status.replace(/_/g, ' ')}</span>
                   </div>
                   <div className="hidden sm:block col-span-3">
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{order.guestName}</p>
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{orderDisplayName(order)}</p>
                     <p className="text-[10px] text-gray-500 dark:text-slate-400 truncate">{order.guestAddress?.split(',')[0]}</p>
                   </div>
                   <div className="hidden sm:block col-span-2 text-xs text-gray-600 dark:text-slate-400">{order.guestPhone}</div>

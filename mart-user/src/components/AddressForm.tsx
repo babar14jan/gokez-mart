@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { Loader2, LocateFixed, Save } from 'lucide-react';
+import { Briefcase, Home, Loader2, LocateFixed, MapPin, Save } from 'lucide-react';
 import { storeApi } from '../services/api';
 
 interface AddressFields {
@@ -17,7 +17,11 @@ export interface AddressCoordinates {
   longitude: number;
 }
 
-const LABELS = ['Home', 'Work', 'Other'];
+const LABELS = [
+  { name: 'Home', Icon: Home },
+  { name: 'Work', Icon: Briefcase },
+  { name: 'Other', Icon: MapPin },
+] as const;
 const EMPTY_ADDRESS: AddressFields = { house: '', building: '', locality: '', landmark: '', city: '', pincode: '' };
 const inputClass = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400';
 
@@ -51,9 +55,10 @@ interface AddressFormProps {
   saving: boolean;
   onSave: (label: string, address: string, coordinates: AddressCoordinates | null) => Promise<void>;
   onCancel: () => void;
+  nameSlot?: React.ReactNode;
 }
 
-export default function AddressForm({ stored = null, initialLabel = 'Home', initialCoordinates = null, focusFirstField = false, saving, onSave, onCancel }: AddressFormProps) {
+export default function AddressForm({ stored = null, initialLabel = 'Home', initialCoordinates = null, focusFirstField = false, saving, onSave, onCancel, nameSlot }: AddressFormProps) {
   const [label, setLabel] = useState(initialLabel);
   const [fields, setFields] = useState<AddressFields>(() => parseAddress(stored));
   const [coordinates, setCoordinates] = useState<AddressCoordinates | null>(initialCoordinates);
@@ -105,10 +110,11 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
   return (
     <div className="space-y-3 pb-20">
       <div className="flex gap-2">
-        {LABELS.map(option => (
-          <button key={option} type="button" onClick={() => setLabel(option)}
-            className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition-colors ${label === option ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400'}`}>
-            {option}
+        {LABELS.map(({ name, Icon }) => (
+          <button key={name} type="button" onClick={() => setLabel(name)}
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition-colors inline-flex items-center justify-center gap-1.5 ${label === name ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-200 dark:border-slate-600 text-gray-500 dark:text-slate-400'}`}>
+            <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+            {name}
           </button>
         ))}
       </div>
@@ -119,6 +125,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
       </button>
       {locationMessage && <p className="text-xs text-gray-500 dark:text-slate-400">{locationMessage}</p>}
       <p className="text-xs text-gray-500 dark:text-slate-400">Fields marked <span className="font-bold text-red-500" aria-hidden="true">*</span> are required for delivery.</p>
+      {nameSlot}
       <div className="grid grid-cols-2 gap-2">
         <Field label="Flat / House No." required value={fields.house} onChange={update('house')} placeholder="Enter house number" autoFocus forceAutoFocus={focusFirstField} />
         <Field label="Building / Tower" value={fields.building} onChange={update('building')} placeholder="Building or tower" />
