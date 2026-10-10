@@ -11,6 +11,7 @@ import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
 type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
@@ -187,6 +188,7 @@ export default function OrdersPage() {
   const [assigningOrder, setAssigningOrder] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState('');
   const [detailsOrder, setDetailsOrder] = useState<any | null>(null);
+  const [confirmNextOpenOrder, setConfirmNextOpenOrder] = useState<any | null>(null);
 
   const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
@@ -238,6 +240,23 @@ export default function OrdersPage() {
     setTerminating(id);
     try { await ordersApi.terminate(id, reason); await load(); }
     finally { setTerminating(null); }
+  };
+
+  // Accept an after-hours order for delivery at the next opening hours. The
+  // order moves to the normal confirmed status, so prepare/assign/dispatch all
+  // keep working exactly as they do for any confirmed order.
+  const handleConfirmNextOpen = async (order: any) => {
+    setUpdating(order.id);
+    try {
+      await ordersApi.confirmNextOpen(order.id);
+      setConfirmNextOpenOrder(null);
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Could not confirm this order for the next opening hours');
+      setConfirmNextOpenOrder(null);
+    } finally {
+      setUpdating(null);
+    }
   };
 
   const handleStopOrder = async (order: any, isEarly: boolean) => {
@@ -520,6 +539,17 @@ export default function OrdersPage() {
                             {order.closedReason === 'manual' ? 'Store closed' : `After hours${order.scheduledForLabel ? ` · ${order.scheduledForLabel}` : ''}`}
                           </span>
                         )}
+                        {/* Accepted for the next opening hours — the customer was
+                            told the same thing and got a push at the moment the
+                            staff confirmed it. */}
+                        {order.confirmedNextOpen && !TERMINAL.includes(order.status) && (
+                          <span
+                            title="Accepted for delivery at the next opening hours"
+                            className="text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full"
+                          >
+                            Confirmed · next opening
+                          </span>
+                        )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <IndianRupee className="w-3.5 h-3.5 text-gray-900 dark:text-white" />
@@ -630,8 +660,27 @@ export default function OrdersPage() {
                       </button>
                     )}
 
+                    {/* Confirm-for-next-opening: shown only for orders placed
+                        after closing hours, and only to staff who can actually
+                        call the endpoint (super_admin/store_owner/store_manager).
+                        The generic Confirm Order button is suppressed for these
+                        managers because "we're preparing your order" would be a
+                        false promise while the store is shut — this one promises
+                        the next opening hours instead. Non-manager roles keep
+                        their original Confirm Order, which is the transition they
+                        have always been able to make. */}
+                    {canManage && order.status === 'pending' && order.placedOutsideHours && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setConfirmNextOpenOrder(order); }}
+                        disabled={isUpdating}
+                        title="Store was closed when this was placed — accept it and deliver at the next opening hours"
+                        className="flex-1 min-w-[150px] flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold leading-tight whitespace-normal rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 transition-colors disabled:opacity-50">
+                        Confirm for next opening hours
+                      </button>
+                    )}
+
                     {/* Primary next action */}
-                    {nextAction && order.status !== 'preparing' && (
+                    {nextAction && order.status !== 'preparing' && !(order.status === 'pending' && order.placedOutsideHours && canManage) && (
                       <button
                         onClick={e => updateStatus(order.id, nextAction.status, e)}
                         disabled={isUpdating}
@@ -899,6 +948,16 @@ export default function OrdersPage() {
             }
           }}
           onCancel={() => setPaymentOrder(null)}
+        />
+      )}
+
+      {confirmNextOpenOrder && (
+        <ConfirmDialog
+          title="Confirm for next opening hours"
+          message={`Accept order #${confirmNextOpenOrder.orderNumber}? The customer will be told it will be delivered at the store's next opening hours, and they'll get a notification now.`}
+          confirmLabel="Confirm"
+          onConfirm={() => handleConfirmNextOpen(confirmNextOpenOrder)}
+          onCancel={() => setConfirmNextOpenOrder(null)}
         />
       )}
     </div>

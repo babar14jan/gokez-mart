@@ -90,6 +90,7 @@ router.get('/admin/analytics/summary', authenticate, requireRole('super_admin', 
 router.get('/admin/analytics/customers', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetCustomerAggregates); // ?range=&from=&to=&storeId=&top=
 router.get('/admin/events',              authenticate, ctrl.adminOrderStream);       // SSE live order stream
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
+router.put('/admin/orders/:id/confirm-next-open', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminConfirmNextOpen);
 router.put("/admin/orders/:id/terminate", authenticate, ctrl.adminTerminateOrder);// ── Admin customers ───────────────────────────────────────────────────────────
 router.get('/admin/customers',         authenticate, ctrl.adminGetCustomers);
 router.get('/admin/customer-leads',        authenticate, requireSuperAdmin, ctrl.adminGetCustomerLeads);

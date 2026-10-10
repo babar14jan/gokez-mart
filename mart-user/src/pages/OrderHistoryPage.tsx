@@ -12,7 +12,8 @@ import {
   ALL_CLOSED, STATUS_LABELS,
   isRecentlyDelivered, hasActiveOrder, formatDateTime,
 } from '../components/OrderCards';
-function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClose: () => void; onOrderAgain: (order: any) => void }) {
+function OrderDetailSheet({ order, onClose, onOrderAgain, nextOpenLabel }: { order: any; onClose: () => void; onOrderAgain: (order: any) => void; nextOpenLabel?: string | null }) {
+  const nextOpenWhen = nextOpenLabel || order.scheduledForLabel || null;
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -99,9 +100,14 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
                   <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
                     {order.closedReason === 'manual' ? 'Store was manually closed' : 'Ordered outside store hours'}
                   </p>
-                  {order.scheduledForLabel && (
+                  {!order.confirmedNextOpen && (nextOpenWhen || order.scheduledForLabel) && (
                     <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                      Will be prepared at {order.scheduledForLabel}
+                      Will be prepared at {nextOpenWhen || order.scheduledForLabel}
+                    </p>
+                  )}
+                  {order.confirmedNextOpen && (order.status === 'pending' || order.status === 'confirmed') && (
+                    <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+                      ✅ Confirmed — we'll start preparing when the store opens{nextOpenWhen ? ` at ${nextOpenWhen}` : ' next'}.
                     </p>
                   )}
                 </div>
@@ -155,7 +161,7 @@ function OrderDetailSheet({ order, onClose, onOrderAgain }: { order: any; onClos
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-interface Props { onBack?: () => void; whatsappNumber?: string; }
+interface Props { onBack?: () => void; whatsappNumber?: string; nextOpenLabel?: string | null; }
 
 function OrdersHeader() {
   return (
@@ -165,7 +171,7 @@ function OrdersHeader() {
   );
 }
 
-export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Props) {
+export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, nextOpenLabel }: Props) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -174,6 +180,10 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const [reorderToast, setReorderToast] = useState('');
   const [activeTab, setActiveTab] = useState<'current' | 'past'>('current');
+  // Live store opening label ("9:00 AM today") when the app has one; falls
+  // back to the opening time captured with the order when the store state
+  // hasn't been fetched yet e.g. right after a fresh page load.
+  const nextOpenWhen = nextOpenLabel || null;
   const [pastSearch, setPastSearch] = useState('');
   const [pastFilter, setPastFilter] = useState<'all' | 'delivered' | 'cancelled'>('all');
   const [guestLoading, setGuestLoading] = useState(false);
@@ -355,6 +365,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
           if (!isClosed) {
             return (
               <ActiveOrderCard key={order.id} order={order} whatsappNumber={whatsappNumber}
+                nextOpenLabel={nextOpenWhen}
                 canCancel={canGuestCancel}
                 confirmCancel={confirmCancel} cancelling={cancelling}
                 cancelError={cancelError}
@@ -378,7 +389,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
         {/* Detail sheet for guests too — "View Details" has to open something. */}
         {selectedOrder && (
           <OrderDetailSheet order={selectedOrder} onClose={() => setSelectedOrder(null)}
-            onOrderAgain={handleOrderAgain} />
+            onOrderAgain={handleOrderAgain} nextOpenLabel={nextOpenWhen} />
         )}
         <div className="text-center">
           <button
@@ -509,6 +520,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
           <>
             {activeOrders.map(order => (
               <ActiveOrderCard key={order.id} order={order} whatsappNumber={whatsappNumber}
+                nextOpenLabel={nextOpenWhen}
                 fallbackName={customerName} fallbackPhone={customerPhone}
                 canCancel={['pending', 'confirmed'].includes(order.status)}
                 confirmCancel={confirmCancel} cancelling={cancelling}
@@ -553,6 +565,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber }: Pr
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onOrderAgain={handleOrderAgain}
+          nextOpenLabel={nextOpenWhen}
         />
       )}
     </div>

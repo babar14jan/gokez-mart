@@ -768,6 +768,35 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
 });
 
 
+// ── Confirm after-hours order for the next opening hours ────────────────────
+// The store was shut when the customer ordered, so instead of "start preparing"
+// the hub acknowledges the order for the next opening: same confirmed status,
+// plus a promise the customer card shows and a push explaining it.
+export const adminConfirmNextOpen = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const order = await OrderService.confirmForNextOpen(req.params.id, req.admin!);
+  if (order.customerId) {
+    PushService.notifyCustomer(order.customerId, {
+      title: `Order #${order.orderNumber} update`,
+      body: order.nextOpenLabel
+        ? `✅ Order #${order.orderNumber} confirmed — we'll deliver it when the store opens (${order.nextOpenLabel}).`
+        : `✅ Order #${order.orderNumber} confirmed — we'll deliver it during the next opening hours.`,
+      url: '/orders',
+      tag: `order-${req.params.id}`,
+    }).catch(() => {});
+  }
+  emitOrderEvent({
+    type: 'order.updated',
+    order: {
+      id: req.params.id,
+      orderNumber: order.orderNumber,
+      status: 'confirmed',
+      storeId: order.storeId,
+    },
+  });
+  res.json({ success: true, data: order });
+});
+
+
 // ── Admin terminate order (super_admin + store_owner) ──────────────────────
 export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { reason, customReason } = req.body;

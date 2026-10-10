@@ -6,6 +6,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { subscribeAdminToPush } from './services/push';
 import { startOrderStream, stopOrderStream } from './services/realtime';
 import Layout from './components/Layout';
+import InstallPrompt from './components/InstallPrompt';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -122,6 +123,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <InstallPrompt />
       <RouteErrorBoundary>
       <Suspense fallback={<RouteLoading />}>
       <Routes>

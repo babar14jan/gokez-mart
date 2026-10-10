@@ -89,6 +89,11 @@ export const ordersApi = {
     api.get('/admin/analytics/summary', { params }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi') =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
+  // Acknowledge an after-hours order for delivery at the next opening hours
+  // (only offered while the order is still pending and was placed outside
+  // posted store hours).
+  confirmNextOpen: (id: string) =>
+    api.put(`/admin/orders/${id}/confirm-next-open`),
   batchDispatch: (orderIds: string[]) =>
     api.post('/admin/orders/batch-dispatch', { orderIds }),
   terminate: (id: string, reason: string, customReason?: string) =>

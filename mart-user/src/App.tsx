@@ -790,7 +790,7 @@ export default function App() {
         <div className={PAGE_BOTTOM}><DeferredPage><TermsPage embed={isEmbed} /></DeferredPage></div>
       ) : view === 'orders' ? (
         <div className={PAGE_BOTTOM}>
-          <DeferredPage><OrderHistoryPage onBack={() => setView('home')} whatsappNumber={settings.whatsapp_number} /></DeferredPage>
+          <DeferredPage><OrderHistoryPage onBack={() => setView('home')} whatsappNumber={settings.whatsapp_number} nextOpenLabel={openState?.nextOpenLabel ?? null} /></DeferredPage>
         </div>
       ) : view === 'account' ? (
         <div className={PAGE_BOTTOM}>

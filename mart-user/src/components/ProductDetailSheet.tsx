@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { trackOnce } from '../utils/track';
@@ -64,12 +64,14 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
       <div className="relative flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-800"
         onClick={e => e.stopPropagation()}>
 
-        <div className="relative flex h-14 shrink-0 items-center justify-center border-b border-gray-100 dark:border-slate-700">
-          <div className="w-10 h-1 bg-gray-200 dark:bg-slate-600 rounded-full" />
-          <button type="button" onClick={onClose} aria-label="Close product details"
-            className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl border border-pink-200 bg-pink-50 text-pink-700 shadow-sm transition-colors hover:bg-pink-100 dark:border-pink-900/60 dark:bg-pink-950/30 dark:text-pink-300 dark:hover:bg-pink-950/50">
-            <ChevronDown className="h-6 w-6" strokeWidth={3} />
+        <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+          <button type="button" onClick={onClose} aria-label="Back to products"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-800">
+            <ArrowLeft className="h-5 w-5" />
           </button>
+          <p className="min-w-0 flex-1 truncate text-base font-bold text-gray-900 dark:text-white">
+            {product.name?.trim() || product.localName?.trim()}
+          </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">

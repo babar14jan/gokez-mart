@@ -108,11 +108,16 @@ type SharedCardProps = {
   whatsappNumber?: string | null;
   fallbackName?: string | null;
   fallbackPhone?: string | null;
+  // Server-computed label for the store's next opening ("9:00 AM today"),
+  // refreshed whenever the app refetches store state. Lets the cards tell a
+  // confirmed-after-hours order's story at the moment it is read instead of
+  // freezing the opening time at placement.
+  nextOpenLabel?: string | null;
 };
 
 // ── Active order card: status banner + step tracker + actions ─────────────────
 export function ActiveOrderCard({
-  order, whatsappNumber, fallbackName, fallbackPhone,
+  order, whatsappNumber, fallbackName, fallbackPhone, nextOpenLabel,
   canCancel, confirmCancel, cancelling, cancelError,
   onCancel, onRequestCancel, onDismissConfirm,
 }: SharedCardProps & {
@@ -126,13 +131,26 @@ export function ActiveOrderCard({
 }) {
   const curStep = STEPS.indexOf(STATUS_TO_STEP[order.status] || order.status);
 
+  // Live opening label first; fall back to the opening time captured when the
+  // order was placed. Live wins so "today"/"tomorrow" stays correct whenever
+  // the customer's screen refreshes.
+  const nextOpenWhen = nextOpenLabel || order.scheduledForLabel || null;
+
+  // The next-opening promise only holds until the order actually starts moving:
+  // while it is still pending or confirmed nothing is being prepared yet, so a
+  // fake ETA would lie and the promise is the only honest statement. The moment
+  // preparing begins the promise has been fulfilled and the live ETA is real
+  // again — showing "when the store opens at <a past date>" would be stale.
+  const awaitingNextOpen = order.confirmedNextOpen
+    && (order.status === 'pending' || order.status === 'confirmed');
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-md border border-emerald-100 dark:border-emerald-900">
       {/* Status banner */}
       <div className="bg-emerald-500 px-4 py-3 flex items-center justify-between">
         <div>
           <p className="text-white font-bold text-sm">{STATUS_LABELS[order.status]}</p>
-          {order.deliveryPreference && (
+          {order.deliveryPreference && !awaitingNextOpen && (
             <p className="text-emerald-100 text-xs mt-0.5">
               {order.deliveryPreference === 'within_15' ? '⚡ Expected in 10-15 mins'
                 : order.deliveryPreference === 'within_30' ? '🕐 Expected in ~30 mins'
@@ -147,6 +165,20 @@ export function ActiveOrderCard({
           )}
         </div>
       </div>
+
+      {/* Accepted for the next opening hours — staff acknowledged the order
+          while the store was shut; this is the real commitment, so the live
+          ETA is suppressed for it (an ETA can't hold while the store is shut).
+          The opening time reads live: "today" vs "tomorrow" is correct for the
+          moment the customer is actually looking. Once the order starts being
+          prepared the promise has been kept and the ETA takes over again. */}
+      {awaitingNextOpen && (
+        <div className="bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900/40 px-4 py-2.5">
+          <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 leading-snug">
+            ✅ Confirmed for the next opening hours — we'll start preparing your order when the store opens{nextOpenWhen ? ` at ${nextOpenWhen}` : ' next'}.
+          </p>
+        </div>
+      )}
 
       {/* Progress tracker */}
       <div className="px-4 pt-5 pb-4">

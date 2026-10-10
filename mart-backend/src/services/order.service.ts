@@ -69,6 +69,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               o.placed_outside_hours as "placedOutsideHours",
               o.closed_reason as "closedReason",
               o.scheduled_for as "scheduledFor",
+              o.confirmed_next_open as "confirmedNextOpen",
               COALESCE((
                 SELECT json_agg(json_build_object(
                   'fromStatus', e.from_status,
@@ -847,6 +848,84 @@ export class OrderService {
         [id, existing.status, status, actor.id, actorName]
       );
       return updated.rows[0];
+    });
+
+    return order;
+  }
+
+  /**
+   * Acknowledge an after-hours order for the next opening hours.
+   *
+   * Only meaningful for orders placed outside posted hours: the store was shut
+   * when the customer ordered, so the hub cannot start preparing anything —
+   * instead it promises delivery at the next opening. Reuses the normal
+   * pending → confirmed transition (same status event, same analytics counts,
+   * same subsequent preparing flow) and additionally records the promise on
+   * the order so the customer's card can explain it, the customer gets a push,
+   * and the hub can track how many after-hours orders were accepted.
+   */
+  static async confirmForNextOpen(
+    id: string,
+    actor: { id: string; username: string; role: string; storeId: string | null }
+  ) {
+    const order = await transaction(async client => {
+      const current = await client.query(
+        `SELECT o.id, o.status, o.store_id as "storeId", o.customer_id as "customerId",
+                o.order_number as "orderNumber", o.placed_outside_hours as "placedOutsideHours",
+                o.scheduled_for as "scheduledFor"
+         FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
+        [id]
+      );
+      const existing = current.rows[0];
+      if (!existing) throw Object.assign(new Error('Order not found'), { status: 404 });
+      if (actor.role !== 'super_admin' && actor.storeId !== existing.storeId) {
+        throw Object.assign(new Error('Access denied'), { status: 403 });
+      }
+      if (existing.status !== 'pending') {
+        throw Object.assign(new Error('Only pending after-hours orders can be confirmed for the next opening'), { status: 409 });
+      }
+      if (!existing.placedOutsideHours) {
+        throw Object.assign(new Error('This order was placed during opening hours'), { status: 409 });
+      }
+      const actorResult = await client.query(
+        `SELECT COALESCE(name, username) as name FROM mart_admins WHERE id = $1`, [actor.id]
+      );
+      const actorName = actorResult.rows[0]?.name || actor.username;
+
+      // Promise the next opening when the schedule knows one. A manual closure
+      // has no reopening time to promise, so it keeps whatever the order
+      // recorded (usually null) rather than inventing one.
+      const hours = await client.query(
+        `SELECT s.opening_hours, sv.value AS store_open
+           FROM mart_stores s
+           LEFT JOIN mart_settings sv ON sv.store_id = s.id AND sv.key = 'store_open'
+          WHERE s.id = $1`,
+        [existing.storeId]
+      );
+      const closure = hours.rows[0];
+      const openState = evaluateStoreOpen(closure?.opening_hours as never, closure?.store_open, new Date());
+
+      await client.query(
+        `UPDATE mart_orders
+            SET status = 'confirmed',
+                confirmed_next_open = true,
+                scheduled_for = COALESCE(scheduled_for, $1),
+                updated_at = NOW()
+          WHERE id = $2`,
+        [openState.nextOpenAt, id]
+      );
+      await client.query(
+        `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_id, actor_name)
+         VALUES ($1, $2, 'confirmed', $3, $4)`,
+        [id, 'pending', actor.id, actorName]
+      );
+      return {
+        ...existing,
+        status: 'confirmed',
+        confirmedNextOpen: true,
+        nextOpenAt: openState.nextOpenAt,
+        nextOpenLabel: openState.nextOpenLabel,
+      };
     });
 
     return order;
