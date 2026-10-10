@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, X, Moon, Sun } from 'lucide-react';
+import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, X, Moon, Sun, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useThemeStore } from '../store/themeStore';
-import type { MartZone } from '../services/api';
+import { useZoneStore } from '../store/zoneStore';
 
 type View = 'home' | 'categories' | 'orders' | 'account';
 
 
 interface NavbarProps {
-  zones: MartZone[];
-  selectedZone: MartZone | null;
-  onZoneChange: (zone: MartZone) => void;
+  onUseMyLocation?: () => void | Promise<void>;
   activeView: View;
   onNavChange: (v: View) => void;
   onCheckout: () => void;
@@ -28,34 +26,53 @@ const navItems = [
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-export default function Navbar({ zones, selectedZone, onZoneChange, activeView, onNavChange, onCheckout, search, onSearch, onSearchFocus, onSearchBlur }: NavbarProps) {
+export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, search, onSearch, onSearchFocus, onSearchBlur }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
   const totalItems = useCartStore(s => s.totalItems());
   const { isDark, toggle } = useThemeStore();
+  // Delivery-area state is shared app-wide via the zone store, so the navbar
+  // picker, the Account page toggle and the catalog loader always stay in sync.
+  const zones = useZoneStore(s => s.zones);
+  const selectedZone = useZoneStore(s => s.selectedZone);
+  const locationBusy = useZoneStore(s => s.locating);
+
+  const selectZone = (zone: (typeof zones)[number]) => {
+    useZoneStore.getState().chooseZone(zone);
+    setZoneOpen(false);
+  };
 
   const ZoneDropdown = () => {
+    const triggerMyLocation = () => {
+      if (!onUseMyLocation || locationBusy) return;
+      setZoneOpen(false);
+      void onUseMyLocation();
+    };
     // Only show dropdown if more than 1 zone
     if (zones.length <= 1) {
       if (!selectedZone) return null;
       return (
-        <div className="flex items-center gap-1">
-          <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+        <button type="button" onClick={triggerMyLocation} className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+          {locationBusy
+            ? <Loader2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 animate-spin" />
+            : <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
           <div className="text-left">
-            <p className="text-[9px] text-slate-400 leading-none">Delivery in</p>
+            <p className="text-[9px] text-slate-400 leading-none">Delivery Zone</p>
             <p className="text-xs font-bold text-white leading-tight truncate max-w-[90px]">
               {selectedZone.name}
             </p>
           </div>
-        </div>
+        </button>
       );
     }
     return (
     <div className="relative">
       <button onClick={() => setZoneOpen(o => !o)}
         className="flex items-center gap-1 hover:opacity-80 transition-opacity">
-        <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+        {locationBusy
+          ? <Loader2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 animate-spin" />
+          : <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
         <div className="text-left">
-          <p className="text-[9px] text-slate-400 leading-none">Delivery in</p>
+          <p className="text-[9px] text-slate-400 leading-none">Delivery Zone</p>
           <p className="text-xs font-bold text-white leading-tight truncate max-w-[90px]">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
@@ -68,8 +85,17 @@ export default function Navbar({ zones, selectedZone, onZoneChange, activeView, 
           <div className="fixed inset-0 z-10" onClick={() => setZoneOpen(false)} />
           <div className="absolute top-full mt-1 right-0 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 py-2 z-20">
             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-3 pb-1.5">Delivery Areas</p>
+            {onUseMyLocation && (
+              <button onClick={triggerMyLocation} disabled={locationBusy}
+                className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60">
+                {locationBusy
+                  ? <Loader2 className="w-4 h-4 text-emerald-500 flex-shrink-0 animate-spin" />
+                  : <LocateFixed className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">{locationBusy ? 'Finding location...' : 'Use my location'}</span>
+              </button>
+            )}
             {zones.map(zone => (
-              <button key={zone.id} onClick={() => { onZoneChange(zone); setZoneOpen(false); }}
+              <button key={zone.id} onClick={() => selectZone(zone)}
                 className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                 <div className="text-left">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{zone.name}</p>

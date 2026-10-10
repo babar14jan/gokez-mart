@@ -103,14 +103,14 @@ export default function InstallPrompt() {
           <div className="flex items-start gap-3">
             <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-12 h-12 rounded-xl flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-bold leading-tight">Add Gokez Mart to Home Screen</p>
-              <p className="text-xs text-slate-400 mt-0.5">A simple browser shortcut for quicker access. No app store download needed.</p>
+              <p className="text-sm font-bold leading-tight">Install Gokez Mart</p>
+              <p className="text-xs text-slate-400 mt-0.5">Installs like a real app — icon on your home screen, opens in its own window. No app store needed.</p>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <button onClick={handleAndroidInstall} aria-label="Add Gokez Mart to Home Screen"
+            <button onClick={handleAndroidInstall} aria-label="Install Gokez Mart"
               className="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-colors">
-              Add to Home Screen
+              Install
             </button>
             <button onClick={dismiss}
               className="px-3 py-2 text-slate-400 text-xs font-medium text-center hover:text-white transition-colors">
@@ -148,8 +148,7 @@ export default function InstallPrompt() {
                   <span className="text-white text-xs font-bold">1</span>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Tap the Share button</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">At the bottom of Safari, tap the Share icon</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Tap Share</p>
                   <div className="mt-2 inline-flex items-center gap-1.5 bg-gray-100 dark:bg-slate-700 px-3 py-1.5 rounded-xl">
                     <Share className="w-4 h-4 text-blue-500" />
                     <span className="text-xs font-medium text-gray-700 dark:text-slate-300">Share</span>
@@ -163,8 +162,7 @@ export default function InstallPrompt() {
                   <span className="text-white text-xs font-bold">2</span>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Scroll down and tap</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Find and tap "Add to Home Screen"</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Tap Add to Home Screen</p>
                   <div className="mt-2 inline-flex items-center gap-1.5 bg-gray-100 dark:bg-slate-700 px-3 py-1.5 rounded-xl">
                     <Plus className="w-4 h-4 text-gray-600 dark:text-slate-300" />
                     <span className="text-xs font-medium text-gray-700 dark:text-slate-300">Add to Home Screen</span>
@@ -179,13 +177,12 @@ export default function InstallPrompt() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">Tap Add</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Confirm by tapping "Add" in the top right</p>
                 </div>
               </div>
             </div>
 
             <p className="text-[10px] text-gray-500 dark:text-slate-400 text-center mt-5">
-              Then open Gokez Mart directly from your Home Screen anytime.
+              Then open Gokez Mart from your home screen, anytime.
             </p>
           </div>
         </div>
@@ -198,7 +195,7 @@ export default function InstallPrompt() {
           <img src="/icons/icon-96.png" alt="Gokez Mart" className="w-12 h-12 rounded-xl flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold leading-tight">Add Gokez Mart to Home Screen</p>
-            <p className="text-xs text-slate-400 mt-0.5">A simple browser shortcut for quicker access. No app store download needed.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Opens like an app, straight from your home screen.</p>
           </div>
           <div className="flex flex-col gap-1.5 flex-shrink-0">
             <button onClick={() => setShowIOSGuide(true)} aria-label="Show Home Screen instructions for Gokez Mart"

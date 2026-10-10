@@ -141,6 +141,14 @@
          before it can flash for users who have JavaScript enabled. -->
     <script>document.documentElement.classList.add('js');</script>
     <style>
+      /* Paint the app background before CSS/JS arrive. An update swap reloads
+         through the service worker, but the window between unload and first
+         paint would otherwise flash white — which reads as the app "closing and
+         reopening". Matching the theme here makes the reload read as a smooth
+         transition instead. */
+      html { background-color: #ffffff; }
+      @media (prefers-color-scheme: dark) { html { background-color: #18191a; } }
+      html.dark { background-color: #18191a; }
       /* Styling for the no-JavaScript SEO block only. Nothing here affects the
          React app, which renders its own layout into #root. */
       .seo-static { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; }

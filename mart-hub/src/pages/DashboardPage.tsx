@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ClipboardList, TrendingUp, Clock, CheckCircle, XCircle, Calendar, Store } from 'lucide-react';
-import { ordersApi, settingsApi } from '../services/api';
+import { ShoppingBag, ClipboardList, TrendingUp, Clock, CheckCircle, XCircle, Calendar, Store, Tag } from 'lucide-react';
+import { ordersApi, settingsApi, type OrderSummary } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { orderDisplayName } from '../utils/orderName';
 import { getActiveStoreId } from '../utils/store';
+import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 
 type Range = 'today' | '7d' | '30d' | 'all';
 
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('today');
   const [storeName, setStoreName] = useState('');
+  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, delivered: 0, cancelled: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 });
   const { name, role } = useAuthStore();
 
   useEffect(() => {
@@ -72,20 +74,52 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    ordersApi.getSummary({ storeId: getActiveStoreId(), range })
+      .then(r => { if (active) setSummary(r.data.data); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [range]);
+
+  const refreshLive = useCallback(() => {
+    ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500 } as any)
+      .then(o => setAllOrders(o.data.data || []))
+      .catch(() => {});
+    ordersApi.getSummary({ storeId: getActiveStoreId(), range })
+      .then(r => setSummary(r.data.data))
+      .catch(() => {});
+  }, [range]);
+
+  // Live refresh: instant via SSE events plus a polling fallback so cards and
+  // the recent-orders list stay current even on a weak/flaky connection.
+  useEffect(() => {
+    let lastRefresh = 0;
+    const refresh = () => {
+      const now = Date.now();
+      if (now - lastRefresh < 2000) return;
+      lastRefresh = now;
+      refreshLive();
+    };
+    const offEvent = onOrderEvent(refresh);
+    const offConnect = onOrderStreamConnect(refreshLive);
+    const poll = setInterval(refreshLive, 30000);
+    return () => { offEvent(); offConnect(); clearInterval(poll); };
+  }, [refreshLive]);
+
   const filtered = useMemo(() => {
     const start = rangeStart(range);
     if (!start) return allOrders;
     return allOrders.filter(o => new Date(o.createdAt) >= start);
   }, [allOrders, range]);
 
-  const kpis = useMemo(() => {
-    const total     = filtered.length;
-    const pending   = filtered.filter(o => o.status === 'pending').length;
-    const delivered = filtered.filter(o => o.status === 'delivered').length;
-    const cancelled = filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length;
-    const revenue   = filtered.filter(o => o.status === 'delivered').reduce((s: number, o: any) => s + (o.total || 0), 0);
-    return { total, pending, delivered, cancelled, revenue };
-  }, [filtered]);
+  const kpis = useMemo(() => ({
+    total:     summary.placed,
+    pending:   summary.pending,
+    delivered: summary.delivered,
+    cancelled: summary.cancelled,
+    revenue:   summary.revenue,
+  }), [summary]);
 
   const rangeLabel = RANGES.find(r => r.id === range)?.label || '';
   const navigate = useNavigate();
@@ -141,12 +175,13 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 items-stretch">
         {[
           { label: 'Total Orders',  value: kpis.total,                    sub: `${kpis.cancelled} cancelled`,    icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
           { label: 'Pending',       value: kpis.pending,                  sub: 'awaiting confirmation',           icon: Clock,         gradient: 'from-amber-500 to-amber-600',     href: '/orders' },
           { label: 'Delivered',     value: kpis.delivered,                sub: 'successfully delivered',          icon: CheckCircle,   gradient: 'from-violet-500 to-violet-600',   href: '/orders' },
           { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: 'from delivered orders',           icon: TrendingUp,    gradient: 'from-blue-500 to-blue-600',       href: null },
+          { label: 'Coupons Used',  value: summary.couponOrders,          sub: `₹${summary.couponAmount.toFixed(0)} discount given`, icon: Tag, gradient: 'from-pink-500 to-rose-500', href: null },
         ].map(k => {
           const inner = (
             <div onClick={() => k.href && navigate(k.href)}

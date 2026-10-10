@@ -31,7 +31,7 @@ export default function TermsPage({ embed = false }: { embed?: boolean } = {}) {
             <ul className="list-disc list-inside space-y-1.5">
               <li>You must be 18 years or older to place orders</li>
               <li>You must provide a valid Indian mobile number for OTP verification</li>
-              <li>You must be within our active delivery zones</li>
+              <li>Your delivery address must be within one of our active delivery zones</li>
             </ul>
           </section>
 

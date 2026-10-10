@@ -4,6 +4,7 @@ import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import { useThemeStore } from '../store/themeStore';
+import { useZoneStore } from '../store/zoneStore';
 import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush } from '../services/push';
 import AddressSheet from '../components/AddressSheet';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -42,9 +43,13 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [locationPermission, setLocationPermission] = useState<string>('prompt');
-  const [locationEnabled, setLocationEnabled] = useState(
-    localStorage.getItem('mart_location_enabled') !== 'false'
-  );
+  // Shared with the navbar picker and the catalog loader: toggling this actually
+  // runs the same location lookup the navbar uses, so it switches delivery area
+  // immediately instead of waiting for a reload.
+  const autoDetect = useZoneStore(s => s.autoDetect);
+  const selectedZone = useZoneStore(s => s.selectedZone);
+  const locationBusy = useZoneStore(s => s.locating);
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
   const [notificationSubscribed, setNotificationSubscribed] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
@@ -91,19 +96,36 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   }, [isLoggedIn]);
 
   const handleLocationToggle = async () => {
-    if (!locationEnabled) {
-      if (locationPermission !== 'granted') {
-        navigator.geolocation.getCurrentPosition(
-          () => { setLocationPermission('granted'); setLocationEnabled(true); localStorage.setItem('mart_location_enabled', 'true'); },
-          () => { setLocationPermission('denied'); }
-        );
-      } else {
-        setLocationEnabled(true);
-        localStorage.setItem('mart_location_enabled', 'true');
-      }
-    } else {
-      setLocationEnabled(false);
-      localStorage.setItem('mart_location_enabled', 'false');
+    setLocationNotice(null);
+    const store = useZoneStore.getState();
+    if (store.autoDetect) {
+      store.setAutoDetect(false);
+      return;
+    }
+    // Enabling runs the shared lookup right away. It can never block ordering —
+    // if the fix can't be matched to an area, the customer just picks one from
+    // the navbar dropdown (e.g. ordering for family in another area).
+    store.setAutoDetect(true);
+    const result = await store.detectAndApply();
+    switch (result.status) {
+      case 'applied':
+      case 'kept':
+        setLocationNotice(`Delivering to ${result.zone.name}`);
+        break;
+      case 'no_match':
+        setLocationNotice('No nearby area detected — pick one from the dropdown. You can order to any available area.');
+        break;
+      case 'denied':
+        setLocationNotice('Location is blocked in your browser settings.');
+        break;
+      case 'unavailable':
+        setLocationNotice('Could not get your location. You can still pick an area from the dropdown.');
+        break;
+      case 'error':
+        setLocationNotice('Something went wrong. Please try again or pick an area from the dropdown.');
+        break;
+      case 'busy':
+        break;
     }
   };
 
@@ -435,19 +457,21 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
             <div className="flex-1 min-w-0">
               <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Location</span>
               <p className="text-[12px] text-[#687386] dark:text-slate-400">
-                {locationPermission === 'denied'
+                {locationNotice ?? (locationPermission === 'denied'
                   ? 'Blocked in browser — enable in browser settings'
-                  : locationEnabled
-                  ? 'Auto-detects your delivery zone'
-                  : 'Off — select zone manually from dropdown'}
+                  : autoDetect
+                  ? selectedZone
+                    ? `Auto-detects — delivering to ${selectedZone.name}`
+                    : 'Auto-detects your delivery zone'
+                  : 'Off — select zone manually from dropdown')}
               </p>
             </div>
             {locationPermission === 'denied' ? (
               <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">Blocked</span>
             ) : (
-              <button onClick={handleLocationToggle} role="switch" aria-checked={locationEnabled}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${locationEnabled ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
-                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${locationEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              <button onClick={handleLocationToggle} role="switch" aria-checked={autoDetect} disabled={locationBusy}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-70 ${autoDetect ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autoDetect ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             )}
           </div>

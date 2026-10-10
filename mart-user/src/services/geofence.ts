@@ -28,13 +28,21 @@ export function findMatchingZone(lat: number, lng: number, zones: MartZone[]): Z
   return best;
 }
 
+// Outcome of a geolocation request. `denied` means the customer blocked the
+// browser permission (an explicit opt-out we should remember); `unavailable`
+// covers timeout / no fix / unsupported, which must NOT be treated as a refusal.
+export type LocationResult =
+  | { status: 'granted'; lat: number; lng: number }
+  | { status: 'denied' }
+  | { status: 'unavailable' };
+
 // Get user's current GPS coordinates
-export async function getUserLocation(): Promise<{ lat: number; lng: number } | null> {
-  if (!navigator.geolocation) return null;
+export async function getUserLocation(): Promise<LocationResult> {
+  if (!navigator.geolocation) return { status: 'unavailable' };
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
+      (pos) => resolve({ status: 'granted', lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => resolve({ status: err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable' }),
       { timeout: 8000, maximumAge: 300000 }
     );
   });

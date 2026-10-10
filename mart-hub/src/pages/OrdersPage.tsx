@@ -9,6 +9,7 @@ import { printReceipt } from '../utils/printReceipt';
 import { orderDisplayName } from '../utils/orderName';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
+import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 
 type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
@@ -209,6 +210,21 @@ export default function OrdersPage() {
     const onVisible = () => { if (document.visibilityState === 'visible') load(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+  // Live refresh: instant via SSE events (weak-network friendly), plus a quiet
+  // polling fallback so a missed/lost event can never hide an order for long.
+  useEffect(() => {
+    let lastRefresh = 0;
+    const refresh = () => {
+      const now = Date.now();
+      if (now - lastRefresh < 2000) return;
+      lastRefresh = now;
+      load();
+    };
+    const offEvent = onOrderEvent(refresh);
+    const offConnect = onOrderStreamConnect(load);
+    const poll = setInterval(load, 30000);
+    return () => { offEvent(); offConnect(); clearInterval(poll); };
   }, []);
 
   const getStaleMinutes = (order: any): number | null => {

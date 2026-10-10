@@ -5,8 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 // Stamps a unique id into the build output so every deploy is detectable by
 // both the running app (/version.json) and the service worker (/cache-version.json
-// plus the worker's own bytes). Previously these were committed by hand and
-// forgotten, so deployed clients kept running the old cached code.
+// plus the worker's own bytes). Previously the worker bytes never changed, so a
+// browser installed it once and then ignored every later deploy — its app-shell
+// cache was never purged and stale assets lingered on offline.
+//
+// This mirrors mart-user/scripts/write-version.mjs so the hub and storefront
+// behave identically.
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');

@@ -1,9 +1,16 @@
 // Cache version — the __BUILD_VERSION__ token is replaced with a unique build id
 // by scripts/write-version.mjs on every build. That changed byte alone makes the
 // browser install this worker; the runtime fetch below then confirms the same id.
+//
+// __BUILD_ASSETS__ is populated at build time (scripts/write-version.mjs prepends
+// `self.__BUILD_ASSETS__ = [...]`) with every hashed JS/CSS chunk emitted by Vite.
+// Precaching them at install means an update swap serves entirely from local
+// cache — no network wait, so the reload reads as a smooth transition instead of
+// a white shutter. In dev the property is absent and this falls back to `[]`.
 let CACHE_NAME = 'gokez-mart-v__BUILD_VERSION__';
 let IMAGE_CACHE_NAME = 'gokez-mart-images-v__BUILD_VERSION__';
 const MAX_IMAGE_ENTRIES = 60;
+const BUILD_ASSETS = Array.isArray(self.__BUILD_ASSETS__) ? self.__BUILD_ASSETS__ : [];
 
 async function cacheImage(request, response) {
   if (!response.ok && response.type !== 'opaque') return;
@@ -21,13 +28,15 @@ self.addEventListener('install', (e) => {
       .catch(() => {})
       .then(() =>
         caches.open(CACHE_NAME).then(c =>
-          // Cache the app shell — critical for home screen launch
+          // Cache the app shell plus every hashed chunk — critical for home
+          // screen launch and for an instant, network-independent update swap.
           c.addAll([
             '/',
             '/index.html',
             '/manifest.json',
             '/icons/icon-192.png',
             '/icons/icon-512.png',
+            ...BUILD_ASSETS,
           ]).catch(() => {})
         )
       )

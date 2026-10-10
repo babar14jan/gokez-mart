@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5178",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/write-version.mjs",
     "preview": "vite preview --port 5178"
   },
   "dependencies": {

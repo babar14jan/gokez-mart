@@ -88,6 +88,33 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
                 'photoUrl', p.photo_url
               )) as items`;
 
+// Shared IST-window builder for the analytics summaries. Mirrors the windowing
+// used by the funnel/lead utilities so KPI cards agree with the rest of the
+// backend reports.
+function buildOrderWindow(range: string, from?: string, to?: string, storeId?: string | null): { where: string; params: unknown[] } {
+  const params: unknown[] = [];
+  const clauses: string[] = [];
+  const at = (index: number) => `$${index}`;
+  if (range === 'custom' && from && to) {
+    clauses.push(`o.created_at >= ((${at(params.length + 1)}::date)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
+    params.push(from);
+    clauses.push(`o.created_at < (((${at(params.length + 1)}::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
+    params.push(to);
+  } else if (range === 'today') {
+    clauses.push(`o.created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
+  } else if (range === '7d' || range === '30d') {
+    clauses.push(`o.created_at >= ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') - (${range === '7d' ? 6 : 29}::int * INTERVAL '1 day'))`);
+  } else if (range === 'last_month') {
+    clauses.push(`o.created_at >= (date_trunc('month', (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 month') AT TIME ZONE 'Asia/Kolkata')`);
+    clauses.push(`o.created_at < (date_trunc('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
+  }
+  if (storeId) {
+    clauses.push(`o.store_id = ${at(params.length + 1)}`);
+    params.push(storeId);
+  }
+  return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params };
+}
+
 export class OrderService {
   // Generate sequential order number MART-001, MART-002 etc
   private static generateOrderNumber(): string {
@@ -574,6 +601,95 @@ export class OrderService {
     };
     if (client) return reverse(client);
     await transaction(reverse);
+  }
+
+  // One SQL pass over mart_orders for the hub's KPI cards (Dashboard, Analytics).
+  // Every money/count figure is derived live from the order rows in the window —
+  // nothing is read from materialised counters (mart_customers.order_count /
+  // total_spent) that could drift when an order is cancelled or backfilled.
+  static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | null) {
+    const { where, params } = buildOrderWindow(range, from, to, storeId);
+    const result = await query<{
+      placed: number; pending: number; delivered: number; cancelled: number;
+      revenue: string | number; delivery_collected: string | number;
+      free_deliveries: number; coupon_orders: number; coupon_amount: string | number;
+    }>(
+      `SELECT COUNT(*)::int AS placed,
+         COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
+         COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
+         COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue,
+         COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_collected,
+         COUNT(*) FILTER (WHERE o.status = 'delivered' AND o.delivery_charge = 0)::int AS free_deliveries,
+         COUNT(*) FILTER (WHERE o.status = 'delivered' AND (o.coupon_code_used IS NOT NULL OR o.campaign_id IS NOT NULL))::int AS coupon_orders,
+         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status = 'delivered'), 0)::float AS coupon_amount
+       FROM mart_orders o ${where}`,
+      params
+    );
+    const row = result.rows[0];
+    const revenue = Number(row?.revenue ?? 0);
+    const delivered = row?.delivered ?? 0;
+    return {
+      placed: row?.placed ?? 0,
+      pending: row?.pending ?? 0,
+      delivered,
+      cancelled: row?.cancelled ?? 0,
+      revenue,
+      avgOrderValue: delivered ? revenue / delivered : 0,
+      deliveryCollected: Number(row?.delivery_collected ?? 0),
+      freeDeliveries: row?.free_deliveries ?? 0,
+      couponOrders: row?.coupon_orders ?? 0,
+      couponAmount: Number(row?.coupon_amount ?? 0),
+    };
+  }
+
+  // Customer card figures for the Analytics Customers tab, aggregated live from
+  // delivered orders so cancelled/failed/terminated rows can never inflate a
+  // customer's spend or repeat count. Includes the top spenders for the window.
+  static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | null, topCount = 10) {
+    const { where, params } = buildOrderWindow(range, from, to, storeId);
+    const aggSql = `SELECT
+         COALESCE(o.customer_id::text, 'g:' || COALESCE(o.guest_phone, o.id::text)) AS ckey,
+         COALESCE(cu.name, o.guest_name) AS name,
+         COALESCE(cu.phone, o.guest_phone) AS phone,
+         COUNT(*)::int AS order_count,
+         SUM(o.total)::float AS total_spent
+       FROM mart_orders o
+       LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+       WHERE o.status = 'delivered'${where ? ` AND ${where.replace(/^WHERE\s+/, '')}` : ''}
+       GROUP BY 1, 2, 3`;
+    const [totals, top] = await Promise.all([
+      query<{ total: number; repeat_customers: number; orders: number }>(
+        `WITH agg AS (${aggSql})
+         SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE order_count >= 2)::int AS repeat_customers,
+                COALESCE(SUM(order_count), 0)::int AS orders
+         FROM agg`,
+        params
+      ),
+      query<{ ckey: string; name: string | null; phone: string | null; order_count: number; total_spent: string | number }>(
+        `WITH agg AS (${aggSql})
+         SELECT ckey, name, phone, order_count, total_spent
+         FROM agg
+         ORDER BY total_spent DESC, order_count DESC
+         LIMIT $${params.length + 1}`,
+        [...params, topCount]
+      ),
+    ]);
+    const t = totals.rows[0];
+    const total = t?.total ?? 0;
+    return {
+      totalCustomers: total,
+      repeatCustomers: t?.repeat_customers ?? 0,
+      avgOrders: total ? Number(t?.orders ?? 0) / total : 0,
+      top: top.rows.map(r => ({
+        id: r.ckey,
+        name: r.name || '',
+        phone: r.phone || '',
+        orderCount: r.order_count,
+        totalSpent: Number(r.total_spent ?? 0),
+      })),
+    };
   }
 
   static async findAll(filters?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }) {

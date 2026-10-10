@@ -24,6 +24,7 @@ import { CampaignService } from '../services/campaign.service';
 import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
 import { FunnelService, FunnelRange } from '../services/funnel.service';
 import { CustomerAnalyticsService } from '../services/customerAnalytics.service';
+import { emitOrderEvent, orderEventBus, type OrderLiveEvent } from '../services/orderEventBus';
 import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.service';
 import { FunnelCartService } from '../services/funnelCart.service';
 import { evaluateStoreOpen } from '../utils/storeHours';
@@ -229,15 +230,17 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     url: '/orders',
     tag: `order-${result.orderId}`,
   }).catch(() => {});
-  const customer = await query<{ customer_id: string | null }>(`SELECT customer_id FROM mart_orders WHERE id = $1`, [result.orderId]);
-  if (!result.duplicate && customer.rows[0]?.customer_id) {
-    PushService.notifyCustomer(customer.rows[0].customer_id, {
-      title: `Order #${result.orderNumber} received`,
-      body: `Order #${result.orderNumber} has been received.`,
-      url: '/orders',
-      tag: `order-${result.orderId}`,
-    }).catch(() => {});
-  }
+  if (!result.duplicate) emitOrderEvent({
+    type: 'order.created',
+    order: {
+      id: result.orderId,
+      orderNumber: result.orderNumber,
+      status: 'pending',
+      total: result.total,
+      guestName: normalizedName,
+      storeId: storeId || SHAPOORJI_ID,
+    },
+  });
   res.status(201).json({ success: true, data: result });
 });
 
@@ -564,7 +567,105 @@ export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Respon
   res.json({ success: true, data: orders });
 });
 
-// ── Batch dispatch ────────────────────────────────────────────────────────────────────
+// KPI summary for the hub Dashboard + Analytics cards. Computed live from the
+// orders table (never from stored customer counters), scoped to a range and,
+// for non-super admins, to the caller's store.
+export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { range, from, to } = req.query;
+  const allowed = range === 'today' || range === '7d' || range === '30d' || range === 'last_month' || range === 'custom' || range === 'all';
+  if (range === 'custom' && (typeof from !== 'string' || typeof to !== 'string')) {
+    res.status(400).json({ success: false, error: 'Custom range requires from and to dates' });
+    return;
+  }
+  // resolveStoreId keeps this scoped like every other admin route: non-super
+  // admins are pinned to their own store regardless of the query param, and
+  // super admins may target a store explicitly (defaulting to Shapoorji).
+  const storeId = resolveStoreId(req);
+  const summary = await OrderService.getSummary(
+    allowed ? (range as string) : 'all',
+    typeof from === 'string' ? from : undefined,
+    typeof to === 'string' ? to : undefined,
+    storeId
+  );
+  res.json({ success: true, data: summary });
+});
+
+// Per-customer figures for the Analytics Customers tab (total/repeat/top by
+// spend) — computed live from delivered orders, so stored counters that never
+// get reversed on cancellation can't mislead the cards.
+export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { range, from, to, top } = req.query;
+  const allowed = range === 'today' || range === '7d' || range === '30d' || range === 'last_month' || range === 'custom' || range === 'all';
+  if (range === 'custom' && (typeof from !== 'string' || typeof to !== 'string')) {
+    res.status(400).json({ success: false, error: 'Custom range requires from and to dates' });
+    return;
+  }
+  const storeId = resolveStoreId(req);
+  const data = await OrderService.getCustomerAggregates(
+    allowed ? (range as string) : 'all',
+    typeof from === 'string' ? from : undefined,
+    typeof to === 'string' ? to : undefined,
+    storeId,
+    top && !Number.isNaN(parseInt(top as string)) ? Math.min(parseInt(top as string), 100) : 10
+  );
+  res.json({ success: true, data });
+});
+
+// Live order stream (SSE) for the hub. Open hub tabs keep this connection and
+// get bomb order events instantly, independent of web-push (whose delivery the
+// browser/push-service controls and which lags on weak networks). Scoped to the
+// caller's store; super admins (no storeId) receive events for every store.
+export const adminOrderStream = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+  res.write(': connected\n\n');
+
+  const storeId = req.admin?.storeId || null;
+  const listener = (event: OrderLiveEvent) => {
+    const order = event.order;
+    if (storeId && order.storeId && order.storeId !== storeId) return;
+    try {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch {
+      /* client gone; close path below handles cleanup */
+    }
+  };
+  orderEventBus.on('order', listener);
+  const heartbeat = setInterval(() => {
+    res.write(`: keepalive\n\n`);
+  }, 25000);
+  const close = () => {
+    orderEventBus.off('order', listener);
+    clearInterval(heartbeat);
+  };
+  res.on('close', close);
+  req.on('close', close);
+});
+
+// ── Customer push messages ─────────────────────────────────────────────
+
+// ── Customer push messages ─────────────────────────────────────────────
+// Customers get exactly three notifications on a successful order:
+// confirmed → rider on the way → delivered. The delivery-stage message is
+// shared by the single-action "Start Delivery" and by batch dispatch so both
+// paths push the same text.
+function deliveryEtaLabel(preference?: string | null): string {
+  if (preference === 'within_30') return '30 mins';
+  if (preference === 'within_60') return '1 hour';
+  return '10-15 mins';
+}
+
+function riderOnTheWayBody(orderNumber: string, riderName: string | null | undefined, preference?: string | null): string {
+  const rider = riderName ? `${riderName} is on the way with your order` : 'The rider is on the way with your order';
+  return `🛵 ${rider}. Should reach you within ${deliveryEtaLabel(preference)}.`;
+}
+
+// ── Batch dispatch ────────────────────────────────────────────────────
 // Marks multiple orders as out_for_delivery in one tap, assigns sequence + batch_id
 export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { orderIds } = req.body; // array of order IDs in delivery sequence
@@ -590,19 +691,27 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
        WHERE id = $6`,
       [req.admin!.id, admin?.name || req.admin!.username, admin?.phone || null, i + 1, batchId, orderIds[i]]
     );
-    // Notify each customer
-    const custResult = await query<{ customer_id: string | null; delivery_preference: string }>(
-      `SELECT customer_id, delivery_preference FROM mart_orders WHERE id = $1`, [orderIds[i]]
+    // Notify each customer — same delivery-stage message as single dispatch
+    const custResult = await query<{ customer_id: string | null; delivery_preference: string; order_number: string; store_id: string | null }>(
+      `SELECT customer_id, delivery_preference, order_number, store_id FROM mart_orders WHERE id = $1`, [orderIds[i]]
     );
-    const { customer_id, delivery_preference } = custResult.rows[0] || {};
-    const etaLabel = delivery_preference === 'within_30' ? '30 mins' : delivery_preference === 'within_60' ? '1 hour' : '10-15 mins';
+    const { customer_id, delivery_preference, order_number, store_id } = custResult.rows[0] || {};
     if (customer_id) {
       PushService.notifyCustomer(customer_id, {
-        title: 'Rider is on the way',
-        body: `🛵 Rider is on the way! Should reach you within ${etaLabel}`,
+        title: `Order #${order_number} update`,
+        body: riderOnTheWayBody(order_number, admin?.name || req.admin!.username, delivery_preference),
         url: '/orders',
       }).catch(() => {});
     }
+    emitOrderEvent({
+      type: 'order.updated',
+      order: {
+        id: orderIds[i],
+        orderNumber: order_number,
+        status: 'out_for_delivery',
+        storeId: store_id || undefined,
+      },
+    });
   }
   res.json({ success: true, message: `${orderIds.length} order(s) dispatched`, batchId });
 });
@@ -616,16 +725,15 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
   if (status === 'failed_delivery' && failureReason) await query(`UPDATE mart_orders SET failure_reason = $1 WHERE id = $2`, [failureReason, req.params.id]);
   if (status === 'cancelled' && cancellationReason) await query(`UPDATE mart_orders SET cancellation_reason = $1 WHERE id = $2`, [cancellationReason, req.params.id]);
 
-  const details = await query<{ customer_id: string | null; guest_name: string; store_name: string; delivery_by: string | null }>(
-    `SELECT o.customer_id, o.guest_name, COALESCE(s.name, 'Gokez Mart') as store_name, o.delivery_by
+  const details = await query<{ customer_id: string | null; guest_name: string; store_name: string; delivery_by: string | null; delivery_preference: string | null }>(
+    `SELECT o.customer_id, o.guest_name, COALESCE(s.name, 'Gokez Mart') as store_name, o.delivery_by, o.delivery_preference
      FROM mart_orders o LEFT JOIN mart_stores s ON s.id = o.store_id WHERE o.id = $1`, [req.params.id]
   );
   const detail = details.rows[0];
   const messages: Record<string, string> = {
-    confirmed: 'Your order has been confirmed.',
-    preparing: 'Your order is being prepared.',
-    out_for_delivery: `Order picked up by ${order.deliveryByName || req.admin!.username} and on the way to you.`,
-    delivered: 'Your order has been delivered.',
+    confirmed: `✅ Order #${order.orderNumber} confirmed. We're preparing your order.`,
+    out_for_delivery: riderOnTheWayBody(order.orderNumber, order.deliveryByName || null, detail?.delivery_preference),
+    delivered: `🎉 Order #${order.orderNumber} delivered. Enjoy your order!`,
     cancelled: cancellationReason === 'outside_area'
       ? 'We are sorry, but your delivery address is currently outside our service area. You will not be charged. We are expanding soon and hope to serve your area very soon.'
       : 'Your order has been cancelled. You will not be charged.',
@@ -652,6 +760,10 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
       url: '/orders', tag,
     }).catch(() => {});
   }
+  emitOrderEvent({
+    type: 'order.updated',
+    order: { id: order.id, orderNumber: order.orderNumber, status, storeId: order.storeId },
+  });
   res.json({ success: true, data: order });
 });
 
@@ -690,6 +802,15 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
   if (ord.customer_id) {
     PushService.notifyCustomer(ord.customer_id, { title: `Order #${ord.order_number}`, body: MSGS[reason] || MSGS.other, url: '/orders', tag: `order-${req.params.id}` }).catch(() => {});
   }
+  emitOrderEvent({
+    type: 'order.updated',
+    order: {
+      id: req.params.id,
+      orderNumber: ord.order_number,
+      status: 'terminated',
+      storeId: ord.store_id || undefined,
+    },
+  });
   res.json({ success: true, message: 'Order terminated', orderNumber: ord.order_number });
 });
 // ── Admin customer controllers ────────────────────────────────────────────────
@@ -1128,6 +1249,15 @@ async function runCancel(req: CustomerRequest, res: Response, scope: CancelScope
       tag: `order-${req.params.id}`,
     }).catch(() => {});
   }
+  emitOrderEvent({
+    type: 'order.updated',
+    order: {
+      id: req.params.id,
+      orderNumber: order.orderNumber,
+      status: 'cancelled',
+      storeId: order.storeId || undefined,
+    },
+  });
   res.json({ success: true, message: 'Order cancelled' });
 }
 

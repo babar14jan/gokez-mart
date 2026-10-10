@@ -11,6 +11,7 @@ import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { useHeaderAction } from '../store/headerActionStore';
+import LiveOrderToasts from './LiveOrderToasts';
 
 // Roles mirror mart_admins_role_check in migration 056, including store_manager.
 // sales_manager was retired: the database now permits super_admin, store_owner,
@@ -168,6 +169,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 font-sans">
+
+      {/* Global live order toasts (new-order alerts, network-independent) */}
+      <LiveOrderToasts />
 
       {/* ── Desktop sidebar ── */}
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>

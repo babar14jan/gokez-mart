@@ -25,6 +25,16 @@
     <noscript>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
     </noscript>
+    <style>
+      /* Paint the app background before CSS/JS arrive. An update swap reloads
+         through the service worker, but the window between unload and first
+         paint would otherwise flash white — which reads as the app "closing and
+         reopening". Matching the theme here makes the reload read as a smooth
+         transition instead. */
+      html { background-color: #ffffff; }
+      @media (prefers-color-scheme: dark) { html { background-color: #18191a; } }
+      html.dark { background-color: #18191a; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

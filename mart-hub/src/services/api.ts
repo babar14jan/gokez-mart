@@ -67,9 +67,26 @@ export const categoriesApi = {
 };
 
 // ── Orders ────────────────────────────────────────────────────────────────────
+export type SummaryRange = 'today' | '7d' | '30d' | 'last_month' | 'custom' | 'all';
+
+export interface OrderSummary {
+  placed: number;
+  pending: number;
+  delivered: number;
+  cancelled: number;
+  revenue: number;
+  avgOrderValue: number;
+  deliveryCollected: number;
+  freeDeliveries: number;
+  couponOrders: number;
+  couponAmount: number;
+}
+
 export const ordersApi = {
   getAll: (params?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }) =>
     api.get('/admin/orders', { params }),
+  getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string }) =>
+    api.get('/admin/analytics/summary', { params }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi') =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
   batchDispatch: (orderIds: string[]) =>
@@ -79,9 +96,18 @@ export const ordersApi = {
 };
 
 // ── Customers ─────────────────────────────────────────────────────────────────
+export interface CustomerAggregates {
+  totalCustomers: number;
+  repeatCustomers: number;
+  avgOrders: number;
+  top: Array<{ id: string; name: string; phone: string; orderCount: number; totalSpent: number }>;
+}
+
 export const customersApi = {
   getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; limit?: number; offset?: number }) =>
     api.get('/admin/customers', { params }),
+  getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number }) =>
+    api.get('/admin/analytics/customers', { params }),
 };
 
 export type FunnelRange = 'today' | '7d' | '30d' | 'custom' | 'all';

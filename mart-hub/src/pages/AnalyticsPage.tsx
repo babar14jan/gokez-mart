@@ -1,11 +1,43 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { TrendingUp, ShoppingBag, Users, CreditCard, Wallet, Smartphone, CheckCircle, XCircle, Star, Package, Tag, Calendar } from 'lucide-react';
-import { ordersApi, productsApi, customersApi, categoriesApi } from '../services/api';
+import { ordersApi, productsApi, customersApi, categoriesApi, type OrderSummary, type CustomerAggregates, type SummaryRange } from '../services/api';
+import { getActiveStoreId } from '../utils/store';
+import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 
 type Tab = 'revenue' | 'orders' | 'customers';
 type DateRange = 'today' | 'week' | 'month' | 'last_month' | 'custom';
 
 const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+
+const mapDateRange = (r: DateRange): SummaryRange =>
+  r === 'today' ? 'today' : r === 'week' ? '7d' : r === 'month' ? '30d' : r === 'last_month' ? 'last_month' : 'custom';
+
+const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, delivered: 0, cancelled: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
+
+// Live refresh for tab cards: instant on order events (weak-network friendly)
+// plus a quiet 30s poll so a lost event can never leave stale figures up.
+function useLivePoll(refresh: () => void) {
+  useEffect(() => {
+    let lastRefresh = 0;
+    const onEvent = () => {
+      const now = Date.now();
+      if (now - lastRefresh < 2000) return;
+      lastRefresh = now;
+      refresh();
+    };
+    const offEvent = onOrderEvent(onEvent);
+    const offConnect = onOrderStreamConnect(refresh);
+    const poll = setInterval(refresh, 30000);
+    return () => { offEvent(); offConnect(); clearInterval(poll); };
+  }, [refresh]);
+}
+
+// Race-safe async fetch for a params set: only the latest request may write.
+function useLatestParams(range: DateRange, customFrom: string, customTo: string) {
+  const ref = useRef({ range, customFrom, customTo });
+  ref.current = { range, customFrom, customTo };
+  return ref;
+}
 
 const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
 const PAYMENT_COLORS: Record<string, string> = {
@@ -135,13 +167,26 @@ function RevenueTab({ orders }: { orders: any[] }) {
   const [range, setRange] = useState<DateRange>('month');
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+  const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
+  const paramsRef = useLatestParams(range, customFrom, customTo);
+
+  const loadSummary = useCallback(() => {
+    const p = paramsRef.current;
+    ordersApi.getSummary({
+      storeId: getActiveStoreId(),
+      range: mapDateRange(p.range),
+      from: p.customFrom || undefined,
+      to: p.customTo || undefined,
+    }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
+      .catch(() => {});
+  }, [paramsRef]);
+
+  useEffect(() => { loadSummary(); }, [loadSummary]);
+  useLivePoll(loadSummary);
 
   const filtered = useMemo(() => filterByDate(orders, range, customFrom, customTo), [orders, range, customFrom, customTo]);
   const delivered = filtered.filter(o => o.status === 'delivered');
   const totalRevenue = delivered.reduce((s, o) => s + o.total, 0);
-  const avgOrderValue = delivered.length ? totalRevenue / delivered.length : 0;
-  const deliveryRevenue = filtered.reduce((s, o) => s + (o.deliveryCharge || 0), 0);
-  const freeDeliveries = filtered.filter(o => o.deliveryCharge === 0).length;
 
   const days = useMemo(() => getDays(range, customFrom, customTo), [range, customFrom, customTo]);
   const showLabel = (i: number) => days.length <= 7 || i % Math.ceil(days.length / 7) === 0;
@@ -173,11 +218,12 @@ function RevenueTab({ orders }: { orders: any[] }) {
     <div className="space-y-6">
       <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <SummaryCard label="Total Revenue" value={`₹${totalRevenue.toFixed(0)}`} sub="delivered orders" icon={<TrendingUp className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
-        <SummaryCard label="Avg Order Value" value={`₹${avgOrderValue.toFixed(0)}`} sub="per delivered order" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
-        <SummaryCard label="Delivery Collected" value={`₹${deliveryRevenue.toFixed(0)}`} sub="delivery charges" icon={<TrendingUp className="w-4 h-4" />} gradient="from-violet-500 to-violet-600" />
-        <SummaryCard label="Free Deliveries" value={freeDeliveries} sub="orders above threshold" icon={<CheckCircle className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <SummaryCard label="Total Revenue" value={`₹${summary.revenue.toFixed(0)}`} sub="delivered orders" icon={<TrendingUp className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
+        <SummaryCard label="Avg Order Value" value={`₹${summary.avgOrderValue.toFixed(0)}`} sub="per delivered order" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
+        <SummaryCard label="Delivery Collected" value={`₹${summary.deliveryCollected.toFixed(0)}`} sub="delivery charges" icon={<TrendingUp className="w-4 h-4" />} gradient="from-violet-500 to-violet-600" />
+        <SummaryCard label="Free Deliveries" value={summary.freeDeliveries} sub="orders above threshold" icon={<CheckCircle className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
+        <SummaryCard label="Coupons Used" value={summary.couponOrders} sub={`₹${summary.couponAmount.toFixed(0)} discount given`} icon={<Tag className="w-4 h-4" />} gradient="from-pink-500 to-rose-500" />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
@@ -237,11 +283,25 @@ function OrdersTab({ orders }: { orders: any[] }) {
   const [range, setRange] = useState<DateRange>('month');
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+  const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
+  const paramsRef = useLatestParams(range, customFrom, customTo);
+
+  const loadSummary = useCallback(() => {
+    const p = paramsRef.current;
+    ordersApi.getSummary({
+      storeId: getActiveStoreId(),
+      range: mapDateRange(p.range),
+      from: p.customFrom || undefined,
+      to: p.customTo || undefined,
+    }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
+      .catch(() => {});
+  }, [paramsRef]);
+
+  useEffect(() => { loadSummary(); }, [loadSummary]);
+  useLivePoll(loadSummary);
 
   const filtered = useMemo(() => filterByDate(orders, range, customFrom, customTo), [orders, range, customFrom, customTo]);
-  const delivered = filtered.filter(o => o.status === 'delivered').length;
-  const cancelled = filtered.filter(o => o.status === 'cancelled').length;
-  const completionRate = filtered.length ? Math.round((delivered / filtered.length) * 100) : 0;
+  const completionRate = summary.placed ? Math.round((summary.delivered / summary.placed) * 100) : 0;
 
   const now = new Date();
   const thisWeek = orders.filter(o => new Date(o.createdAt) >= new Date(now.getTime() - 7 * 86400000)).length;
@@ -280,10 +340,10 @@ function OrdersTab({ orders }: { orders: any[] }) {
       <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <SummaryCard label="Total Orders" value={filtered.length} sub="in selected period" icon={<ShoppingBag className="w-4 h-4" />} gradient="from-slate-500 to-slate-600" />
-        <SummaryCard label="Delivered" value={delivered} sub={`${completionRate}% completion`} icon={<CheckCircle className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
-        <SummaryCard label="Cancelled" value={cancelled} sub="not completed" icon={<XCircle className="w-4 h-4" />} gradient="from-red-400 to-red-500" />
-        <SummaryCard label="Completion Rate" value={`${completionRate}%`} sub="delivered / total" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
+        <SummaryCard label="Total Orders" value={summary.placed} sub="in selected period" icon={<ShoppingBag className="w-4 h-4" />} gradient="from-slate-500 to-slate-600" />
+        <SummaryCard label="Delivered" value={summary.delivered} sub={`${completionRate}% completion`} icon={<CheckCircle className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
+        <SummaryCard label="Not Completed" value={summary.cancelled} sub="cancelled · failed · terminated" icon={<XCircle className="w-4 h-4" />} gradient="from-red-400 to-red-500" />
+        <SummaryCard label="Completion Rate" value={`${completionRate}%`} sub="delivered / placed" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
@@ -335,13 +395,34 @@ function OrdersTab({ orders }: { orders: any[] }) {
 
 
 // ── Customers Tab ─────────────────────────────────────────────────────────────
-function CustomersTab({ orders, customers, products }: { orders: any[]; customers: any[]; products: any[]; categories?: any[] }) {
-  const repeatCustomers = customers.filter((c: any) => c.orderCount >= 2).length;
-  const avgOrders = customers.length ? (customers.reduce((s: number, c: any) => s + c.orderCount, 0) / customers.length).toFixed(1) : '0';
-  const topCustomers = [...customers].sort((a: any, b: any) => b.totalSpent - a.totalSpent).slice(0, 10);
+function CustomersTab({ orders, products }: { orders: any[]; products: any[]; categories?: any[] }) {
+  const [range, setRange] = useState<DateRange>('month');
+  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
+  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+  const [agg, setAgg] = useState<CustomerAggregates>({ totalCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
+  const paramsRef = useLatestParams(range, customFrom, customTo);
+
+  const loadAggregates = useCallback(() => {
+    const p = paramsRef.current;
+    customersApi.getAggregates({
+      storeId: getActiveStoreId(),
+      range: mapDateRange(p.range),
+      from: p.customFrom || undefined,
+      to: p.customTo || undefined,
+    }).then(r => { if (paramsRef.current === p) setAgg(r.data.data || { totalCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] }); })
+      .catch(() => {});
+  }, [paramsRef]);
+
+  useEffect(() => { loadAggregates(); }, [loadAggregates]);
+  useLivePoll(loadAggregates);
+
+  const scoped = useMemo(() => filterByDate(orders, range, customFrom, customTo), [orders, range, customFrom, customTo]);
+  const repeatCustomers = agg.repeatCustomers;
+  const avgOrders = agg.avgOrders ? agg.avgOrders.toFixed(1) : '0';
+  const topCustomers = agg.top;
 
   const productCount: Record<string, { name: string; units: number; revenue: number }> = {};
-  for (const order of orders) {
+  for (const order of scoped) {
     for (const item of (order.items || [])) {
       if (!productCount[item.productName]) productCount[item.productName] = { name: item.productName, units: 0, revenue: 0 };
       productCount[item.productName].units += item.quantity;
@@ -351,7 +432,7 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
   const topProducts = Object.values(productCount).sort((a, b) => b.units - a.units).slice(0, 5);
 
   const catCount: Record<string, number> = {};
-  for (const order of orders) {
+  for (const order of scoped) {
     for (const item of (order.items || [])) {
       const prod = products.find((p: any) => p.name === item.productName);
       const cat = prod?.categoryName || 'Others';
@@ -363,10 +444,12 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
 
   return (
     <div className="space-y-6">
+      <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
+
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Total Customers" value={customers.length} sub="registered via orders" icon={<Users className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
-        <SummaryCard label="Repeat Customers" value={repeatCustomers} sub="ordered 2+ times" icon={<Star className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
-        <SummaryCard label="Avg Orders" value={avgOrders} sub="per customer" icon={<ShoppingBag className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
+        <SummaryCard label="Total Customers" value={agg.totalCustomers} sub="who delivered an order" icon={<Users className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
+        <SummaryCard label="Repeat Customers" value={repeatCustomers} sub="delivered 2+ orders" icon={<Star className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
+        <SummaryCard label="Avg Orders" value={avgOrders} sub="delivered per customer" icon={<ShoppingBag className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
@@ -420,29 +503,32 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
             <div className="hidden sm:grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
               <div className="col-span-1">#</div><div className="col-span-4">Customer</div><div className="col-span-3">Phone</div><div className="col-span-2 text-center">Orders</div><div className="col-span-2 text-right">Spent</div>
             </div>
-            {topCustomers.map((c: any, i: number) => (
+            {topCustomers.map((c: any, i: number) => {
+              const initial = (c.name || c.phone || '?')[0].toUpperCase();
+              return (
               <div key={c.id} className="grid grid-cols-1 sm:grid-cols-12 gap-1 sm:gap-3 px-4 py-3 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/50 items-center">
                 <div className="sm:hidden flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-bold text-emerald-700">{(c.name || c.phone)[0].toUpperCase()}</span>
+                      <span className="text-xs font-bold text-emerald-700">{initial}</span>
                     </div>
-                    <div><p className="text-xs font-semibold text-gray-900 dark:text-white">{c.name || 'Guest'}</p><p className="text-[10px] text-gray-500 dark:text-slate-400">{c.phone} · {c.orderCount} orders</p></div>
+                    <div><p className="text-xs font-semibold text-gray-900 dark:text-white">{c.name || 'Guest'}</p><p className="text-[10px] text-gray-500 dark:text-slate-400">{c.phone || '—'} · {c.orderCount} orders</p></div>
                   </div>
                   <p className="text-sm font-bold text-gray-900 dark:text-white">₹{c.totalSpent.toFixed(0)}</p>
                 </div>
                 <div className="hidden sm:block col-span-1 text-xs font-bold text-gray-500 dark:text-slate-400">#{i + 1}</div>
                 <div className="hidden sm:flex col-span-4 items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-emerald-700">{(c.name || c.phone)[0].toUpperCase()}</span>
+                    <span className="text-xs font-bold text-emerald-700">{initial}</span>
                   </div>
                   <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{c.name || 'Guest'}</p>
                 </div>
-                <div className="hidden sm:block col-span-3 text-xs text-gray-600 dark:text-slate-400">{c.phone}</div>
+                <div className="hidden sm:block col-span-3 text-xs text-gray-600 dark:text-slate-400">{c.phone || '—'}</div>
                 <div className="hidden sm:block col-span-2 text-center text-xs font-semibold text-gray-900 dark:text-white">{c.orderCount}</div>
                 <div className="hidden sm:block col-span-2 text-right text-sm font-bold text-gray-900 dark:text-white">₹{c.totalSpent.toFixed(0)}</div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -454,17 +540,16 @@ function CustomersTab({ orders, customers, products }: { orders: any[]; customer
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('revenue');
-  const [data, setData] = useState({ orders: [], products: [], customers: [], categories: [] });
+  const [data, setData] = useState({ orders: [], products: [], categories: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       ordersApi.getAll({ limit: 500 } as any),
       productsApi.getAll(),
-      customersApi.getAll(),
       categoriesApi.getAll(),
-    ]).then(([o, p, c, cat]) => {
-      setData({ orders: o.data.data || [], products: p.data.data || [], customers: c.data.data || [], categories: cat.data.data || [] });
+    ]).then(([o, p, cat]) => {
+      setData({ orders: o.data.data || [], products: p.data.data || [], categories: cat.data.data || [] });
     }).finally(() => setLoading(false));
   }, []);
 
@@ -499,7 +584,7 @@ export default function AnalyticsPage() {
 
       {tab === 'revenue'   && <RevenueTab   orders={data.orders} />}
       {tab === 'orders'    && <OrdersTab    orders={data.orders} />}
-      {tab === 'customers' && <CustomersTab orders={data.orders} customers={data.customers} products={data.products} categories={data.categories} />}
+      {tab === 'customers' && <CustomersTab orders={data.orders} products={data.products} categories={data.categories} />}
     </div>
   );
 }

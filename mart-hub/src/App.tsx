@@ -4,6 +4,7 @@ import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { subscribeAdminToPush } from './services/push';
+import { startOrderStream, stopOrderStream } from './services/realtime';
 import Layout from './components/Layout';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -96,6 +97,14 @@ export default function App() {
     if (isAuthenticated && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       subscribeAdminToPush().catch(() => {});
     }
+  }, [isAuthenticated]);
+
+  // Live order stream: gives open hub tabs instant order/status events
+  // regardless of web-push delivery (which lags on weak networks).
+  useEffect(() => {
+    if (isAuthenticated) startOrderStream();
+    else stopOrderStream();
+    return () => stopOrderStream();
   }, [isAuthenticated]);
 
   useEffect(() => {

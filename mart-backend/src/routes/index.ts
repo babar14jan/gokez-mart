@@ -86,6 +86,9 @@ router.delete('/admin/users/:id', authenticate, requireSuperAdmin, ctrl.adminDel
 
 // ── Admin orders ──────────────────────────────────────────────────────────────
 router.get('/admin/orders',            authenticate, ctrl.adminGetOrders);       // ?storeId=
+router.get('/admin/analytics/summary', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetAnalyticsSummary); // ?range=&from=&to=&storeId=
+router.get('/admin/analytics/customers', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetCustomerAggregates); // ?range=&from=&to=&storeId=&top=
+router.get('/admin/events',              authenticate, ctrl.adminOrderStream);       // SSE live order stream
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
 router.put("/admin/orders/:id/terminate", authenticate, ctrl.adminTerminateOrder);// ── Admin customers ───────────────────────────────────────────────────────────
 router.get('/admin/customers',         authenticate, ctrl.adminGetCustomers);

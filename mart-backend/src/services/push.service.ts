@@ -97,7 +97,14 @@ export class PushService {
       subs.map(sub =>
         webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          body
+          body,
+          {
+            // Short TTL + high urgency: an order alert that cannot be delivered
+            // within ~2 minutes is stale (the delivery meet time is gone), so
+            // the push service should drop it instead of delivering it late.
+            TTL: 120,
+            urgency: 'high',
+          }
         ).catch(async (err: any) => {
           // Remove expired or invalid subscriptions
           if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {

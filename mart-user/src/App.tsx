@@ -1,11 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Search, X, CheckCircle, Mail, Phone, BellRing, MapPin } from 'lucide-react';
+import { Search, X, CheckCircle, Mail, Phone, BellRing } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
-import type { Category, Product, PublicSettings, MartZone } from './services/api';
+import type { Category, Product, PublicSettings } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
-import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush } from './services/push';
-import { getUserLocation, findMatchingZone } from './services/geofence';
+import { useZoneStore, SHAPOORJI_ZONE } from './store/zoneStore';
+import { getNotificationPermission, requestNotificationPermission, subscribeToPush } from './services/push';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
 import ConfirmDialog from './components/ConfirmDialog';
@@ -32,32 +32,19 @@ import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COM
 
 type View = 'home' | 'about' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
-type PermissionPrompt = 'order-notifications' | 'location' | null;
+type PermissionPrompt = 'order-notifications' | null;
 
 const PERMISSION_PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const ORDER_NOTIFICATION_PROMPT_KEY = 'mart_order_notification_prompted_at';
-const LOCATION_PROMPT_KEY = 'mart_location_prompted_at';
-const PERMISSION_PROMPT_SESSION_KEY = 'mart_permission_prompt_shown';
 
 function isPermissionPromptDue(storageKey: string): boolean {
   const lastPromptedAt = Number(localStorage.getItem(storageKey) || 0);
   return !lastPromptedAt || Date.now() - lastPromptedAt >= PERMISSION_PROMPT_COOLDOWN_MS;
 }
 
-function recordPermissionPrompt(storageKey: string, prompt: Exclude<PermissionPrompt, null>) {
+function recordPermissionPrompt(storageKey: string) {
   localStorage.setItem(storageKey, String(Date.now()));
-  sessionStorage.setItem(PERMISSION_PROMPT_SESSION_KEY, prompt);
 }
-
-const SHAPOORJI_ZONE: MartZone = {
-  id: 'shapoorji-default',
-  storeId: '00000000-0000-0000-0000-000000000001',
-  name: 'Shapoorji',
-  lat: 22.565717182227967,
-  lng: 88.51426843552692,
-  radiusKm: 5,
-  isActive: true,
-};
 
 const OrderHistoryPage = lazy(() => import('./pages/OrderHistoryPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
@@ -135,8 +122,7 @@ export default function App() {
   const [orderNotificationError, setOrderNotificationError] = useState('');
   const [enablingOrderNotifications, setEnablingOrderNotifications] = useState(false);
 
-  const [showOutsideWarning, setShowOutsideWarning] = useState(false);
-  const [showOutsideBlock, setShowOutsideBlock] = useState(false);
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -176,8 +162,6 @@ export default function App() {
   useEffect(() => () => {
     setClosedPrompt(current => { current?.resolve(false); return null; });
   }, []);
-  const [zones, setZones] = useState<MartZone[]>([]);
-  const [selectedZone, setSelectedZone] = useState<MartZone | null>(SHAPOORJI_ZONE);
   const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [isHomeSearchFocused, setIsHomeSearchFocused] = useState(false);
@@ -188,6 +172,10 @@ export default function App() {
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
   const cartItems = useCartStore(s => s.totalItems());
+  // Delivery-area state lives in the shared zone store so the navbar picker, the
+  // Account page toggle and this catalog loader all read/write one source of truth.
+  const selectedZone = useZoneStore(s => s.selectedZone);
+  const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
 
   // Keeps .page-shell equal to the visible height; see the hook for why one
   // mechanism covers both iOS and Android.
@@ -255,57 +243,78 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
+  // Delivery areas: load once, keep a saved zone if it still exists (never
+  // silently reset a deliberate choice), and — only on a first visit — quietly
+  // prefill the zone from GPS if permission is already granted. Detecting here
+  // never pops a browser prompt; the Navbar "Use my location" action does.
+  // Zones are a convenience, not a gate: if the areas API fails we still serve
+  // the default catalog from the effect below and never block ordering.
   useEffect(() => {
     if (!isApiConfigured) {
       setCatalogError('Store service is not configured. Please try again later.');
       setLoading(false);
       return;
     }
+    let cancelled = false;
+    // A deliberate pick (or a prior detection) means the customer owns the area
+    // choice — never override it from GPS on later visits.
+    const hasZoneSelected = useZoneStore.getState().zoneSelected;
+
+    (async () => {
+      try {
+        const zonesRes = await storeApi.getZones();
+        if (cancelled) return;
+        const fetchedZones = zonesRes.data.data || [];
+        useZoneStore.getState().setZones(fetchedZones);
+        useZoneStore.getState().setSelectedZone(prev => {
+          if (prev && fetchedZones.length > 0 && fetchedZones.some(z => z.id === prev.id)) return prev;
+          if (fetchedZones.length === 0) return SHAPOORJI_ZONE;
+          return fetchedZones.find(zone => zone.storeId === SHAPOORJI_ZONE.storeId) || fetchedZones[0];
+        });
+        if (hasZoneSelected || cancelled) return;
+        const { autoDetect } = useZoneStore.getState();
+        if (!autoDetect || !navigator.permissions) return;
+        const result = await navigator.permissions.query({ name: 'geolocation' });
+        if (result.state !== 'granted' || cancelled) return;
+        await useZoneStore.getState().detectAndApply();
+      } catch {
+        // Swallow — a zones outage must not block the default catalog.
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [catalogRequest]);
+
+  // Catalog + settings for the active delivery zone. Refires whenever the zone
+  // changes (navbar picker, "Use my location", Account toggle, GPS prefill) or
+  // on "Try Again", so every switch goes through ONE path — previously the GPS
+  // path and the picker duplicated this and could drift apart.
+  useEffect(() => {
+    if (!isApiConfigured) return;
+    let cancelled = false;
     setLoading(true);
     setCatalogError(null);
+    // A new delivery area is a browsing context switch: reset the filters so the
+    // customer never sees the previous zone's category/search results.
+    setActiveCategoryId('all');
+    setSearch('');
     Promise.all([
       storeApi.getCategories(),
-      storeApi.getProducts(undefined, SHAPOORJI_ZONE.storeId),
-      storeApi.getSettings(SHAPOORJI_ZONE.storeId),
-      storeApi.getZones(),
-    ]).then(([catRes, prodRes, settingsRes, zonesRes]) => {
+      storeApi.getProducts(undefined, activeStoreId),
+      storeApi.getSettings(activeStoreId),
+    ]).then(([catRes, prodRes, settingsRes]) => {
+      if (cancelled) return;
       setCategories(catRes.data.data || []);
       setProducts(prodRes.data.data || []);
       setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
-      const fetchedZones = zonesRes.data.data || [];
-      setZones(fetchedZones);
-      // Default to first zone (Shapoorji) so UI matches what's loaded
-      if (fetchedZones.length > 0) setSelectedZone(fetchedZones.find(zone => zone.storeId === SHAPOORJI_ZONE.storeId) || fetchedZones[0]);
-      if (fetchedZones.length > 0) {
-        // Ask location on first visit, respect app-level preference after that
-        const locationEnabled = localStorage.getItem('mart_location_enabled') !== 'false';
-        if (locationEnabled) {
-          if (navigator.permissions) {
-            navigator.permissions.query({ name: 'geolocation' }).then(async result => {
-              if (result.state === 'granted') {
-                // Already granted — use silently
-                const loc = await getUserLocation();
-                if (loc) {
-                  const match = findMatchingZone(loc.lat, loc.lng, fetchedZones);
-                  if (match) {
-                    setSelectedZone(match.zone);
-                    const [pr, sr] = await Promise.all([
-                      storeApi.getProducts(undefined, match.zone.storeId),
-                      storeApi.getSettings(match.zone.storeId),
-                    ]);
-                    setProducts(pr.data.data || []);
-                    setSettings(sr.data.data || DEFAULT_SETTINGS);
-                  }
-                }
-              }
-            }).catch(() => {});
-          }
-        }
-      }
+      setCatalogError(null);
     }).catch(() => {
-      setCatalogError('Shapoorji store is temporarily unavailable. Check your connection and try again.');
-    }).finally(() => setLoading(false));
-  }, [catalogRequest]);
+      if (!cancelled) setCatalogError('Shapoorji store is temporarily unavailable. Check your connection and try again.');
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [activeStoreId, catalogRequest]);
 
   // Silent refresh — products + settings for current store every 3 mins + on tab focus
   useEffect(() => {
@@ -326,7 +335,7 @@ export default function App() {
     const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
-  }, [selectedZone]);
+  }, [activeStoreId]);
 
   // The 3-minute poll above would leave a stale "closed" strip for up to three
   // minutes after the store actually opens, so schedule an exact refetch for the
@@ -339,15 +348,14 @@ export default function App() {
     // Guard against a past or unparseable instant, which would fire immediately
     // and spin. The poll above still covers those cases.
     if (!Number.isFinite(delay) || delay <= 0 || delay > 24 * 60 * 60 * 1000) return;
-    const storeId = selectedZone?.storeId;
     const timer = setTimeout(async () => {
       try {
-        const srRes = await storeApi.getSettings(storeId);
+        const srRes = await storeApi.getSettings(activeStoreId);
         setSettings(srRes.data.data || DEFAULT_SETTINGS);
       } catch {}
     }, delay);
     return () => clearTimeout(timer);
-  }, [openState?.isOpen, openState?.nextOpenAt, selectedZone?.storeId]);
+  }, [openState?.isOpen, openState?.nextOpenAt, activeStoreId]);
 
   const filteredProducts = products.filter(p => {
     const q = search.trim().toLowerCase();
@@ -430,21 +438,14 @@ export default function App() {
   }, [isLoggedIn, successData]);
 
   useEffect(() => {
-    if (successData || permissionPrompt || sessionStorage.getItem(PERMISSION_PROMPT_SESSION_KEY)) return;
-    let cancelled = false;
-    getLocationPermission().then(permission => {
-      if (!cancelled && permission === 'prompt' && isPermissionPromptDue(LOCATION_PROMPT_KEY)) {
-        setPermissionPrompt('location');
-      }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [permissionPrompt, successData]);
+    if (!locationNotice) return;
+    const t = setTimeout(() => setLocationNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [locationNotice]);
 
   const dismissPermissionPrompt = () => {
     if (permissionPrompt === 'order-notifications') {
-      recordPermissionPrompt(ORDER_NOTIFICATION_PROMPT_KEY, permissionPrompt);
-    } else if (permissionPrompt === 'location') {
-      recordPermissionPrompt(LOCATION_PROMPT_KEY, permissionPrompt);
+      recordPermissionPrompt(ORDER_NOTIFICATION_PROMPT_KEY);
     }
     setPermissionPrompt(null);
     setOrderNotificationError('');
@@ -469,31 +470,34 @@ export default function App() {
     }
   };
 
-  const enableLocation = async () => {
-    const location = await getUserLocation();
-    if (!location) {
-      dismissPermissionPrompt();
-      return;
-    }
-    localStorage.setItem('mart_location_enabled', 'true');
-    try {
-      const availableZones = zones.length > 0 ? zones : (await storeApi.getZones()).data.data || [];
-      const match = findMatchingZone(location.lat, location.lng, availableZones);
-      if (match) {
-        setSelectedZone(match.zone);
-        const [productResponse, settingsResponse] = await Promise.all([
-          storeApi.getProducts(undefined, match.zone.storeId),
-          storeApi.getSettings(match.zone.storeId),
-        ]);
-        setProducts(productResponse.data.data || []);
-        setSettings(settingsResponse.data.data || DEFAULT_SETTINGS);
-      } else {
-        setShowOutsideWarning(true);
-      }
-    } catch {
-      // Permission remains enabled; the next catalog refresh can retry zone lookup.
-    } finally {
-      dismissPermissionPrompt();
+  // Triggered by a tap on the location/zone control. Requesting on a gesture
+  // (instead of an automatic prompt on load) means the browser shows only one
+  // prompt, and a decline never burns the one-shot native permission. The shared
+  // zone store does the detection + apply; App just surfaces the outcome as a
+  // toast, so the navbar and the Account page behave identically. A failed
+  // lookup is never a block — the customer picks an area manually instead.
+  const useMyLocation = async () => {
+    setLocationNotice(null);
+    const result = await useZoneStore.getState().detectAndApply();
+    switch (result.status) {
+      case 'applied':
+      case 'kept':
+        setLocationNotice(`Delivering to ${result.zone.name}`);
+        break;
+      case 'no_match':
+        setLocationNotice('We couldn\'t match your location to a delivery area. Pick one below — you can order to any available area.');
+        break;
+      case 'denied':
+        setLocationNotice('Location is blocked. Allow it in your browser settings, or pick your area below.');
+        break;
+      case 'unavailable':
+        setLocationNotice('Could not get your location. Please try again or pick your area below.');
+        break;
+      case 'error':
+        setLocationNotice('Something went wrong while finding your area. Please try again.');
+        break;
+      case 'busy':
+        break;
     }
   };
 
@@ -694,79 +698,16 @@ export default function App() {
 
         {showNamePrompt && <NamePrompt onDone={() => setShowNamePrompt(false)} />}
 
-        {permissionPrompt === 'location' && (
-          <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/45 p-4 sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-labelledby="location-permission-title">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800">
-              <MapPin className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-              <h2 id="location-permission-title" className="mt-3 text-base font-bold text-gray-900 dark:text-white">Find the right store for you</h2>
-              <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-slate-300">Use your location while the app is open to check delivery availability. We do not track your location in the background.</p>
-              <div className="mt-5 flex gap-2">
-                <button onClick={enableLocation} className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-700">Use my location</button>
-                <button onClick={dismissPermissionPrompt} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700">Not now</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      {/* Outside zone — soft warning */}
-      {showOutsideWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-6 max-w-sm w-full text-center">
-            <div className="text-4xl mb-3">📍</div>
-            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">We&apos;re not in your area yet</h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-1">
-              {BRAND_NAME} currently delivers within <strong>{selectedZone?.radiusKm ?? 5}km of {selectedZone?.name ?? 'your area'}</strong>.
-            </p>
-            <p className="text-sm text-emerald-600 font-semibold mb-5">🚀 We&apos;re expanding soon — you&apos;ll be next!</p>
-            <button onClick={() => setShowOutsideWarning(false)}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">
-              Continue Browsing
-            </button>
-            <p className="text-[11px] text-gray-500 mt-3">You can browse products but ordering is not available in your area.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Outside zone — hard block */}
-      {showOutsideBlock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-6 max-w-sm w-full text-center">
-            <div className="text-4xl mb-3">🛵</div>
-            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">Delivery not available yet</h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-2">
-              We deliver within <strong>{selectedZone?.radiusKm ?? 5}km of {selectedZone?.name ?? 'your area'}</strong>. Your location is outside our current delivery zone.
-            </p>
-            <p className="text-sm text-emerald-600 font-semibold mb-5">We&apos;re coming to your area soon! 🌱</p>
-            <button onClick={() => setShowOutsideBlock(false)}
-              className="w-full py-3 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-white font-bold rounded-2xl transition-all">
-              Got it
-            </button>
-          </div>
+      {/* Location feedback toast */}
+      {locationNotice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100vw-2rem)] rounded-full bg-slate-900 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-lg dark:bg-slate-700">
+          {locationNotice}
         </div>
       )}
 
       {!isEmbed && (
         <Navbar
-          zones={zones}
-          selectedZone={selectedZone}
-          onZoneChange={async (zone) => {
-          setSelectedZone(zone);
-          setShowOutsideWarning(false);
-          setShowOutsideBlock(false);
-          setLoading(true);
-          setActiveCategoryId('all');
-          setSearch('');
-          try {
-            const [catRes, prodRes, srRes] = await Promise.all([
-              storeApi.getCategories(),
-              storeApi.getProducts(undefined, zone.storeId),
-              storeApi.getSettings(zone.storeId),
-            ]);
-            setCategories(catRes.data.data || []);
-            setProducts(prodRes.data.data || []);
-            setSettings(srRes.data.data || DEFAULT_SETTINGS);
-          } finally { setLoading(false); }
-        }}
+          onUseMyLocation={useMyLocation}
           activeView={view as 'home' | 'categories' | 'orders' | 'account'}
           onNavChange={handleNavChange}
           onCheckout={handleCheckout}
