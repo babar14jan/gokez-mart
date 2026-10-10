@@ -4,16 +4,6 @@ import { useCartStore } from '../store/cartStore';
 import ProductDetailSheet from './ProductDetailSheet';
 import CartQuantityControl from './CartQuantityControl';
 
-// Display name: English (Hindi) or just English or just Hindi — never empty brackets
-function displayName(product: Product): string {
-  const eng = product.name?.trim();
-  const local = product.localName?.trim();
-  if (eng && local) return `${eng} (${local})`;
-  if (eng) return eng;
-  if (local) return local;
-  return '';
-}
-
 interface ProductCardProps {
   product: Product;
 }
@@ -49,7 +39,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
           {/* Discount badge */}
           {savings > 0 && !isOutOfStock && (
-            <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-lg shadow-sm">
+            <span className="absolute top-0 left-0 rounded-br-lg bg-red-100 px-2 py-1 text-[11px] font-extrabold text-red-600 shadow-sm dark:bg-red-900/40 dark:text-red-300">
               {product.discountPercent}% OFF
             </span>
           )}
@@ -61,9 +51,9 @@ export default function ProductCard({ product }: ProductCardProps) {
             </div>
           )}
 
-          {/* ADD / qty — stops propagation so card tap doesn't open sheet */}
+          {/* ADD / qty — sits on the image corner so the full price row stays visible */}
           {!isOutOfStock && (
-            <div className="absolute bottom-0 right-0 z-10">
+            <div className="absolute bottom-0 right-[3px] z-10">
               <CartQuantityControl
                 variant="card"
                 quantity={qty}
@@ -76,15 +66,18 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Info — fixed height name so all cards align */}
         <div className="px-2 pt-1.5 pb-2 flex flex-col">
-          <p className="text-[12px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1" style={{ minHeight: '2.2em' }}>{displayName(product)}</p>
-          <div className="flex items-center justify-between gap-1 mt-auto">
-            <div className="flex flex-col">
-              <span className="inline-flex w-fit rounded-md bg-emerald-600 px-1.5 py-0.5 text-sm font-bold leading-tight text-white dark:bg-emerald-500">₹{discountedPrice}</span>
-              {savings > 0 && (
-                <span className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 line-through leading-none">₹{product.price}</span>
-              )}
-            </div>
-            <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-md flex-shrink-0">{product.unit}</span>
+          <p className="text-[12px] font-semibold text-gray-900 dark:text-white leading-tight mb-1 line-clamp-2" style={{ minHeight: '2.2em' }}>
+            {product.name?.trim() || product.localName?.trim()}
+            {(product.name?.trim() && product.localName?.trim() && product.localName.trim() !== product.name?.trim()) && (
+              <span className="block text-[11px] font-medium text-gray-500 dark:text-slate-400">{product.localName.trim()}</span>
+            )}
+          </p>
+          <p className="text-[11px] font-semibold text-gray-600 dark:text-slate-300 leading-none">{product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}</p>
+          <div className="mt-auto flex flex-wrap items-baseline gap-x-1 pt-1.5">
+            <span className="text-sm font-extrabold leading-none text-gray-900 dark:text-white">₹{discountedPrice}</span>
+            {savings > 0 && (
+              <span className="text-[11px] font-semibold text-gray-400 dark:text-slate-500 line-through leading-none">₹{product.price}</span>
+            )}
           </div>
         </div>
       </div>

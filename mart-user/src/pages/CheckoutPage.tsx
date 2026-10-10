@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
 import { ArrowLeft, Loader2, Plus, Minus, Trash2, MapPin, X, Tag, Check, MessageCircle, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi } from '../services/api';
-import type { PublicSettings, Product } from '../services/api';
+import type { PublicSettings, Product, StoreOpeningHours } from '../services/api';
 import { useCustomerStore } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -38,7 +38,95 @@ const PREFERENCES = [
   { value: 'within_15', label: '⚡ 10-15 mins', sub: 'Fastest' },
   { value: 'within_30', label: '🕐 30 mins',   sub: 'Standard' },
   { value: 'within_60', label: '🕑 1 hour',    sub: 'Flexible' },
+  { value: 'scheduled', label: '📅 Schedule',  sub: 'Pick a slot' },
 ] as const;
+
+/* Designated delivery windows, generated from the store's opening hours. A
+   customer who does not need the fastest option picks a day and a two-hour
+   slot; the chosen start instant is stored on the order so the hub and the
+   rider plan around it. Slots run open→close for today and tomorrow only, and
+   any window that has already started is dropped, so the picker never offers a
+   time that has passed. All of this is reasoned about in IST -- the store's
+   clock -- rather than the customer's device, matching the backend. Exit the
+   country and the slots still line up with the shop's day. */
+const IST_OFFSET_MIN = 330; // Asia/Kolkata, fixed +05:30
+const SLOT_MINUTES = 120;
+const SLOT_LEAD_MINUTES = 30; // a window opening within 30 min is not bookable
+const FALLBACK_OPEN_MIN = 8 * 60;
+const FALLBACK_CLOSE_MIN = 22 * 60;
+const JS_DAY_TO_KEY = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+export interface DeliverySlot {
+  offset: number; // days from today: 0, 1
+  start: number;  // minutes from IST midnight
+  end: number;
+  at: Date;       // UTC instant the window opens
+}
+export interface DeliveryDay {
+  offset: number;
+  label: string;
+  slots: DeliverySlot[];
+}
+
+function istParts(d: Date = new Date()) {
+  const t = new Date(d.getTime() + IST_OFFSET_MIN * 60000);
+  return {
+    y: t.getUTCFullYear(), mo: t.getUTCMonth(), d: t.getUTCDate(),
+    day: t.getUTCDay(), h: t.getUTCHours(), mi: t.getUTCMinutes(),
+  };
+}
+function istInstant(offset: number, minutes: number): Date {
+  const b = istParts();
+  const midnight = Date.UTC(b.y, b.mo, b.d + offset);
+  return new Date(midnight + minutes * 60000 - IST_OFFSET_MIN * 60000);
+}
+function toMinutes(hhmm: string | undefined, fallback: number): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+  if (!m) return fallback;
+  const v = Number(m[1]) * 60 + Number(m[2]);
+  return v >= 0 && v < 1440 ? v : fallback;
+}
+function fmtClock(minutes: number): { text: string; mer: 'AM' | 'PM' } {
+  const h24 = Math.floor(minutes / 60) % 24;
+  const mm = minutes % 60;
+  const mer = h24 < 12 ? 'AM' : 'PM';
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return { text: mm === 0 ? `${h}` : `${h}:${String(mm).padStart(2, '0')}`, mer };
+}
+function slotRange(slot: DeliverySlot): string {
+  const a = fmtClock(slot.start), b = fmtClock(slot.end);
+  return a.mer === b.mer ? `${a.text}–${b.text} ${b.mer}` : `${a.text} ${a.mer}–${b.text} ${b.mer}`;
+}
+function buildSchedule(hours: StoreOpeningHours | undefined): DeliveryDay[] {
+  const nowMs = Date.now();
+  const b = istParts();
+  const days: DeliveryDay[] = [];
+  for (let offset = 0; offset < 2; offset++) {
+    const dt = new Date(Date.UTC(b.y, b.mo, b.d + offset));
+    const key = JS_DAY_TO_KEY[dt.getUTCDay()] ?? 'mon';
+    const label = offset === 0 ? 'Today' : 'Tomorrow';
+    const w = hours?.[key];
+    const slots: DeliverySlot[] = [];
+    if (w && !w.closed) {
+      const open = toMinutes(w.open, FALLBACK_OPEN_MIN);
+      const close = toMinutes(w.close, FALLBACK_CLOSE_MIN);
+      for (let s = open; s + 60 <= close; s += SLOT_MINUTES) {
+        const at = istInstant(offset, s);
+        if (at.getTime() <= nowMs + SLOT_LEAD_MINUTES * 60000) continue;
+        slots.push({ offset, start: s, end: Math.min(s + SLOT_MINUTES, close), at });
+      }
+    }
+    days.push({ offset, label, slots });
+  }
+  return days;
+}
+function dayLabel(days: DeliveryDay[], offset: number): string {
+  return days.find(d => d.offset === offset)?.label ?? '';
+}
+function slotLabel(days: DeliveryDay[], slot: DeliverySlot | null): string {
+  if (!slot) return '';
+  return `${dayLabel(days, slot.offset)} · ${slotRange(slot)}`;
+}
 
 const NOTES = ['Ring the bell', 'Call me when you arrive', "Don't ring the bell"];
 
@@ -417,8 +505,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   };
 
   // Delivery preference
-  const [deliveryPreference, setDeliveryPreference] = useState<'within_15' | 'within_30' | 'within_60'>('within_15');
+  const [deliveryPreference, setDeliveryPreference] = useState<typeof PREFERENCES[number]['value']>('within_15');
   const [showPreferences, setShowPreferences] = useState(false);
+  const [scheduledSlot, setScheduledSlot] = useState<DeliverySlot | null>(null);
+  const [scheduleDay, setScheduleDay] = useState(0);
+  const schedule = useMemo(() => buildSchedule(settings.openingHours), [settings.openingHours]);
 
   // Delivery note
   const [deliveryNote, setDeliveryNote] = useState('Ring the bell');
@@ -582,7 +673,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   ].filter(Boolean) as string[];
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
   const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
-  const selectedPref = PREFERENCES.find(p => p.value === deliveryPreference)!;
   const currentNote = showCustomNote ? (customNote || '✏️ Custom note') : deliveryNote;
 
   // Reaching checkout is a distinct funnel stage, and it is also recorded on
@@ -648,6 +738,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
         zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
+        scheduledFor: deliveryPreference === 'scheduled' && scheduledSlot ? scheduledSlot.at.toISOString() : undefined,
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
         campaignId: appliedCouponCode ? undefined : appliedCampaign?.id || undefined,
         couponCode: appliedCouponCode || undefined,
@@ -667,6 +758,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         guestPhone: isLoggedIn ? (authPhone || guestPhone) : guestPhone,
         createdAt: new Date().toISOString(),
         status: 'pending',
+        scheduledLabel: deliveryPreference === 'scheduled' && scheduledSlot ? slotLabel(schedule, scheduledSlot) : undefined,
       };
       clearCart();
       onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined, orderData);
@@ -940,34 +1032,87 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
           {/* ── USP: Delivery time + Note in one card ── */}
           <div className={card}>
-            {/* Delivery time */}
-            <div className="flex items-center gap-3 px-4 py-3">
+            {/* Fastest is the default and is deliberately not offered as a choice.
+                A customer who does not need it taps "Schedule Delivery" to book a
+                later window. */}
+            <button type="button"
+              onClick={() => {
+                setShowNotes(false);
+                if (showPreferences) { setShowPreferences(false); return; }
+                setDeliveryPreference('scheduled');
+                setShowPreferences(true);
+                if (scheduledSlot) {
+                  setScheduleDay(scheduledSlot.offset);
+                } else {
+                  const first = schedule.find(d => d.slots.length > 0);
+                  if (first) { setScheduleDay(first.offset); setScheduledSlot(first.slots[0]); }
+                }
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left">
               <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-4 h-4 text-emerald-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery Time</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium">
-                  {selectedPref.label} <span className="text-gray-500 text-xs font-normal">· {selectedPref.sub}</span>
+                  {deliveryPreference === 'scheduled' && scheduledSlot
+                    ? <>{slotLabel(schedule, scheduledSlot)}</>
+                    : <>Delivery in 10-15 mins</>}
                 </p>
               </div>
-              <button type="button" onClick={() => { setShowPreferences(s => !s); setShowNotes(false); }}
-                className="text-xs font-semibold text-emerald-600 flex-shrink-0">
-                {showPreferences ? 'Done' : 'Change'}
-              </button>
-            </div>
+              <span className="flex items-center flex-shrink-0 bg-gray-900 dark:bg-slate-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg">
+                {showPreferences ? 'Done' : deliveryPreference === 'scheduled' ? 'Change' : 'Schedule Delivery'}
+              </span>
+            </button>
             {showPreferences && (
-              <div className="border-t border-gray-100 dark:border-slate-700 grid grid-cols-3 gap-2 p-3">
-                {PREFERENCES.map(p => (
-                  <label key={p.value} className={`flex flex-col items-center p-3 rounded-xl border-2 cursor-pointer text-center transition-all ${
-                    deliveryPreference === p.value ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'
-                  }`}>
-                    <input type="radio" name="preference" value={p.value} checked={deliveryPreference === p.value}
-                      onChange={() => { setDeliveryPreference(p.value); setShowPreferences(false); }} className="hidden" />
-                    <p className="text-xs font-bold text-gray-900 dark:text-white">{p.label}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">{p.sub}</p>
-                  </label>
-                ))}
+              <div className="border-t border-gray-100 dark:border-slate-700 p-3 space-y-2.5">
+                <div className="space-y-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 p-2.5">
+                  <div className="flex gap-2 overflow-x-auto">
+                    {schedule.map(d => {
+                      const active = scheduleDay === d.offset;
+                      return (
+                        <button key={d.offset} type="button" disabled={d.slots.length === 0}
+                          onClick={() => setScheduleDay(d.offset)}
+                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold whitespace-nowrap border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                            active ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400'
+                                   : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/60 dark:text-slate-300'}`}>
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const day = schedule.find(d => d.offset === scheduleDay);
+                    if (!day || day.slots.length === 0) {
+                      return <p className="text-xs text-violet-700 dark:text-violet-300 text-center font-medium py-2">No delivery slots left for this day</p>;
+                    }
+                    return (
+                      <div className="grid grid-cols-2 gap-2">
+                        {day.slots.map(s => {
+                          const active = scheduledSlot?.offset === s.offset && scheduledSlot?.start === s.start;
+                          return (
+                            <button key={`${s.offset}-${s.start}`} type="button"
+                              onClick={() => { setScheduledSlot(s); setScheduleDay(s.offset); }}
+                              className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                                active ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400'
+                                       : 'border-transparent bg-white/70 text-gray-700 dark:bg-slate-800/60 dark:text-slate-200'}`}>
+                              {slotRange(s)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                  {scheduledSlot && (
+                    <p className="text-[10px] text-violet-700 dark:text-violet-300 text-center font-medium">
+                      {slotLabel(schedule, scheduledSlot)}
+                    </p>
+                  )}
+                </div>
+                <button type="button" onClick={() => { setDeliveryPreference('within_15'); setShowPreferences(false); setScheduledSlot(null); }}
+                  className="w-full text-center text-[11px] font-semibold text-gray-500 hover:text-emerald-600 py-1">
+                  Deliver as soon as possible
+                </button>
               </div>
             )}
 
@@ -981,7 +1126,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 <MessageCircle className="w-4 h-4 text-violet-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery Instructions</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery note</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{currentNote}</p>
               </div>
               <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">Change</span>
@@ -999,7 +1144,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                     <MessageCircle className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">Delivery instructions</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Delivery note</p>
                     <p className="text-xs text-gray-500 dark:text-slate-400">How should we handle your delivery?</p>
                   </div>
                   <button onClick={() => setShowNotes(false)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">

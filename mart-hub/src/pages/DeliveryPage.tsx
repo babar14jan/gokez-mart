@@ -81,6 +81,18 @@ export default function DeliveryPage() {
       await load(true);
       return true;
     } catch (error: any) {
+      // A delivered order may already be committed server-side while a later
+      // step reports failure. Re-fetch so a real status change isn't shown as
+      // an error popup.
+      try {
+        const r = await ordersApi.getAll({ limit: 50 });
+        const fresh = r.data.data || [];
+        if (fresh.some((o: any) => o.id === orderId && o.status === status)) {
+          setOrders(fresh.filter((o: any) => o.deliveryById === myId));
+          setLoading(false);
+          return true;
+        }
+      } catch { /* fall through to the error popup */ }
       alert(error?.response?.data?.error || 'Failed to update status');
       return false;
     }
@@ -147,6 +159,15 @@ export default function DeliveryPage() {
               </div>
 
               <RiderProgress status={order.status} />
+
+              {order.deliveryPreference === 'scheduled' && order.scheduledForLabel && (
+                <div className="flex items-center gap-2 bg-violet-50 dark:bg-violet-900/20 px-4 py-2 border-y border-violet-100 dark:border-violet-800">
+                  <span className="text-sm">📅</span>
+                  <span className="text-xs font-bold text-violet-700 dark:text-violet-300">
+                    Scheduled delivery · {order.scheduledForLabel}
+                  </span>
+                </div>
+              )}
 
               <div className="p-4 space-y-3">
                 {/* Customer info */}

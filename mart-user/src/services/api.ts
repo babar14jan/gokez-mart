@@ -28,6 +28,7 @@ export interface Product {
   id: string; name: string; localName: string | null; description: string | null;
   searchAliases: string[];
   photoUrl: string | null; price: number; unit: string;
+  approxWeight: string | null;
   weightOptions: Array<{ label: string; price: number }> | null;
   discountPercent: number; isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
@@ -51,6 +52,9 @@ export interface StoreOpenState {
   closesAtLabel: string | null;
 }
 
+export type StoreOpeningHours =
+  Record<string, { open?: string; close?: string; closed?: boolean } | null | undefined> | null;
+
 export interface PublicSettings {
   store_name: string; store_address: string; delivery_charge: string;
   free_delivery_above: string; min_order_amount: string;
@@ -59,6 +63,7 @@ export interface PublicSettings {
   phonepay_qr_url: string; upi_phone: string; upi_id: string;
   whatsapp_number: string; support_name: string; support_phone: string;
   openState?: StoreOpenState;
+  openingHours?: StoreOpeningHours;
 }
 
 export interface MartZone {
@@ -131,6 +136,8 @@ export const storeApi = {
     latitude?: number | null; longitude?: number | null;
     zoneName?: string; storeId?: string;
     deliveryPreference?: string; deliveryNote?: string;
+    /** ISO instant for a customer-chosen "Scheduled" delivery window. */
+    scheduledFor?: string;
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
     paymentMethod?: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;

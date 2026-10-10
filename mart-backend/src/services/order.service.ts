@@ -24,8 +24,10 @@ export interface CreateOrderDto {
   storeId: string;
   storeName?: string;
   zoneName?: string;
-  deliveryPreference?: 'within_15' | 'within_30' | 'within_60';
+  deliveryPreference?: 'within_15' | 'within_30' | 'within_60' | 'scheduled';
   deliveryNote?: string;
+  /** Customer-chosen delivery window for a scheduled order (ISO instant). */
+  scheduledFor?: string | null;
   items: OrderItem[];
   paymentMethod?: 'cod' | 'upi' | 'phonepay' | null;
   notes?: string;
@@ -398,6 +400,14 @@ export class OrderService {
         new Date(),
       );
 
+      // A customer can book a later delivery window ("scheduled"). When they do,
+      // their explicit choice is what the order promises; the store-closed
+      // fallback only applies when no schedule was requested (or it is malformed).
+      const requestedSchedule = data.scheduledFor ? new Date(data.scheduledFor) : null;
+      const scheduledFor = requestedSchedule && !Number.isNaN(requestedSchedule.getTime())
+        ? requestedSchedule
+        : openState.nextOpenAt;
+
       // Create order
       const orderId = uuidv4();
       await client.query(
@@ -422,7 +432,7 @@ export class OrderService {
         openState.closedReason,
         // A manual closure has no reopening time to promise, so it stays null
         // rather than carrying a guess the owner never made.
-        openState.nextOpenAt,
+        scheduledFor,
         trackingToken,
         attribution?.session_id ?? null,
         attribution?.visitor_id ?? null,
@@ -612,31 +622,36 @@ export class OrderService {
     const { where, params } = buildOrderWindow(range, from, to, storeId);
     const result = await query<{
       placed: number; pending: number; delivered: number; cancelled: number;
-      revenue: string | number; delivery_collected: string | number;
+      revenue: string | number; delivered_revenue: string | number;
+      delivery_collected: string | number;
       free_deliveries: number; coupon_orders: number; coupon_amount: string | number;
     }>(
       `SELECT COUNT(*)::int AS placed,
          COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
          COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
          COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated')), 0)::float AS revenue,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivered_revenue,
          COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_collected,
          COUNT(*) FILTER (WHERE o.status = 'delivered' AND o.delivery_charge = 0)::int AS free_deliveries,
-         COUNT(*) FILTER (WHERE o.status = 'delivered' AND (o.coupon_code_used IS NOT NULL OR o.campaign_id IS NOT NULL))::int AS coupon_orders,
-         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status = 'delivered'), 0)::float AS coupon_amount
+         COUNT(*) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated') AND (o.coupon_code_used IS NOT NULL OR o.campaign_id IS NOT NULL))::int AS coupon_orders,
+         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated')), 0)::float AS coupon_amount
        FROM mart_orders o ${where}`,
       params
     );
     const row = result.rows[0];
+    // Revenue = value of everything placed in the window that wasn't cancelled,
+    // net of offers (o.total is already subtotal + delivery − campaign_discount).
     const revenue = Number(row?.revenue ?? 0);
     const delivered = row?.delivered ?? 0;
+    const deliveredRevenue = Number(row?.delivered_revenue ?? 0);
     return {
       placed: row?.placed ?? 0,
       pending: row?.pending ?? 0,
       delivered,
       cancelled: row?.cancelled ?? 0,
       revenue,
-      avgOrderValue: delivered ? revenue / delivered : 0,
+      avgOrderValue: delivered ? deliveredRevenue / delivered : 0,
       deliveryCollected: Number(row?.delivery_collected ?? 0),
       freeDeliveries: row?.free_deliveries ?? 0,
       couponOrders: row?.coupon_orders ?? 0,
@@ -660,9 +675,10 @@ export class OrderService {
        WHERE o.status = 'delivered'${where ? ` AND ${where.replace(/^WHERE\s+/, '')}` : ''}
        GROUP BY 1, 2, 3`;
     const [totals, top] = await Promise.all([
-      query<{ total: number; repeat_customers: number; orders: number }>(
+      query<{ total: number; new_customers: number; repeat_customers: number; orders: number }>(
         `WITH agg AS (${aggSql})
          SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE order_count = 1)::int AS new_customers,
                 COUNT(*) FILTER (WHERE order_count >= 2)::int AS repeat_customers,
                 COALESCE(SUM(order_count), 0)::int AS orders
          FROM agg`,
@@ -681,6 +697,7 @@ export class OrderService {
     const total = t?.total ?? 0;
     return {
       totalCustomers: total,
+      newCustomers: t?.new_customers ?? 0,
       repeatCustomers: t?.repeat_customers ?? 0,
       avgOrders: total ? Number(t?.orders ?? 0) / total : 0,
       top: top.rows.map(r => ({
@@ -829,15 +846,22 @@ export class OrderService {
         );
       }
       if (status === 'delivered') {
-        const items = await this.getInventoryItemsForOrder(id, client);
-        await InventoryService.deductForOrder(
-          id,
-          existing.storeId,
-          items,
-          (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
-          parseFloat(settings.low_stock_threshold ?? '5'),
-          client
-        );
+        try {
+          const items = await this.getInventoryItemsForOrder(id, client);
+          await InventoryService.deductForOrder(
+            id,
+            existing.storeId,
+            items,
+            (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
+            parseFloat(settings.low_stock_threshold ?? '5'),
+            client
+          );
+        } catch (err) {
+          // Never block a delivery over inventory bookkeeping. Loss/unit issues
+          // are logged and skipped so the order still marks delivered, matching
+          // the non-blocking behavior of updateStatus().
+          console.error(`[inventory] deduction skipped for delivered order ${id}:`, err);
+        }
       }
       if (['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
         await this.reverseCampaignRedemption(id, status, client);

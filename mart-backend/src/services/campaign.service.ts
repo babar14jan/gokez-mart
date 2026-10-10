@@ -481,12 +481,15 @@ export class CampaignService {
    * here is trusted at checkout — redemption goes through validateCode() and
    * then the server re-checks everything in create().
    */
-  static async getPublicWelcomeOffers(cartTotal: number, storeId: string): Promise<any[]> {
+  static async getPublicWelcomeOffers(cartTotal: number, storeId: string, customerId: string | null = null): Promise<any[]> {
     const now = new Date().toISOString();
     const result = await query(
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
               discount_type, discount_value, max_discount, min_order_amount,
-              eligibility_type, carousel_gradient, valid_until
+              eligibility_type, carousel_gradient, valid_until,
+              -- Selected only to enforce eligibility for a signed-in shopper below;
+              -- stripped before the rows are returned.
+              new_customers_only, per_customer_limit
          FROM mart_campaigns
         WHERE status = 'active'
           AND (store_id IS NULL OR store_id = $1::uuid)
@@ -500,7 +503,40 @@ export class CampaignService {
         LIMIT 5`,
       [this.normalizeStoreId(storeId), now, cartTotal]
     );
-    return result.rows;
+
+    const strip = (c: any) => {
+      const { new_customers_only, per_customer_limit, ...pub } = c;
+      return pub;
+    };
+
+    // A guest gets the unfiltered teaser so a first-order offer can entice login.
+    if (!customerId) return result.rows.map(strip);
+
+    // A signed-in shopper must not be shown an offer they have already used or
+    // are not eligible for. The reason is surfaced only when they type the code
+    // explicitly, via validateCode() — not by advertising it here.
+    const orderRes = await query(
+      `SELECT COUNT(*) as cnt FROM mart_orders
+        WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
+      [customerId]
+    );
+    const isNewCustomer = parseInt(orderRes.rows[0].cnt) === 0;
+
+    const offers: any[] = [];
+    for (const c of result.rows) {
+      const eligibilityType = c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all');
+      if (eligibilityType === 'first_order' && !isNewCustomer) continue;
+      if (c.per_customer_limit != null) {
+        const uses = await query(
+          `SELECT COUNT(*) as cnt FROM mart_campaign_uses
+            WHERE campaign_id = $1 AND customer_id = $2 AND reversed_at IS NULL`,
+          [c.id, customerId]
+        );
+        if (parseInt(uses.rows[0].cnt) >= c.per_customer_limit) continue;
+      }
+      offers.push(strip(c));
+    }
+    return offers;
   }
 
   // ── Public: eligible campaigns for a customer + cart ─────────────────────────

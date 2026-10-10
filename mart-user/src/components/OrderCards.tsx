@@ -144,17 +144,24 @@ export function ActiveOrderCard({
   const awaitingNextOpen = order.confirmedNextOpen
     && (order.status === 'pending' || order.status === 'confirmed');
 
+  // While waiting on the store to open — accepted or not — the store is shut, so
+  // an express ETA would be a lie. Suppressed until preparation actually begins.
+  const outsideHoursPending = order.placedOutsideHours
+    && (order.status === 'pending' || order.status === 'confirmed');
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-md border border-emerald-100 dark:border-emerald-900">
       {/* Status banner */}
       <div className="bg-emerald-500 px-4 py-3 flex items-center justify-between">
         <div>
           <p className="text-white font-bold text-sm">{STATUS_LABELS[order.status]}</p>
-          {order.deliveryPreference && !awaitingNextOpen && (
+          {order.deliveryPreference && !outsideHoursPending && (
             <p className="text-emerald-100 text-xs mt-0.5">
               {order.deliveryPreference === 'within_15' ? '⚡ Expected in 10-15 mins'
                 : order.deliveryPreference === 'within_30' ? '🕐 Expected in ~30 mins'
-                : '🕑 Expected in ~1 hour'}
+                : order.deliveryPreference === 'within_60' ? '🕑 Expected in ~1 hour'
+                : order.scheduledForLabel ? `📅 Scheduled · ${order.scheduledForLabel}`
+                : '📅 Scheduled delivery'}
             </p>
           )}
         </div>
@@ -176,6 +183,17 @@ export function ActiveOrderCard({
         <div className="bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900/40 px-4 py-2.5">
           <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 leading-snug">
             ✅ Confirmed for the next opening hours — we'll start preparing your order when the store opens{nextOpenWhen ? ` at ${nextOpenWhen}` : ' next'}.
+          </p>
+        </div>
+      )}
+
+      {/* Placed while the store was shut and not yet accepted. The ETA is hidden
+          above, so say why the order is simply waiting rather than silently
+          dropping the estimate. */}
+      {order.placedOutsideHours && !order.confirmedNextOpen && (order.status === 'pending' || order.status === 'confirmed') && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900/40 px-4 py-2.5">
+          <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 leading-snug">
+            🕘 Ordered outside store hours — we'll confirm and start preparing your order when the store opens{nextOpenWhen ? ` at ${nextOpenWhen}` : ' next'}.
           </p>
         </div>
       )}

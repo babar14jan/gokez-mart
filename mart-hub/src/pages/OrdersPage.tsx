@@ -16,7 +16,8 @@ import ConfirmDialog from '../components/ConfirmDialog';
 type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
 type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
 
-const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // Order pipeline — used for progress bar
 const PIPELINE = [
@@ -91,6 +92,7 @@ const PREF_LABELS: Record<string, string> = {
   within_15: '⚡ 10-15 mins',
   within_30: '🕐 30 mins',
   within_60: '🕑 1 hour',
+  scheduled: '📅 Scheduled',
 };
 
 const STALE_MINS: Record<string, number> = {
@@ -230,6 +232,9 @@ export default function OrdersPage() {
   }, []);
 
   const getStaleMinutes = (order: any): number | null => {
+    // After-hours orders legitimately sit from placement until the store next
+    // opens, so timing "waiting" from placement would always flag them as late.
+    if (order.placedOutsideHours) return null;
     const threshold = STALE_MINS[order.status];
     if (!threshold) return null;
     const mins = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
@@ -309,6 +314,20 @@ export default function OrdersPage() {
       await load();
       return true;
     } catch (error: any) {
+      // A delivered/moved order may already be committed server-side while a
+      // later step (notifications, inventory, etc.) reports failure. Re-fetch
+      // instead of trusting the error, so a real status change isn't shown as
+      // an error popup.
+      try {
+        const r = await ordersApi.getAll({ limit: 500, storeId: getActiveStoreId() } as any);
+        const rows = r.data.data || [];
+        const isDone = rows.some((o: any) => o.id === id && o.status === status);
+        if (isDone) {
+          setAllOrders(rows);
+          setLoading(false);
+          return true;
+        }
+      } catch { /* fall through to the error popup */ }
       alert(error?.response?.data?.error || 'Failed to update order status');
       return false;
     }
@@ -324,16 +343,21 @@ export default function OrdersPage() {
     } finally { setUpdating(null); }
   };
 
-  const filteredOrders = useMemo(() => {
+  const dateBounds = useMemo(() => {
     const now = new Date();
     const start =
       dateRange === 'today'  ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) :
       dateRange === 'week'   ? new Date(now.getTime() - 7 * 86400000) :
       dateRange === 'month'  ? new Date(now.getTime() - 30 * 86400000) :
-      dateRange === 'custom' && customFrom ? new Date(customFrom) : null;
-    const end = dateRange === 'custom' && customTo
-      ? (() => { const d = new Date(customTo); d.setHours(23,59,59,999); return d; })()
-      : null;
+      dateRange === 'custom' && customFrom ? new Date(`${customFrom}T00:00:00`) : null;
+    // Custom end is the whole local day, so a single-day pick isn't cut off at
+    // 00:00 and a range ending "today" includes today's orders.
+    const end = dateRange === 'custom' && customTo ? new Date(`${customTo}T23:59:59.999`) : null;
+    return { start, end };
+  }, [dateRange, customFrom, customTo]);
+
+  const filteredOrders = useMemo(() => {
+    const { start, end } = dateBounds;
     return allOrders.filter(o => {
       const created = new Date(o.createdAt);
       if (start && created < start) return false;
@@ -350,21 +374,20 @@ export default function OrdersPage() {
       }
       return true;
     });
-  }, [allOrders, dateRange, customFrom, customTo, statusFilter, search]);
+  }, [allOrders, dateBounds, statusFilter, search]);
 
   const statusCounts = useMemo(() => {
+    const { start, end } = dateBounds;
     const base = allOrders.filter(o => {
-      const now = new Date();
-      const start =
-        dateRange === 'today' ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) :
-        dateRange === 'week'  ? new Date(now.getTime() - 7 * 86400000) :
-        dateRange === 'month' ? new Date(now.getTime() - 30 * 86400000) : null;
-      return !start || new Date(o.createdAt) >= start;
+      const d = new Date(o.createdAt);
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
     });
     return Object.fromEntries(
       STATUS_TABS.map(t => [t.id, t.id === '' ? base.length : base.filter(o => o.status === t.id).length])
     );
-  }, [allOrders, dateRange]);
+  }, [allOrders, dateBounds]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -479,6 +502,12 @@ export default function OrdersPage() {
             const isUpdating = updating === order.id;
             const totalItems = (order.items || []).reduce((s: number, i: any) => s + i.quantity, 0);
             const staleMin = getStaleMinutes(order);
+            // The next-opening promise only holds until fulfilment actually
+            // starts. While the order is still pending/confirmed nothing is
+            // being prepared, so the promise is the honest state; once preparing
+            // begins it is fulfilled and the promise badges must drop away.
+            const awaitingNextOpen = order.confirmedNextOpen
+              && (order.status === 'pending' || order.status === 'confirmed');
             const isActive = !TERMINAL.includes(order.status);
             const timeStr = new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
             const isAssignedDeliveryHandler = order.deliveryById === currentUserId;
@@ -519,17 +548,27 @@ export default function OrdersPage() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
                         {STATUS_LABELS[order.status] || order.status}
                       </span>
-                        {order.deliveryPreference && (
+                        {/* Express ETA is meaningless on an after-hours order,
+                            and the scheduled window has its own badge below. */}
+                        {order.deliveryPreference && order.deliveryPreference !== 'scheduled' && !order.placedOutsideHours && (
                           <span className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">
                             {PREF_LABELS[order.deliveryPreference]}
                           </span>
                         )}
-                        {/* Taken while the store was shut. Shown while the order is
-                            still live: staff should hold it for the next opening
-                            rather than treat it as a late or mistaken order. A
-                            manual closure says so, because "reopens 9 AM" would be
-                            a promise the owner never made. */}
-                        {order.placedOutsideHours && !TERMINAL.includes(order.status) && (
+                        {/* Customer booked a later delivery window. Staff plan
+                            around the slot rather than the express ETA. */}
+                        {order.deliveryPreference === 'scheduled' && order.scheduledForLabel && !TERMINAL.includes(order.status) && (
+                          <span
+                            title={`Scheduled delivery · ${order.scheduledForLabel}`}
+                            className="text-[10px] font-semibold bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded-full"
+                          >
+                            Scheduled · {order.scheduledForLabel}
+                          </span>
+                        )}
+                        {/* Taken while the store was shut, not yet accepted.
+                            Once staff accept it the "Confirmed · next opening"
+                            badge below carries the state, so this drops away. */}
+                        {order.placedOutsideHours && !order.confirmedNextOpen && !TERMINAL.includes(order.status) && (
                           <span
                             title={order.closedReason === 'manual'
                               ? 'Store was manually closed when this was placed'
@@ -541,8 +580,9 @@ export default function OrdersPage() {
                         )}
                         {/* Accepted for the next opening hours — the customer was
                             told the same thing and got a push at the moment the
-                            staff confirmed it. */}
-                        {order.confirmedNextOpen && !TERMINAL.includes(order.status) && (
+                            staff confirmed it. Only while fulfilment is still
+                            waiting on the opening. */}
+                        {awaitingNextOpen && (
                           <span
                             title="Accepted for delivery at the next opening hours"
                             className="text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full"

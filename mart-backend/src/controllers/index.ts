@@ -102,7 +102,10 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   // nextOpenAt to pick up the change instead of re-deriving it locally.
   const store = await StoreService.findById(storeId);
   const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
-  res.json({ success: true, data: { ...settings, openState } });
+  // The raw schedule rides along so the storefront can offer scheduled delivery
+  // slots that run open→close on the store's own clock (IST), rather than
+  // guessing a window. Null when the store posts no hours.
+  res.json({ success: true, data: { ...settings, openState, openingHours: store?.openingHours ?? null } });
 });
 
 export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {
@@ -143,7 +146,7 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneName, deliveryPreference, deliveryNote, campaignId, couponCode, latitude, longitude } = req.body;
+  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneName, deliveryPreference, deliveryNote, scheduledFor, campaignId, couponCode, latitude, longitude } = req.body;
   let suppliedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
   // A signed-in order is identified by the verified phone, not by the name the
   // client posts. An account that never saved a name sends the 'Customer'
@@ -214,7 +217,7 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
       : undefined,
     storeId: storeId || SHAPOORJI_ID,
     storeName,
-    zoneName, deliveryPreference, deliveryNote,
+    zoneName, deliveryPreference, deliveryNote, scheduledFor,
     latitude: hasCoordinates ? latitude : null,
     longitude: hasCoordinates ? longitude : null,
     campaignId: campaignId || null,
@@ -845,7 +848,7 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
 // ── Admin customer controllers ────────────────────────────────────────────────
 
 export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const allowedRoles = ['super_admin', 'store_owner', 'store_manager'];
+  const allowedRoles = ['super_admin'];
   if (!req.admin || !allowedRoles.includes(req.admin.role)) {
     res.status(403).json({ success: false, error: 'Access denied' }); return;
   }
@@ -1919,14 +1922,17 @@ export const getEligibleCampaigns = asyncHandler(async (req: CustomerRequest, re
   res.json({ success: true, data: campaigns });
 });
 
-// Public by design: this is the pre-login welcome teaser. It returns a
-// whitelisted projection (see CampaignService.getPublicWelcomeOffers) and grants
-// no authority — an offer can only actually be redeemed after OTP.
-export const getPublicWelcomeOffers = asyncHandler(async (req: Request, res: Response) => {
+// Public by design: this is the welcome teaser. It returns a whitelisted
+// projection (see CampaignService.getPublicWelcomeOffers) and grants no
+// authority — an offer can only actually be redeemed after OTP. When a customer
+// token is present the teaser is filtered so an offer they already used is not
+// advertised back to them.
+export const getPublicWelcomeOffers = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const { cartTotal, storeId } = req.query;
   const offers = await CampaignService.getPublicWelcomeOffers(
     parseFloat(cartTotal as string) || 0,
-    (storeId as string) || ''
+    (storeId as string) || '',
+    req.customer?.id || null
   );
   res.json({ success: true, data: offers });
 });

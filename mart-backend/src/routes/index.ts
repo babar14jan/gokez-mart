@@ -92,7 +92,9 @@ router.get('/admin/events',              authenticate, ctrl.adminOrderStream);  
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
 router.put('/admin/orders/:id/confirm-next-open', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminConfirmNextOpen);
 router.put("/admin/orders/:id/terminate", authenticate, ctrl.adminTerminateOrder);// ── Admin customers ───────────────────────────────────────────────────────────
-router.get('/admin/customers',         authenticate, ctrl.adminGetCustomers);
+// Platform-wide customers (Gokez's own customer base, not a single store's),
+// so super admins only.
+router.get('/admin/customers',         authenticate, requireSuperAdmin, ctrl.adminGetCustomers);
 router.get('/admin/customer-leads',        authenticate, requireSuperAdmin, ctrl.adminGetCustomerLeads);
 router.get('/admin/customer-leads/export', authenticate, requireSuperAdmin, ctrl.adminExportMarketingLeads);
 router.get('/admin/customer-funnel',       authenticate, requireSuperAdmin, ctrl.adminGetCustomerFunnel);
@@ -152,7 +154,7 @@ router.post('/admin/carousel/reorder',         authenticate, requireSuperAdmin, 
 
 // Public campaign routes
 router.get('/carousel',                        ctrl.getCarouselSlides);
-router.get('/campaigns/welcome',                          ctrl.getPublicWelcomeOffers);
+router.get('/campaigns/welcome',              authenticateCustomerIfPresent, ctrl.getPublicWelcomeOffers);
 router.get('/campaigns/eligible',              authenticateCustomerIfPresent, ctrl.getEligibleCampaigns);
 router.post('/campaigns/validate',             authenticateCustomer, ctrl.validateCouponCode);
 // ── Admin upload ──────────────────────────────────────────────────────────────

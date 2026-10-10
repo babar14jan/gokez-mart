@@ -91,6 +91,21 @@ function OrderDetailSheet({ order, onClose, onOrderAgain, nextOpenLabel }: { ord
             </div>
           </div>
 
+          {/* Scheduled delivery window chosen by the customer */}
+          {order.deliveryPreference === 'scheduled' && order.scheduledForLabel && (
+            <div className="bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900/60 rounded-xl p-3">
+              <div className="flex items-start gap-2">
+                <span className="text-violet-600 dark:text-violet-400">📅</span>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-violet-900 dark:text-violet-200">Scheduled delivery</p>
+                  <p className="text-xs text-violet-700 dark:text-violet-300 mt-1">
+                    {order.status === 'delivered' ? 'Delivered on' : 'Arriving'} {order.scheduledForLabel}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Closed store indicator */}
           {order.placedOutsideHours && (
             <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl p-3">
@@ -249,6 +264,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
         availabilityStatus: 'available', isAvailable: true,
         discountPercent: 0, categoryId: '', categoryName: '',
         description: null, weightOptions: null, localName: null, searchAliases: [],
+        approxWeight: null,
       });
     });
     setReorderToast(`${items.length} item${items.length > 1 ? 's' : ''} added to cart`);

@@ -203,6 +203,11 @@ function RevenueTab({ orders }: { orders: any[] }) {
     revenue: delivered.filter(o => o.paymentMethod === m).reduce((s, o) => s + o.total, 0),
   })).filter(p => p.count > 0);
 
+  const onlineRevenue = paymentBreakdown.filter(p => p.method !== 'cod').reduce((s, p) => s + p.revenue, 0);
+  const codRevenue = paymentBreakdown.filter(p => p.method === 'cod').reduce((s, p) => s + p.revenue, 0);
+  const onlinePct = totalRevenue > 0 ? Math.round((onlineRevenue / totalRevenue) * 100) : 0;
+  const peakDay = dailyRevenue.reduce((a, b) => (b.value > a.value ? b : a), dailyRevenue[0]);
+
   const dailyTable = days.map(d => {
     const dayOrders = filtered.filter(o => new Date(o.createdAt).toDateString() === d.toDateString());
     const dayDelivered = dayOrders.filter(o => o.status === 'delivered');
@@ -218,12 +223,11 @@ function RevenueTab({ orders }: { orders: any[] }) {
     <div className="space-y-6">
       <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <SummaryCard label="Total Revenue" value={`₹${summary.revenue.toFixed(0)}`} sub="delivered orders" icon={<TrendingUp className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <SummaryCard label="Delivered Revenue" value={`₹${Math.round(totalRevenue).toLocaleString('en-IN')}`} sub={`${delivered.length} delivered orders`} icon={<Wallet className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
         <SummaryCard label="Avg Order Value" value={`₹${summary.avgOrderValue.toFixed(0)}`} sub="per delivered order" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
-        <SummaryCard label="Delivery Collected" value={`₹${summary.deliveryCollected.toFixed(0)}`} sub="delivery charges" icon={<TrendingUp className="w-4 h-4" />} gradient="from-violet-500 to-violet-600" />
-        <SummaryCard label="Free Deliveries" value={summary.freeDeliveries} sub="orders above threshold" icon={<CheckCircle className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
-        <SummaryCard label="Coupons Used" value={summary.couponOrders} sub={`₹${summary.couponAmount.toFixed(0)} discount given`} icon={<Tag className="w-4 h-4" />} gradient="from-pink-500 to-rose-500" />
+        <SummaryCard label="Online Payment Share" value={`${onlinePct}%`} sub={`COD ₹${Math.round(codRevenue).toLocaleString('en-IN')} · Online ₹${Math.round(onlineRevenue).toLocaleString('en-IN')}`} icon={<Smartphone className="w-4 h-4" />} gradient="from-violet-500 to-violet-600" />
+        <SummaryCard label="Peak Revenue Day" value={`₹${peakDay.value.toLocaleString('en-IN')}`} sub={peakDay.fullLabel} icon={<Calendar className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
@@ -264,11 +268,11 @@ function RevenueTab({ orders }: { orders: any[] }) {
             <div>Date</div><div className="text-center">Orders</div><div className="text-center">Avg Value</div><div className="text-right">Revenue</div>
           </div>
           {dailyTable.slice(0, 14).map((r, i) => (
-            <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-4 py-2.5 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs">
+            <div key={i} className="grid grid-cols-3 sm:grid-cols-4 gap-3 px-4 py-2.5 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs">
               <div className="font-medium text-gray-900 dark:text-white">{r.date}</div>
-              <div className="sm:text-center text-gray-600 text-right sm:text-left">{r.orders} orders</div>
+              <div className="text-right sm:text-center text-gray-600 dark:text-slate-400">{r.orders} orders</div>
               <div className="hidden sm:block text-center text-gray-600 dark:text-slate-400">₹{r.avg}</div>
-              <div className="hidden sm:block text-right font-bold text-gray-900 dark:text-white">₹{r.revenue.toFixed(0)}</div>
+              <div className="text-right font-bold text-gray-900 dark:text-white">₹{r.revenue.toFixed(0)}</div>
             </div>
           ))}
         </div>
@@ -399,7 +403,7 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
   const [range, setRange] = useState<DateRange>('month');
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
-  const [agg, setAgg] = useState<CustomerAggregates>({ totalCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
+  const [agg, setAgg] = useState<CustomerAggregates>({ totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
   const paramsRef = useLatestParams(range, customFrom, customTo);
 
   const loadAggregates = useCallback(() => {
@@ -409,7 +413,7 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
       range: mapDateRange(p.range),
       from: p.customFrom || undefined,
       to: p.customTo || undefined,
-    }).then(r => { if (paramsRef.current === p) setAgg(r.data.data || { totalCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] }); })
+    }).then(r => { if (paramsRef.current === p) setAgg(r.data.data || { totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] }); })
       .catch(() => {});
   }, [paramsRef]);
 
@@ -418,6 +422,7 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
 
   const scoped = useMemo(() => filterByDate(orders, range, customFrom, customTo), [orders, range, customFrom, customTo]);
   const repeatCustomers = agg.repeatCustomers;
+  const newCustomers = agg.newCustomers;
   const avgOrders = agg.avgOrders ? agg.avgOrders.toFixed(1) : '0';
   const topCustomers = agg.top;
 
@@ -447,8 +452,8 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
       <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
 
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Total Customers" value={agg.totalCustomers} sub="who delivered an order" icon={<Users className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
-        <SummaryCard label="Repeat Customers" value={repeatCustomers} sub="delivered 2+ orders" icon={<Star className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
+        <SummaryCard label="Unique Customers" value={agg.totalCustomers} sub={`${newCustomers} new · ${repeatCustomers} repeat`} icon={<Users className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
+        <SummaryCard label="Repeat Customers" value={repeatCustomers} sub={`${agg.totalCustomers > 0 ? Math.round((repeatCustomers / agg.totalCustomers) * 100) : 0}% returning`} icon={<Star className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
         <SummaryCard label="Avg Orders" value={avgOrders} sub="delivered per customer" icon={<ShoppingBag className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
       </div>
 

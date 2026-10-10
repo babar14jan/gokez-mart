@@ -1,13 +1,13 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ClipboardList, TrendingUp, Clock, CheckCircle, XCircle, Calendar, Store, Tag } from 'lucide-react';
-import { ordersApi, settingsApi, type OrderSummary } from '../services/api';
+import { ShoppingBag, ClipboardList, TrendingUp, Clock, XCircle, Calendar, Store, Users } from 'lucide-react';
+import { ordersApi, settingsApi, customersApi, type OrderSummary, type CustomerAggregates } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { orderDisplayName } from '../utils/orderName';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 
-type Range = 'today' | '7d' | '30d' | 'all';
+type Range = 'today' | '7d' | '30d' | 'custom' | 'all';
 
 const ROLE_MESSAGES: Record<string, string> = {
   super_admin:    'Here\u2019s the overview across your stores.',
@@ -36,28 +36,43 @@ const STATUS_COLORS: Record<string, string> = {
 
 const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
 
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/* Local-time day bounds for a range. Custom dates are read as local calendar
+   days (via `T00:00:00`), not UTC, so a single-day pick includes the whole
+   local day instead of losing the early hours to a timezone shift. */
+function rangeBounds(r: Range, from: string, to: string): { start: Date | null; end: Date | null } {
+  const now = new Date();
+  if (r === 'today') return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate()), end: null };
+  if (r === '7d')    return { start: new Date(now.getTime() - 7 * 86400000), end: null };
+  if (r === '30d')   return { start: new Date(now.getTime() - 30 * 86400000), end: null };
+  if (r === 'custom') return {
+    start: from ? new Date(`${from}T00:00:00`) : null,
+    end:   to   ? new Date(`${to}T23:59:59.999`) : null,
+  };
+  return { start: null, end: null };
+}
+
 const RANGES: { id: Range; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: '7d',    label: '7 Days' },
   { id: '30d',   label: '30 Days' },
   { id: 'all',   label: 'All Time' },
+  { id: 'custom',label: 'Custom' },
 ];
-
-function rangeStart(r: Range): Date | null {
-  const now = new Date();
-  if (r === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (r === '7d')    return new Date(now.getTime() - 7 * 86400000);
-  if (r === '30d')   return new Date(now.getTime() - 30 * 86400000);
-  return null;
-}
 
 export default function DashboardPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('today');
+  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
+  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
   const [storeName, setStoreName] = useState('');
   const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, delivered: 0, cancelled: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 });
+  const [customerAgg, setCustomerAgg] = useState<CustomerAggregates>({ totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
   const { name, role } = useAuthStore();
+  const canSeeCustomers = !!role && ['super_admin', 'store_owner', 'store_manager'].includes(role);
 
   useEffect(() => {
     settingsApi.getAll(getActiveStoreId())
@@ -68,28 +83,38 @@ export default function DashboardPage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const reqId = useRef(0);
+  const EMPTY_AGG = { totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] };
+
+  const loadAllOrders = useCallback(() =>
     ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500 } as any)
       .then(o => setAllOrders(o.data.data || []))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => {}), []);
 
-  useEffect(() => {
-    let active = true;
-    ordersApi.getSummary({ storeId: getActiveStoreId(), range })
-      .then(r => { if (active) setSummary(r.data.data); })
+  // One loader for both the initial paint and every live refresh. A request id
+  // guards against out-of-order responses: switching range/date fires a new
+  // request immediately, and a slow reply from the previous params is dropped
+  // instead of overwriting the newer figures (which looked like "data not
+  // refreshing").
+  const loadSummary = useCallback(() => {
+    const custom = range === 'custom';
+    if (custom && (!customFrom || !customTo)) return;
+    const id = ++reqId.current;
+    const params = { storeId: getActiveStoreId(), range, from: custom ? customFrom : undefined, to: custom ? customTo : undefined };
+    ordersApi.getSummary(params)
+      .then(r => { if (id === reqId.current) setSummary(r.data.data); })
       .catch(() => {});
-    return () => { active = false; };
-  }, [range]);
+    if (canSeeCustomers) {
+      customersApi.getAggregates(params)
+        .then(r => { if (id === reqId.current) setCustomerAgg(r.data.data || EMPTY_AGG); })
+        .catch(() => {});
+    }
+  }, [range, customFrom, customTo, canSeeCustomers]);
 
-  const refreshLive = useCallback(() => {
-    ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500 } as any)
-      .then(o => setAllOrders(o.data.data || []))
-      .catch(() => {});
-    ordersApi.getSummary({ storeId: getActiveStoreId(), range })
-      .then(r => setSummary(r.data.data))
-      .catch(() => {});
-  }, [range]);
+  useEffect(() => { loadAllOrders().finally(() => setLoading(false)); }, [loadAllOrders]);
+  useEffect(() => { loadSummary(); }, [loadSummary]);
+
+  const refreshLive = useCallback(() => { loadAllOrders(); loadSummary(); }, [loadAllOrders, loadSummary]);
 
   // Live refresh: instant via SSE events plus a polling fallback so cards and
   // the recent-orders list stay current even on a weak/flaky connection.
@@ -108,10 +133,14 @@ export default function DashboardPage() {
   }, [refreshLive]);
 
   const filtered = useMemo(() => {
-    const start = rangeStart(range);
-    if (!start) return allOrders;
-    return allOrders.filter(o => new Date(o.createdAt) >= start);
-  }, [allOrders, range]);
+    const { start, end } = rangeBounds(range, customFrom, customTo);
+    return allOrders.filter(o => {
+      const d = new Date(o.createdAt);
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    });
+  }, [allOrders, range, customFrom, customTo]);
 
   const kpis = useMemo(() => ({
     total:     summary.placed,
@@ -121,7 +150,9 @@ export default function DashboardPage() {
     revenue:   summary.revenue,
   }), [summary]);
 
-  const rangeLabel = RANGES.find(r => r.id === range)?.label || '';
+  const rangeLabel = range === 'custom'
+    ? `${customFrom || '…'} – ${customTo || '…'}`
+    : RANGES.find(r => r.id === range)?.label || '';
   const navigate = useNavigate();
 
   if (loading) return (
@@ -168,20 +199,28 @@ export default function DashboardPage() {
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
             }`}>
-            {r.id === 'today' && <Calendar className="w-3 h-3" />}
+            {(r.id === 'today' || r.id === 'custom') && <Calendar className="w-3 h-3" />}
             {r.label}
           </button>
         ))}
+        {range === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+            <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
+            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+          </div>
+        )}
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 items-stretch">
+      <div className={`grid grid-cols-2 sm:grid-cols-3 ${canSeeCustomers ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3 items-stretch`}>
         {[
-          { label: 'Total Orders',  value: kpis.total,                    sub: `${kpis.cancelled} cancelled`,    icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
-          { label: 'Pending',       value: kpis.pending,                  sub: 'awaiting confirmation',           icon: Clock,         gradient: 'from-amber-500 to-amber-600',     href: '/orders' },
-          { label: 'Delivered',     value: kpis.delivered,                sub: 'successfully delivered',          icon: CheckCircle,   gradient: 'from-violet-500 to-violet-600',   href: '/orders' },
-          { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: 'from delivered orders',           icon: TrendingUp,    gradient: 'from-blue-500 to-blue-600',       href: null },
-          { label: 'Coupons Used',  value: summary.couponOrders,          sub: `₹${summary.couponAmount.toFixed(0)} discount given`, icon: Tag, gradient: 'from-pink-500 to-rose-500', href: null },
+          { label: 'Total Orders',  value: kpis.total,                    sub: `${kpis.delivered} delivered · ${kpis.cancelled} cancelled`, icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
+          { label: 'Pending',       value: Math.max(kpis.total - kpis.delivered - kpis.cancelled, 0), sub: `${kpis.pending} awaiting confirmation`, icon: Clock, gradient: 'from-amber-500 to-amber-600', href: '/orders' },
+          { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: `₹${(kpis.revenue + summary.couponAmount).toFixed(0)} order value − ₹${summary.couponAmount.toFixed(0)} coupons`, icon: TrendingUp, gradient: 'from-blue-500 to-blue-600', href: null },
+          ...(canSeeCustomers ? [{ label: 'Unique Customers', value: customerAgg.totalCustomers, sub: `${customerAgg.newCustomers} new · ${customerAgg.repeatCustomers} repeat`, icon: Users, gradient: 'from-cyan-500 to-cyan-600', href: null }] : []),
         ].map(k => {
           const inner = (
             <div onClick={() => k.href && navigate(k.href)}
@@ -192,7 +231,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-xl font-bold text-gray-900 dark:text-white leading-none">{k.value}</p>
                 <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1">{k.label}</p>
-                <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">{k.sub}</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1">{k.sub}</p>
               </div>
             </div>
           );
@@ -202,11 +241,11 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Recent orders + status breakdown */}
-      <div className="grid lg:grid-cols-3 gap-4">
+      {/* Order status chart sits above Recent Orders */}
+      <div className="flex flex-col gap-4">
 
         {/* Recent orders */}
-        <div className="lg:col-span-2 page-card">
+        <div className="order-2 page-card">
           <div className="page-card-header">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-gray-500 dark:text-slate-400" />
@@ -274,7 +313,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Order status breakdown — vertical bar chart */}
-        <div className="page-card">
+        <div className="order-1 page-card">
           <div className="page-card-header">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-gray-500 dark:text-slate-400" />
@@ -309,7 +348,6 @@ export default function DashboardPage() {
                 count: filtered.filter(o => b.keys.includes(o.status)).length,
               }));
               const maxCount = Math.max(...counts.map(b => b.count), 1);
-              const total = filtered.length;
               return (
                 <>
                   {/* Chart area */}
@@ -341,12 +379,6 @@ export default function DashboardPage() {
                         <p className="text-[9px] font-semibold text-gray-500 dark:text-slate-400 leading-tight">{bar.label}</p>
                       </div>
                     ))}
-                  </div>
-
-                  {/* Summary */}
-                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-500 dark:text-slate-400">Total orders</span>
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">{total}</span>
                   </div>
                 </>
               );

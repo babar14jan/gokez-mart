@@ -98,7 +98,7 @@ export default function App() {
   );
 
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
-  const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number; trackingToken?: string; items?: any[]; total?: number; guestAddress?: string; guestName?: string; guestPhone?: string; createdAt?: string; status?: string } | null>(null);
+  const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number; trackingToken?: string; items?: any[]; total?: number; guestAddress?: string; guestName?: string; guestPhone?: string; createdAt?: string; status?: string; scheduledLabel?: string } | null>(null);
   // One session_start per session, fired as early as possible so a visit that
   // never reaches the login screen is still counted.
   useEffect(() => {
@@ -550,7 +550,9 @@ export default function App() {
                 <p className="text-emerald-100 text-xs mt-0.5">
                   {successData.preference === 'within_15' ? '⚡ Expected in 10-15 mins'
                     : successData.preference === 'within_30' ? '🕐 Expected in ~30 mins'
-                    : '🕑 Expected in ~1 hour'}
+                    : successData.preference === 'within_60' ? '🕑 Expected in ~1 hour'
+                    : successData.scheduledLabel ? `📅 Scheduled · ${successData.scheduledLabel}`
+                    : '📅 Scheduled delivery'}
                 </p>
               </div>
               <div className="text-right">
@@ -752,7 +754,7 @@ export default function App() {
               onHome={() => { setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
               confirmOrder={confirmOrder}
-              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
             />
           </div>
           {/* Desktop — right side drawer */}
@@ -765,7 +767,7 @@ export default function App() {
               onHome={() => { setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
               confirmOrder={confirmOrder}
-              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
             />
           </div>
         </div>

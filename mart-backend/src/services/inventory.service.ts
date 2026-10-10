@@ -112,9 +112,13 @@ export class InventoryService {
         stock_unit: string | null;
         low_stock_threshold: number | null;
         availability_status: string;
+        name: string;
       }> } = await client.query(
-        `SELECT stock_quantity::float, stock_unit, low_stock_threshold::float, availability_status
-         FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+        `SELECT sp.stock_quantity::float, sp.stock_unit, sp.low_stock_threshold::float, sp.availability_status,
+                p.name
+         FROM mart_store_products sp
+         JOIN mart_products p ON p.id = sp.product_id
+         WHERE sp.product_id = $1 AND sp.store_id = $2 FOR UPDATE OF sp`,
         [item.productId, storeId]
       );
       const row = cur.rows[0];
@@ -123,7 +127,9 @@ export class InventoryService {
       // Convert selling unit to base unit deduction
       const { deductionPerQty, baseUnit } = parseSellingUnit(item.sellingUnit);
 
-      // Only deduct if base units match
+      // Skip products whose selling unit doesn't match the unit its stock is
+      // held in — deliveries must never fail over a data misconfiguration, and
+      // restock() now blocks such mismatches from being created/newly tracked.
       if (baseUnit !== row.stock_unit) continue;
 
       const deduction = deductionPerQty * item.quantity;

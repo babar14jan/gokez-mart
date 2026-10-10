@@ -22,6 +22,7 @@ interface Product {
   localName: string | null;
   searchAliases: string[];
   price: number; unit: string; discountPercent: number;
+  approxWeight: string | null;
   isAvailable: boolean;
   isBundle: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
@@ -81,6 +82,7 @@ export default function ProductsPage() {
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [form, setForm] = useState({
     name: '', localName: '', searchAliases: '', categoryId: '', price: '', unit: '1 kg',
+    approxWeight: '',
     discountPercent: '0', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
     isCatalog: false,
@@ -275,7 +277,7 @@ export default function ProductsPage() {
   // ── Product CRUD ──────────────────────────────────────────────────────────
   const openCreate = useCallback(() => {
     setEditing(null);
-    setForm({ name: '', localName: '', searchAliases: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', discountPercent: '0', description: '', availabilityStatus: 'available', isCatalog: false });
+    setForm({ name: '', localName: '', searchAliases: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', approxWeight: '', discountPercent: '0', description: '', availabilityStatus: 'available', isCatalog: false });
     setPhotoFile(null); setPhotoPreview(null);
     setShowModal(true);
   }, [categories]);
@@ -289,7 +291,8 @@ export default function ProductsPage() {
     setEditing(p);
     setForm({
       name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '', price: String(p.price),
-      unit: p.unit, discountPercent: String(p.discountPercent),
+      unit: p.unit, approxWeight: p.approxWeight || '',
+      discountPercent: String(p.discountPercent),
       description: p.description || '',
       availabilityStatus: p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock'),
       isCatalog: (p as any).isCatalog || false,
@@ -868,6 +871,7 @@ export default function ProductsPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Name *</label>
+                  <span className={`text-[10px] font-semibold ${form.name.length >= 26 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.name.length}/26</span>
                   {!editing && (
                     <button type="button" onClick={() => openCatalogBrowser('single')}
                       className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -875,14 +879,18 @@ export default function ProductsPage() {
                     </button>
                   )}
                 </div>
-                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" />
+                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" maxLength={26} />
+                <p className="mt-0.5 text-[10px] text-gray-400 dark:text-slate-500">Fits one line on a phone card. Put extra names in Search aliases (hidden from customers).</p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
-                  Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
-                </label>
-                <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo, Pyaaz" />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-gray-700 dark:text-slate-300">
+                    Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
+                  </label>
+                  <span className={`text-[10px] font-semibold ${form.localName.length >= 20 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.localName.length}/20</span>
+                </div>
+                <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo, Pyaaz" maxLength={20} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
@@ -914,6 +922,20 @@ export default function ProductsPage() {
                       {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                   </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Approx. weight (per unit) <span className="text-gray-400 dark:text-slate-500">— optional, shown to customers</span></label>
+                <div className="flex gap-1.5">
+                  <input
+                    value={form.approxWeight}
+                    onChange={e => setForm(f => ({ ...f, approxWeight: e.target.value }))}
+                    className={inp} placeholder="e.g. 200-300 g" />
+                  {form.approxWeight && (
+                    <span className="flex items-center px-2 text-[10px] text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                      shown as "{form.unit.replace(/^\d*\.?\d*\s*/, '') === 'pcs' ? '1 pc' : form.unit}{form.approxWeight ? ` · ${form.approxWeight}` : ''}"
+                    </span>
+                  )}
                 </div>
               </div>
               <div>

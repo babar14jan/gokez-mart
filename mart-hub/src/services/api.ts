@@ -103,6 +103,7 @@ export const ordersApi = {
 // ── Customers ─────────────────────────────────────────────────────────────────
 export interface CustomerAggregates {
   totalCustomers: number;
+  newCustomers: number;
   repeatCustomers: number;
   avgOrders: number;
   top: Array<{ id: string; name: string; phone: string; orderCount: number; totalSpent: number }>;

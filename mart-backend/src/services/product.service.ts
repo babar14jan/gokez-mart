@@ -13,6 +13,7 @@ export interface MartProduct {
   photoUrl: string | null;
   price: number;
   unit: string;
+  approxWeight: string | null;
   weightOptions: Array<{ label: string; price: number }> | null;
   discountPercent: number;
   isAvailable: boolean;
@@ -29,6 +30,7 @@ const PRODUCT_SELECT = `
          p.description, p.photo_url as "photoUrl",
          p.weight_options as "weightOptions",
          sp.price::float, sp.unit,
+         sp.approx_weight as "approxWeight",
          sp.discount_percent::float as "discountPercent",
          sp.is_available as "isAvailable",
          sp.availability_status as "availabilityStatus",
@@ -129,13 +131,14 @@ export class ProductService {
     );
     await query(
       `INSERT INTO mart_store_products
-         (store_id, product_id, price, unit, discount_percent, availability_status, is_available, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+         (store_id, product_id, price, unit, discount_percent, availability_status, is_available, sort_order, approx_weight)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [data.storeId, id, data.price, data.unit || '1 kg',
        data.discountPercent || 0,
        data.availabilityStatus || 'available',
        data.isAvailable !== false,
-       data.sortOrder || 0]
+       data.sortOrder || 0,
+       data.approxWeight || null]
     );
     return (await this.findById(id, data.storeId))!;
   }
@@ -228,6 +231,7 @@ export class ProductService {
       let si = 1;
       if (data.price !== undefined)           { storeFields.push(`price = $${si++}`);               storeParams.push(data.price); }
       if (data.unit !== undefined)            { storeFields.push(`unit = $${si++}`);                storeParams.push(data.unit); }
+      if (data.approxWeight !== undefined)    { storeFields.push(`approx_weight = $${si++}`);       storeParams.push(data.approxWeight || null); }
       if (data.discountPercent !== undefined) { storeFields.push(`discount_percent = $${si++}`);    storeParams.push(data.discountPercent); }
       if (data.availabilityStatus !== undefined) {
         storeFields.push(`availability_status = $${si++}`); storeParams.push(data.availabilityStatus);
