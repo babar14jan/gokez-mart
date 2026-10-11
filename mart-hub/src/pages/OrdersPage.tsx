@@ -840,6 +840,7 @@ export default function OrdersPage() {
                             {(isEarly || canTerminate) && <option value="out_of_stock">Out of stock</option>}
                             {(isEarly || canTerminate) && <option value="store_closed">Store closed</option>}
                             {order.status === 'pending' && canCancelOutsideArea && <option value="outside_area">Outside delivery area</option>}
+                            {(isEarly || canTerminate) && <option value="incorrect_address">Incorrect delivery address</option>}
                             {!isEarly && canTerminate && <option value="rider_unavailable">Rider unavailable</option>}
                             {!isEarly && canTerminate && <option value="technical_issue">Technical issue</option>}
                             {(isEarly || canTerminate) && <option value="other">Other</option>}

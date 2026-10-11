@@ -54,6 +54,7 @@ const CANCELLATION_MESSAGES: Record<string, string> = {
   duplicate_order: 'Cancelled — this appeared to be a duplicate order.',
   out_of_stock: 'Sorry — some items became unavailable. You will not be charged.',
   store_closed: 'Sorry — the store had to close unexpectedly. You will not be charged.',
+  incorrect_address: 'The delivery address was incorrect. You will not be charged.',
   other: 'Your order was cancelled. You will not be charged.',
 };
 
