@@ -83,7 +83,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
               <div className="flex h-full w-full items-center justify-center text-7xl">🥦</div>
             )}
             {savings > 0 && !isOutOfStock && (
-              <span className="absolute left-0 top-0 rounded-br-lg bg-red-100 px-2 py-1 text-[11px] font-extrabold text-red-600 dark:bg-red-950/70 dark:text-red-200">
+              <span className="absolute left-0 top-0 rounded-br-lg bg-red-500 px-2 py-1 text-[11px] font-extrabold text-white">
                 {product.discountPercent}% OFF
               </span>
             )}
