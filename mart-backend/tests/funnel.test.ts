@@ -540,8 +540,13 @@ describe('I. Guest checkouts flow through the lead funnel', () => {
     assert.ok(/=== 'guest'/.test(ctrl),
       'the admin leads controller no longer accepts status=guest');
     const hub = read('mart-hub/src/pages/CustomerLeadsPage.tsx');
-    assert.ok(/'Checkout-only'/.test(hub),
-      'the super admin is never shown a checkout-only bucket for these shoppers');
+    // The Leads page is intentionally prospect-only (OTP not completed). The
+    // checkout-only/guest and verified identities are customers and now live on
+    // the Customers page, so the Leads page must not grow a guest bucket again.
+    assert.equal(/'Checkout-only'/.test(hub), false,
+      'the checkout-only bucket belongs on the Customers page, not Leads');
+    assert.ok(/getAll\('unverified'/.test(hub),
+      'the Leads page must list only OTP-not-completed prospects');
   });
 
   test('direct checkouts are excluded from the OTP-not-completed bucket', () => {

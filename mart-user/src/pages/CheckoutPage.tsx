@@ -567,6 +567,34 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
       if (appliedCampaign && !appliedCouponCode && !eligible.some((c: any) => c.id === appliedCampaign.id)) {
         removeCampaign();
+      } else if (appliedCampaign) {
+        // The cart changed after a discount was applied. Re-check it against the
+        // current subtotal so a coupon can never stay applied below the minimum
+        // order the store set when the coupon was created, and so the discount
+        // is re-priced for the new total.
+        if (appliedCouponCode) {
+          try {
+            const res = await campaignApi.validateCode(appliedCouponCode, cartSubtotal, storeId);
+            if (cancelled) return;
+            const campaign = res.data.data.campaign;
+            const disc = calcDiscount(campaign, cartSubtotal);
+            if (disc !== campaignDiscount || campaign.id !== appliedCampaign.id) {
+              setLocalAppliedCampaign(campaign);
+              setCampaignDiscount(disc);
+              useCartStore.getState().setAppliedCampaign(campaign, disc);
+            }
+          } catch (e: any) {
+            if (cancelled) return;
+            removeCampaign();
+            setOfferNotice(e?.response?.data?.error || 'Your cart changed, so the coupon was removed.');
+          }
+        } else {
+          const disc = calcDiscount(appliedCampaign, cartSubtotal);
+          if (disc !== campaignDiscount) {
+            setCampaignDiscount(disc);
+            useCartStore.getState().setAppliedCampaign(appliedCampaign, disc);
+          }
+        }
       }
 
       const flow = useLoginFlowStore.getState();
@@ -651,11 +679,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   const validateCoupon = () => applyCode(couponInput);
 
-  const deliveryCharge = parseFloat(settings.delivery_charge || '15');
-  const freeAbove = parseFloat(settings.free_delivery_above || '150');
-  const minOrder = parseFloat(settings.min_order_amount || '50');
+  const deliveryCharge = parseFloat(settings.delivery_charge || '0');
+  const freeAbove = parseFloat(settings.free_delivery_above || '0');
+  const minOrder = parseFloat(settings.min_order_amount || '0');
   const sub = subtotal();
-  const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' ? 0 : (sub >= freeAbove ? 0 : deliveryCharge);
+  const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' ? 0 : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
   const total = Math.max(0, sub + actualDelivery - campaignDiscount);
   const canCheckout = sub >= minOrder && items.length > 0;
 
@@ -879,7 +907,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               ))}
             </div>
             {/* Free delivery nudge */}
-            {canCheckout && actualDelivery > 0 && (
+            {canCheckout && freeAbove > 0 && actualDelivery > 0 && (
               <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 border-t border-emerald-100 dark:border-emerald-900">
                 <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium text-center">
                   🎉 Add ₹{(freeAbove - sub).toFixed(0)} more in items for free delivery at ₹{freeAbove.toFixed(0)}

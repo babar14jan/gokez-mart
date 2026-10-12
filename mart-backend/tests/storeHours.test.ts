@@ -311,6 +311,23 @@ describe('the order insert records the closure columns', () => {
   });
 });
 
+describe('the store minimum order is enforced on the server', () => {
+  const source = readFileSync(join(__dirname, '..', 'src', 'services', 'order.service.ts'), 'utf8');
+
+  test('reads the store admin setting and rejects a short order', () => {
+    assert.ok(/min_order_amount/.test(source), 'the store minimum order setting is never read');
+    assert.ok(/if \(minOrderAmount > 0 && subtotal < minOrderAmount\)/.test(source),
+      'order creation does not reject a subtotal below the store minimum');
+  });
+
+  test('does not trust a client-supplied minimum', () => {
+    const guard = /if \(minOrderAmount > 0 && subtotal < minOrderAmount\)([\s\S]*?)\}/.exec(source);
+    assert.ok(guard, 'could not locate the minimum order guard');
+    assert.ok(!/data\.|req\.|body\./.test(guard[1]!),
+      'the minimum order guard must not read client-supplied values');
+  });
+});
+
 describe('IST formatting for the hub', () => {
   test('renders the instant in IST regardless of the host timezone', () => {
     // 2026-01-08T03:30:00Z is 09:00 IST on 8 January.

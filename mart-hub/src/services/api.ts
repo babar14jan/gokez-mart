@@ -109,8 +109,19 @@ export interface CustomerAggregates {
   top: Array<{ id: string; name: string; phone: string; orderCount: number; totalSpent: number }>;
 }
 
+export type CustomerSort = 'orders_desc' | 'spend_desc' | 'name_asc' | 'newest';
+
+export interface CustomerStats {
+  totalCustomers: number;
+  totalRevenue: number;
+  totalOrders: number;
+  repeatCustomers: number;
+  newCustomers: number;
+  avgOrders: number;
+}
+
 export const customersApi = {
-  getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; limit?: number; offset?: number }) =>
+  getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; search?: string; sort?: CustomerSort; limit?: number; offset?: number }) =>
     api.get('/admin/customers', { params }),
   getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number }) =>
     api.get('/admin/analytics/customers', { params }),

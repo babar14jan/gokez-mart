@@ -61,7 +61,7 @@ function DeferredPage({ children }: { children: ReactNode }) {
 
 const DEFAULT_SETTINGS: PublicSettings = {
   store_name: BRAND_NAME, store_address: 'Kolkata',
-  delivery_charge: '15', free_delivery_above: '150', min_order_amount: '50',
+  delivery_charge: '0', free_delivery_above: '0', min_order_amount: '0',
   delivery_area: 'Kolkata', store_open: 'true',
   estimated_delivery: '30-45 mins', cod_enabled: 'true',
   upi_enabled: 'true', phonepay_enabled: 'false',

@@ -135,8 +135,9 @@ export class OrderService {
       throw new Error('Select either an offer or a coupon code, not both');
     }
     const settings = await SettingsService.getPublic(data.storeId);
-    const deliveryCharge = parseFloat(settings.delivery_charge || '15');
-    const freeAbove = parseFloat(settings.free_delivery_above || '150');
+    const deliveryCharge = parseFloat(settings.delivery_charge || '0');
+    const freeAbove = parseFloat(settings.free_delivery_above || '0');
+    const minOrderAmount = parseFloat(settings.min_order_amount || '0');
 
     // Normalize phone once so leads, orders, and funnels all match
     const cleanPhone = data.guestPhone.replace(/\D/g, '');
@@ -297,6 +298,14 @@ export class OrderService {
       }
       const subtotal = resolvedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
+      // The store's minimum order (set by the store admin in Settings) is
+      // enforced here so it cannot be bypassed with a direct API call. The
+      // storefront has its own guard, but that copy is advisory. Compared to
+      // the pre-discount item subtotal, which is what the storefront shows.
+      if (minOrderAmount > 0 && subtotal < minOrderAmount) {
+        throw badRequest(`Minimum order amount is ₹${minOrderAmount}. Add ₹${Math.ceil(minOrderAmount - subtotal)} more to place this order.`);
+      }
+
       let campaign: any = null;
       if (data.campaignId || data.couponCodeUsed) {
         const campaignResult = await client.query(
@@ -374,7 +383,10 @@ export class OrderService {
             ? Math.min((subtotal * Number(campaign.discount_value)) / 100, campaign.max_discount ? Number(campaign.max_discount) : Number.MAX_SAFE_INTEGER)
             : 0
         : 0;
-      const actualDelivery = campaign?.discount_type === 'free_delivery' || subtotal >= freeAbove ? 0 : deliveryCharge;
+      // freeAbove = 0 means the store has no free-delivery threshold, so the
+      // delivery charge still applies. Without this guard `subtotal >= 0` would
+      // waive delivery for every order.
+      const actualDelivery = campaign?.discount_type === 'free_delivery' || (freeAbove > 0 && subtotal >= freeAbove) ? 0 : deliveryCharge;
       const total = Math.max(0, subtotal + actualDelivery - campaignDiscount);
 
       // Whether the store is trading is decided here, on the server, inside the

@@ -53,9 +53,15 @@ export class CustomerAnalyticsService {
                   )
                 )::int AS returning_visitors
          FROM scoped s`, values),
+      // Repeat-buyer mix, matching the Analytics "Customers" tab and the
+      // dashboard KPI: within the selected period a one-time buyer counts as
+      // new, a customer with two or more delivered orders counts as returning.
+      // The previous cohort definition (first-ever delivery in period) reported
+      // zero returning customers whenever the period covered the store's whole
+      // history — always true for "All time".
       query<{ new_customers: number; returning_customers: number }>(
         `WITH delivered_in_range AS (
-           SELECT o.customer_id, MIN(o.delivered_at) AS first_delivery_in_range
+           SELECT o.customer_id, COUNT(*)::int AS delivered_orders
            FROM mart_orders o
            WHERE o.status = 'delivered'
              AND o.customer_id IS NOT NULL
@@ -63,23 +69,9 @@ export class CustomerAnalyticsService {
              AND ${deliveryWhere}
            GROUP BY o.customer_id
          )
-         SELECT COUNT(*) FILTER (
-           WHERE NOT EXISTS (
-             SELECT 1 FROM mart_orders prior
-             WHERE prior.customer_id = customer.customer_id
-               AND prior.status = 'delivered'
-               AND prior.delivered_at < customer.first_delivery_in_range
-           )
-         )::int AS new_customers,
-         COUNT(*) FILTER (
-           WHERE EXISTS (
-             SELECT 1 FROM mart_orders prior
-             WHERE prior.customer_id = customer.customer_id
-               AND prior.status = 'delivered'
-               AND prior.delivered_at < customer.first_delivery_in_range
-           )
-         )::int AS returning_customers
-         FROM delivered_in_range customer`, values),
+         SELECT COUNT(*) FILTER (WHERE delivered_orders = 1)::int AS new_customers,
+                COUNT(*) FILTER (WHERE delivered_orders >= 2)::int AS returning_customers
+         FROM delivered_in_range`, values),
       query<{ event_name: string; count: number }>(`SELECT e.event_name, COUNT(*)::int AS count FROM mart_funnel_events e WHERE ${eventWhere} GROUP BY e.event_name`, values),
       query<{ category_interactions: number; search_interactions: number; product_view_sessions: number; product_view_events: number; zero_result_searches: number }>(
         `SELECT COUNT(DISTINCT e.session_id) FILTER (WHERE e.event_name = 'category_viewed')::int AS category_interactions,

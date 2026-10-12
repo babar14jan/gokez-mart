@@ -199,7 +199,7 @@ export default function DashboardPage() {
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
             }`}>
-            {(r.id === 'today' || r.id === 'custom') && <Calendar className="w-3 h-3" />}
+            {r.id === 'custom' && <Calendar className="w-3 h-3" />}
             {r.label}
           </button>
         ))}

@@ -117,10 +117,10 @@ export default function CheckoutScreen() {
   const selectedLabel = addresses.find(a => a.addressLine === address)?.label ?? 'Delivery Address';
 
   const sub            = subtotal();
-  const deliveryCharge = parseFloat(settings?.delivery_charge ?? '30');
-  const freeAbove      = parseFloat(settings?.free_delivery_above ?? '299');
-  const minOrder       = parseFloat(settings?.min_order_amount ?? '50');
-  const actualDelivery = appliedCamp?.discount_type === 'free_delivery' ? 0 : (sub >= freeAbove ? 0 : deliveryCharge);
+  const deliveryCharge = parseFloat(settings?.delivery_charge ?? '0');
+  const freeAbove      = parseFloat(settings?.free_delivery_above ?? '0');
+  const minOrder       = parseFloat(settings?.min_order_amount ?? '0');
+  const actualDelivery = appliedCamp?.discount_type === 'free_delivery' ? 0 : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
   const total          = Math.max(0, sub + actualDelivery - campDiscount);
   const cartProductIds = new Set(items.map(i => i.productId));
 
@@ -168,6 +168,33 @@ export default function CheckoutScreen() {
       setCouponError(e?.response?.data?.error ?? 'Invalid coupon code');
     } finally { setCouponLoading(false); }
   };
+
+  // The cart can change after a discount is applied. Re-check the applied offer
+  // against the current subtotal so a coupon can never stay applied below the
+  // minimum order the store set when the coupon was created, and re-price it.
+  useEffect(() => {
+    if (!appliedCamp || !selectedZone?.storeId) return;
+    let cancelled = false;
+    const recheck = async () => {
+      if (appliedCamp.coupon_code) {
+        try {
+          const res = await campaignApi.validateCode(appliedCamp.coupon_code, sub, selectedZone.storeId);
+          if (cancelled) return;
+          setAppliedCamp(res.data.data.campaign);
+          setCampDiscount(res.data.data.discount);
+        } catch (e: any) {
+          if (cancelled) return;
+          removeCampaign();
+          Alert.alert('Coupon removed', e?.response?.data?.error ?? 'Your cart changed, so the coupon was removed.');
+        }
+      } else {
+        applyDiscount(appliedCamp, sub);
+      }
+    };
+    recheck();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sub, selectedZone?.storeId]);
 
   const handlePlace = async () => {
     if (sub < minOrder) { Alert.alert('Minimum order', `Add ₹${Math.ceil(minOrder - sub)} more to place order.`); return; }
@@ -242,8 +269,8 @@ export default function CheckoutScreen() {
       const orderId = res.data.data?.id;
       if (isGuest) await AsyncStorage.setItem('guest_phone', orderPhone.replace(/\D/g, ''));
       router.replace(orderId ? `/order/${orderId}` : '/(tabs)/orders');
-    } catch {
-      Alert.alert('Order failed', 'Failed to place order. Please try again.');
+    } catch (e: any) {
+      Alert.alert('Order failed', e?.response?.data?.error ?? 'Failed to place order. Please try again.');
     } finally { setPlacing(false); }
   };
 

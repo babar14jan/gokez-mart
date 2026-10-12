@@ -855,13 +855,24 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
   const identity = req.query.identity === 'signed_in' || req.query.identity === 'guest_checkout'
     ? req.query.identity
     : 'all';
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  // Empty pattern keeps the search clause a no-op while avoiding a null param.
+  const searchPattern = search ? `%${search}%` : '';
+  const SORTS: Record<string, string> = {
+    orders_desc: '"orderCount" DESC, "createdAt" DESC',
+    spend_desc: '"totalSpent" DESC, "orderCount" DESC',
+    name_asc: 'name ASC NULLS LAST, phone ASC',
+    newest: '"createdAt" DESC',
+  };
+  const sortKey = typeof req.query.sort === 'string' ? req.query.sort : 'orders_desc';
+  const orderBy = SORTS[sortKey] || SORTS.orders_desc;
   const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 50, 1), 100);
   const offset = Math.max(Number.parseInt(String(req.query.offset), 10) || 0, 0);
   const identitySql = `CASE WHEN EXISTS (
     SELECT 1 FROM mart_customer_leads l
     WHERE l.customer_id = c.id AND l.verified_at IS NOT NULL
   ) THEN 'signed_in' ELSE 'guest_checkout' END`;
-  const [customers, counts] = await Promise.all([
+  const [customers, counts, stats] = await Promise.all([
     query(
       `WITH classified AS (
          SELECT c.id, c.phone, c.name, c.address, c.order_count as "orderCount",
@@ -870,28 +881,47 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
          FROM mart_customers c
        )
        SELECT * FROM classified
-       WHERE $1 = 'all' OR "identityType" = $1
-       ORDER BY "orderCount" DESC, "createdAt" DESC
+       WHERE ($1 = 'all' OR "identityType" = $1)
+         AND ($4 = '' OR name ILIKE $4 OR phone ILIKE $4)
+       ORDER BY ${orderBy}
        LIMIT $2 OFFSET $3`,
-      [identity, limit, offset]
+      [identity, limit, offset, searchPattern]
     ),
-    query<{ total: number; signedIn: number; guestCheckout: number }>(
-      `SELECT COUNT(*)::int as total,
-              COUNT(*) FILTER (WHERE ${identitySql} = 'signed_in')::int as "signedIn",
-              COUNT(*) FILTER (WHERE ${identitySql} = 'guest_checkout')::int as "guestCheckout"
-       FROM mart_customers c`
+    query<{ total: number; signedIn: number; guestCheckout: number; filtered: number }>(
+      `WITH classified AS (
+         SELECT c.name, c.phone, ${identitySql} as "identityType"
+         FROM mart_customers c
+       )
+       SELECT COUNT(*)::int as total,
+              COUNT(*) FILTER (WHERE "identityType" = 'signed_in')::int as "signedIn",
+              COUNT(*) FILTER (WHERE "identityType" = 'guest_checkout')::int as "guestCheckout",
+              COUNT(*) FILTER (WHERE ($1 = 'all' OR "identityType" = $1)
+                                 AND ($2 = '' OR name ILIKE $2 OR phone ILIKE $2))::int as filtered
+       FROM classified`,
+      [identity, searchPattern]
+    ),
+    query<{ totalCustomers: number; totalRevenue: number; totalOrders: number; repeatCustomers: number; newCustomers: number }>(
+      `SELECT COUNT(*)::int as "totalCustomers",
+              COALESCE(SUM(total_spent), 0)::float as "totalRevenue",
+              COALESCE(SUM(order_count), 0)::int as "totalOrders",
+              COUNT(*) FILTER (WHERE order_count > 1)::int as "repeatCustomers",
+              COUNT(*) FILTER (WHERE created_at >= now() - interval '30 days')::int as "newCustomers"
+       FROM mart_customers`
     ),
   ]);
-  const count = counts.rows[0] || { total: 0, signedIn: 0, guestCheckout: 0 };
-  const filteredTotal = identity === 'signed_in'
-    ? count.signedIn
-    : identity === 'guest_checkout'
-      ? count.guestCheckout
-      : count.total;
+  const count = counts.rows[0] || { total: 0, signedIn: 0, guestCheckout: 0, filtered: 0 };
+  const filteredTotal = count.filtered;
+  const customerStats = stats.rows[0] || { totalCustomers: 0, totalRevenue: 0, totalOrders: 0, repeatCustomers: 0, newCustomers: 0 };
   res.json({
     success: true,
     data: customers.rows,
-    counts: count,
+    counts: { total: count.total, signedIn: count.signedIn, guestCheckout: count.guestCheckout },
+    stats: {
+      ...customerStats,
+      avgOrders: customerStats.totalCustomers > 0
+        ? Math.round((customerStats.totalOrders / customerStats.totalCustomers) * 10) / 10
+        : 0,
+    },
     pagination: { limit, offset, total: filteredTotal, hasMore: offset + customers.rows.length < filteredTotal },
   });
 });
