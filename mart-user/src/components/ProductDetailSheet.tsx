@@ -83,17 +83,16 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
               <div className="flex h-full w-full items-center justify-center text-7xl">🥦</div>
             )}
             {savings > 0 && !isOutOfStock && (
-              <span className="absolute left-0 top-0 rounded-br-lg bg-red-100 px-2 py-1 text-[11px] font-extrabold text-red-600 dark:bg-red-900/40 dark:text-red-300">
+              <span className="absolute left-0 top-0 rounded-br-lg bg-red-100 px-2 py-1 text-[11px] font-extrabold text-red-600 dark:bg-red-950/70 dark:text-red-200">
                 {product.discountPercent}% OFF
               </span>
             )}
           </div>
 
           <div className="px-4 pb-3 pt-4">
-            <h2 className="break-words text-xl font-bold leading-snug text-gray-900 dark:text-white">{product.name?.trim() || product.localName?.trim()}</h2>
-            {product.localName?.trim() && product.localName.trim() !== product.name?.trim() && (
-              <p className="mt-1 break-words text-sm font-semibold leading-snug text-pink-700 dark:text-pink-300">{product.localName.trim()}</p>
-            )}
+            <h2 className="break-words text-xl font-bold leading-snug text-gray-900 dark:text-white">
+              {displayName(product)}
+            </h2>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <span className="text-2xl font-extrabold text-gray-900 dark:text-white">₹{discountedPrice}</span>
               {savings > 0 && <span className="text-sm font-semibold text-gray-400 dark:text-slate-500 line-through">MRP ₹{product.price}</span>}
