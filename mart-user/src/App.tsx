@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Search, CheckCircle, Mail, Phone, BellRing } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
@@ -211,8 +211,11 @@ export default function App() {
   // Checkout deliberately does NOT reset: it is an overlay over the current view,
   // so opening and closing it leaves `view` untouched and the offset survives.
   const showingSuccess = Boolean(successData);
+  const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     window.scrollTo(0, 0);
+    // The page now scrolls inside .app-scroll, not the document, so reset it too.
+    scrollRef.current?.scrollTo(0, 0);
   }, [view, showingSuccess]);
 
   useEffect(() => {
@@ -419,6 +422,7 @@ export default function App() {
     flow.setGuestReturnPath('/checkout');
     setPendingCheckout(false);
     setCheckoutActive(false);
+    setCatalogSearchOpen(false);
     setShowLoginModal(false);
     window.history.pushState({}, '', '/account');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -427,6 +431,14 @@ export default function App() {
   const handleCheckout = async () => {
     setPreCheckoutView(view);
     setCheckoutActive(true);
+  };
+
+  // Closing checkout returns to the view it covered. When checkout was opened on
+  // top of the product search sheet, that sheet stays mounted underneath, so the
+  // shopper lands right back on their results.
+  const handleCheckoutClose = () => {
+    setCheckoutActive(false);
+    setView(preCheckoutView);
   };
 
   // Persist the tracking token in an effect, never during render: the success
@@ -676,7 +688,7 @@ export default function App() {
   }
 
   return (
-    <div className={`page-shell ${view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
+    <div className={`app-shell ${view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNameRequested={() => {
         // Checkout must resume immediately after authentication. Elsewhere, the
@@ -719,6 +731,11 @@ export default function App() {
         </div>
       )}
 
+      {/* Single scroll area. The bottom nav below is a flex sibling of this
+          scroller, so it is structurally pinned and cannot drift the way a
+          position: fixed bar does on iOS Safari/standalone PWA. */}
+      <div className="app-scroll" ref={scrollRef}>
+
       {!isEmbed && (
         <Navbar
           onUseMyLocation={useMyLocation}
@@ -749,22 +766,23 @@ export default function App() {
         />
       )}
 
-      {/* Checkout — overlay on both mobile and desktop */}
+      {/* Checkout — overlay on both mobile and desktop (above the search sheet so
+          the search results stay mounted underneath and return on back) */}
       {checkoutActive && (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-[55]">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
-            onClick={() => { setCheckoutActive(false); setView(preCheckoutView); }} />
+            onClick={handleCheckoutClose} />
           {/* Mobile — full screen slide up */}
           <div className="sm:hidden absolute inset-0 bg-white dark:bg-slate-900 overflow-y-auto">
             <CheckoutPage
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
-              onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
-              onHome={() => { setCheckoutActive(false); setView('home'); }}
+              onBack={handleCheckoutClose}
+              onHome={() => { setCatalogSearchOpen(false); setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
               confirmOrder={confirmOrder}
-              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCatalogSearchOpen(false); setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
             />
           </div>
           {/* Desktop — right side drawer */}
@@ -773,11 +791,11 @@ export default function App() {
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
-              onBack={() => { setCheckoutActive(false); setView(preCheckoutView); }}
-              onHome={() => { setCheckoutActive(false); setView('home'); }}
+              onBack={handleCheckoutClose}
+              onHome={() => { setCatalogSearchOpen(false); setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
               confirmOrder={confirmOrder}
-              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
+              onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCatalogSearchOpen(false); setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
             />
           </div>
         </div>
@@ -797,6 +815,7 @@ export default function App() {
           products={products}
           searchPrompt={searchPrompt}
           onClose={() => setCatalogSearchOpen(false)}
+          onOpenCart={() => handleCheckout()}
         />
       )}
 
@@ -805,7 +824,7 @@ export default function App() {
         <DeferredPage><AboutPage /></DeferredPage>
       ) : view === 'categories' ? (
         <div className={PAGE_BOTTOM}>
-          <CategoriesView categories={categories} products={products} onSearchOpen={() => setCatalogSearchOpen(true)} searchPrompt={searchPrompt} />
+          <CategoriesView categories={categories} products={products} />
         </div>
       ) : view === 'deals' ? (
         <div className={PAGE_BOTTOM}>
@@ -993,14 +1012,16 @@ export default function App() {
         </main>
       )}
 
+      </div>
+
       {/* Floating cart bar — mobile only. Hidden in checkout, and on the account
           page while signed out so it never competes with the login/OTP screens;
           it reappears once the customer is signed in. */}
       <FloatingCart onOpen={handleCheckout} hidden={checkoutActive || (view === 'account' && !isLoggedIn)} />
 
-      {/* Bottom nav — mobile only */}
-      <div className="sm:hidden">
-        <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} />
+      {/* Bottom nav — mobile only. In-flow (not fixed) so it stays pinned. */}
+      <div className="sm:hidden shrink-0">
+        <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => setCatalogSearchOpen(true)} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { ChevronLeft, Search, X } from 'lucide-react';
 import type { Product } from '../services/api';
 import ProductCard from './ProductCard';
 
@@ -31,13 +31,12 @@ export default function ComboSheet({ title, products, onClose }: ComboSheetProps
       <button type="button" aria-label="Close combos" onClick={onClose}
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
-        <header className="flex shrink-0 items-center border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <header className="relative flex shrink-0 items-center border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
           <button type="button" onClick={onClose} aria-label="Back to home"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
-            <ArrowLeft className="h-5 w-5" />
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+            <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
           </button>
-          <h1 className="min-w-0 flex-1 text-center text-base font-bold text-gray-900 dark:text-white">{title}</h1>
-          <span className="w-11 shrink-0" />
+          <h1 className="pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-base font-bold text-gray-900 dark:text-white">{title}</h1>
         </header>
 
         <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">

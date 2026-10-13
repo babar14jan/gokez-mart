@@ -66,12 +66,12 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Info — fixed height name so all cards align */}
         <div className="px-2 pt-1.5 pb-2 flex flex-col">
-          <p className="text-[12px] font-semibold text-gray-900 dark:text-white leading-tight mb-1" style={{ minHeight: '2.2em' }}>
-            {product.name?.trim() || product.localName?.trim()}
+          <div className="mb-1 leading-tight" style={{ minHeight: '2.2em' }}>
+            <p className="text-[12px] font-semibold text-gray-900 dark:text-white">{product.name?.trim() || product.localName?.trim()}</p>
             {product.name?.trim() && product.localName?.trim() && product.localName.trim() !== product.name?.trim() && (
-              <> ({product.localName.trim()})</>
+              <p className="truncate text-[11px] font-medium text-gray-500 dark:text-slate-400">{product.localName.trim()}</p>
             )}
-          </p>
+          </div>
           <p className="text-[11px] font-semibold text-gray-600 dark:text-slate-300 leading-none">{product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}</p>
           <div className="mt-auto flex flex-wrap items-baseline gap-x-1 pt-1.5">
             <span className="text-sm font-extrabold leading-none text-gray-900 dark:text-white">₹{discountedPrice}</span>
