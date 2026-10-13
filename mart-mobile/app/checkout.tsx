@@ -53,10 +53,12 @@ export default function CheckoutScreen() {
   const [suggestions,   setSuggestions]   = useState<Product[]>([]);
   const [campaigns,     setCampaigns]     = useState<any[]>([]);
   const [appliedCamp,   setAppliedCamp]   = useState<any>(null);
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
   const [campDiscount,  setCampDiscount]  = useState(0);
   const [couponInput,   setCouponInput]   = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError,   setCouponError]   = useState('');
+  const [couponHint,    setCouponHint]    = useState('');
   const [showOffers,    setShowOffers]    = useState(false);
   const [billExpanded,  setBillExpanded]  = useState(false);
 
@@ -155,17 +157,34 @@ export default function CheckoutScreen() {
     setAppliedCamp(camp); setCampDiscount(Math.round(disc));
   };
 
-  const removeCampaign = () => { setAppliedCamp(null); setCampDiscount(0); setCouponInput(''); setCouponError(''); };
+  const removeCampaign = (hint = '') => {
+    setAppliedCamp(null); setAppliedCouponCode(null); setCampDiscount(0); setCouponInput(''); setCouponError(''); setCouponHint(hint);
+  };
+
+  useEffect(() => {
+    if (appliedCamp && sub < Number(appliedCamp.min_order_amount || 0)) {
+      const minimumOrder = Number(appliedCamp.min_order_amount || 0);
+      removeCampaign(`Add ₹${Math.max(0, minimumOrder - sub)} more to use this coupon (minimum cart value ₹${minimumOrder}).`);
+    }
+  }, [sub, appliedCamp]);
 
   const validateCoupon = async () => {
     if (!couponInput.trim() || !selectedZone?.storeId) return;
-    setCouponLoading(true); setCouponError('');
+    setCouponLoading(true); setCouponError(''); setCouponHint('');
     try {
       const res = await campaignApi.validateCode(couponInput.trim(), sub, selectedZone.storeId);
       const { campaign, discount } = res.data.data;
-      setAppliedCamp(campaign); setCampDiscount(discount); setCouponInput(''); setShowOffers(false);
+      setAppliedCamp(campaign); setAppliedCouponCode(couponInput.trim().toUpperCase());
+      setCampDiscount(discount); setCouponInput(''); setShowOffers(false);
     } catch (e: any) {
-      setCouponError(e?.response?.data?.error ?? 'Invalid coupon code');
+      const message = e?.response?.data?.error ?? 'Invalid coupon code';
+      const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
+      if (minimumMatch) {
+        const minimumOrder = Number(minimumMatch[1]);
+        setCouponHint(`Add ₹${Math.max(0, minimumOrder - sub)} more to use this coupon (minimum cart value ₹${minimumOrder}).`);
+      } else {
+        setCouponError(message);
+      }
     } finally { setCouponLoading(false); }
   };
 
@@ -261,8 +280,8 @@ export default function CheckoutScreen() {
         paymentMethod: payment,
         storeId: selectedZone?.storeId,
         zoneName: selectedZone?.name,
-        campaignId: appliedCamp?.id,
-        couponCode: appliedCamp?.coupon_code,
+        campaignId: appliedCouponCode ? undefined : appliedCamp?.id,
+        couponCode: appliedCouponCode || undefined,
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
       });
       clearCart();
@@ -505,7 +524,7 @@ export default function CheckoutScreen() {
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
                     style={{ flex: 1, borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
-                    value={couponInput} onChangeText={t => setCouponInput(t.toUpperCase())}
+                    value={couponInput} onChangeText={t => { setCouponInput(t.toUpperCase()); setCouponError(''); setCouponHint(''); }}
                     placeholder="Enter coupon code" placeholderTextColor={colors.gray400}
                   />
                   <TouchableOpacity onPress={validateCoupon} disabled={couponLoading || !couponInput.trim()}
@@ -514,6 +533,7 @@ export default function CheckoutScreen() {
                   </TouchableOpacity>
                 </View>
                 {couponError ? <Text style={{ fontSize: 12, color: colors.red500, fontFamily: 'Inter-Regular' }}>{couponError}</Text> : null}
+                {couponHint ? <Text style={{ fontSize: 12, color: colors.gray500, fontFamily: 'Inter-Regular' }}>{couponHint}</Text> : null}
               </View>
             )}
           </Card>
@@ -619,8 +639,8 @@ export default function CheckoutScreen() {
 
         <View style={{ paddingHorizontal: 16, paddingBottom: 28 }}>
           {sub < minOrder && sub > 0 && (
-            <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.red500, textAlign: 'center', marginBottom: 8 }}>
-              Add ₹{Math.ceil(minOrder - sub)} more for minimum order ₹{minOrder}
+            <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, textAlign: 'center', marginBottom: 8 }}>
+              Add ₹{Math.ceil(minOrder - sub)} more to reach the ₹{minOrder} minimum order
             </Text>
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>

@@ -45,6 +45,7 @@ const EMPTY_FORM = {
   title: '', subtitle: '', description: '', badgeText: '',
   discountType: 'flat', discountValue: '', maxDiscount: '', minOrderAmount: '0',
   couponCode: '', eligibilityType: 'all', inactiveDays: '30', targetCustomerIds: [] as string[], perCustomerLimit: '1', usageLimit: '', priority: '0',
+  allowRedemptionUntilUsed: false,
   showInCarousel: false, carouselGradient: GRADIENTS[0],
   status: 'active', validFrom: '', validUntil: '',
 };
@@ -114,6 +115,7 @@ export default function CampaignsPage() {
       targetCustomerIds: c.targetCustomerIds || [],
       priority: String(c.priority || '0'),
       perCustomerLimit: String(c.per_customer_limit || '1'), usageLimit: String(c.usage_limit || ''),
+      allowRedemptionUntilUsed: Boolean(c.allow_redemption_until_used),
       showInCarousel: c.show_in_carousel || false,
       carouselGradient: c.carousel_gradient || GRADIENTS[0],
       status: c.status || 'active',
@@ -149,6 +151,7 @@ export default function CampaignsPage() {
         inactiveDays: form.eligibilityType === 'inactive_customers' ? parseInt(form.inactiveDays) || 30 : undefined,
         targetCustomerIds: form.eligibilityType === 'targeted_customers' ? form.targetCustomerIds : undefined,
         perCustomerLimit: parseInt(form.perCustomerLimit) || 1,
+        allowRedemptionUntilUsed: form.eligibilityType === 'first_order' && form.allowRedemptionUntilUsed,
         usageLimit: form.usageLimit ? parseInt(form.usageLimit) : undefined,
         priority: parseInt(form.priority) || 0,
         showInCarousel: form.showInCarousel, carouselGradient: form.carouselGradient,
@@ -176,6 +179,7 @@ export default function CampaignsPage() {
         if (sameNumber(data.perCustomerLimit, editing.per_customer_limit)) delete (data as any).perCustomerLimit;
         if (sameNumber(data.usageLimit, editing.usage_limit)) delete (data as any).usageLimit;
         if (data.eligibilityType === editing.eligibility_type) delete (data as any).eligibilityType;
+        if (data.allowRedemptionUntilUsed === Boolean(editing.allow_redemption_until_used)) delete (data as any).allowRedemptionUntilUsed;
         if (sameNumber(data.inactiveDays, editing.inactive_days)) delete (data as any).inactiveDays;
         if (sameTargets(data.targetCustomerIds, editing.targetCustomerIds)) delete (data as any).targetCustomerIds;
       }
@@ -250,7 +254,7 @@ export default function CampaignsPage() {
                       {c.badge_text && <span className="text-[10px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded-full">{c.badge_text}</span>}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[c.status] || STATUS_COLORS.draft}`}>{c.status}</span>
                       {c.show_in_carousel && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">📱 Carousel</span>}
-                      {c.eligibility_type === 'first_order' && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">First order</span>}
+                      {c.eligibility_type === 'first_order' && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">{c.allow_redemption_until_used ? 'Welcome offer until used' : 'First order'}</span>}
                       {c.eligibility_type === 'inactive_customers' && <span className="text-[10px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">Inactive {c.inactive_days} days</span>}
                       {c.eligibility_type === 'targeted_customers' && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">Targeted customers</span>}
                     </div>
@@ -357,13 +361,24 @@ export default function CampaignsPage() {
                     <input type="number" value={form.usageLimit} onChange={e => setForm(f => ({ ...f, usageLimit: e.target.value }))} className={inp} placeholder="Unlimited" min="1" /></div>
                 </div>
                 <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Eligible Customers</label>
-                  <select value={form.eligibilityType} onChange={e => setForm(f => ({ ...f, eligibilityType: e.target.value }))} className={inp}>
+                  <select value={form.eligibilityType} onChange={e => setForm(f => ({ ...f, eligibilityType: e.target.value, allowRedemptionUntilUsed: e.target.value === 'first_order' ? f.allowRedemptionUntilUsed : false }))} className={inp}>
                     <option value="all">All customers</option>
-                    <option value="first_order">First successful order only</option>
+                    <option value="first_order">Welcome offer (first order)</option>
                     <option value="inactive_customers">Customers inactive for a period</option>
                     <option value="targeted_customers">Selected customers only</option>
                   </select>
                 </div>
+                {form.eligibilityType === 'first_order' && (
+                  <label className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 cursor-pointer">
+                    <input type="checkbox" checked={form.allowRedemptionUntilUsed}
+                      onChange={e => setForm(f => ({ ...f, allowRedemptionUntilUsed: e.target.checked }))}
+                      className="mt-0.5 h-4 w-4 accent-emerald-500" />
+                    <span>
+                      <span className="block text-xs font-semibold text-gray-900 dark:text-white">Keep available until used</span>
+                      <span className="block mt-0.5 text-[11px] leading-tight text-gray-600 dark:text-slate-400">The customer can redeem this welcome offer once on any order until it is used.</span>
+                    </span>
+                  </label>
+                )}
                 {form.eligibilityType === 'inactive_customers' && <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Inactive for at least days</label>
                   <input type="number" value={form.inactiveDays} onChange={e => setForm(f => ({ ...f, inactiveDays: e.target.value }))} className={inp} min="1" placeholder="30" />
                 </div>}

@@ -4,8 +4,8 @@
  * Covers the behaviour that replaced the old "cannot edit after redemption"
  * block: commercial terms are editable on a running campaign, each change is
  * audited, the published coupon code is superseded rather than mutated, a
- * raised minimum order grandfathers carts already in progress, and a reversed
- * redemption no longer counts as a use.
+ * minimum-order changes take effect immediately, and a reversed redemption no
+ * longer counts as a use.
  *
  * Harness matches tests/security.test.ts — Node's `node:test` via `tsx`, with
  * `pg.Pool.prototype.connect` stubbed so the real service code runs against
@@ -88,9 +88,8 @@ const liveCampaign = (over: Row = {}): Row => ({
   show_in_carousel: true, carousel_image_url: '/banner.webp',
   carousel_gradient: 'from-emerald-500', carousel_sort_order: 1,
   status: 'active', valid_from: null, valid_until: null,
-  eligibility_type: 'all', inactive_days: null, priority: 5,
+  eligibility_type: 'all', inactive_days: null, allow_redemption_until_used: false, priority: 5,
   superseded_by: null, superseded_at: null,
-  min_order_previous: null, min_order_grace_until: null,
   ...over,
 });
 
@@ -248,34 +247,22 @@ describe('term changes are audited', () => {
   });
 });
 
-// ── Grandfathering a raised minimum order ────────────────────────────────────
-describe('raising the minimum order grandfathers carts in progress', () => {
-  test('a raise records the previous threshold and a grace deadline', async () => {
+// ── Minimum-order changes take effect immediately ───────────────────────────
+describe('minimum-order changes take effect immediately', () => {
+  test('a raise writes only the current threshold with no grace state', async () => {
     await CampaignService.update('campaign-1', { minOrderAmount: 800 });
     const update = findCall(/^UPDATE mart_campaigns SET/)!;
     const sql = update.text;
-    assert.match(sql, /min_order_previous = \$\d+/, 'previous threshold is persisted');
-    assert.match(sql, /min_order_grace_until = \$\d+/, 'grace deadline is persisted');
-    const graceIdx = [...sql.matchAll(/min_order_previous = \$(\d+)/g)][0][1];
-    assert.equal(update.params[Number(graceIdx) - 1], 500, 'carries the old 500 threshold');
+    assert.match(sql, /min_order_amount = \$\d+/, 'current threshold is persisted');
+    assert.doesNotMatch(sql, /min_order_previous|min_order_grace_until/, 'no previous threshold or grace deadline is written');
+    assert.equal(update.params[0], 800, 'the new threshold takes effect immediately');
   });
 
-  test('the grace window is six hours', async () => {
-    await CampaignService.update('campaign-1', { minOrderAmount: 800 });
-    const update = findCall(/^UPDATE mart_campaigns SET/)!;
-    const sql = update.text;
-    const prevIdx = Number([...sql.matchAll(/min_order_previous = \$(\d+)/g)][0][1]);
-    const graceIdx = Number([...sql.matchAll(/min_order_grace_until = \$(\d+)/g)][0][1]);
-    const grace = update.params[graceIdx - 1] as Date;
-    const hours = (grace.getTime() - Date.now()) / 3_600_000;
-    assert.ok(hours > 5.9 && hours <= 6, `grace is ~6h, got ${hours.toFixed(2)}h`);
-    assert.notEqual(update.params[prevIdx - 1], grace, 'previous threshold is stored separately');
-  });
-
-  test('lowering the minimum order opens no grace window', async () => {
+  test('lowering the minimum order also writes no grace state', async () => {
     await CampaignService.update('campaign-1', { minOrderAmount: 200 });
     const update = findCall(/^UPDATE mart_campaigns SET/)!;
-    assert.ok(!/min_order_grace_until/.test(update.text), 'no grace when the bar is lowered');
+    assert.doesNotMatch(update.text, /min_order_previous|min_order_grace_until/, 'no grace state is written');
+    assert.equal(update.params[0], 200, 'the lowered threshold is persisted');
   });
 });
 
@@ -401,5 +388,15 @@ describe('supersede mints a new version without losing the offer', () => {
     const row = insertedRow();
     assert.equal(row.eligibility_type, 'first_order', 'eligibility carried');
     assert.equal(row.new_customers_only, true, 'new_customers_only derived from eligibility');
+  });
+
+  test('a welcome offer remains available until its first use', async () => {
+    campaignRow = liveCampaign({
+      eligibility_type: 'first_order',
+      new_customers_only: true,
+      allow_redemption_until_used: true,
+    });
+    await CampaignService.supersede('campaign-1', { couponCode: 'welcome25' }, ADMIN);
+    assert.equal(insertedRow().allow_redemption_until_used, true, 'welcome redemption policy carried');
   });
 });
