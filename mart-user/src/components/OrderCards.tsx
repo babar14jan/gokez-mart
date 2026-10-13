@@ -221,12 +221,9 @@ export function ActiveOrderCard({
       {order.status === 'out_for_delivery' && order.deliveryByName && (
         <div className="mx-4 mb-3 flex items-center justify-between gap-3 bg-violet-50 dark:bg-violet-900/20 rounded-2xl px-3 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-violet-500 flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-bold text-white">{order.deliveryByName[0].toUpperCase()}</span>
-            </div>
+            <span className="shrink-0 text-lg" aria-hidden="true">🛵</span>
             <div>
-              <p className="text-xs font-bold text-gray-900 dark:text-white">{order.deliveryByName}</p>
-              <p className="text-[10px] text-violet-600 dark:text-violet-400">Your delivery partner</p>
+              <p className="text-xs font-bold text-gray-900 dark:text-white">Delivery partner</p>
             </div>
           </div>
           {order.deliveryByPhone && (
