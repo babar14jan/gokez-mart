@@ -9,7 +9,7 @@ interface BottomNavProps {
 
 const tabs = [
   { id: 'home',       label: 'Home',       Icon: Home },
-  { id: 'categories', label: 'Categories', Icon: LayoutGrid },
+  { id: 'categories', label: 'Vegetables', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: ClipboardList },
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;

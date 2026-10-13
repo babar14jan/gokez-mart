@@ -21,6 +21,7 @@ import { ComplianceService } from '../services/compliance.service';
 import { query, transaction } from '../database/db';
 import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
+import { HomeSectionService } from '../services/homeSection.service';
 import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
 import { FunnelService, FunnelRange } from '../services/funnel.service';
 import { CustomerAnalyticsService } from '../services/customerAnalytics.service';
@@ -1937,6 +1938,49 @@ export const adminReorderCarouselSlides = asyncHandler(async (req: AdminRequest,
   const { ids } = req.body;
   if (!Array.isArray(ids)) { res.status(400).json({ success: false, error: 'ids array required' }); return; }
   await CampaignService.reorderSlides(ids);
+  res.json({ success: true, message: 'Reordered' });
+});
+
+// ── Homepage sections ─────────────────────────────────────────────────────────
+// Storefront reads enabled sections only; the store is resolved from the query
+// (or Shapoorji by default) exactly like /products and /settings/public.
+
+export const getPublicHomeSections = asyncHandler(async (req: Request, res: Response) => {
+  const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
+  const sections = await HomeSectionService.publicSections(storeId);
+  res.json({ success: true, data: sections });
+});
+
+export const adminGetHomeSections = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const sections = await HomeSectionService.findByStore(storeId, false);
+  res.json({ success: true, data: sections });
+});
+
+export const adminCreateHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const section = await HomeSectionService.create(storeId, req.body);
+  res.status(201).json({ success: true, data: section });
+});
+
+export const adminUpdateHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const section = await HomeSectionService.update(req.params.id, storeId, req.body);
+  if (!section) { res.status(404).json({ success: false, error: 'Section not found' }); return; }
+  res.json({ success: true, data: section });
+});
+
+export const adminDeleteHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  await HomeSectionService.delete(req.params.id, storeId);
+  res.json({ success: true, message: 'Section deleted' });
+});
+
+export const adminReorderHomeSections = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) { res.status(400).json({ success: false, error: 'ids array required' }); return; }
+  await HomeSectionService.reorder(storeId, ids);
   res.json({ success: true, message: 'Reordered' });
 });
 

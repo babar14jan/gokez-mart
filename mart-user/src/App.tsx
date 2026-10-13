@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Search, X, CheckCircle, Mail, Phone, BellRing } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
-import type { Category, Product, PublicSettings } from './services/api';
+import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
 import { useZoneStore, SHAPOORJI_ZONE } from './store/zoneStore';
@@ -13,9 +13,12 @@ import BottomNav from './components/BottomNav';
 import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
+import HomeSections, { resolveSectionItems } from './components/HomeSections';
+import BuyAgain from './components/BuyAgain';
 import LoginModal from './components/LoginModal';
 
 import CheckoutPage from './pages/CheckoutPage';
+import DealsPage from './pages/DealsPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
@@ -30,7 +33,7 @@ import { saveTrackingToken } from './utils/guestTracking';
 import { GOKEZ_SUPPORT } from './constants/gokezSupport';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
-type View = 'home' | 'about' | 'categories' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
+type View = 'home' | 'about' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
 type PermissionPrompt = 'order-notifications' | null;
 
@@ -85,6 +88,7 @@ export default function App() {
     if (path === '/delete-account') return 'delete-account';
     if (path === '/account') return 'account';
     if (path === '/categories') return 'categories';
+    if (path === '/deals') return 'deals';
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
@@ -126,6 +130,10 @@ export default function App() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  // Configurable homepage sections, ordered by the backend. Empty (or failed to
+  // load) falls back to the built-in category-grouped layout, so the home page is
+  // never blank if the sections endpoint is unavailable.
+  const [homeSections, setHomeSections] = useState<HomeSection[]>([]);
   const [settings, setSettings] = useState<PublicSettings>(DEFAULT_SETTINGS);
   // Holds the resolver for the in-flight "store is closed" confirmation. Kept as
   // a ref-backed closure rather than a boolean so the promise settles exactly
@@ -236,6 +244,7 @@ export default function App() {
       // Declining login from the account tab returns here, so this path has to
       // resolve to a view. Without it the guest exit fell through to Home.
       else if (path === '/categories') setView('categories');
+      else if (path === '/deals') setView('deals');
       else if (path === '/checkout') { setView('home'); setCheckoutActive(true); }
       else setView('home');
     };
@@ -302,11 +311,13 @@ export default function App() {
       storeApi.getCategories(),
       storeApi.getProducts(undefined, activeStoreId),
       storeApi.getSettings(activeStoreId),
-    ]).then(([catRes, prodRes, settingsRes]) => {
+      storeApi.getHomeSections(activeStoreId),
+    ]).then(([catRes, prodRes, settingsRes, sectionsRes]) => {
       if (cancelled) return;
       setCategories(catRes.data.data || []);
       setProducts(prodRes.data.data || []);
       setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
+      setHomeSections(sectionsRes.data.data || []);
       setCatalogError(null);
     }).catch(() => {
       if (!cancelled) setCatalogError('Shapoorji store is temporarily unavailable. Check your connection and try again.');
@@ -321,14 +332,16 @@ export default function App() {
     const refresh = async () => {
       try {
         const storeId = selectedZone?.storeId;
-        const [catRes, prodRes, srRes] = await Promise.all([
+        const [catRes, prodRes, srRes, sectionsRes] = await Promise.all([
           storeApi.getCategories(),
           storeApi.getProducts(undefined, storeId),
           storeApi.getSettings(storeId),
+          storeApi.getHomeSections(storeId),
         ]);
         setCategories([...(catRes.data.data || [])]);
         setProducts([...(prodRes.data.data || [])]);
         setSettings(srRes.data.data || DEFAULT_SETTINGS);
+        setHomeSections([...(sectionsRes.data.data || [])]);
       } catch {}
     };
     const interval = setInterval(refresh, 3 * 60 * 1000);
@@ -366,6 +379,16 @@ export default function App() {
       (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q));
     return matchCat && matchSearch;
   });
+
+  // Homepage sections, in the admin's order. A section with no matching products
+  // is dropped (rather than shown empty). If nothing resolves — no config, or a
+  // config that points at empty categories — the caller falls back to the
+  // built-in category-grouped layout so the home page is never blank.
+  const resolvedHomeSections = [...homeSections]
+    .filter(s => s.isEnabled)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(section => ({ section, items: resolveSectionItems(section, products, categories) }))
+    .filter(entry => entry.items.length > 0);
 
   // Account tab — show login modal if not logged in, but still navigate
   const handleNavChange = (v: View) => {
@@ -664,7 +687,7 @@ export default function App() {
   }
 
   return (
-    <div className={`page-shell ${view === 'home' || view === 'categories' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
+    <div className={`page-shell ${view === 'home' || view === 'categories' || view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNameRequested={() => {
         // Checkout must resume immediately after authentication. Elsewhere, the
@@ -779,6 +802,10 @@ export default function App() {
       ) : view === 'categories' ? (
         <div className={PAGE_BOTTOM}>
           <CategoriesView categories={categories} products={products} />
+        </div>
+      ) : view === 'deals' ? (
+        <div className={PAGE_BOTTOM}>
+          <DealsPage products={products} onBack={() => setView('home')} />
         </div>
       ) : view === 'grievance' ? (
         <div className={PAGE_BOTTOM}><DeferredPage><GrievancePage /></DeferredPage></div>
@@ -905,9 +932,19 @@ export default function App() {
                 ))}
               </div>
             </>
+          ) : resolvedHomeSections.length > 0 ? (
+            /* Home — admin-configured sections (Today's Combos, Deals, Top Picks, ...) */
+            <>
+              <BuyAgain products={products} />
+              <HomeSections
+                entries={resolvedHomeSections}
+                onViewAll={(section) => setView(section.sectionKey === 'deals' ? 'deals' : 'categories')}
+              />
+            </>
           ) : (
-            /* Home — grouped by category with section headers */
+            /* Fallback — built-in category-grouped layout when no sections resolve */
             <div className="space-y-6">
+              <BuyAgain products={products} />
               {categories.map(cat => {
                 const catProducts = filteredProducts.filter(p => p.categoryId === cat.id);
                 if (catProducts.length === 0) return null;

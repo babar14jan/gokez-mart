@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, Tag, Image as ImageIcon, ClipboardList,
   Users, Settings, Shield, QrCode, Boxes, UserPlus,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
-  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard,
+  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
@@ -29,6 +29,7 @@ export const NAV_ALL = [
   { label: 'Feedback',         href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Campaigns',         href: '/campaigns',           icon: Tag,             roles: ['super_admin', 'store_owner'] },
   { label: 'Carousel',           href: '/carousel',            icon: ImageIcon,           roles: ['super_admin'] },
+  { label: 'Home Sections',      href: '/home-sections',       icon: LayoutGrid,          roles: ['super_admin', 'store_owner'] },
   { label: 'My Deliveries',      href: '/delivery',            icon: ClipboardList,   roles: ['delivery_staff', 'staff'] },
   { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
   { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager'] },
@@ -139,6 +140,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/feedback': 'Feedback',
     '/campaigns': 'Campaigns',
     '/carousel': 'Carousel Manager',
+    '/home-sections': 'Home Sections',
     '/team': 'My Team',
     '/delivery': 'My Deliveries',
   };
@@ -221,7 +223,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns', '/carousel'].includes(pathname) ? (
+              {['/change-password', '/settings', '/analytics', '/customers', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <button onClick={() => navigate(-1)}
                   className="p-2 -ml-1 rounded-xl hover:bg-white/10 transition-colors">
                   <ChevronLeft className="w-5 h-5 text-slate-300" />

@@ -264,7 +264,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
         availabilityStatus: 'available', isAvailable: true,
         discountPercent: 0, categoryId: '', categoryName: '',
         description: null, weightOptions: null, localName: null, searchAliases: [],
-        approxWeight: null,
+        approxWeight: null, isBundle: false,
       });
     });
     setReorderToast(`${items.length} item${items.length > 1 ? 's' : ''} added to cart`);

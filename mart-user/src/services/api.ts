@@ -33,6 +33,28 @@ export interface Product {
   discountPercent: number; isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
   categoryId: string; categoryName: string;
+  /** A fixed combo/bundle sold as one product. Drives the "Today's Combos" section. */
+  isBundle: boolean;
+}
+
+/**
+ * A configurable homepage section, ordered by the backend. `sectionKey` selects
+ * how the storefront renders it; `config` carries the small amount of per-section
+ * setting. Product content is resolved live from the catalogue, never stored here.
+ */
+export interface HomeSection {
+  id: string;
+  sectionKey: 'todays_combos' | 'fresh_vegetables' | 'deals' | 'top_picks' | string;
+  title: string;
+  subtitle: string | null;
+  sortOrder: number;
+  isEnabled: boolean;
+  config: {
+    categorySlug: string | null;
+    productIds?: string[];
+    limit?: number | null;
+    layout?: 'row' | 'grid' | null;
+  };
 }
 
 /**
@@ -127,6 +149,10 @@ export const storeApi = {
   getSettings: (storeId?: string) => api.get<{ success: boolean; data: PublicSettings }>('/settings/public', {
     params: storeId ? { storeId } : {},
   }),
+  getHomeSections: (storeId?: string) =>
+    api.get<{ success: boolean; data: HomeSection[] }>('/home-sections', {
+      params: storeId ? { storeId } : {},
+    }),
   getZones: () => api.get<{ success: boolean; data: MartZone[] }>('/zones'),
   reverseGeocode: (latitude: number, longitude: number) =>
     api.post<{ success: boolean; data: { house: string; building: string; locality: string; landmark: string; city: string; pincode: string } }>('/geocode/reverse', { latitude, longitude }),

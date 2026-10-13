@@ -157,6 +157,14 @@ router.get('/carousel',                        ctrl.getCarouselSlides);
 router.get('/campaigns/welcome',              authenticateCustomerIfPresent, ctrl.getPublicWelcomeOffers);
 router.get('/campaigns/eligible',              authenticateCustomerIfPresent, ctrl.getEligibleCampaigns);
 router.post('/campaigns/validate',             authenticateCustomer, ctrl.validateCouponCode);
+
+// Homepage sections — public storefront config (enabled only) + admin management
+router.get('/home-sections',                   ctrl.getPublicHomeSections);   // ?storeId=
+router.get('/admin/home-sections',             authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminGetHomeSections);
+router.post('/admin/home-sections',            authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminCreateHomeSection);
+router.put('/admin/home-sections/:id',         authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminUpdateHomeSection);
+router.delete('/admin/home-sections/:id',      authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminDeleteHomeSection);
+router.post('/admin/home-sections/reorder',    authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminReorderHomeSections);
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
 

@@ -23,15 +23,35 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
       || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q));
   });
 
-  return (
-    <div className="flex overflow-hidden" style={{ height: 'calc(100dvh - var(--kb, 0px) - 8rem)' }}>
+  const selectCategory = (id: string) => { setActiveCatId(id); track('category_viewed', { categoryId: id }); };
 
-      {/* Left sidebar */}
-      <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">
+  return (
+    <div className="flex flex-col sm:flex-row overflow-hidden" style={{ height: 'calc(100dvh - var(--kb, 0px) - 8rem)' }}>
+
+      {/* Mobile — horizontal category chips, so the grid gets the full width
+          instead of losing ~20% to a permanent vertical sidebar. */}
+      <div className="sm:hidden flex-shrink-0 flex gap-2 overflow-x-auto px-3 py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 scrollbar-hide">
         {visibleCategories.map(cat => (
           <button
             key={cat.id}
-            onClick={() => { setActiveCatId(cat.id); track('category_viewed', { categoryId: cat.id }); }}
+            onClick={() => selectCategory(cat.id)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              activeCatId === cat.id
+                ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-200'
+                : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300'
+            }`}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Desktop — vertical sidebar */}
+      <div className="hidden sm:block w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">
+        {visibleCategories.map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => selectCategory(cat.id)}
             className={`w-full flex flex-col items-center gap-1 py-3 px-1 border-l-2 transition-colors ${
               activeCatId === cat.id
                 ? 'border-emerald-500 bg-white dark:bg-slate-800'
@@ -47,7 +67,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
       </div>
 
       {/* Right — products */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 px-3 py-2 border-b border-gray-100 dark:border-slate-800">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
