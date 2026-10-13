@@ -165,7 +165,6 @@ type OfferCampaign = {
   discount_value?: number | string | null;
   max_discount?: number | string | null;
   min_order_amount?: number | string | null;
-  valid_until?: string | null;
 };
 
 /* The admin stores these as NUMERIC, so they arrive as "50.00" and would otherwise
@@ -188,15 +187,6 @@ function offerDetailBits(c: OfferCampaign): string[] {
   const bits: string[] = [];
   if (Number(c.min_order_amount) > 0) bits.push(`Min order \u20b9${money(c.min_order_amount)}`);
   if (c.discount_type === 'percent' && Number(c.max_discount) > 0) bits.push(`up to \u20b9${money(c.max_discount)}`);
-  if (c.valid_until) {
-    // Year only when it is not the current one: a welcome offer valid until 2027
-    // rendered as a bare "Ends 1 Oct", which reads like next month.
-    const until = new Date(c.valid_until);
-    const sameYear = until.getFullYear() === new Date().getFullYear();
-    bits.push(`Ends ${until.toLocaleDateString('en-IN', sameYear
-      ? { day: 'numeric', month: 'short' }
-      : { day: 'numeric', month: 'short', year: 'numeric' })}`);
-  }
   if (c.coupon_code) bits.push(`Code ${c.coupon_code}`);
   return bits;
 }
@@ -586,7 +576,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
           } catch (e: any) {
             if (cancelled) return;
             removeCampaign();
-            setOfferNotice(e?.response?.data?.error || 'Your cart changed, so the coupon was removed.');
+            const message = e?.response?.data?.error || 'Your cart changed, so the coupon was removed.';
+            const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
+            setOfferNotice(minimumMatch
+              ? `Add ₹${Math.max(0, Number(minimumMatch[1]) - cartSubtotal).toFixed(0)} more to use this coupon (minimum cart value ₹${minimumMatch[1]}).`
+              : message);
           }
         } else {
           const disc = calcDiscount(appliedCampaign, cartSubtotal);
@@ -665,15 +659,22 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const applyCode = async (raw: string) => {
     const code = raw.trim().toUpperCase();
     if (!code || !storeId) return;
-    setCouponLoading(true); setCouponError(''); setCouponSuccess('');
+    setCouponLoading(true); setCouponError(''); setCouponSuccess(''); setOfferNotice('');
     try {
       const res = await campaignApi.validateCode(code, sub, storeId);
       const { campaign } = res.data.data;
       applyCampaign(campaign, code);
       setCouponSuccess('Coupon applied');
     } catch (e: any) {
+      const message = e?.response?.data?.error || 'Invalid coupon';
+      const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
       setCouponSuccess('');
-      setCouponError(e?.response?.data?.error || 'Invalid coupon');
+      if (minimumMatch) {
+        const minimumOrder = Number(minimumMatch[1]);
+        setOfferNotice(`Add ₹${Math.max(0, minimumOrder - sub).toFixed(0)} more to use this coupon (minimum cart value ₹${minimumOrder}).`);
+      } else {
+        setCouponError(message);
+      }
     } finally { setCouponLoading(false); }
   };
 
@@ -1057,7 +1058,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             onRemoveOffer={removeCampaign}
           />
 
-
           {/* ── USP: Delivery time + Note in one card ── */}
           <div className={card}>
             {/* Fastest is the default and is deliberately not offered as a choice.
@@ -1277,7 +1277,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
           <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {!canCheckout && sub < minOrder && (
-              <p className="text-xs text-red-500 text-center mb-2">Just ₹{(minOrder - sub).toFixed(0)} more to place your order.</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 text-center mb-2">Add ₹{(minOrder - sub).toFixed(0)} more to reach the ₹{minOrder} minimum order.</p>
             )}
 
             {canCheckout && showMissingDetails && incompleteCheckoutDetails.length > 0 && (
