@@ -89,7 +89,7 @@ export default function HomeSectionsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const remainingTypes = SECTION_TYPES.filter(t => !sections.some(s => s.section_key === t.key));
+  const remainingTypes = SECTION_TYPES.filter(t => !sections.some(s => s.sectionKey === t.key));
 
   const openCreate = () => {
     const next = remainingTypes[0];
@@ -104,14 +104,14 @@ export default function HomeSectionsPage() {
     setEditing(s);
     setProductSearch('');
     setForm({
-      sectionKey: s.section_key,
+      sectionKey: s.sectionKey,
       title: s.title || '',
       subtitle: s.subtitle || '',
       categorySlug: s.config?.categorySlug || '',
       productIds: Array.isArray(s.config?.productIds) ? s.config.productIds : [],
       limit: s.config?.limit != null ? String(s.config.limit) : '',
       layout: s.config?.layout || '',
-      isEnabled: s.is_enabled,
+      isEnabled: s.isEnabled,
     });
     setShowModal(true);
   };
@@ -141,7 +141,7 @@ export default function HomeSectionsPage() {
   };
 
   const toggleEnabled = async (s: any) => {
-    await homeSectionsApi.update(storeId, s.id, { isEnabled: !s.is_enabled });
+    await homeSectionsApi.update(storeId, s.id, { isEnabled: !s.isEnabled });
     await load();
   };
 
@@ -212,7 +212,7 @@ export default function HomeSectionsPage() {
       ) : (
         <div className="space-y-2">
           {sections.map((s, i) => {
-            const Icon = typeInfo(s.section_key)?.icon || LayoutGrid;
+            const Icon = typeInfo(s.sectionKey)?.icon || LayoutGrid;
             return (
             <div key={s.id}
               draggable
@@ -220,27 +220,32 @@ export default function HomeSectionsPage() {
               onDragEnter={() => setDragOver(i)}
               onDragEnd={handleDragEnd}
               onDragOver={e => e.preventDefault()}
-              className={`bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden shadow-sm transition-all cursor-grab active:cursor-grabbing ${dragOver === i ? 'border-emerald-400 scale-[1.01]' : 'border-gray-100 dark:border-slate-700'} ${!s.is_enabled ? 'opacity-50' : ''}`}>
+              className={`bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden shadow-sm transition-all cursor-grab active:cursor-grabbing ${dragOver === i ? 'border-emerald-400 scale-[1.01]' : 'border-gray-100 dark:border-slate-700'}`}>
               <div className="flex items-center gap-3 p-3">
-                <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                <div className="w-10 h-10 rounded-xl flex-shrink-0 bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-emerald-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{s.title || 'Untitled section'}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-[10px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full">{typeLabel(s.section_key)}</span>
-                    {s.config?.categorySlug && <span className="text-[10px] text-gray-500">· {s.config.categorySlug}</span>}
-                    {s.section_key === 'top_picks' && (s.config?.productIds?.length || 0) > 0 && (
-                      <span className="text-[10px] text-gray-500">· {s.config.productIds.length} picked</span>
-                    )}
-                    {s.config?.layout && <span className="text-[10px] text-gray-500">· {s.config.layout}</span>}
-                    {s.subtitle && <span className="text-xs text-gray-500 truncate">{s.subtitle}</span>}
+                <div className={`flex items-center gap-3 flex-1 min-w-0 ${!s.isEnabled ? 'opacity-50' : ''}`}>
+                  <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <div className="w-10 h-10 rounded-xl flex-shrink-0 bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
+                    <Icon className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{s.title || 'Untitled section'}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-[10px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full">{typeLabel(s.sectionKey)}</span>
+                      {s.config?.categorySlug && <span className="text-[10px] text-gray-500">· {s.config.categorySlug}</span>}
+                      {s.sectionKey === 'top_picks' && (s.config?.productIds?.length || 0) > 0 && (
+                        <span className="text-[10px] text-gray-500">· {s.config.productIds.length} picked</span>
+                      )}
+                      {s.config?.layout && <span className="text-[10px] text-gray-500">· {s.config.layout}</span>}
+                      {s.subtitle && <span className="text-xs text-gray-500 truncate">{s.subtitle}</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button onClick={() => toggleEnabled(s)} title={s.is_enabled ? 'Hide' : 'Show'}>
-                    {s.is_enabled ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+                  {!s.isEnabled && (
+                    <span className="text-[10px] font-bold bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full">Hidden</span>
+                  )}
+                  <button onClick={() => toggleEnabled(s)} title={s.isEnabled ? 'Hide' : 'Show'}>
+                    {s.isEnabled ? <Eye className="w-4 h-4 text-emerald-500" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
                   </button>
                   <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
                     <Pencil className="w-4 h-4" />
