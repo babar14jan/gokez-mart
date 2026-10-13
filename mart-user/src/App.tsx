@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Search, CheckCircle, Mail, Phone, BellRing } from 'lucide-react';
+import { Search, CheckCircle, Mail, BellRing } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -15,6 +15,7 @@ import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import HomeSections, { resolveSectionItems } from './components/HomeSections';
 import ComboSheet from './components/ComboSheet';
+import DealsSheet from './components/DealsSheet';
 import CatalogSearchSheet from './components/CatalogSearchSheet';
 import LoginModal from './components/LoginModal';
 
@@ -34,6 +35,7 @@ import { useLoginFlowStore } from './store/loginFlowStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { GOKEZ_SUPPORT } from './constants/gokezSupport';
+import WhatsAppIcon from './components/WhatsAppIcon';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
 type View = 'home' | 'about' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
@@ -143,7 +145,8 @@ export default function App() {
   // load) falls back to the built-in category-grouped layout, so the home page is
   // never blank if the sections endpoint is unavailable.
   const [homeSections, setHomeSections] = useState<HomeSection[]>([]);
-  const [comboSheet, setComboSheet] = useState<{ title: string; products: Product[] } | null>(null);
+  const [comboSheet, setComboSheet] = useState<{ title: string; subtitle?: string; products: Product[] } | null>(null);
+  const [dealsSheet, setDealsSheet] = useState<{ title: string; products: Product[] } | null>(null);
   const [settings, setSettings] = useState<PublicSettings>(DEFAULT_SETTINGS);
   // Holds the resolver for the in-flight "store is closed" confirmation. Kept as
   // a ref-backed closure rather than a boolean so the promise settles exactly
@@ -805,8 +808,17 @@ export default function App() {
       {comboSheet && (
         <ComboSheet
           title={comboSheet.title}
+          subtitle={comboSheet.subtitle}
           products={comboSheet.products}
           onClose={() => setComboSheet(null)}
+        />
+      )}
+
+      {dealsSheet && (
+        <DealsSheet
+          title={dealsSheet.title}
+          products={dealsSheet.products}
+          onClose={() => setDealsSheet(null)}
         />
       )}
 
@@ -903,10 +915,18 @@ export default function App() {
                 entries={resolvedHomeSections}
                 onViewAll={(section, sectionProducts) => {
                   if (section.sectionKey === 'todays_combos') {
-                    setComboSheet({ title: section.title, products: sectionProducts });
+                    setComboSheet({ title: section.title, subtitle: section.subtitle || undefined, products: sectionProducts });
                     return;
                   }
-                  setView(section.sectionKey === 'deals' ? 'deals' : 'categories');
+                  if (section.sectionKey === 'deals') {
+                    setDealsSheet({ title: section.title || "Today's Deals", products: sectionProducts });
+                    return;
+                  }
+                  if (section.sectionKey === 'top_picks') {
+                    setCatalogSearchOpen(true);
+                    return;
+                  }
+                  setView('categories');
                 }}
               />
             </>
@@ -958,8 +978,8 @@ export default function App() {
           </div>
           <div className="mt-2 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
             <img src="/mart_brand_new.png" alt="Gokez Mart" className="h-16 w-auto object-contain mx-auto" />
-            <p className="mt-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{BRAND_SLOGAN}</p>
-            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+            <p className="-mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{BRAND_SLOGAN}</p>
+            <p className="mt-4 text-sm text-gray-900 dark:text-white leading-relaxed">
               {BRAND_DESCRIPTION}
             </p>
             <p className="mt-3 text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
@@ -983,9 +1003,9 @@ export default function App() {
                 <section className="pb-5 sm:pb-0 sm:pr-8">
                   <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 sm:text-left">Contact Gokez Technologies</p>
                   <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
-                    <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900">
-                      <Phone className="h-4 w-4" />
-                      <span>{GOKEZ_SUPPORT.phone}</span>
+                    <a href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
+                      <WhatsAppIcon className="h-4 w-4" />
+                      <span>WhatsApp</span>
                     </a>
                     <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
                       <Mail className="h-4 w-4" />
@@ -1020,10 +1040,20 @@ export default function App() {
           it reappears once the customer is signed in. */}
       <FloatingCart onOpen={handleCheckout} hidden={checkoutActive || (view === 'account' && !isLoggedIn)} />
 
-      {/* Bottom nav — mobile only. In-flow (not fixed) so it stays pinned. */}
-      <div className="sm:hidden shrink-0">
-        <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => setCatalogSearchOpen(true)} />
-      </div>
+      {/* Bottom nav — mobile only. In-flow (not fixed) so it stays pinned.
+          Hidden while checkout is open: in iOS standalone the 100lvh shell is
+          taller than the fixed checkout overlay's viewport (the safe-area strip),
+          so this in-flow nav peeked out below the overlay and covered the
+          address / Place order footer. Checkout is a full-screen overlay, so the
+          nav has nothing to do there — same as the floating cart above.
+
+          Scoped to checkout on purpose: the nav's pinned behaviour everywhere else
+          is what the recent fix delivered, so do not gate it on other sheets. */}
+      {!checkoutActive && (
+        <div className="sm:hidden shrink-0">
+          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => setCatalogSearchOpen(true)} />
+        </div>
+      )}
     </div>
   );
 }

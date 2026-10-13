@@ -73,7 +73,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
           ) : (
             <button type="button" onClick={onClose} aria-label="Back to products"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
-              <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
+              <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
             </button>
           )}
           <div className="shrink-0">

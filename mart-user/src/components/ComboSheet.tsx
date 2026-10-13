@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, Search, X } from 'lucide-react';
+import { ChevronLeft, Package, Search, X } from 'lucide-react';
 import type { Product } from '../services/api';
 import ProductCard from './ProductCard';
 
 interface ComboSheetProps {
   title: string;
+  subtitle?: string;
   products: Product[];
   onClose: () => void;
 }
 
-export default function ComboSheet({ title, products, onClose }: ComboSheetProps) {
+export default function ComboSheet({ title, subtitle, products, onClose }: ComboSheetProps) {
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const matches = products.filter(product => !query ||
@@ -31,12 +32,18 @@ export default function ComboSheet({ title, products, onClose }: ComboSheetProps
       <button type="button" aria-label="Close combos" onClick={onClose}
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
-        <header className="relative flex shrink-0 items-center border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <header className="relative flex shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
           <button type="button" onClick={onClose} aria-label="Back to home"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
-            <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
+            <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
           </button>
-          <h1 className="pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-base font-bold text-gray-900 dark:text-white">{title}</h1>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
+            <Package className="h-5 w-5 text-emerald-500" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-bold text-gray-900 dark:text-white">{title}</h1>
+            {subtitle && <p className="truncate text-xs text-gray-500 dark:text-slate-400">{subtitle}</p>}
+          </div>
         </header>
 
         <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
@@ -56,9 +63,14 @@ export default function ComboSheet({ title, products, onClose }: ComboSheetProps
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
           {matches.length ? (
-            <div className="grid grid-cols-2 gap-2.5">
-              {matches.map(product => <ProductCard key={product.id} product={product} />)}
-            </div>
+            <>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
+                {matches.length} combo{matches.length !== 1 ? 's' : ''}
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {matches.map(product => <ProductCard key={product.id} product={product} />)}
+              </div>
+            </>
           ) : (
             <p className="py-16 text-center text-sm text-gray-500 dark:text-slate-400">No matching combos</p>
           )}
