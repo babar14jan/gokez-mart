@@ -25,7 +25,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   return (
     <>
       <div
-        className="bg-white dark:bg-slate-800 rounded-2xl shadow-md hover:shadow-lg transition-shadow flex flex-col overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+        className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
         onClick={() => setShowDetail(true)}
       >
         {/* Image */}

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Component, lazy, Suspense, useEffect, type ErrorInfo, type ReactNode } from 'react';
+import { Component, Suspense, useEffect, type ErrorInfo, type ReactNode } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
@@ -7,56 +7,62 @@ import { subscribeAdminToPush } from './services/push';
 import { startOrderStream, stopOrderStream } from './services/realtime';
 import Layout from './components/Layout';
 import InstallPrompt from './components/InstallPrompt';
+import { lazyWithRetry, isChunkLoadError, recoverFromChunkError } from './utils/lazyWithRetry';
 
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const ProductsPage = lazy(() => import('./pages/ProductsPage'));
-const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
-const OrdersPage = lazy(() => import('./pages/OrdersPage'));
-const CustomersPage = lazy(() => import('./pages/CustomersPage'));
-const CustomerLeadsPage = lazy(() => import('./pages/CustomerLeadsPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage'));
-const StoresPage = lazy(() => import('./pages/StoresPage'));
-const SubscriptionsPage = lazy(() => import('./pages/SubscriptionsPage'));
-const UsersPage = lazy(() => import('./pages/UsersPage'));
-const CompliancePage = lazy(() => import('./pages/CompliancePage'));
-const MorePage = lazy(() => import('./pages/MorePage'));
-const ApplyPage = lazy(() => import('./pages/ApplyPage'));
-const MerchantTermsPage = lazy(() => import('./pages/MerchantTermsPage'));
-const LandingPage = lazy(() => import('./pages/LandingPage'));
-const StoreApplicationsPage = lazy(() => import('./pages/StoreApplicationsPage'));
-const CatalogPage = lazy(() => import('./pages/CatalogPage'));
-const TeamPage = lazy(() => import('./pages/TeamPage'));
-const DeliveryPage = lazy(() => import('./pages/DeliveryPage'));
-const InventoryPage = lazy(() => import('./pages/InventoryPage'));
-const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
-const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
-const CarouselPage = lazy(() => import('./pages/CarouselPage'));
-const HomeSectionsPage = lazy(() => import('./pages/HomeSectionsPage'));
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
+const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'));
+const ProductsPage = lazyWithRetry(() => import('./pages/ProductsPage'));
+const CategoriesPage = lazyWithRetry(() => import('./pages/CategoriesPage'));
+const OrdersPage = lazyWithRetry(() => import('./pages/OrdersPage'));
+const CustomersPage = lazyWithRetry(() => import('./pages/CustomersPage'));
+const CustomerLeadsPage = lazyWithRetry(() => import('./pages/CustomerLeadsPage'));
+const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'));
+const AnalyticsPage = lazyWithRetry(() => import('./pages/AnalyticsPage'));
+const ProfilePage = lazyWithRetry(() => import('./pages/ProfilePage'));
+const ChangePasswordPage = lazyWithRetry(() => import('./pages/ChangePasswordPage'));
+const StoresPage = lazyWithRetry(() => import('./pages/StoresPage'));
+const SubscriptionsPage = lazyWithRetry(() => import('./pages/SubscriptionsPage'));
+const UsersPage = lazyWithRetry(() => import('./pages/UsersPage'));
+const CompliancePage = lazyWithRetry(() => import('./pages/CompliancePage'));
+const MorePage = lazyWithRetry(() => import('./pages/MorePage'));
+const ApplyPage = lazyWithRetry(() => import('./pages/ApplyPage'));
+const MerchantTermsPage = lazyWithRetry(() => import('./pages/MerchantTermsPage'));
+const LandingPage = lazyWithRetry(() => import('./pages/LandingPage'));
+const StoreApplicationsPage = lazyWithRetry(() => import('./pages/StoreApplicationsPage'));
+const CatalogPage = lazyWithRetry(() => import('./pages/CatalogPage'));
+const TeamPage = lazyWithRetry(() => import('./pages/TeamPage'));
+const DeliveryPage = lazyWithRetry(() => import('./pages/DeliveryPage'));
+const InventoryPage = lazyWithRetry(() => import('./pages/InventoryPage'));
+const FeedbackPage = lazyWithRetry(() => import('./pages/FeedbackPage'));
+const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
+const CarouselPage = lazyWithRetry(() => import('./pages/CarouselPage'));
+const HomeSectionsPage = lazyWithRetry(() => import('./pages/HomeSectionsPage'));
 
 function RouteLoading() {
   return <div className="flex min-h-screen items-center justify-center bg-white text-sm font-medium text-gray-500 dark:bg-slate-900 dark:text-slate-400">Loading...</div>;
 }
 
-class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  state = { hasError: false };
+class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; recovering: boolean }> {
+  state = { hasError: false, recovering: false };
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error) {
+    // Stale-chunk errors after a deploy are not real failures; flag them so the
+    // boundary stays blank while it reloads instead of flashing a CTA.
+    return { hasError: true, recovering: isChunkLoadError(error) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    if (this.state.recovering && recoverFromChunkError()) return;
+    if (this.state.recovering) this.setState({ recovering: false });
     console.error('Hub route failed to load', error, info);
   }
 
   render() {
+    if (this.state.recovering) return null;
     if (this.state.hasError) {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-white px-6 text-center dark:bg-slate-900">
-          <p className="text-sm font-semibold text-gray-900 dark:text-white">A newer version is available.</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">Something went wrong.</p>
           <button type="button" onClick={() => window.location.reload()} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Reload app</button>
         </div>
       );
