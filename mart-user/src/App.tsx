@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Search, CheckCircle, Mail, Phone, BellRing } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
@@ -28,6 +28,7 @@ import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 import { useKeyboardInset } from './utils/useKeyboardInset';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
 import { track, getFunnelChannel } from './utils/track';
@@ -51,14 +52,14 @@ function recordPermissionPrompt(storageKey: string) {
   localStorage.setItem(storageKey, String(Date.now()));
 }
 
-const OrderHistoryPage = lazy(() => import('./pages/OrderHistoryPage'));
-const AccountPage = lazy(() => import('./pages/AccountPage'));
-const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
-const TermsPage = lazy(() => import('./pages/TermsPage'));
-const GrievancePage = lazy(() => import('./pages/GrievancePage'));
-const DeleteAccountPage = lazy(() => import('./pages/DeleteAccountPage'));
-const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
-const AboutPage = lazy(() => import('./pages/AboutPage'));
+const OrderHistoryPage = lazyWithRetry(() => import('./pages/OrderHistoryPage'));
+const AccountPage = lazyWithRetry(() => import('./pages/AccountPage'));
+const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage'));
+const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'));
+const GrievancePage = lazyWithRetry(() => import('./pages/GrievancePage'));
+const DeleteAccountPage = lazyWithRetry(() => import('./pages/DeleteAccountPage'));
+const FeedbackPage = lazyWithRetry(() => import('./pages/FeedbackPage'));
+const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'));
 
 function DeferredPage({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="min-h-[12rem]" />}>{children}</Suspense>;

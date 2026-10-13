@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { isChunkLoadError, recoverFromChunkError } from '../utils/lazyWithRetry';
 
 interface Props {
   children: ReactNode;
@@ -6,24 +7,36 @@ interface Props {
 
 interface State {
   error: Error | null;
+  recovering: boolean;
 }
 
 /**
  * Last line of defence for the whole app.
  *
  * Without this, a single throw during render leaves the root unmounted and the
- * PWA showing nothing at all: on a phone that is an installed app with no
- * address bar to recover with. The boundary keeps the app mounted and offers a
- * way back instead.
+ * PWA showing nothing at all: on a phone it is an installed app with no address
+ * bar to recover with. The boundary keeps the app mounted and offers a way back
+ * instead — except for stale-chunk errors after a deploy, which it recovers from
+ * silently (see lazyWithRetry).
  */
 export default class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, recovering: false };
 
   static getDerivedStateFromError(error: Error): State {
-    return { error };
+    // A stale-chunk error after a deploy is not a real failure: recover
+    // silently. Render nothing for the one frame before componentDidCatch
+    // decides, instead of flashing the CTA.
+    return { error, recovering: isChunkLoadError(error) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // Backstop for a stale-chunk error that did not come through lazyWithRetry
+    // (e.g. a nested dynamic import). Reload silently; if the loop guard
+    // declines, fall through and show the screen below.
+    if (this.state.recovering) {
+      if (recoverFromChunkError()) return;
+      this.setState({ recovering: false });
+    }
     // Left to Sentry/hosting integration if one is wired up later. Logging is
     // deliberate: swallowing this would make field reports impossible to triage.
     console.error('[mart] unhandled render error', error, info.componentStack);
@@ -48,6 +61,8 @@ export default class ErrorBoundary extends Component<Props, State> {
   };
 
   render() {
+    // While a stale-chunk reload is in flight, show nothing rather than a CTA.
+    if (this.state.recovering) return null;
     if (!this.state.error) return this.props.children;
 
     return (

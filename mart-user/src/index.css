@@ -99,6 +99,7 @@ body { background-color: #ffffff; color: #111827; }
      (checkout, sheets, dialogs) rely on escaping to the viewport. */
   .app-shell {
     height: 100vh;
+    height: 100dvh;
     height: calc(100dvh - var(--kb, 0px));
     display: flex;
     flex-direction: column;
@@ -111,6 +112,30 @@ body { background-color: #ffffff; color: #111827; }
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Installed iOS PWA (Add to Home Screen) with apple-mobile-web-app-status-bar-
+     style: black-translucent + viewport-fit=cover.
+
+     WebKit reports 100dvh / 100svh / visualViewport.height / -webkit-fill-
+     available as the screen MINUS the safe-area in standalone (bugs 297779 and
+     255852), so a 100dvh shell ends ~34px above the bottom of the screen and the
+     nav floats up over an unpainted strip. A standalone web app has no
+     collapsing URL/toolbar bars, so the large viewport (100lvh == 100vh, which
+     does include the safe area here) is the true screen.
+
+     Scoped to standalone on purpose: in a browser TAB, lvh is the
+     toolbars-retracted height, i.e. taller than what is on screen, so using it
+     there would push the nav below the fold while the URL bar is visible. */
+  @media all and (display-mode: standalone) {
+    .app-shell {
+      height: 100vh;
+      height: 100lvh;
+      height: calc(100lvh - var(--kb, 0px));
+    }
+    .page-shell {
+      min-height: calc(100lvh - var(--kb, 0px));
+    }
   }
 
   /* ---- While the on-screen keyboard is up ------------------------------

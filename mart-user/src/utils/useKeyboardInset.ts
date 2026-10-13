@@ -30,6 +30,14 @@ export function useKeyboardInset(): void {
     const vv = window.visualViewport;
     if (!vv) return;
 
+    // A real on-screen keyboard covers far more than this; browser chrome
+    // collapsing, the home indicator and safe-area rounding never do. Requiring
+    // a threshold (with a lower one to release) keeps a stray few-pixel delta
+    // from shrinking the shell and lifting the bottom nav on every scroll.
+    const OPEN_AT = 120;
+    const CLOSE_AT = 80;
+    let open = false;
+
     let frame = 0;
     const update = () => {
       cancelAnimationFrame(frame);
@@ -38,12 +46,13 @@ export function useKeyboardInset(): void {
         // Safari pans the visual viewport, and without subtracting that the
         // inset over-reports and the shell collapses too far.
         const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        open = open ? covered > CLOSE_AT : covered > OPEN_AT;
         const root = document.documentElement;
-        root.style.setProperty('--kb', `${Math.round(covered)}px`);
+        root.style.setProperty('--kb', `${open ? Math.round(covered) : 0}px`);
         // A class as well as the variable: some adjustments (the bottom-nav
         // reservation, the login hero cap) are only sensible while the keyboard
         // is actually up, and keying them off one flag keeps them in CSS.
-        root.classList.toggle('kb-open', covered > 80);
+        root.classList.toggle('kb-open', open);
       });
     };
 
