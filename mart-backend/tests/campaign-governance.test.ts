@@ -266,6 +266,25 @@ describe('minimum-order changes take effect immediately', () => {
   });
 });
 
+describe('customer-aware carousel slides', () => {
+  test('hides a campaign slide after the signed-in customer has redeemed it', async () => {
+    await CampaignService.getCarouselSlides(true, 'customer-1');
+    const carouselQuery = findCall(/FROM mart_carousel_slides cs/)!;
+    assert.match(carouselQuery.text, /cs\.is_active = true/, 'only active slides are returned');
+    assert.match(carouselQuery.text, /NOT EXISTS \(\s*SELECT 1 FROM mart_campaign_uses cu/, 'redeemed campaign slides are excluded');
+    assert.match(carouselQuery.text, /cu\.customer_id = \$1/, 'the exclusion is scoped to the signed-in customer');
+    assert.match(carouselQuery.text, /cu\.reversed_at IS NULL/, 'reversed redemptions do not hide the slide');
+    assert.deepEqual(carouselQuery.params, ['customer-1'], 'the customer ID is bound as a query parameter');
+  });
+
+  test('keeps the guest carousel public without a customer-use filter', async () => {
+    await CampaignService.getCarouselSlides(true);
+    const carouselQuery = findCall(/FROM mart_carousel_slides cs/)!;
+    assert.doesNotMatch(carouselQuery.text, /mart_campaign_uses cu/, 'guests can still see welcome campaign slides');
+    assert.deepEqual(carouselQuery.params, [], 'no customer identity is required');
+  });
+});
+
 // ── The coupon code stays immutable ──────────────────────────────────────────
 describe('the published coupon code is never mutated', () => {
   test('changing the code is refused with a pointer to supersede', async () => {

@@ -60,7 +60,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="categories"
           options={{
-            title: 'Categories',
+            title: 'Vegetables',
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? TAB_ICONS.categories.active : TAB_ICONS.categories.inactive}

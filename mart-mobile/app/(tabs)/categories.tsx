@@ -10,11 +10,9 @@ import { useThemeColors } from '@/constants/theme';
 import ProductCard from '@/components/features/ProductCard';
 import CartPill from '@/components/features/CartPill';
 
-// Sidebar: icon 32px + 4px padding each side = 40px min, use 56 for label
-const SIDEBAR_W = 72;
-const SCREEN_W  = Dimensions.get('window').width;
-// 2 cols: screen - sidebar - (6 outer padding * 2) - (6 gap between cols)
-const CARD_W    = Math.floor((SCREEN_W - SIDEBAR_W - 18) / 2);
+const SCREEN_W = Dimensions.get('window').width;
+// Full-width 2-col grid: screen - (6 outer padding * 2) - (6 gap between cols)
+const CARD_W   = Math.floor((SCREEN_W - 18) / 2);
 
 export default function CategoriesScreen() {
   const colors     = useThemeColors();
@@ -73,7 +71,7 @@ export default function CategoriesScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bgTint }} edges={['top']}>
       {/* Header */}
       <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.gray100 }}>
-        <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 10 }}>Categories</Text>
+        <Text style={{ fontSize: 18, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 10 }}>Vegetables</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: colors.gray100 }}>
           <Ionicons name="search-outline" size={16} color={colors.gray400} style={{ marginRight: 8 }} />
           <TextInput
@@ -90,86 +88,76 @@ export default function CategoriesScreen() {
         </View>
       </View>
 
-      <View style={{ flex: 1, flexDirection: 'row' }}>
+      {/* Horizontal category chips — gives the grid the full width instead of
+          reserving a permanent vertical sidebar. */}
+      <View style={{ borderBottomWidth: 1, borderBottomColor: colors.gray100 }}>
+        <FlatList
+          data={categories}
+          keyExtractor={c => c.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}
+          renderItem={({ item }) => {
+            const active = selected?.id === item.id;
+            return (
+              <TouchableOpacity
+                onPress={() => selectCategory(item)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  backgroundColor: active ? colors.primary : colors.gray100,
+                }}
+              >
+                <Image
+                  source={{ uri: item.icon }}
+                  style={{ width: 18, height: 18, borderRadius: 4, backgroundColor: colors.gray100 }}
+                  contentFit="contain"
+                />
+                <Text style={{ fontSize: 12, fontFamily: active ? 'Inter-SemiBold' : 'Inter-Regular', color: active ? '#fff' : colors.gray600 }}>
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
 
-        {/* Sidebar */}
-        <View style={{ width: SIDEBAR_W, backgroundColor: colors.bg }}>
+      {/* Products grid — full width */}
+      <View style={{ flex: 1, backgroundColor: colors.surface }}>
+        {selected && (
+          <View style={{ paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.gray100 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.gray800 }}>
+              {selected.name}
+            </Text>
+          </View>
+        )}
+        {prodLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
           <FlatList
-            data={categories}
-            keyExtractor={c => c.id}
+            data={filteredProducts}
+            keyExtractor={p => p.id}
+            numColumns={2}
+            contentContainerStyle={{ padding: 6, paddingBottom: 120 }}
+            columnWrapperStyle={{ gap: 6, marginBottom: 6 }}
+            renderItem={({ item }) => <ProductCard product={item} width={CARD_W} />}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', paddingTop: 60 }}>
+                <Text style={{ fontSize: 28, marginBottom: 8 }}>📦</Text>
+                <Text style={{ fontSize: 13, color: colors.gray400, fontFamily: 'Inter-Regular' }}>
+                  {search ? 'No matching products' : 'No products here'}
+                </Text>
+              </View>
+            }
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => {
-              const active = selected?.id === item.id;
-              return (
-                <TouchableOpacity
-                  onPress={() => selectCategory(item)}
-                  style={{
-                    width: SIDEBAR_W,
-                    paddingVertical: 10,
-                    alignItems: 'center',
-                    borderLeftWidth: 2,
-                    borderLeftColor: active ? colors.primary : 'transparent',
-                    backgroundColor: active ? colors.surface : 'transparent',
-                  }}
-                >
-                  <Image
-                    source={{ uri: item.icon }}
-                    style={{ width: 30, height: 30, borderRadius: 6, backgroundColor: colors.gray100 }}
-                    contentFit="contain"
-                  />
-                  <Text
-                    numberOfLines={2}
-                    style={{
-                      fontSize: 9,
-                      textAlign: 'center',
-                      marginTop: 3,
-                      lineHeight: 12,
-                      paddingHorizontal: 2,
-                      fontFamily: active ? 'Inter-SemiBold' : 'Inter-Regular',
-                      color: active ? colors.primary : colors.gray500,
-                    }}
-                  >
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
           />
-        </View>
-
-        {/* Products grid */}
-        <View style={{ flex: 1, backgroundColor: colors.surface }}>
-          {selected && (
-            <View style={{ paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.gray100 }}>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.gray800 }}>
-                {selected.name}
-              </Text>
-            </View>
-          )}
-          {prodLoading ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <ActivityIndicator color={colors.primary} />
-            </View>
-          ) : (
-            <FlatList
-              data={filteredProducts}
-              keyExtractor={p => p.id}
-              numColumns={2}
-              contentContainerStyle={{ padding: 6, paddingBottom: 120 }}
-              columnWrapperStyle={{ gap: 6, marginBottom: 6 }}
-              renderItem={({ item }) => <ProductCard product={item} width={CARD_W} />}
-              ListEmptyComponent={
-                <View style={{ alignItems: 'center', paddingTop: 60 }}>
-                  <Text style={{ fontSize: 28, marginBottom: 8 }}>📦</Text>
-                  <Text style={{ fontSize: 13, color: colors.gray400, fontFamily: 'Inter-Regular' }}>
-                    {search ? 'No matching products' : 'No products here'}
-                  </Text>
-                </View>
-              }
-              showsVerticalScrollIndicator={false}
-            />
-          )}
-        </View>
+        )}
       </View>
 
       {totalItems() > 0 && <CartPill />}

@@ -65,6 +65,11 @@ export function printReceipt(order: any) {
           <td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Delivery</td>
           <td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td>
         </tr>
+        ${Number(order.campaignDiscount) > 0 ? `
+        <tr>
+          <td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">${order.couponCodeUsed ? `Coupon: ${order.couponCodeUsed}` : 'Offer discount'}</td>
+          <td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${order.campaignDiscount}</td>
+        </tr>` : ''}
         <tr>
           <td style="font-size:17px;font-weight:800;color:#111;padding-top:10px;border-top:1px solid #e5e7eb;">TOTAL PAID</td>
           <td style="font-size:17px;font-weight:800;color:#111;text-align:right;padding-top:10px;border-top:1px solid #e5e7eb;">₹${order.total}</td>
@@ -112,17 +117,18 @@ export function printReceipt(order: any) {
     top: 0;
     background: white;
     border-bottom: 1px solid #e5e7eb;
-    padding: 12px 16px;
+    padding: max(12px, env(safe-area-inset-top)) 12px 10px;
     display: flex;
+    align-items: center;
     gap: 8px;
     z-index: 1;
   `;
   actionBar.innerHTML = `
-    <button onclick="window.print()" style="padding:8px 16px;background:#10b981;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
-      🖨️ Print / Save PDF
+    <button onclick="window.print()" style="padding:6px 10px;background:#15803d;color:white;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;">
+      🖨️ Print
     </button>
     <div style="flex:1;"></div>
-    <button id="__receipt_close__" style="padding:8px 12px;background:#ef4444;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;">
+    <button id="__receipt_close__" style="padding:6px 10px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;">
       ✕ Close
     </button>
   `;

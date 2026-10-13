@@ -502,7 +502,7 @@ export default function CheckoutScreen() {
                 {campDiscount > 0 && <Text style={{ fontSize: 11, color: colors.primary, fontFamily: 'Inter-Regular', marginTop: 1 }}>Saving ₹{campDiscount}</Text>}
               </View>
               {appliedCamp
-                ? <TouchableOpacity onPress={removeCampaign}><Ionicons name="close-circle" size={20} color={colors.gray400} /></TouchableOpacity>
+                ? <TouchableOpacity onPress={() => removeCampaign()}><Ionicons name="close-circle" size={20} color={colors.gray400} /></TouchableOpacity>
                 : <Ionicons name={showOffers ? 'chevron-up' : 'chevron-down'} size={16} color={colors.gray400} />
               }
             </TouchableOpacity>

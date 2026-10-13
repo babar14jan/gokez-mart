@@ -64,9 +64,9 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
       <div className="relative flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-800"
         onClick={e => e.stopPropagation()}>
 
-        <div className="flex shrink-0 items-center border-b border-gray-100 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex shrink-0 items-center border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800">
           <button type="button" onClick={onClose} aria-label="Back to products"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-800">
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <p className="min-w-0 flex-1 text-center text-base font-bold leading-snug text-gray-900 dark:text-white">Product details</p>

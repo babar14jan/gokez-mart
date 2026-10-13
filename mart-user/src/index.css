@@ -30,6 +30,16 @@ body { background-color: #ffffff; color: #111827; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 
+@keyframes search-prompt-enter {
+  from { opacity: 0; transform: translateY(0.8em); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.search-prompt-text {
+  display: inline-block;
+  animation: search-prompt-enter 280ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

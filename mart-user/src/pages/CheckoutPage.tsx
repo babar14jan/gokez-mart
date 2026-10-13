@@ -236,7 +236,12 @@ function OffersPanel(props: OffersPanelProps) {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
+            <div className="min-w-0">
+              <span className="block text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
+              {campaigns.length === 0 && !locked && !hasMinimumOrderNotice && (
+                <span className="block text-[11px] text-gray-500 dark:text-slate-400">No offers are available for this cart right now.</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -302,18 +307,14 @@ function OffersPanel(props: OffersPanelProps) {
         )}
 
         {campaigns.length === 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+          <div className={locked || notice ? 'mt-2' : ''}>
             {notice && (
-              <p className="mb-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              <p className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                 {notice}
               </p>
             )}
-            {!hasMinimumOrderNotice && (
-              <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">
-                {locked
-                  ? 'Log in to unlock exclusive offers and discounts on your order.'
-                  : 'No offers are available for this cart right now.'}
-              </p>
+            {locked && !hasMinimumOrderNotice && (
+              <p className="mb-2 text-[11px] text-gray-500 dark:text-slate-400">Log in to unlock exclusive offers and discounts on your order.</p>
             )}
             {locked && (
               <button type="button" onClick={() => onApply(null as any)}
@@ -657,8 +658,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const freeAbove = parseFloat(settings.free_delivery_above || '0');
   const minOrder = parseFloat(settings.min_order_amount || '0');
   const sub = subtotal();
-  const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' ? 0 : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
-  const total = Math.max(0, sub + actualDelivery - campaignDiscount);
+  const campaignMeetsMinimum = !appliedCampaign || Number(appliedCampaign.min_order_amount || 0) <= sub;
+  const displayedCampaignDiscount = appliedCampaign && campaignMeetsMinimum
+    ? calcDiscount(appliedCampaign, sub)
+    : 0;
+  const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' && campaignMeetsMinimum
+    ? 0
+    : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
+  const total = Math.max(0, sub + actualDelivery - displayedCampaignDiscount);
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
@@ -815,11 +822,12 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     return (
       <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
         <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
-          <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-slate-400">
-            <ChevronUp className="w-4 h-4 rotate-90" /> Back
+          <button type="button" onClick={onBack} aria-label="Back to shopping"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <span className="text-sm font-bold text-gray-900 dark:text-white">Checkout</span>
-          <span className="w-8" />
+          <span className="w-11" />
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
@@ -840,7 +848,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
-        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-800">
+        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
@@ -1125,7 +1133,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 <MessageCircle className="w-4 h-4 text-violet-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery note</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery instruction</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{currentNote}</p>
               </div>
               <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">Change</span>
@@ -1143,7 +1151,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                     <MessageCircle className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">Delivery note</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Delivery instruction</p>
                     <p className="text-xs text-gray-500 dark:text-slate-400">How should we handle your delivery?</p>
                   </div>
                   <button onClick={() => setShowNotes(false)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
@@ -1187,22 +1195,30 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             <button type="button" onClick={() => setBillExpanded(s => !s)}
               className="w-full flex items-center justify-between px-4 py-3">
               <span className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Bill Summary</span>
-              <span className="text-xs font-semibold text-emerald-600">{billExpanded ? 'Hide' : 'View'} details</span>
+              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                {billExpanded ? 'Hide' : 'View'} details
+                <ChevronUp className={`h-3.5 w-3.5 transition-transform ${billExpanded ? '' : 'rotate-180'}`} />
+              </span>
             </button>
             {billExpanded && (
-              <div className="border-t border-gray-100 dark:border-slate-700 px-4 py-2">
-                {items.map(item => (
-                  <div key={`${item.productId}-${item.unit}`} className="flex items-center justify-between py-1.5 text-sm">
-                    <span className="text-gray-600 dark:text-slate-400 truncate">{item.productName} <span className="text-gray-500">({item.unit} × {item.quantity})</span></span>
-                    <span className="font-semibold text-gray-900 dark:text-white flex-shrink-0 ml-2">₹{(item.price * item.quantity).toFixed(0)}</span>
+              <div className="border-t border-gray-100 dark:border-slate-700 px-4 py-3">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500">Items</p>
+                {items.map((item, index) => (
+                  <div key={`${item.productId}-${item.unit}`} className={`flex items-start justify-between gap-3 py-2.5 ${index > 0 ? 'border-t border-gray-100 dark:border-slate-700/70' : ''}`}>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-800 dark:text-slate-100">{item.productName}</p>
+                      <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">{item.unit} · ₹{item.price} × {item.quantity}</p>
+                    </div>
+                    <span className="shrink-0 pt-0.5 text-sm font-semibold text-gray-900 dark:text-white">₹{(item.price * item.quantity).toFixed(0)}</span>
                   </div>
                 ))}
               </div>
             )}
-            <div className={`px-4 py-3 space-y-1.5 ${billExpanded ? 'border-t border-gray-100 dark:border-slate-700' : ''}`}>
+            <div className={`px-4 py-3 space-y-2 ${billExpanded ? 'border-t border-gray-100 dark:border-slate-700' : ''}`}>
+              {billExpanded && <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500">Charges</p>}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600 dark:text-slate-400">Item total</span>
-                <span className="text-gray-900 dark:text-white">₹{sub.toFixed(0)}</span>
+                <span className="text-gray-600 dark:text-slate-400">Subtotal</span>
+                <span className="font-medium text-gray-900 dark:text-white">₹{sub.toFixed(0)}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600 dark:text-slate-400">Delivery charge</span>
@@ -1210,15 +1226,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   {actualDelivery === 0 ? 'FREE' : `₹${actualDelivery}`}
                 </span>
               </div>
-              {campaignDiscount > 0 && (
+              {displayedCampaignDiscount > 0 && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-emerald-600">🎉 {appliedCampaign?.title || 'Discount'}</span>
-                  <span className="text-emerald-600 font-semibold">-₹{campaignDiscount.toFixed(0)}</span>
+                  <span className="text-emerald-600 font-semibold">-₹{displayedCampaignDiscount.toFixed(0)}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-gray-100 dark:border-slate-700">
+              <div className="flex items-center justify-between border-t border-gray-100 pt-2.5 dark:border-slate-700">
                 <span className="text-sm font-bold text-gray-900 dark:text-white">Total</span>
-                <span className="text-sm font-bold text-gray-900 dark:text-white">₹{total.toFixed(0)}</span>
+                <span className="text-base font-extrabold text-gray-900 dark:text-white">₹{total.toFixed(0)}</span>
               </div>
             </div>
           </div>
@@ -1263,11 +1279,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 <p className="text-lg font-bold text-gray-900 dark:text-white">₹{total.toFixed(0)}</p>
               </div>
               <button type="submit" form="checkout-form" disabled={loading}
-                className="flex-1 h-14 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight">
+                className="flex-1 h-14 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-[#15803d] dark:text-white dark:hover:bg-[#166534]">
                 {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                   <>
-                    <span className="text-base">Pay Cash / UPI</span>
-                    <span className="text-[11px] font-normal text-emerald-100">On Delivery</span>
+                    <span className="text-lg font-extrabold leading-5">Place order</span>
+                    <span className="text-[11px] font-normal leading-4 text-white/80 dark:text-white/80">Pay Cash / UPI On Delivery</span>
                   </>
                 )}
               </button>
