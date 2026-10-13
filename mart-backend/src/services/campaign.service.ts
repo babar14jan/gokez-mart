@@ -44,11 +44,15 @@ const validateCampaignTerms = (data: any): void => {
   }
 
   const eligibilityType = data.eligibilityType ?? data.eligibility_type ?? 'all';
+  const allowRedemptionUntilUsed = Boolean(data.allowRedemptionUntilUsed ?? data.allow_redemption_until_used ?? false);
   if (!['all', 'first_order', 'inactive_customers', 'targeted_customers'].includes(eligibilityType)) {
     throw new Error('Invalid campaign eligibility type');
   }
   if (eligibilityType === 'first_order' && perCustomerLimit !== 1) {
     throw new Error('First-order campaigns must have a per-customer limit of 1');
+  }
+  if (allowRedemptionUntilUsed && eligibilityType !== 'first_order') {
+    throw new Error('Redemption until used is only available for welcome campaigns');
   }
 
   const validFrom = data.validFrom ?? data.valid_from;
@@ -108,8 +112,8 @@ export class CampaignService {
         discount_type, discount_value, max_discount, min_order_amount,
         coupon_code, new_customers_only, per_customer_limit, usage_limit,
         store_id, show_in_carousel, carousel_image_url, carousel_gradient, carousel_sort_order,
-        status, valid_from, valid_until, eligibility_type, inactive_days, priority, created_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+        status, valid_from, valid_until, eligibility_type, inactive_days, allow_redemption_until_used, priority, created_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
       RETURNING *`,
       [
         data.title, data.subtitle || null, data.description || null, data.badgeText || null,
@@ -122,7 +126,7 @@ export class CampaignService {
         data.status || 'draft',
         data.validFrom || null, data.validUntil || null,
         data.eligibilityType || 'all', data.eligibilityType === 'inactive_customers' ? Number(data.inactiveDays) : null,
-        Number(data.priority) || 0, adminId,
+        data.eligibilityType === 'first_order' && Boolean(data.allowRedemptionUntilUsed), Number(data.priority) || 0, adminId,
       ]
     );
     const campaign = result.rows[0];
@@ -163,6 +167,7 @@ export class CampaignService {
       perCustomerLimit: data.perCustomerLimit ?? existing.per_customer_limit,
       usageLimit: data.usageLimit !== undefined ? data.usageLimit : existing.usage_limit,
       eligibilityType: data.eligibilityType ?? existing.eligibility_type,
+      allowRedemptionUntilUsed: data.allowRedemptionUntilUsed ?? existing.allow_redemption_until_used,
       validFrom: data.validFrom !== undefined ? data.validFrom : existing.valid_from,
       validUntil: data.validUntil !== undefined ? data.validUntil : existing.valid_until,
     });
@@ -187,6 +192,7 @@ export class CampaignService {
       perCustomerLimit: 'per_customer_limit', usageLimit: 'usage_limit',
       storeId: 'store_id', eligibilityType: 'eligibility_type',
       inactiveDays: 'inactive_days', newCustomersOnly: 'new_customers_only',
+      allowRedemptionUntilUsed: 'allow_redemption_until_used',
     };
     const changedTerms: { field: string; from: unknown; to: unknown }[] = [];
     const NUMERIC_TERM_COLUMNS = ['discount_value', 'max_discount', 'min_order_amount', 'per_customer_limit', 'usage_limit', 'inactive_days'];
@@ -236,7 +242,8 @@ export class CampaignService {
       carouselImageUrl: 'carousel_image_url', carouselGradient: 'carousel_gradient',
       carouselSortOrder: 'carousel_sort_order', status: 'status',
       validFrom: 'valid_from', validUntil: 'valid_until',
-      eligibilityType: 'eligibility_type', inactiveDays: 'inactive_days', priority: 'priority',
+      eligibilityType: 'eligibility_type', inactiveDays: 'inactive_days',
+      allowRedemptionUntilUsed: 'allow_redemption_until_used', priority: 'priority',
     };
     for (const [key, col] of Object.entries(map)) {
       if (data[key] !== undefined) {
@@ -405,6 +412,9 @@ export class CampaignService {
       usageLimit: pick(data.usageLimit, existing.usage_limit),
       storeId: pick(data.storeId, existing.store_id),
       eligibilityType,
+      allowRedemptionUntilUsed: eligibilityType === 'first_order'
+        ? pick(data.allowRedemptionUntilUsed, Boolean(existing.allow_redemption_until_used))
+        : false,
       inactiveDays: eligibilityType === 'inactive_customers'
         ? pick(data.inactiveDays, existing.inactive_days)
         : null,
@@ -461,7 +471,7 @@ export class CampaignService {
    * ("FIRST50") is stored.
    *
    * This is a teaser, never an authority. It returns a whitelisted projection
-   * (no targeting lists, limits, admin notes or internal flags) and nothing
+  * (no targeting lists, limits or admin notes) and nothing
    * here is trusted at checkout — redemption goes through validateCode() and
    * then the server re-checks everything in create().
    */
@@ -470,9 +480,9 @@ export class CampaignService {
     const result = await query(
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
               discount_type, discount_value, max_discount, min_order_amount,
-              eligibility_type, carousel_gradient, valid_until,
-              -- Selected only to enforce eligibility for a signed-in shopper below;
-              -- stripped before the rows are returned.
+              eligibility_type, allow_redemption_until_used, carousel_gradient, valid_until,
+              -- The welcome-offer option is a customer-visible redemption term.
+              -- The remaining fields are only for eligibility enforcement below.
               new_customers_only, per_customer_limit
          FROM mart_campaigns
         WHERE status = 'active'
@@ -504,12 +514,12 @@ export class CampaignService {
         WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
       [customerId]
     );
-    const isNewCustomer = parseInt(orderRes.rows[0].cnt) === 0;
+    const priorOrderCount = parseInt(orderRes.rows[0].cnt);
 
     const offers: any[] = [];
     for (const c of result.rows) {
       const eligibilityType = c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all');
-      if (eligibilityType === 'first_order' && !isNewCustomer) continue;
+      if (eligibilityType === 'first_order' && !c.allow_redemption_until_used && priorOrderCount > 0) continue;
       if (c.per_customer_limit != null) {
         const uses = await query(
           `SELECT COUNT(*) as cnt FROM mart_campaign_uses
@@ -534,7 +544,7 @@ export class CampaignService {
       // not hand out targeting lists, per-customer limits or admin-only fields.
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
               discount_type, discount_value, max_discount, min_order_amount,
-              eligibility_type, carousel_gradient, valid_until,
+              eligibility_type, allow_redemption_until_used, carousel_gradient, valid_until,
               -- Needed for per-customer enforcement below; stripped before return.
               per_customer_limit, inactive_days
          FROM mart_campaigns
@@ -577,7 +587,7 @@ export class CampaignService {
           `SELECT COUNT(*) as cnt FROM mart_orders WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
           [customerId]
         );
-        if (parseInt(orderCount.rows[0].cnt) > 0) continue; // not a new customer
+        if (!c.allow_redemption_until_used && parseInt(orderCount.rows[0].cnt) > 0) continue;
       }
       // Check per_customer_limit
       if (eligibilityType === 'inactive_customers') {
@@ -633,7 +643,9 @@ export class CampaignService {
           `SELECT COUNT(*) as cnt FROM mart_orders WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
           [customerId]
         );
-        if (parseInt(orderCount.rows[0].cnt) > 0) throw forbidden('This offer is for new customers only');
+        if (!campaign.allow_redemption_until_used && parseInt(orderCount.rows[0].cnt) > 0) {
+          throw forbidden('This offer is for new customers only');
+        }
       }
       // Check per customer limit
       if (eligibilityType === 'inactive_customers') {

@@ -165,6 +165,8 @@ type OfferCampaign = {
   discount_value?: number | string | null;
   max_discount?: number | string | null;
   min_order_amount?: number | string | null;
+  eligibility_type?: string | null;
+  allow_redemption_until_used?: boolean;
 };
 
 /* The admin stores these as NUMERIC, so they arrive as "50.00" and would otherwise
@@ -197,6 +199,13 @@ function offerDetailBits(c: OfferCampaign): string[] {
   return bits;
 }
 
+function welcomeOfferMessage(c: OfferCampaign): string | null {
+  if (c.eligibility_type !== 'first_order' || !c.allow_redemption_until_used) return null;
+  return c.coupon_code
+    ? `Your unused ${c.coupon_code} welcome offer is still available.`
+    : 'Your unused welcome offer is still available.';
+}
+
 type OffersPanelProps = {
   cardClass: string;
   campaigns: OfferCampaign[];
@@ -219,7 +228,6 @@ function OffersPanel(props: OffersPanelProps) {
   const { cardClass, campaigns, applied, appliedCode, notice, locked,
     codeInput, onCodeInput, codeLoading, codeError,
     codeSuccess, onValidateCode, onApply, onClearCode, onRemoveOffer } = props;
-  const hasCodeBasedOffer = campaigns.some(campaign => Boolean(campaign.coupon_code));
   const hasMinimumOrderNotice = /^Add ₹[\d.]+ more to unlock this offer/.test(notice);
 
   return (
@@ -246,6 +254,7 @@ function OffersPanel(props: OffersPanelProps) {
               const headline = offerHeadline(c);
               const desc = formatOfferText(c.description || c.subtitle || headline);
               const bits = offerDetailBits(c);
+              const welcomeMessage = welcomeOfferMessage(c);
               const done = isApplied || isAppliedByCode;
               return (
                 <div key={c.id}
@@ -260,6 +269,7 @@ function OffersPanel(props: OffersPanelProps) {
                       <p className={`text-[11px] mt-0.5 break-words ${done ? 'text-emerald-600 dark:text-emerald-400' : 'text-violet-600 dark:text-violet-400'}`}>
                         {desc}
                       </p>
+                      {welcomeMessage && <p className="mt-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">{welcomeMessage}</p>}
                       {bits.length > 0 && (
                         <p className="text-[10px] mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-gray-500 dark:text-slate-400">
                           {bits.map((b) => (
@@ -317,15 +327,18 @@ function OffersPanel(props: OffersPanelProps) {
         {/* Signed-in only. /campaigns/validate requires auth, so a guest typing
             here gets a bare "No token provided". Guests apply the campaign code
             with Apply & Save, and the code is printed in the offer details. */}
-        {!locked && !applied && !hasCodeBasedOffer && !hasMinimumOrderNotice && (
+        {!locked && !hasMinimumOrderNotice && (
         <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Have a coupon code?</label>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300">Have a coupon code?</label>
+            {appliedCode && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Applied</span>}
+          </div>
           <div className="flex gap-2">
-            <input type="text" value={codeInput} onChange={e => onCodeInput(e.target.value)} placeholder="Enter coupon code"
-              className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
-            <button type="button" onClick={onValidateCode} disabled={codeLoading || !codeInput.trim()}
-              className="px-3 py-2 text-xs font-bold text-white bg-violet-500 hover:bg-violet-600 rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap">
-              {codeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Apply
+            <input type="text" value={appliedCode || codeInput} onChange={e => onCodeInput(e.target.value)} placeholder="Enter coupon code" disabled={Boolean(appliedCode)}
+              className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:cursor-not-allowed disabled:border-emerald-200 disabled:bg-emerald-50 disabled:text-emerald-700 dark:disabled:border-emerald-800 dark:disabled:bg-emerald-900/20 dark:disabled:text-emerald-300" />
+            <button type="button" onClick={appliedCode ? onClearCode : onValidateCode} disabled={!appliedCode && (codeLoading || !codeInput.trim())}
+              className={`px-3 py-2 text-xs font-bold rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap ${appliedCode ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-300 dark:bg-red-900/20 dark:hover:bg-red-900/30' : 'text-white bg-violet-500 hover:bg-violet-600'}`}>
+              {appliedCode ? <X className="w-3 h-3" /> : codeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {appliedCode ? 'Remove' : 'Apply'}
             </button>
           </div>
           {codeSuccess && <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">{codeSuccess}</p>}
@@ -622,7 +635,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       const res = await campaignApi.validateCode(code, sub, storeId);
       const { campaign } = res.data.data;
       applyCampaign(campaign, code);
-      setCouponSuccess('Coupon applied');
+      setCouponSuccess(campaign.allow_redemption_until_used
+        ? `${campaign.coupon_code || 'Welcome offer'} applied. This is your one welcome-offer redemption.`
+        : 'Coupon applied');
     } catch (e: any) {
       const message = e?.response?.data?.error || 'Invalid coupon';
       const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
