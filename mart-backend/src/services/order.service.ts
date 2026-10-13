@@ -338,7 +338,9 @@ export class OrderService {
              WHERE guest_phone = $1 AND status NOT IN ('cancelled', 'terminated', 'failed_delivery')`,
             [cleanPhone]
           );
-          if (priorOrders.rows[0].count > 0) throw forbidden('This offer is only for first-time customers');
+          if (!campaign.allow_redemption_until_used && priorOrders.rows[0].count > 0) {
+            throw forbidden('This offer is only for first-time customers');
+          }
         }
         if (eligibilityType === 'inactive_customers') {
           const priorDelivery = await client.query(
@@ -495,6 +497,7 @@ export class OrderService {
           usage_limit: campaign.usage_limit,
           coupon_code: campaign.coupon_code || null,
           eligibility_type: campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all'),
+          allow_redemption_until_used: Boolean(campaign.allow_redemption_until_used),
           store_id: campaign.store_id || null,
         });
         await client.query(
