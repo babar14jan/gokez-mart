@@ -1,11 +1,6 @@
 import { query } from '../database/db';
 import { badRequest, forbidden, notFound, conflict } from '../utils/apiError';
 
-// How long a raised minimum order keeps the previous threshold valid. Long
-// enough to cover a cart already in progress, short enough that the offer
-// cannot be re-run at the old threshold.
-const MIN_ORDER_GRACE_HOURS = 6;
-
 const normalizedCouponCode = (value: unknown) => value ? String(value).trim().toUpperCase() : null;
 
 const normalizedCouponCodeOrThrow = (value: unknown) => {
@@ -253,17 +248,6 @@ export class CampaignService {
     if (data.eligibilityType !== undefined && data.eligibilityType !== 'inactive_customers' && data.inactiveDays === undefined) {
       fields.push(`inactive_days = $${i++}`);
       params.push(null);
-    }
-    // Raising the minimum order opens a grace window on the previous threshold
-    // so a customer already part-way to the discount is not stranded. The
-    // window is deliberately short: it covers carts in progress, not a re-run
-    // of the old offer. Lowering it needs no grace.
-    const minOrderRaise = changedTerms.find(t => t.field === 'min_order_amount' && Number(t.to) > Number(t.from));
-    if (minOrderRaise) {
-      fields.push(`min_order_previous = $${i++}`);
-      params.push(Number(minOrderRaise.from) || 0);
-      fields.push(`min_order_grace_until = $${i++}`);
-      params.push(new Date(Date.now() + MIN_ORDER_GRACE_HOURS * 60 * 60 * 1000));
     }
     if (!fields.length) throw new Error('Nothing to update');
     fields.push(`updated_at = NOW()`);
@@ -561,8 +545,7 @@ export class CampaignService {
          AND (valid_from IS NULL OR valid_from <= $2)
          AND (valid_until IS NULL OR valid_until >= $2)
           AND (usage_limit IS NULL OR usage_count < usage_limit)
-          AND (min_order_amount <= $3
-               OR (min_order_previous IS NOT NULL AND min_order_grace_until > $2 AND min_order_previous <= $3))
+          AND min_order_amount <= $3
        ORDER BY priority DESC, discount_value DESC`,
       [this.normalizeStoreId(storeId), now, cartTotal]
     );
@@ -673,13 +656,7 @@ export class CampaignService {
 
     // Check min order after customer eligibility so an ineligible customer gets
     // the actionable reason instead of being prompted to increase their cart.
-    // The previous threshold stays valid during the grace window so a raised
-    // minimum does not strand an in-progress cart.
-    const previousMinMet = !!campaign.min_order_previous &&
-      !!campaign.min_order_grace_until &&
-      new Date(campaign.min_order_grace_until) > now &&
-      cartTotal >= Number(campaign.min_order_previous);
-    if (cartTotal < parseFloat(campaign.min_order_amount) && !previousMinMet) {
+    if (cartTotal < parseFloat(campaign.min_order_amount)) {
       throw badRequest(`Add ₹${Number(campaign.min_order_amount) - cartTotal} more to use this coupon (minimum order ₹${Number(campaign.min_order_amount)})`);
     }
 
