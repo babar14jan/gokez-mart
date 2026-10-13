@@ -1,38 +1,62 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { ChevronLeft, X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
-import ProductDetailSheet from './ProductDetailSheet';
+import { useCartStore } from '../store/cartStore';
 
 interface CatalogSearchSheetProps {
   categories: Category[];
   products: Product[];
   searchPrompt: string;
   onClose: () => void;
+  onOpenCart: () => void;
 }
 
-function productMatches(product: Product, query: string): boolean {
-  return product.name.toLowerCase().includes(query)
-    || (product.localName ?? '').toLowerCase().includes(query)
-    || (product.searchAliases ?? []).some(alias => alias.toLowerCase().includes(query));
+/**
+ * Ranks a product against the search query so the closest keyword matches sort
+ * first. Lower is better; 7 means "no match". Exact and prefix name matches
+ * outrank local-name and alias matches, which outrank plain "contains" matches.
+ */
+function matchScore(product: Product, query: string): number {
+  const name = product.name.trim().toLowerCase();
+  const local = (product.localName ?? '').trim().toLowerCase();
+  const aliases = (product.searchAliases ?? []).map(alias => alias.toLowerCase());
+  if (name === query) return 0;
+  if (name.startsWith(query)) return 1;
+  if (local.startsWith(query)) return 2;
+  if (aliases.some(alias => alias.startsWith(query))) return 3;
+  if (name.includes(query)) return 4;
+  if (local.includes(query)) return 5;
+  if (aliases.some(alias => alias.includes(query))) return 6;
+  return 7;
 }
 
-export default function CatalogSearchSheet({ categories, products, searchPrompt, onClose }: CatalogSearchSheetProps) {
+export default function CatalogSearchSheet({ categories, products, searchPrompt, onClose, onOpenCart }: CatalogSearchSheetProps) {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const totalItems = useCartStore(s => s.totalItems());
   const query = search.trim().toLowerCase();
   const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
   const categoriesWithProducts = useMemo(
     () => categories.filter(category => products.some(product => product.categoryId === category.id)),
     [categories, products]
   );
-  const visibleProducts = useMemo(() => products.filter(product => {
-    if (query && !productMatches(product, query)) return false;
-    return !categoryId || product.categoryId === categoryId;
-  }), [products, query, categoryId]);
-  const topMatches = query ? visibleProducts.slice(0, 5) : [];
+  // Live matches, closest keyword first. Recomputed on every keystroke — the
+  // catalogue already lives on the client, so no request is needed.
+  const results = useMemo(() => {
+    if (!query) return [] as Product[];
+    return products
+      .map((product, index) => ({ product, index, score: matchScore(product, query) }))
+      .filter(entry => entry.score < 7)
+      .sort((a, b) => a.score - b.score || a.index - b.index)
+      .map(entry => entry.product);
+  }, [products, query]);
+  const suggestions = results.slice(0, 8);
+  const displayed = useMemo(
+    () => (query ? results : products.filter(product => !categoryId || product.categoryId === categoryId)),
+    [query, results, products, categoryId]
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -52,26 +76,66 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
       <button type="button" aria-label="Close product search" onClick={onClose}
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
-        <header className="flex shrink-0 items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-800 dark:bg-slate-900">
-          <button type="button" onClick={onClose} aria-label="Back to home"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
-            <input autoFocus type="text" inputMode="search" value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
-              placeholder={searchPrompt}
-              className="h-11 w-full rounded-xl border-0 bg-gray-100 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300" />
-            {search && (
-              <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
-                <X className="h-4 w-4" />
+        <div className={`shrink-0 ${query ? 'bg-yellow-100/60 dark:bg-yellow-950/40' : 'bg-white dark:bg-slate-900'}`}>
+          <header className={`flex items-center gap-2 border-b px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] ${query ? 'border-yellow-200/60 dark:border-yellow-900/40' : 'border-gray-100 dark:border-slate-800'}`}>
+            <button type="button" onClick={onClose} aria-label="Back to home"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+              <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
+            </button>
+            <div className="relative min-w-0 flex-1">
+              <input autoFocus type="text" inputMode="search" value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
+                placeholder={searchPrompt}
+                className="w-full rounded-xl border-0 bg-gray-100 py-2.5 pl-4 pr-11 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
+              {search && (
+                <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
+                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+                  <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+
+            {/* Cart — appears only once the shopper has added something; taps straight to checkout. */}
+            {totalItems > 0 && (
+              <button type="button" onClick={onOpenCart} aria-label={`View cart, ${totalItems} ${totalItems === 1 ? 'item' : 'items'}`}
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700">
+                <ShoppingCart className="h-5 w-5" />
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                  {totalItems}
+                </span>
               </button>
             )}
-          </div>
-        </header>
+          </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-4 dark:bg-slate-900">
+          {/* Live suggestions — compact white rows inside the yellow search area, bounded so results stay reachable. */}
+          {query && suggestions.length > 0 && (
+            <div className="border-b border-yellow-200/60 px-3 pt-2 dark:border-yellow-900/40">
+              <div className="max-h-56 space-y-1 overflow-y-auto">
+                {suggestions.map(product => {
+                  const category = categoryById.get(product.categoryId);
+                  return (
+                    <button type="button" key={product.id} onClick={() => setSearch(product.name)}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
+                        {product.photoUrl
+                          ? <img src={product.photoUrl} alt="" className="h-full w-full object-cover" />
+                          : <CategoryIcon icon={category?.icon || ''} name={category?.name || product.name} className="h-5 w-5 object-contain" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{product.name}</p>
+                        {product.localName && product.localName.trim() && product.localName.trim() !== product.name.trim() && (
+                          <p className="truncate text-xs text-gray-500 dark:text-slate-400">{product.localName.trim()}</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900">
+          {/* Initial state (empty query): browse categories. */}
           {!query && categoriesWithProducts.length > 1 && (
             <section className="mb-5">
               <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">Browse categories</h2>
@@ -94,46 +158,23 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
             </section>
           )}
 
-          {topMatches.length > 0 && (
-            <section className="mb-4">
-              <div className="space-y-1.5">
-                {topMatches.map(product => {
-                  const category = categoryById.get(product.categoryId);
-                  return (
-                    <button type="button" key={product.id} onClick={() => setSelectedProduct(product)}
-                      className="flex w-full items-center gap-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-left transition-colors hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 dark:bg-slate-800">
-                        {product.photoUrl
-                          ? <img src={product.photoUrl} alt="" className="h-full w-full object-cover" />
-                          : <CategoryIcon icon={category?.icon || ''} name={category?.name || product.name} className="h-6 w-6 object-contain" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{product.name}</p>
-                        {product.localName && product.localName.trim() !== product.name.trim() && (
-                          <p className="truncate text-xs text-gray-500 dark:text-slate-400">{product.localName}</p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
+          {/* Live product results. */}
           <section>
-            <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">{query ? 'All results' : categoryId ? categoryById.get(categoryId)?.name || 'Products' : 'All products'}</h2>
-            {visibleProducts.length ? (
-              <div className="grid grid-cols-2 gap-2.5">
-                {visibleProducts.map(product => <ProductCard key={product.id} product={product} />)}
+            <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
+              {query
+                ? `Showing results for “${search.trim()}”`
+                : categoryId ? categoryById.get(categoryId)?.name || 'Products' : 'All products'}
+            </h2>
+            {displayed.length ? (
+              <div className="grid grid-cols-3 gap-2.5">
+                {displayed.map(product => <ProductCard key={product.id} product={product} />)}
               </div>
             ) : (
-              <p className="py-16 text-center text-sm text-gray-500 dark:text-slate-400">No matching products</p>
+              <p className="py-12 text-center text-sm text-gray-500 dark:text-slate-400">No products found for “{search.trim()}”</p>
             )}
           </section>
         </div>
       </section>
-
-      {selectedProduct && <ProductDetailSheet product={selectedProduct} onClose={() => setSelectedProduct(null)} />}
     </div>
   );
 }

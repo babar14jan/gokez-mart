@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Check, MapPin, PenLine, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, Check, MapPin, PenLine, Plus, Trash2 } from 'lucide-react';
 import type { SavedAddress } from '../store/customerStore';
 import AddressForm, { type AddressCoordinates } from './AddressForm';
 import ConfirmDialog from './ConfirmDialog';
@@ -100,13 +100,13 @@ export default function AddressSheet({
     <div className="fixed inset-0 z-[70] bg-white dark:bg-slate-900">
       {/* Same full-height surface as the cart: header row, then the scrolling body */}
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
+        <div className="relative flex shrink-0 items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
           <button type="button" onClick={canReturnToList ? () => setEditingId(null) : onClose}
             aria-label={canReturnToList ? 'Back to saved addresses' : 'Close address'}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
-            <ArrowLeft className="h-5 w-5" />
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+            <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
           </button>
-          <p className="flex-1 truncate text-base font-bold text-gray-900 dark:text-white">{title}</p>
+          <p className="pointer-events-none absolute left-1/2 max-w-[60%] -translate-x-1/2 truncate text-base font-bold text-gray-900 dark:text-white">{title}</p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom,0px)]">

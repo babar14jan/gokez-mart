@@ -1,4 +1,4 @@
-import { ArrowLeft, Tag } from 'lucide-react';
+import { ChevronLeft, Tag } from 'lucide-react';
 import type { Product } from '../services/api';
 import ProductCard from '../components/ProductCard';
 
@@ -15,8 +15,8 @@ export default function DealsPage({ products, onBack }: DealsPageProps) {
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={onBack} className="p-2 -ml-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition-colors" aria-label="Back">
-          <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-slate-200" />
+        <button onClick={onBack} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700" aria-label="Back">
+          <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
         </button>
         <div className="flex items-center gap-2">
           <span className="w-9 h-9 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
