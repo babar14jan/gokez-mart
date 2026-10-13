@@ -13,14 +13,13 @@ interface Slide {
   discountType: string | null;
   discountValue: number | null;
   couponCode: string | null;
-  validUntil: string | null;
 }
 
 // Fallback static slides if API fails
 const FALLBACK: Slide[] = [
-  { id: '1', title: 'Shop local. Support local.', subtitle: 'Fresh from your neighbourhood', image_url: '/1.webp', gradient: 'from-emerald-500 via-teal-500 to-cyan-500', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null, validUntil: null },
-  { id: '2', title: 'Farm fresh every day', subtitle: 'Sourced directly from local vendors', image_url: '/2.webp', gradient: 'from-violet-500 via-purple-600 to-indigo-600', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null, validUntil: null },
-  { id: '3', title: 'Bringing local stores online', subtitle: 'Your neighbourhood store, now at your door', image_url: '/3.webp', gradient: 'from-rose-500 via-pink-500 to-fuchsia-500', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null, validUntil: null },
+  { id: '1', title: 'Shop local. Support local.', subtitle: 'Fresh from your neighbourhood', image_url: '/1.webp', gradient: 'from-emerald-500 via-teal-500 to-cyan-500', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null },
+  { id: '2', title: 'Farm fresh every day', subtitle: 'Sourced directly from local vendors', image_url: '/2.webp', gradient: 'from-violet-500 via-purple-600 to-indigo-600', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null },
+  { id: '3', title: 'Bringing local stores online', subtitle: 'Your neighbourhood store, now at your door', image_url: '/3.webp', gradient: 'from-rose-500 via-pink-500 to-fuchsia-500', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null },
 ];
 
 function discountLabel(slide: Slide): string {
