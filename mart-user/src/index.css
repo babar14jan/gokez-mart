@@ -111,7 +111,12 @@ body { background-color: #ffffff; color: #111827; }
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    /* Do NOT restore -webkit-overflow-scrolling: touch here. On iOS it makes
+       .app-scroll a stacking context and a containing block for fixed
+       descendants, so full-screen overlays opened from inside it (checkout,
+       combo, deals, search) were painted *below* the in-flow bottom nav — the
+       Place order footer ended up under the nav buttons in iOS standalone.
+       Modern iOS scrolls with momentum without it. */
   }
 
   /* Installed iOS PWA (Add to Home Screen) with apple-mobile-web-app-status-bar-
@@ -135,6 +140,14 @@ body { background-color: #ffffff; color: #111827; }
     }
     .page-shell {
       min-height: calc(100lvh - var(--kb, 0px));
+    }
+    /* Full-screen overlays are `fixed; inset: 0`, which iOS standalone sizes to
+       the layout viewport — the screen MINUS the safe area — while .app-shell
+       above now stretches to 100lvh (the true screen). The uncovered safe-area
+       strip let the in-flow bottom nav peek out below every sheet, so extend the
+       overlays down by the home-indicator inset to reach the true bottom edge. */
+    .fixed.inset-0 {
+      bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
     }
   }
 
