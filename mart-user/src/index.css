@@ -141,14 +141,6 @@ body { background-color: #ffffff; color: #111827; }
     .page-shell {
       min-height: calc(100lvh - var(--kb, 0px));
     }
-    /* Full-screen overlays are `fixed; inset: 0`, which iOS standalone sizes to
-       the layout viewport — the screen MINUS the safe area — while .app-shell
-       above now stretches to 100lvh (the true screen). The uncovered safe-area
-       strip let the in-flow bottom nav peek out below every sheet, so extend the
-       overlays down by the home-indicator inset to reach the true bottom edge. */
-    .fixed.inset-0 {
-      bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
-    }
   }
 
   /* ---- While the on-screen keyboard is up ------------------------------
