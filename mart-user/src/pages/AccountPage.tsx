@@ -442,18 +442,8 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
         <section>
           <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Contact Gokez</p>
           <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
-          <a href={`tel:+${GOKEZ_SUPPORT.phoneE164}`}
-            className="flex min-h-[64px] items-center gap-3 px-4 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
-              <Phone className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">{GOKEZ_SUPPORT.phone}</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-gray-300" />
-          </a>
           <a href={`mailto:${GOKEZ_SUPPORT.email}`}
-            className="flex min-h-[64px] items-center gap-3 border-t border-[#e9edf2] px-4 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+            className="flex min-h-[64px] items-center gap-3 px-4 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20">
               <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </div>

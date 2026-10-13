@@ -80,7 +80,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
           <header className={`flex items-center gap-2 border-b px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] ${query ? 'border-yellow-200/60 dark:border-yellow-900/40' : 'border-gray-100 dark:border-slate-800'}`}>
             <button type="button" onClick={onClose} aria-label="Back to home"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
-              <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
+              <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
             </button>
             <div className="relative min-w-0 flex-1">
               <input autoFocus type="text" inputMode="search" value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
