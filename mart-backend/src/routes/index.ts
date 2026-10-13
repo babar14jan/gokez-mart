@@ -153,7 +153,7 @@ router.delete('/admin/carousel/:id',           authenticate, requireSuperAdmin, 
 router.post('/admin/carousel/reorder',         authenticate, requireSuperAdmin, ctrl.adminReorderCarouselSlides);
 
 // Public campaign routes
-router.get('/carousel',                        ctrl.getCarouselSlides);
+router.get('/carousel',                        authenticateCustomerIfPresent, ctrl.getCarouselSlides);
 router.get('/campaigns/welcome',              authenticateCustomerIfPresent, ctrl.getPublicWelcomeOffers);
 router.get('/campaigns/eligible',              authenticateCustomerIfPresent, ctrl.getEligibleCampaigns);
 router.post('/campaigns/validate',             authenticateCustomer, ctrl.validateCouponCode);

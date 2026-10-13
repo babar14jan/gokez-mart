@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, X, Moon, Sun, Loader2, LocateFixed } from 'lucide-react';
+import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, Moon, Sun, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
@@ -12,21 +12,19 @@ interface NavbarProps {
   activeView: View;
   onNavChange: (v: View) => void;
   onCheckout: () => void;
-  search: string;
-  onSearch: (v: string) => void;
-  onSearchFocus: () => void;
-  onSearchBlur: () => void;
+  onSearchOpen: () => void;
+  searchPrompt: string;
 }
 
 // Nav items — all including Cart and Profile in center
 const navItems = [
   { id: 'home',       label: 'Home',       Icon: Home },
-  { id: 'categories', label: 'Vegetables', Icon: LayoutGrid },
+  { id: 'categories', label: 'Categories', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: ClipboardList },
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, search, onSearch, onSearchFocus, onSearchBlur }: NavbarProps) {
+  export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, onSearchOpen, searchPrompt }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
   const totalItems = useCartStore(s => s.totalItems());
   const { isDark, toggle } = useThemeStore();
@@ -135,17 +133,16 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
           <picture className="dark:hidden">
             <source srcSet="/mart_brand_new.webp" type="image/webp" />
             <img src="/mart_brand_new.png" alt="Gokez Mart" width="384" height="256"
-              className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left" />
+              className="h-[37px] w-[148px] sm:h-[45px] sm:w-[196px] object-contain object-left" />
           </picture>
           <picture className="hidden dark:block">
             <source srcSet="/mart_brand_dark.webp" type="image/webp" />
             <img src="/mart_brand_dark.png" alt="Gokez Mart" width="384" height="256"
-              className="h-9 w-36 sm:h-11 sm:w-48 object-contain object-left" />
+              className="h-[37px] w-[148px] sm:h-[45px] sm:w-[196px] object-contain object-left" />
           </picture>
-          <p className="block -mt-1.5 text-[6px] sm:text-[8px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
+          <p className="block -mt-1.5 text-[7px] sm:text-[9px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
             Shop Local <span className="align-middle">&bull;</span> Support Local
           </p>
-
         </div>
 
         {/* ── Desktop layout ── */}
@@ -192,23 +189,10 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
       {/* Row 2: Search — the Categories view owns its own category-scoped filter. */}
       {activeView !== 'account' && activeView !== 'orders' && activeView !== 'categories' && (
         <div className="sm:hidden px-4 pb-2.5">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => onSearch(e.target.value)}
-              onFocus={onSearchFocus}
-              onBlur={onSearchBlur}
-              placeholder="Search groceries, vegetables..."
-              className="w-full pl-10 pr-9 py-2.5 bg-gray-100 dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white dark:focus:bg-slate-700 transition-all border-0"
-            />
-            {search && (
-              <button onClick={() => onSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            )}
-          </div>
+          <button type="button" onClick={onSearchOpen} className="relative w-full text-left">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
+            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl bg-gray-100 py-2.5 pl-10 pr-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+          </button>
         </div>
       )}
 

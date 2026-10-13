@@ -902,12 +902,32 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
       [identity, searchPattern]
     ),
     query<{ totalCustomers: number; totalRevenue: number; totalOrders: number; repeatCustomers: number; newCustomers: number }>(
-      `SELECT COUNT(*)::int as "totalCustomers",
-              COALESCE(SUM(total_spent), 0)::float as "totalRevenue",
-              COALESCE(SUM(order_count), 0)::int as "totalOrders",
-              COUNT(*) FILTER (WHERE order_count > 1)::int as "repeatCustomers",
-              COUNT(*) FILTER (WHERE created_at >= now() - interval '30 days')::int as "newCustomers"
-       FROM mart_customers`
+      `WITH phone_orders AS (
+         SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
+                o.status, o.total, o.created_at, o.delivered_at
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+       ), first_deliveries AS (
+         SELECT phone, MIN(delivered_at) AS first_delivered_at
+         FROM phone_orders
+         WHERE status = 'delivered' AND phone IS NOT NULL
+         GROUP BY phone
+       ), customers AS (
+         SELECT f.phone, f.first_delivered_at,
+                COUNT(*) FILTER (WHERE p.status = 'delivered')::int AS delivered_orders,
+                COALESCE(SUM(p.total) FILTER (WHERE p.status = 'delivered'), 0)::float AS delivered_revenue,
+                BOOL_OR(p.status NOT IN ('cancelled', 'failed_delivery', 'terminated')
+                        AND p.created_at > f.first_delivered_at) AS is_returning
+         FROM first_deliveries f
+         JOIN phone_orders p ON p.phone = f.phone
+         GROUP BY f.phone, f.first_delivered_at
+       )
+       SELECT COUNT(*)::int AS "totalCustomers",
+              COALESCE(SUM(delivered_revenue), 0)::float AS "totalRevenue",
+              COALESCE(SUM(delivered_orders), 0)::int AS "totalOrders",
+              COUNT(*) FILTER (WHERE is_returning)::int AS "repeatCustomers",
+              COUNT(*) FILTER (WHERE NOT is_returning AND first_delivered_at >= now() - interval '30 days')::int AS "newCustomers"
+       FROM customers`
     ),
   ]);
   const count = counts.rows[0] || { total: 0, signedIn: 0, guestCheckout: 0, filtered: 0 };
@@ -1909,8 +1929,8 @@ export const adminDeleteCampaign = asyncHandler(async (req: AdminRequest, res: R
 
 // ── Carousel controllers ──────────────────────────────────────────────────────
 
-export const getCarouselSlides = asyncHandler(async (_req: Request, res: Response) => {
-  const slides = await CampaignService.getCarouselSlides(true);
+export const getCarouselSlides = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const slides = await CampaignService.getCarouselSlides(true, req.customer?.id || null);
   res.json({ success: true, data: slides });
 });
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, Mail } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, Mail, Share2 } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -58,6 +58,7 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   const [photoUploading, setPhotoUploading] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | 'new' | null>(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [shareNotice, setShareNotice] = useState('');
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
@@ -142,6 +143,24 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
     const permission = await requestNotificationPermission();
     setNotificationPermission(permission);
     if (permission === 'granted') setNotificationSubscribed(await subscribeToPush());
+  };
+
+  const handleShareApp = async () => {
+    const url = new URL('/', window.location.href).href;
+    const shareData = {
+      title: 'Gokez Mart',
+      text: 'Shop local. Support local. Order everyday essentials from nearby stores.',
+      url,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShareNotice('Link copied');
+      window.setTimeout(() => setShareNotice(''), 2500);
+    } catch {}
   };
 
   const handleMarketingNotifications = async () => {
@@ -322,7 +341,17 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
         </div>
 
         <section>
-          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">My Gokez Mart</p>
+          <div className="mb-3 flex items-center justify-between px-1">
+            <p className="text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">My Gokez Mart</p>
+            <div className="flex items-center gap-2">
+              {shareNotice && <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400" role="status">{shareNotice}</span>}
+              <button type="button" onClick={handleShareApp} aria-label="Share Gokez Mart" title="Share Gokez Mart"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gray-950 px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
+                <Share2 className="h-3.5 w-3.5" />
+                Share
+              </button>
+            </div>
+          </div>
           <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <p className="text-[15px] font-semibold text-[#172033] dark:text-white">My addresses</p>

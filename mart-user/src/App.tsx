@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Search, X, CheckCircle, Mail, Phone, BellRing } from 'lucide-react';
+import { Search, CheckCircle, Mail, Phone, BellRing } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -14,7 +14,8 @@ import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import HomeSections, { resolveSectionItems } from './components/HomeSections';
-import BuyAgain from './components/BuyAgain';
+import ComboSheet from './components/ComboSheet';
+import CatalogSearchSheet from './components/CatalogSearchSheet';
 import LoginModal from './components/LoginModal';
 
 import CheckoutPage from './pages/CheckoutPage';
@@ -22,6 +23,7 @@ import DealsPage from './pages/DealsPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import NamePrompt from './components/NamePrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
+import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
@@ -134,6 +136,7 @@ export default function App() {
   // load) falls back to the built-in category-grouped layout, so the home page is
   // never blank if the sections endpoint is unavailable.
   const [homeSections, setHomeSections] = useState<HomeSection[]>([]);
+  const [comboSheet, setComboSheet] = useState<{ title: string; products: Product[] } | null>(null);
   const [settings, setSettings] = useState<PublicSettings>(DEFAULT_SETTINGS);
   // Holds the resolver for the in-flight "store is closed" confirmation. Kept as
   // a ref-backed closure rather than a boolean so the promise settles exactly
@@ -170,9 +173,7 @@ export default function App() {
   useEffect(() => () => {
     setClosedPrompt(current => { current?.resolve(false); return null; });
   }, []);
-  const [activeCategoryId, setActiveCategoryId] = useState<string>('all');
-  const [search, setSearch] = useState('');
-  const [isHomeSearchFocused, setIsHomeSearchFocused] = useState(false);
+  const [catalogSearchOpen, setCatalogSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogRequest, setCatalogRequest] = useState(0);
@@ -180,6 +181,7 @@ export default function App() {
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
   const cartItems = useCartStore(s => s.totalItems());
+  const searchPrompt = useRotatingSearchPrompt(products);
   // Delivery-area state lives in the shared zone store so the navbar picker, the
   // Account page toggle and this catalog loader all read/write one source of truth.
   const selectedZone = useZoneStore(s => s.selectedZone);
@@ -303,10 +305,6 @@ export default function App() {
     let cancelled = false;
     setLoading(true);
     setCatalogError(null);
-    // A new delivery area is a browsing context switch: reset the filters so the
-    // customer never sees the previous zone's category/search results.
-    setActiveCategoryId('all');
-    setSearch('');
     Promise.all([
       storeApi.getCategories(),
       storeApi.getProducts(undefined, activeStoreId),
@@ -370,16 +368,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [openState?.isOpen, openState?.nextOpenAt, activeStoreId]);
 
-  const filteredProducts = products.filter(p => {
-    const q = search.trim().toLowerCase();
-    const matchCat = Boolean(q) || activeCategoryId === 'all' || p.categoryId === activeCategoryId;
-    const matchSearch = !q ||
-      p.name.toLowerCase().includes(q) ||
-      (p.localName?.toLowerCase().includes(q) ?? false) ||
-      (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q));
-    return matchCat && matchSearch;
-  });
-
   // Homepage sections, in the admin's order. A section with no matching products
   // is dropped (rather than shown empty). If nothing resolves — no config, or a
   // config that points at empty categories — the caller falls back to the
@@ -392,12 +380,7 @@ export default function App() {
 
   // Account tab — show login modal if not logged in, but still navigate
   const handleNavChange = (v: View) => {
-    if (v === 'account') {
-      setPendingCheckout(false);
-      // Re-tapping the Account tab must not record '/account' as the origin, or
-      // the guest exit would navigate to the page it is already leaving.
-      if (view !== 'account') useLoginFlowStore.getState().setGuestReturnPath('/');
-    }
+    setCatalogSearchOpen(false);
     setView(v);
   };
 
@@ -687,7 +670,7 @@ export default function App() {
   }
 
   return (
-    <div className={`page-shell ${view === 'home' || view === 'categories' || view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
+    <div className={`page-shell ${view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNameRequested={() => {
         // Checkout must resume immediately after authentication. Elsewhere, the
@@ -736,10 +719,8 @@ export default function App() {
           activeView={view as 'home' | 'categories' | 'orders' | 'account'}
           onNavChange={handleNavChange}
           onCheckout={handleCheckout}
-          search={search}
-          onSearch={setSearch}
-          onSearchFocus={() => setIsHomeSearchFocused(true)}
-          onSearchBlur={() => setIsHomeSearchFocused(false)}
+          onSearchOpen={() => setCatalogSearchOpen(true)}
+          searchPrompt={searchPrompt}
         />
       )}
 
@@ -796,12 +777,29 @@ export default function App() {
         </div>
       )}
 
+      {comboSheet && (
+        <ComboSheet
+          title={comboSheet.title}
+          products={comboSheet.products}
+          onClose={() => setComboSheet(null)}
+        />
+      )}
+
+      {catalogSearchOpen && (
+        <CatalogSearchSheet
+          categories={categories}
+          products={products}
+          searchPrompt={searchPrompt}
+          onClose={() => setCatalogSearchOpen(false)}
+        />
+      )}
+
       {/* Pages */}
       {view === 'about' ? (
         <DeferredPage><AboutPage /></DeferredPage>
       ) : view === 'categories' ? (
         <div className={PAGE_BOTTOM}>
-          <CategoriesView categories={categories} products={products} />
+          <CategoriesView categories={categories} products={products} onSearchOpen={() => setCatalogSearchOpen(true)} searchPrompt={searchPrompt} />
         </div>
       ) : view === 'deals' ? (
         <div className={PAGE_BOTTOM}>
@@ -841,56 +839,14 @@ export default function App() {
             </div>
           )}
 
-          {/* Search — desktop only, mobile search is in Navbar */}
-          <div className="relative mt-4 mb-4 hidden sm:block">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              type="text" value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search groceries, vegetables..."
-              className="w-full pl-11 pr-10 py-3.5 bg-white dark:bg-slate-800 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-md transition-all border-0"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-4 top-1/2 -translate-y-1/2">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            )}
-          </div>
+          {/* Desktop search opens the complete store catalogue. */}
+          <button type="button" onClick={() => setCatalogSearchOpen(true)}
+            className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
+            <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+          </button>
 
-          {/* Search intent takes priority over discovery on a phone. */}
-          <div className={isHomeSearchFocused || search.trim() ? 'hidden sm:block' : undefined}>
-            <HomeCarousel />
-          </div>
-
-          {/* Category pills */}
-          <div className={isHomeSearchFocused || search.trim() ? 'hidden sm:block' : undefined}>
-          {!loading && categories.length > 0 && (() => {
-            const categoriesWithProducts = categories.filter(cat => products.some(p => p.categoryId === cat.id));
-            if (categoriesWithProducts.length === 0) return null;
-            return (
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-5 mt-1">
-              <button onClick={() => setActiveCategoryId('all')}
-                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                  activeCategoryId === 'all'
-                    ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-200'
-                    : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 shadow-sm'
-                }`}>
-                All
-              </button>
-              {categoriesWithProducts.map(cat => (
-                <button key={cat.id} onClick={() => setActiveCategoryId(cat.id)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                    activeCategoryId === cat.id
-                      ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-200'
-                      : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 shadow-sm'
-                  }`}>
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-            );
-          })()}
-          </div>
+          <HomeCarousel />
 
           {/* Products */}
           {loading ? (
@@ -914,39 +870,25 @@ export default function App() {
                 Try Again
               </button>
             </div>
-          ) : filteredProducts.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-5xl mb-3">🔍</div>
-              <p className="text-base font-semibold text-gray-900 dark:text-white mb-1">No products found</p>
-              <p className="text-sm text-gray-500">Try a different category or search term</p>
-            </div>
-          ) : search || activeCategoryId !== 'all' ? (
-            /* Filtered — flat grid */
-            <>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''}
-              </p>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
-                {filteredProducts.map(product => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            </>
           ) : resolvedHomeSections.length > 0 ? (
             /* Home — admin-configured sections (Today's Combos, Deals, Top Picks, ...) */
             <>
-              <BuyAgain products={products} />
               <HomeSections
                 entries={resolvedHomeSections}
-                onViewAll={(section) => setView(section.sectionKey === 'deals' ? 'deals' : 'categories')}
+                onViewAll={(section, sectionProducts) => {
+                  if (section.sectionKey === 'todays_combos') {
+                    setComboSheet({ title: section.title, products: sectionProducts });
+                    return;
+                  }
+                  setView(section.sectionKey === 'deals' ? 'deals' : 'categories');
+                }}
               />
             </>
           ) : (
             /* Fallback — built-in category-grouped layout when no sections resolve */
             <div className="space-y-6">
-              <BuyAgain products={products} />
               {categories.map(cat => {
-                const catProducts = filteredProducts.filter(p => p.categoryId === cat.id);
+                const catProducts = products.filter(p => p.categoryId === cat.id);
                 if (catProducts.length === 0) return null;
                 return (
                   <div key={cat.id}>
@@ -963,7 +905,7 @@ export default function App() {
               })}
               {/* Uncategorised */}
               {(() => {
-                const uncat = filteredProducts.filter(p => !p.categoryId);
+                const uncat = products.filter(p => !p.categoryId);
                 if (uncat.length === 0) return null;
                 return (
                   <div>

@@ -20,7 +20,7 @@ FROM mart_stores
 ON CONFLICT (store_id, section_key) DO NOTHING;
 
 INSERT INTO mart_home_sections (store_id, section_key, title, subtitle, sort_order, is_enabled, config)
-SELECT id, 'top_picks', 'Store Favourites', 'Hand-picked favourites', 4, false,
+SELECT id, 'top_picks', 'Store Favourites', 'Loved by our shoppers', 4, false,
        '{}'::jsonb
 FROM mart_stores
 ON CONFLICT (store_id, section_key) DO NOTHING;

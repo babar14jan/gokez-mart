@@ -49,6 +49,9 @@ export function resolveSectionItems(
   }
 
   const limit = typeof cfg.limit === 'number' && cfg.limit > 0 ? cfg.limit : null;
+  // Combos always resolve the full bundle catalogue: home caps the preview at
+  // four and the remaining products belong in the dedicated Combo sheet.
+  if (section.sectionKey === 'todays_combos') return list;
   return limit ? list.slice(0, limit) : list;
 }
 
@@ -56,10 +59,9 @@ export function resolveSectionItems(
 function sectionLayout(section: HomeSection): 'row' | 'grid' {
   const l = section.config?.layout;
   if (l === 'row' || l === 'grid') return l;
-  // Combos render as a swipeable row (featured bundles). Top Picks also
-  // work better as a horizontal row for discovery. Fresh Vegetables reads
-  // as a full grid; the rest as a swipe row.
-  if (section.sectionKey === 'todays_combos' || section.sectionKey === 'top_picks') return 'row';
+  // Combos fill a two-column grid; Top Picks remains a horizontal discovery row.
+  if (section.sectionKey === 'todays_combos') return 'grid';
+  if (section.sectionKey === 'top_picks') return 'row';
   return section.sectionKey === 'fresh_vegetables' ? 'grid' : 'row';
 }
 
@@ -76,7 +78,7 @@ export interface ResolvedSection {
 
 interface HomeSectionsProps {
   entries: ResolvedSection[];
-  onViewAll: (section: HomeSection) => void;
+  onViewAll: (section: HomeSection, items: Product[]) => void;
 }
 
 export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) {
@@ -84,6 +86,10 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
     <div className="space-y-8">
       {entries.map(({ section, items }) => {
         const layout = sectionLayout(section);
+        const isComboSection = section.sectionKey === 'todays_combos';
+        const isStoreFavourites = section.sectionKey === 'top_picks';
+        const visibleItems = isComboSection ? items.slice(0, 4) : items;
+        const canViewAll = !isComboSection || items.length > 4;
         return (
           <section key={section.id}>
             <div className="flex items-end justify-between gap-3 mb-3">
@@ -93,17 +99,19 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{section.subtitle}</p>
                 )}
               </div>
-              <button
-                onClick={() => onViewAll(section)}
-                className="flex-shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
-              >
-                View All
-              </button>
+              {canViewAll && !isComboSection && !isStoreFavourites && (
+                <button
+                  onClick={() => onViewAll(section, items)}
+                  className="flex-shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                >
+                  View All
+                </button>
+              )}
             </div>
 
             {layout === 'row' ? (
               <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-                {items.map(p => (
+                {visibleItems.map(p => (
                   <div key={p.id} className="w-[42%] min-w-[140px] sm:w-[170px] md:w-[190px] flex-shrink-0">
                     <ProductCard product={p} />
                   </div>
@@ -111,10 +119,29 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
               </div>
             ) : (
               <div className={`grid ${gridCols(section)} gap-2.5`}>
-                {items.map(p => (
+                {visibleItems.map(p => (
                   <ProductCard key={p.id} product={p} />
                 ))}
               </div>
+            )}
+
+            {isComboSection && canViewAll && (
+              <button
+                type="button"
+                onClick={() => onViewAll(section, items)}
+                className="mt-3 w-full rounded-xl border border-emerald-600 bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+              >
+                View all Today&apos;s Combo
+              </button>
+            )}
+            {isStoreFavourites && canViewAll && (
+              <button
+                type="button"
+                onClick={() => onViewAll(section, items)}
+                className="mt-3 w-full rounded-xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+              >
+                View all products
+              </button>
             )}
           </section>
         );

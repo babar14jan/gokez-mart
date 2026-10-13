@@ -9,7 +9,7 @@ interface BottomNavProps {
 
 const tabs = [
   { id: 'home',       label: 'Home',       Icon: Home },
-  { id: 'categories', label: 'Vegetables', Icon: LayoutGrid },
+  { id: 'categories', label: 'Categories', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: ClipboardList },
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
@@ -31,7 +31,7 @@ export default function BottomNav({ active, onChange }: BottomNavProps) {
               <div className="relative">
                 <Icon className="w-6 h-6" />
               </div>
-              <span className={`text-[11px] font-semibold ${isActive ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
+              <span className={`text-[11px] font-semibold ${isActive ? 'font-bold text-emerald-800 dark:text-emerald-300' : ''}`}>
                 {label}
               </span>
               {isActive && (

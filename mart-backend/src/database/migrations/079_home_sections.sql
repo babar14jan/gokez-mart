@@ -29,7 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_home_sections_store
 -- edited. Combos default to an unscoped scope (all bundle products — the catalogue
 -- is vegetable-only), while Fresh Vegetables is pinned to the vegetables category.
 INSERT INTO mart_home_sections (store_id, section_key, title, subtitle, sort_order, is_enabled, config)
-SELECT id, 'todays_combos', 'Today''s Combos', 'Fresh vegetable combos, packed today', 1, true,
+SELECT id, 'todays_combos', 'Today''s Combos', 'Fresh combos, packed today', 1, true,
        '{}'::jsonb
 FROM mart_stores
 ON CONFLICT (store_id, section_key) DO NOTHING;

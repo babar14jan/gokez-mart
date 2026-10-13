@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { campaignApi } from '../services/api';
+import { useCustomerAuthStore } from '../store/customerAuthStore';
 
 interface Slide {
   id: string;
@@ -32,6 +33,7 @@ function discountLabel(slide: Slide): string {
 }
 
 export default function HomeCarousel() {
+  const { isLoggedIn } = useCustomerAuthStore();
   const [slides, setSlides] = useState<Slide[]>(FALLBACK);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -42,10 +44,13 @@ export default function HomeCarousel() {
     campaignApi.getCarousel()
       .then(r => {
         const data = r.data.data || [];
-        if (data.length > 0) setSlides(data);
+        if (data.length > 0) {
+          setSlides(data);
+          setActive(0);
+        }
       })
       .catch(() => {}); // fallback to static
-  }, []);
+  }, [isLoggedIn]);
 
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);

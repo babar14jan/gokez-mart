@@ -1,6 +1,6 @@
 import {
-  AlertCircle, Bike, CheckCircle, ChefHat, MapPin, MessageCircle,
-  Phone, RotateCcw, ShoppingCart, X, type LucideIcon,
+  AlertCircle, Bike, CheckCircle, ChefHat, MapPin,
+  Phone, RotateCcw, ShoppingCart, type LucideIcon,
   XCircle,
 } from 'lucide-react';
 
@@ -118,17 +118,9 @@ type SharedCardProps = {
 
 // ── Active order card: status banner + step tracker + actions ─────────────────
 export function ActiveOrderCard({
-  order, whatsappNumber, fallbackName, fallbackPhone, nextOpenLabel,
-  canCancel, confirmCancel, cancelling, cancelError,
-  onCancel, onRequestCancel, onDismissConfirm,
+  order, nextOpenLabel, onViewDetails,
 }: SharedCardProps & {
-  canCancel: boolean;
-  confirmCancel: string | null;
-  cancelling: string | null;
-  cancelError?: string;
-  onCancel: (order: any) => void;
-  onRequestCancel: (order: any) => void;
-  onDismissConfirm: () => void;
+  onViewDetails: (order: any) => void;
 }) {
   const curStep = STEPS.indexOf(STATUS_TO_STEP[order.status] || order.status);
 
@@ -262,49 +254,12 @@ export function ActiveOrderCard({
         </div>
       </div>
 
-      {/* Cancel + Need Help */}
-      {(canCancel || whatsappNumber || cancelError) && (
-        <div className="px-4 pb-4 flex items-center justify-between gap-3">
-          {whatsappNumber ? (() => {
-            const name = order.guestName || fallbackName || 'Customer';
-            const phone = order.guestPhone || fallbackPhone || 'Not provided';
-            const message = `Need help regarding Order #${order.orderNumber} placed at ${formatDateTime(order.createdAt)}. Customer: ${name}. Phone: ${phone}.`;
-            return (
-              <a
-                href={`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors"
-              >
-                <MessageCircle className="w-3.5 h-3.5" /> Need Help
-              </a>
-            );
-          })() : <span />}
-          {canCancel && (
-            <div className={whatsappNumber ? 'ml-auto' : ''}>
-            {confirmCancel === order.id ? (
-              <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 rounded-2xl px-3 py-2.5">
-                <p className="text-xs text-red-600 flex-1">Cancel this order?</p>
-                <button onClick={() => onCancel(order)} disabled={cancelling === order.id}
-                  className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-xl disabled:opacity-50">
-                  {cancelling === order.id ? '...' : 'Yes'}
-                </button>
-                <button onClick={onDismissConfirm}
-                  className="px-3 py-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 text-xs font-semibold rounded-xl">No</button>
-              </div>
-            ) : (
-              <button onClick={() => onRequestCancel(order)}
-                className="flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-500 transition-colors">
-                <X className="w-3.5 h-3.5" /> Cancel Order
-              </button>
-            )}
-            </div>
-          )}
-          {cancelError && (
-            <p className="w-full text-[11px] leading-snug text-red-600 dark:text-red-400">{cancelError}</p>
-          )}
-        </div>
-      )}
+      <div className="px-4 pb-4">
+        <button type="button" onClick={() => onViewDetails(order)}
+          className="flex w-full items-center justify-center rounded-xl bg-emerald-50 py-3 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30">
+          View order
+        </button>
+      </div>
     </div>
   );
 }
