@@ -132,6 +132,12 @@ export default function App() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    const iconUrls = [...new Set(categories.map(category => category.icon)
+      .filter(icon => icon?.startsWith('/') || icon?.startsWith('http')))];
+    iconUrls.forEach(icon => { const image = new Image(); image.src = icon; });
+  }, [categories]);
+
   // Configurable homepage sections, ordered by the backend. Empty (or failed to
   // load) falls back to the built-in category-grouped layout, so the home page is
   // never blank if the sections endpoint is unavailable.

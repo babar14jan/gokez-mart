@@ -59,8 +59,8 @@ export function resolveSectionItems(
 function sectionLayout(section: HomeSection): 'row' | 'grid' {
   const l = section.config?.layout;
   if (l === 'row' || l === 'grid') return l;
-  // Combos fill a two-column grid; Top Picks remains a horizontal discovery row.
-  if (section.sectionKey === 'todays_combos') return 'grid';
+  // Combos and Top Picks use the same horizontal discovery row.
+  if (section.sectionKey === 'todays_combos') return 'row';
   if (section.sectionKey === 'top_picks') return 'row';
   return section.sectionKey === 'fresh_vegetables' ? 'grid' : 'row';
 }
