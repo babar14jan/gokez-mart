@@ -317,14 +317,7 @@ export class OrderService {
         campaign = campaignResult.rows[0];
         const now = new Date();
         if (!campaign) throw new Error('Campaign is no longer eligible for this order');
-        // A raised minimum order must not strand a customer who was already
-        // part-way to the discount, so the previous threshold stays valid for
-        // the 6-hour grace window (see migration 053).
-        const minOrderMet = subtotal >= Number(campaign.min_order_amount) ||
-          (!!campaign.min_order_previous &&
-            !!campaign.min_order_grace_until &&
-            new Date(campaign.min_order_grace_until) > now &&
-            subtotal >= Number(campaign.min_order_previous));
+        const minOrderMet = subtotal >= Number(campaign.min_order_amount);
         if (!['active', 'scheduled'].includes(campaign.status) ||
           (campaign.status === 'scheduled' && (!campaign.valid_from || new Date(campaign.valid_from) > now)) ||
             (campaign.store_id && campaign.store_id !== data.storeId) ||
