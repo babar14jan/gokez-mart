@@ -21,6 +21,7 @@ import { ComplianceService } from '../services/compliance.service';
 import { query, transaction } from '../database/db';
 import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
+import { HomeSectionService } from '../services/homeSection.service';
 import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
 import { FunnelService, FunnelRange } from '../services/funnel.service';
 import { CustomerAnalyticsService } from '../services/customerAnalytics.service';
@@ -901,12 +902,32 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
       [identity, searchPattern]
     ),
     query<{ totalCustomers: number; totalRevenue: number; totalOrders: number; repeatCustomers: number; newCustomers: number }>(
-      `SELECT COUNT(*)::int as "totalCustomers",
-              COALESCE(SUM(total_spent), 0)::float as "totalRevenue",
-              COALESCE(SUM(order_count), 0)::int as "totalOrders",
-              COUNT(*) FILTER (WHERE order_count > 1)::int as "repeatCustomers",
-              COUNT(*) FILTER (WHERE created_at >= now() - interval '30 days')::int as "newCustomers"
-       FROM mart_customers`
+      `WITH phone_orders AS (
+         SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
+                o.status, o.total, o.created_at, o.delivered_at
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+       ), first_deliveries AS (
+         SELECT phone, MIN(delivered_at) AS first_delivered_at
+         FROM phone_orders
+         WHERE status = 'delivered' AND phone IS NOT NULL
+         GROUP BY phone
+       ), customers AS (
+         SELECT f.phone, f.first_delivered_at,
+                COUNT(*) FILTER (WHERE p.status = 'delivered')::int AS delivered_orders,
+                COALESCE(SUM(p.total) FILTER (WHERE p.status = 'delivered'), 0)::float AS delivered_revenue,
+                BOOL_OR(p.status NOT IN ('cancelled', 'failed_delivery', 'terminated')
+                        AND p.created_at > f.first_delivered_at) AS is_returning
+         FROM first_deliveries f
+         JOIN phone_orders p ON p.phone = f.phone
+         GROUP BY f.phone, f.first_delivered_at
+       )
+       SELECT COUNT(*)::int AS "totalCustomers",
+              COALESCE(SUM(delivered_revenue), 0)::float AS "totalRevenue",
+              COALESCE(SUM(delivered_orders), 0)::int AS "totalOrders",
+              COUNT(*) FILTER (WHERE is_returning)::int AS "repeatCustomers",
+              COUNT(*) FILTER (WHERE NOT is_returning AND first_delivered_at >= now() - interval '30 days')::int AS "newCustomers"
+       FROM customers`
     ),
   ]);
   const count = counts.rows[0] || { total: 0, signedIn: 0, guestCheckout: 0, filtered: 0 };
@@ -1908,8 +1929,8 @@ export const adminDeleteCampaign = asyncHandler(async (req: AdminRequest, res: R
 
 // ── Carousel controllers ──────────────────────────────────────────────────────
 
-export const getCarouselSlides = asyncHandler(async (_req: Request, res: Response) => {
-  const slides = await CampaignService.getCarouselSlides(true);
+export const getCarouselSlides = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const slides = await CampaignService.getCarouselSlides(true, req.customer?.id || null);
   res.json({ success: true, data: slides });
 });
 
@@ -1937,6 +1958,49 @@ export const adminReorderCarouselSlides = asyncHandler(async (req: AdminRequest,
   const { ids } = req.body;
   if (!Array.isArray(ids)) { res.status(400).json({ success: false, error: 'ids array required' }); return; }
   await CampaignService.reorderSlides(ids);
+  res.json({ success: true, message: 'Reordered' });
+});
+
+// ── Homepage sections ─────────────────────────────────────────────────────────
+// Storefront reads enabled sections only; the store is resolved from the query
+// (or Shapoorji by default) exactly like /products and /settings/public.
+
+export const getPublicHomeSections = asyncHandler(async (req: Request, res: Response) => {
+  const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
+  const sections = await HomeSectionService.publicSections(storeId);
+  res.json({ success: true, data: sections });
+});
+
+export const adminGetHomeSections = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const sections = await HomeSectionService.findByStore(storeId, false);
+  res.json({ success: true, data: sections });
+});
+
+export const adminCreateHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const section = await HomeSectionService.create(storeId, req.body);
+  res.status(201).json({ success: true, data: section });
+});
+
+export const adminUpdateHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const section = await HomeSectionService.update(req.params.id, storeId, req.body);
+  if (!section) { res.status(404).json({ success: false, error: 'Section not found' }); return; }
+  res.json({ success: true, data: section });
+});
+
+export const adminDeleteHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  await HomeSectionService.delete(req.params.id, storeId);
+  res.json({ success: true, message: 'Section deleted' });
+});
+
+export const adminReorderHomeSections = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) { res.status(400).json({ success: false, error: 'ids array required' }); return; }
+  await HomeSectionService.reorder(storeId, ids);
   res.json({ success: true, message: 'Reordered' });
 });
 

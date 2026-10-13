@@ -58,11 +58,11 @@ export default function FunnelPanel({ range: controlledRange, from: controlledFr
   const stages = canonical?.sessionFunnel ?? summary?.stages ?? [];
   const newVisitorShare = canonical ? pct(canonical.acquisition.newVisitors, canonical.acquisition.uniqueVisitors) : 0;
   const returningVisitorShare = canonical ? pct(canonical.acquisition.returningVisitors, canonical.acquisition.uniqueVisitors) : 0;
-  const deliveredCustomers = canonical
+  const lifecycleCustomers = canonical
     ? canonical.customerLifecycle.newCustomers + canonical.customerLifecycle.returningCustomers
     : 0;
-  const newCustomerShare = canonical ? pct(canonical.customerLifecycle.newCustomers, deliveredCustomers) : 0;
-  const returningCustomerShare = canonical ? pct(canonical.customerLifecycle.returningCustomers, deliveredCustomers) : 0;
+  const newCustomerShare = canonical ? pct(canonical.customerLifecycle.newCustomers, lifecycleCustomers) : 0;
+  const returningCustomerShare = canonical ? pct(canonical.customerLifecycle.returningCustomers, lifecycleCustomers) : 0;
   const channelRows = canonical
     ? canonical.channels.map(row => ({ channel: `${row.source} / ${row.medium}`, campaign: row.campaign, sessions: row.sessions, carts: row.cartSessions, checkout: row.checkoutSessions, ordered: row.orders }))
     : (summary?.channels ?? []).map(row => ({ ...row, campaign: null as string | null, carts: null as number | null, checkout: null as number | null }));
@@ -165,16 +165,16 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
               </div>
             </div>
             <div className="mb-5">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Delivered customer mix</p>
-              <div className="grid grid-cols-2 gap-2" aria-label="New and returning delivered customers in the selected period">
-                <div title="New customers: they received exactly one delivered order in the selected period. Guest checkouts are excluded because they cannot be reliably identified across orders." className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950/25">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Customer lifecycle</p>
+              <div className="grid grid-cols-2 gap-2" aria-label="New and returning customers active in the selected period">
+                <div title="New customers: one delivered order by mobile number, with no later active order in the selected period." className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50 px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950/25">
                   <UserPlus className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
                   <div className="min-w-0">
                     <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{canonical.customerLifecycle.newCustomers} <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{newCustomerShare}%</span></p>
                     <p className="text-[10px] leading-tight text-gray-600 dark:text-slate-300">New customers</p>
                   </div>
                 </div>
-                <div title="Returning customers: they received two or more delivered orders in the selected period. Guest checkouts are excluded because they cannot be reliably identified across orders." className="flex items-center gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 dark:border-indigo-900/60 dark:bg-indigo-950/25">
+                <div title="Returning customers: a delivered order followed by a later active order under the same mobile number." className="flex items-center gap-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 dark:border-indigo-900/60 dark:bg-indigo-950/25">
                   <Repeat2 className="h-4 w-4 shrink-0 text-indigo-700 dark:text-indigo-300" aria-hidden="true" />
                   <div className="min-w-0">
                     <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{canonical.customerLifecycle.returningCustomers} <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">{returningCustomerShare}%</span></p>
@@ -182,7 +182,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                   </div>
                 </div>
               </div>
-              <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">Based on identified customers with a delivered order in the selected period — one order counts as new, two or more as returning.</p>
+              <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">Orders sharing a mobile number are grouped, whether placed as a guest or signed in. One delivered order starts the lifecycle; a later active order makes the customer returning.</p>
             </div>
             </>
           )}

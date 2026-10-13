@@ -871,9 +871,12 @@ export default function OrdersPage() {
                   className="w-full flex items-center justify-between px-4 py-2.5 border-t border-gray-50 dark:border-slate-700 text-xs text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
                   <div className="flex items-center gap-1.5">
                     <Package className="w-3.5 h-3.5" />
-                    <span>{totalItems} item{totalItems !== 1 ? 's' : ''} · ₹{order.subtotal} + ₹{order.deliveryCharge} delivery</span>
+                    <span>
+                      {totalItems} item{totalItems !== 1 ? 's' : ''} · ₹{order.subtotal} + ₹{order.deliveryCharge} delivery
+                      {Number(order.campaignDiscount) > 0 ? ` − ₹${order.campaignDiscount} offer` : ''}
+                    </span>
                   </div>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} strokeWidth={3} />
                 </button>
 
                 {/* Expanded items */}
@@ -886,9 +889,14 @@ export default function OrdersPage() {
                             <img src={item.photoUrl} alt={item.productName}
                               className="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-gray-100 dark:border-slate-600" />
                           )}
-                          <span className="text-xs text-gray-700 dark:text-slate-300 break-words">
-                            {item.productName} <span className="text-gray-500 dark:text-slate-400">({item.unit})</span> × {item.quantity}
-                          </span>
+                          <div className="min-w-0">
+                            <p className="break-words text-xs text-gray-700 dark:text-slate-300">
+                              {item.productName} <span className="text-gray-500 dark:text-slate-400">({item.unit})</span> × {item.quantity}
+                            </p>
+                            {item.localName && item.localName.trim() !== item.productName.trim() && (
+                              <p className="mt-0.5 break-words text-[11px] text-gray-500 dark:text-slate-400">{item.localName}</p>
+                            )}
+                          </div>
                         </div>
                         <span className="text-xs font-semibold text-gray-900 dark:text-white flex-shrink-0">₹{item.total}</span>
                       </div>
@@ -900,6 +908,12 @@ export default function OrdersPage() {
                       <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
                         <span>Delivery</span><span>₹{order.deliveryCharge}</span>
                       </div>
+                      {Number(order.campaignDiscount) > 0 && (
+                        <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                          <span>{order.couponCodeUsed ? `Coupon ${order.couponCodeUsed}` : 'Offer discount'}</span>
+                          <span>-₹{order.campaignDiscount}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">
                         <span>Total</span><span>₹{order.total}</span>
                       </div>

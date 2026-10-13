@@ -103,7 +103,7 @@ export default function AddressSheet({
         <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
           <button type="button" onClick={canReturnToList ? () => setEditingId(null) : onClose}
             aria-label={canReturnToList ? 'Back to saved addresses' : 'Close address'}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-200 dark:hover:bg-slate-800">
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <p className="flex-1 truncate text-base font-bold text-gray-900 dark:text-white">{title}</p>

@@ -134,22 +134,27 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
       if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
       // If returning customer (has name) — check for offers then done
       if (customer.name) {
-        // Check for eligible campaigns
-        campaignApi.getEligible(0, '').then(r => {
+        // Don't show welcome offer again to returning users who already have an account
+        onSuccess?.();
+        onClose?.();
+      } else {
+        // New user after OTP - check for welcome offers
+        campaignApi.getWelcome(0, '').then(r => {
           const offers = r.data.data || [];
           if (offers.length > 0) {
             trackCampaignTouch(offers[0].id);
             setWelcomeOffer(offers[0]);
             setStep('offer');
           } else {
+            if (!sessionStorage.getItem('mart_name_prompt_skipped')) onNameRequested?.();
             onSuccess?.();
             onClose?.();
           }
-        }).catch(() => { onSuccess?.(); onClose?.(); });
-      } else {
-        if (!sessionStorage.getItem('mart_name_prompt_skipped')) onNameRequested?.();
-        onSuccess?.();
-        onClose?.();
+        }).catch(() => {
+          if (!sessionStorage.getItem('mart_name_prompt_skipped')) onNameRequested?.();
+          onSuccess?.();
+          onClose?.();
+        });
       }
     } catch (err: any) {
       track('otp_verification_failed', {

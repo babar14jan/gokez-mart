@@ -18,7 +18,7 @@ const SITE_ORIGIN = 'https://mart.gokez.com';
 // Matches the `View` union in App.tsx. Only the five public views are indexable;
 // everything else in this app is an authenticated or transactional surface.
 export type SeoView =
-  | 'home' | 'about' | 'categories' | 'grievance' | 'feedback' | 'privacy' | 'terms'
+  | 'home' | 'about' | 'categories' | 'deals' | 'grievance' | 'feedback' | 'privacy' | 'terms'
   | 'notification-settings' | 'delete-account' | 'account' | 'orders' | 'checkout';
 
 interface RouteMeta {
@@ -77,6 +77,12 @@ const ROUTES: Record<SeoView, RouteMeta> = {
   categories: {
     title: `Browse Stores | ${BRAND}`,
     description: `Browse products available from local stores on ${BRAND}.`,
+    path: null,
+    indexable: false,
+  },
+  deals: {
+    title: `Deals | ${BRAND}`,
+    description: `Today's discounted prices on everyday essentials from local stores on ${BRAND}.`,
     path: null,
     indexable: false,
   },

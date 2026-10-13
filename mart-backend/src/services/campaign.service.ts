@@ -475,7 +475,11 @@ export class CampaignService {
    * here is trusted at checkout — redemption goes through validateCode() and
    * then the server re-checks everything in create().
    */
-  static async getPublicWelcomeOffers(cartTotal: number, storeId: string, customerId: string | null = null): Promise<any[]> {
+  static async getPublicWelcomeOffers(
+    cartTotal: number,
+    storeId: string,
+    customerId: string | null = null,
+  ): Promise<any[]> {
     const now = new Date().toISOString();
     const result = await query(
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
@@ -510,8 +514,12 @@ export class CampaignService {
     // are not eligible for. The reason is surfaced only when they type the code
     // explicitly, via validateCode() — not by advertising it here.
     const orderRes = await query(
-      `SELECT COUNT(*) as cnt FROM mart_orders
-        WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
+      `SELECT COUNT(*) as cnt
+         FROM mart_orders o
+         JOIN mart_customers c ON c.id = $1
+        WHERE NULLIF(regexp_replace(o.guest_phone, '\\D', '', 'g'), '') =
+              NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '')
+          AND o.status NOT IN ('cancelled','terminated','failed_delivery')`,
       [customerId]
     );
     const priorOrderCount = parseInt(orderRes.rows[0].cnt);
@@ -696,8 +704,22 @@ export class CampaignService {
 
   // ── Carousel slides ───────────────────────────────────────────────────────────
 
-  static async getCarouselSlides(activeOnly = true): Promise<any[]> {
-    const where = activeOnly ? 'WHERE is_active = true' : '';
+  static async getCarouselSlides(activeOnly = true, customerId: string | null = null): Promise<any[]> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    if (activeOnly) conditions.push('cs.is_active = true');
+    if (customerId) {
+      params.push(customerId);
+      conditions.push(`(
+        cs.campaign_id IS NULL OR NOT EXISTS (
+          SELECT 1 FROM mart_campaign_uses cu
+          WHERE cu.campaign_id = cs.campaign_id
+            AND cu.customer_id = $1
+            AND cu.reversed_at IS NULL
+        )
+      )`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const result = await query(
       `SELECT cs.*, c.title as "campaignTitle", c.badge_text as "campaignBadge",
               c.discount_type as "discountType", c.discount_value as "discountValue",
@@ -706,7 +728,7 @@ export class CampaignService {
        LEFT JOIN mart_campaigns c ON c.id = cs.campaign_id
        ${where}
        ORDER BY cs.sort_order ASC`,
-      []
+      params
     );
     return result.rows;
   }

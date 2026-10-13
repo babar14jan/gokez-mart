@@ -1,32 +1,34 @@
-import { useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import ProductCard from './ProductCard';
 import CategoryIcon from './CategoryIcon';
-import { track, trackOnce } from '../utils/track';
+import { track } from '../utils/track';
 
 interface CategoriesViewProps {
   categories: Category[];
   products: Product[];
+  onSearchOpen: () => void;
+  searchPrompt: string;
 }
 
-export default function CategoriesView({ categories, products }: CategoriesViewProps) {
+export default function CategoriesView({ categories, products, onSearchOpen, searchPrompt }: CategoriesViewProps) {
   // Hide categories with no visible products for this store
   const visibleCategories = categories.filter(cat => products.some(p => p.categoryId === cat.id));
   const [activeCatId, setActiveCatId] = useState<string>(visibleCategories[0]?.id || '');
-  const [search, setSearch] = useState('');
 
-  const filteredProducts = products.filter(p => {
-    const q = search.trim().toLowerCase();
-    if (!q) return p.categoryId === activeCatId;
-    return p.name.toLowerCase().includes(q) || (p.localName ?? '').toLowerCase().includes(q)
-      || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q));
-  });
+  useEffect(() => {
+    if (!visibleCategories.some(category => category.id === activeCatId)) {
+      setActiveCatId(visibleCategories[0]?.id || '');
+    }
+  }, [activeCatId, visibleCategories]);
+
+  const filteredProducts = products.filter(product => product.categoryId === activeCatId);
 
   return (
     <div className="flex overflow-hidden" style={{ height: 'calc(100dvh - var(--kb, 0px) - 8rem)' }}>
 
-      {/* Left sidebar */}
+      {/* Category sidebar */}
       <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">
         {visibleCategories.map(cat => (
           <button
@@ -47,33 +49,17 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
       </div>
 
       {/* Right — products */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 px-3 py-2 border-b border-gray-100 dark:border-slate-800">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onBlur={() => {
-                if (!search.trim()) return;
-                trackOnce('product_search');
-                if (filteredProducts.length === 0) track('search_zero_results');
-              }}
-              placeholder="Search products..."
-              className="w-full pl-9 pr-9 py-2 bg-gray-100 dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white dark:focus:bg-slate-700 transition-all border-0"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-                <X className="w-4 h-4 text-gray-400" />
-              </button>
-            )}
-          </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="sticky top-0 z-30 isolate bg-white px-3 py-2 shadow-sm dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
+          <button type="button" onClick={onSearchOpen} className="relative w-full text-left">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
+            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl bg-gray-100 py-2 pl-9 pr-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+          </button>
         </div>
         <div className="p-2 pb-36">
           {filteredProducts.length === 0 ? (
             <div className="text-center py-16 text-gray-500">
-              <p className="text-sm">{search ? 'No matching products' : 'No products in this category'}</p>
+              <p className="text-sm">No products in this category</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

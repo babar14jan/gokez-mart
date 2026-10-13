@@ -84,6 +84,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               json_agg(json_build_object(
                 'productId', oi.product_id,
                 'productName', oi.product_name,
+                'localName', p.local_name,
                 'unit', oi.unit,
                 'price', oi.price::float,
                 'quantity', oi.quantity,
@@ -668,29 +669,51 @@ export class OrderService {
     };
   }
 
-  // Customer card figures for the Analytics Customers tab, aggregated live from
-  // delivered orders so cancelled/failed/terminated rows can never inflate a
-  // customer's spend or repeat count. Includes the top spenders for the window.
+  // Customer card figures for the Analytics Customers tab. Spend remains based
+  // on delivered orders, while a customer becomes returning as soon as they
+  // place a later non-terminal order after a delivery under the same mobile.
   static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | null, topCount = 10) {
     const { where, params } = buildOrderWindow(range, from, to, storeId);
+    const phoneIdentity = `NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '')`;
+    const storeScope = storeId ? `AND o.store_id = $${params.length}` : '';
     const aggSql = `SELECT
-         COALESCE(o.customer_id::text, 'g:' || COALESCE(o.guest_phone, o.id::text)) AS ckey,
-         COALESCE(cu.name, o.guest_name) AS name,
-         COALESCE(cu.phone, o.guest_phone) AS phone,
+         ${phoneIdentity} AS ckey,
+         MAX(COALESCE(cu.name, o.guest_name)) AS name,
+         MAX(COALESCE(cu.phone, o.guest_phone)) AS phone,
          COUNT(*)::int AS order_count,
          SUM(o.total)::float AS total_spent
        FROM mart_orders o
        LEFT JOIN mart_customers cu ON cu.id = o.customer_id
-       WHERE o.status = 'delivered'${where ? ` AND ${where.replace(/^WHERE\s+/, '')}` : ''}
-       GROUP BY 1, 2, 3`;
+       WHERE o.status = 'delivered'
+         AND ${phoneIdentity} IS NOT NULL${where ? ` AND ${where.replace(/^WHERE\s+/, '')}` : ''}
+       GROUP BY 1`;
+    const lifecycleSql = `WITH delivered_agg AS (${aggSql}), scoped_orders AS (
+         SELECT ${phoneIdentity} AS phone, o.created_at
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+         WHERE o.status NOT IN ('cancelled', 'failed_delivery', 'terminated')
+           AND ${phoneIdentity} IS NOT NULL${where ? ` AND ${where.replace(/^WHERE\s+/, '')}` : ''}
+       ), first_deliveries AS (
+         SELECT ${phoneIdentity} AS phone, MIN(o.delivered_at) AS first_delivered_at
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+         WHERE o.status = 'delivered'
+           AND ${phoneIdentity} IS NOT NULL ${storeScope}
+         GROUP BY 1
+       ), active_customers AS (
+         SELECT s.phone, BOOL_OR(s.created_at > f.first_delivered_at) AS is_returning
+         FROM scoped_orders s
+         JOIN first_deliveries f ON f.phone = s.phone
+         GROUP BY s.phone
+       )
+       SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE NOT is_returning)::int AS new_customers,
+        COUNT(*) FILTER (WHERE is_returning)::int AS repeat_customers,
+        COALESCE((SELECT SUM(order_count) FROM delivered_agg), 0)::int AS delivered_orders
+       FROM active_customers`;
     const [totals, top] = await Promise.all([
-      query<{ total: number; new_customers: number; repeat_customers: number; orders: number }>(
-        `WITH agg AS (${aggSql})
-         SELECT COUNT(*)::int AS total,
-                COUNT(*) FILTER (WHERE order_count = 1)::int AS new_customers,
-                COUNT(*) FILTER (WHERE order_count >= 2)::int AS repeat_customers,
-                COALESCE(SUM(order_count), 0)::int AS orders
-         FROM agg`,
+          query<{ total: number; new_customers: number; repeat_customers: number; delivered_orders: number }>(
+        lifecycleSql,
         params
       ),
       query<{ ckey: string; name: string | null; phone: string | null; order_count: number; total_spent: string | number }>(
@@ -708,7 +731,7 @@ export class OrderService {
       totalCustomers: total,
       newCustomers: t?.new_customers ?? 0,
       repeatCustomers: t?.repeat_customers ?? 0,
-      avgOrders: total ? Number(t?.orders ?? 0) / total : 0,
+      avgOrders: total ? Number(t?.delivered_orders ?? 0) / total : 0,
       top: top.rows.map(r => ({
         id: r.ckey,
         name: r.name || '',

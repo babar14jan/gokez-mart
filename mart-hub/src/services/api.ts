@@ -314,3 +314,12 @@ export const carouselApi = {
     return api.post("/admin/upload/photo", form, { headers: { "Content-Type": "multipart/form-data" } });
   },
 };
+
+// Homepage sections are per-store, so every call carries the active store id.
+export const homeSectionsApi = {
+  getAll: (storeId: string) => api.get("/admin/home-sections", { params: { storeId } }),
+  create: (storeId: string, data: any) => api.post("/admin/home-sections", data, { params: { storeId } }),
+  update: (storeId: string, id: string, data: any) => api.put("/admin/home-sections/" + id, data, { params: { storeId } }),
+  delete: (storeId: string, id: string) => api.delete("/admin/home-sections/" + id, { params: { storeId } }),
+  reorder: (storeId: string, ids: string[]) => api.post("/admin/home-sections/reorder", { ids }, { params: { storeId } }),
+};

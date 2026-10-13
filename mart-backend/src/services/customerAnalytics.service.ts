@@ -53,25 +53,35 @@ export class CustomerAnalyticsService {
                   )
                 )::int AS returning_visitors
          FROM scoped s`, values),
-      // Repeat-buyer mix, matching the Analytics "Customers" tab and the
-      // dashboard KPI: within the selected period a one-time buyer counts as
-      // new, a customer with two or more delivered orders counts as returning.
-      // The previous cohort definition (first-ever delivery in period) reported
-      // zero returning customers whenever the period covered the store's whole
-      // history — always true for "All time".
+      // Customer lifecycle is keyed by phone, so guest and signed-in orders
+      // belong to one customer. A delivered first order plus a later live order
+      // makes that customer returning immediately; the later order need not be
+      // delivered yet.
       query<{ new_customers: number; returning_customers: number }>(
-        `WITH delivered_in_range AS (
-           SELECT o.customer_id, COUNT(*)::int AS delivered_orders
+        `WITH scoped_orders AS (
+           SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
+                  o.created_at
            FROM mart_orders o
+           LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+           WHERE o.status NOT IN ('cancelled', 'failed_delivery', 'terminated')
+             AND ${orderWhere}
+         ), first_deliveries AS (
+           SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
+                  MIN(o.delivered_at) AS first_delivered_at
+           FROM mart_orders o
+           LEFT JOIN mart_customers cu ON cu.id = o.customer_id
            WHERE o.status = 'delivered'
-             AND o.customer_id IS NOT NULL
-             AND o.delivered_at IS NOT NULL
-             AND ${deliveryWhere}
-           GROUP BY o.customer_id
+           GROUP BY 1
+         ), active_customers AS (
+           SELECT s.phone, BOOL_OR(s.created_at > f.first_delivered_at) AS is_returning
+           FROM scoped_orders s
+           JOIN first_deliveries f ON f.phone = s.phone
+           WHERE s.phone IS NOT NULL
+           GROUP BY s.phone
          )
-         SELECT COUNT(*) FILTER (WHERE delivered_orders = 1)::int AS new_customers,
-                COUNT(*) FILTER (WHERE delivered_orders >= 2)::int AS returning_customers
-         FROM delivered_in_range`, values),
+         SELECT COUNT(*) FILTER (WHERE NOT is_returning)::int AS new_customers,
+                COUNT(*) FILTER (WHERE is_returning)::int AS returning_customers
+         FROM active_customers`, values),
       query<{ event_name: string; count: number }>(`SELECT e.event_name, COUNT(*)::int AS count FROM mart_funnel_events e WHERE ${eventWhere} GROUP BY e.event_name`, values),
       query<{ category_interactions: number; search_interactions: number; product_view_sessions: number; product_view_events: number; zero_result_searches: number }>(
         `SELECT COUNT(DISTINCT e.session_id) FILTER (WHERE e.event_name = 'category_viewed')::int AS category_interactions,
