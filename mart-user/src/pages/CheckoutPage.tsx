@@ -733,6 +733,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         // that produced it, and the funnel reports every checkout as abandoned.
         funnelSessionId: getFunnelSessionId(),
       }, orderRequestKey.current);
+      const confirmedCampaignDiscount = Number(res.data.data.campaignDiscount) || 0;
       track('order_placed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
       track('order_completed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
       const orderData = {
@@ -748,7 +749,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         scheduledLabel: deliveryPreference === 'scheduled' && scheduledSlot ? slotLabel(schedule, scheduledSlot) : undefined,
       };
       clearCart();
-      onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, campaignDiscount > 0 ? campaignDiscount : undefined, orderData);
+      onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, confirmedCampaignDiscount || undefined, orderData);
     } catch (err: any) {
       console.error('[checkout] order placement failed', err);
       if (!err?.response) {
