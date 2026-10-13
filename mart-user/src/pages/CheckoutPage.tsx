@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { ArrowLeft, Loader2, Plus, Minus, Trash2, MapPin, X, Tag, Check, MessageCircle, ChevronUp, Clock, User, ShoppingBag } from 'lucide-react';
+import { ChevronLeft, Loader2, Plus, Minus, Trash2, MapPin, X, Tag, Check, MessageCircle, ChevronUp, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi } from '../services/api';
 import type { PublicSettings, Product, StoreOpeningHours } from '../services/api';
@@ -821,13 +821,12 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   if (items.length === 0) {
     return (
       <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
-        <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center justify-between">
+        <div className="sticky top-0 z-20 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center">
           <button type="button" onClick={onBack} aria-label="Back to shopping"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
-            <ArrowLeft className="h-5 w-5" />
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+            <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
           </button>
-          <span className="text-sm font-bold text-gray-900 dark:text-white">Checkout</span>
-          <span className="w-11" />
+          <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-sm font-bold text-gray-900 dark:text-white">Checkout</span>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
@@ -847,11 +846,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
-        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:hover:bg-slate-600">
-          <ArrowLeft className="h-5 w-5" />
+      <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
+        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+          <ChevronLeft className="h-6 w-6" strokeWidth={2.5} />
         </button>
-        <h1 className="text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
+        <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
       </div>
 
       <form id="checkout-form" onSubmit={handleSubmit}>
@@ -875,12 +874,12 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity - 1)}
                       className="w-7 h-7 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center">
-                      {item.quantity === 1 ? <Trash2 className="w-3 h-3 text-red-400" /> : <Minus className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />}
+                      {item.quantity === 1 ? <Trash2 className="w-3 h-3 text-red-400" /> : <Minus className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />}
                     </button>
                     <span className="text-sm font-bold text-gray-900 dark:text-white w-5 text-center">{item.quantity}</span>
                     <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity + 1)}
                       className="w-7 h-7 bg-emerald-500 text-white rounded-lg flex items-center justify-center">
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-3.5 h-3.5" strokeWidth={3.5} />
                     </button>
                   </div>
                   <p className="text-sm font-bold text-gray-900 dark:text-white w-12 text-right flex-shrink-0">
@@ -917,6 +916,13 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                     <ProductCard product={product} />
                   </div>
                 ))}
+                <div className="flex w-32 shrink-0 snap-start">
+                  <button type="button" onClick={onHome}
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40">
+                    <ChevronRight className="h-6 w-6" />
+                    <span className="text-sm font-bold">View all</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -956,21 +962,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             />
           )}
 
-          {/* ── Who's ordering ── */}
+          {/* ── Who's ordering (guests only — logged-in customers are known) ── */}
+          {!isLoggedIn && (
           <div className={card}>
-            {isLoggedIn ? (
-              <div className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
-                    <User className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-gray-900 dark:text-white truncate">{authName || 'Customer'}</p>
-                    <p className="text-[11px] text-gray-500">+91 {authPhone}</p>
-                  </div>
-                </div>
-              </div>
-) : (
               <div className="px-4 py-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -1002,8 +996,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   {validationField === 'phone' && <p id="guest-phone-error" className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">Enter a valid 10-digit Indian mobile number.</p>}
                 </div>
               </div>
-            )}
           </div>
+          )}
 
           {/* ── Offers / Coupons ── */}
           <OffersPanel
@@ -1243,7 +1237,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       </form>
 
       {/* ── Sticky address + Place Order footer ── */}
-      <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
+      <div className="sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
           {/* Address row — tappable, opens sheet */}
           <button type="button" onClick={() => { track('checkout_address_started'); openAddressSheet(); }} aria-invalid={validationField === 'address'}

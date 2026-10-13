@@ -88,6 +88,31 @@ body { background-color: #ffffff; color: #111827; }
     min-height: calc(100dvh - var(--kb, 0px));
   }
 
+  /* App shell: exactly one dynamic viewport tall, with a single inner scroll
+     area (.app-scroll) and the bottom nav as a normal flex child.
+
+     iOS Safari/standalone PWA mis-anchors position: fixed bottom bars during
+     scroll (WebKit bug 297779), letting them drift up and cover content. A
+     bottom bar that is a flex sibling of the scroller is structurally pinned
+     through normal layout, so it cannot drift. Keep only .app-scroll scrollable
+     and do not put a transform on .app-shell or .app-scroll: fixed overlays
+     (checkout, sheets, dialogs) rely on escaping to the viewport. */
+  .app-shell {
+    height: 100vh;
+    height: calc(100dvh - var(--kb, 0px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .app-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   /* ---- While the on-screen keyboard is up ------------------------------
      Flagged by useKeyboardInset() as .kb-open on <html>.
 
