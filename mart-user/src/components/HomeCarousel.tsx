@@ -109,13 +109,13 @@ export default function HomeCarousel() {
           </div>
         )}
 
-        {/* Campaign overlay — shown on campaign slides */}
-        {isCampaignSlide && (
+        {/* Text stays on generated gradients; uploaded artwork remains unobstructed. */}
+        {isCampaignSlide && !slide.image_url && (
           <div className="absolute inset-0 bg-black/20" />
         )}
 
-        {/* Campaign content — fully centered, responsive */}
-        {isCampaignSlide && (
+        {/* Campaign content — used when no custom artwork is supplied */}
+        {isCampaignSlide && !slide.image_url && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-10">
             {slide.campaignBadge && (
               <span className="inline-block text-[11px] sm:text-xs font-bold bg-white/25 text-white px-3 py-1 rounded-full mb-3 backdrop-blur-sm border border-white/30">
@@ -197,9 +197,9 @@ export default function HomeCarousel() {
                     <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
                   </div>
                 )}
-                {/* Campaign overlay */}
-                {isCamp && <div className="absolute inset-0 bg-black/20" />}
-                {isCamp && (
+                {/* Custom campaign artwork is shown without text or dimming. */}
+                {isCamp && !s.image_url && <div className="absolute inset-0 bg-black/20" />}
+                {isCamp && !s.image_url && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3 z-10">
                     {s.campaignBadge && (
                       <span className="text-[9px] font-bold bg-white/25 text-white px-2 py-0.5 rounded-full mb-1.5 border border-white/30">{s.campaignBadge}</span>
