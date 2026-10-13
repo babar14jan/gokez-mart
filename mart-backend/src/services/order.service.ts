@@ -157,7 +157,7 @@ export class OrderService {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-order:${cleanPhone}`]);
       const prior = await client.query(
         `SELECT id, order_number as "orderNumber", subtotal::float, delivery_charge::float as "deliveryCharge",
-                total::float, tracking_token as "trackingToken"
+                campaign_discount::float as "campaignDiscount", total::float, tracking_token as "trackingToken"
          FROM mart_orders WHERE idempotency_key = $1`,
         [data.idempotencyKey]
       );
@@ -532,6 +532,7 @@ export class OrderService {
         storeName: data.storeName || 'Gokez Mart',
         subtotal,
         deliveryCharge: actualDelivery,
+        campaignDiscount,
         total,
         whatsappMessage: this.buildWhatsAppMessage({
           orderNumber, guestName: data.guestName,
