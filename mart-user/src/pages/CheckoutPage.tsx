@@ -181,6 +181,12 @@ function offerHeadline(c: OfferCampaign): string {
   return 'Free delivery';
 }
 
+function formatOfferText(text: string): string {
+  return text
+    .replace(/\bRs\.?\s*/gi, '\u20b9')
+    .replace(/\s+(?:above|over)\s*₹\s*\d+(?:\.\d+)?/gi, '');
+}
+
 /* The terms the customer is agreeing to. Assembled only from fields the admin
    actually set, so an offer with no minimum and no expiry shows neither. */
 function offerDetailBits(c: OfferCampaign): string[] {
@@ -196,11 +202,8 @@ type OffersPanelProps = {
   campaigns: OfferCampaign[];
   applied: OfferCampaign | null;
   appliedCode: string | null;
-  discount: number;
   notice: string;
   locked: boolean;               // guest: applying needs an OTP login first
-  hidden: boolean;
-  onToggleHidden: () => void;
   codeInput: string;
   onCodeInput: (v: string) => void;
   codeLoading: boolean;
@@ -213,9 +216,11 @@ type OffersPanelProps = {
 };
 
 function OffersPanel(props: OffersPanelProps) {
-  const { cardClass, campaigns, applied, appliedCode, discount, notice, locked,
-    hidden, onToggleHidden, codeInput, onCodeInput, codeLoading, codeError,
+  const { cardClass, campaigns, applied, appliedCode, notice, locked,
+    codeInput, onCodeInput, codeLoading, codeError,
     codeSuccess, onValidateCode, onApply, onClearCode, onRemoveOffer } = props;
+  const hasCodeBasedOffer = campaigns.some(campaign => Boolean(campaign.coupon_code));
+  const hasMinimumOrderNotice = /^Add ₹[\d.]+ more to unlock this offer/.test(notice);
 
   return (
     <div className={cardClass}>
@@ -224,50 +229,22 @@ function OffersPanel(props: OffersPanelProps) {
           <div className="flex items-center gap-2 min-w-0">
             <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <span className="text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
-            {campaigns.length > 0 && (
-              <span className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 rounded-full px-1.5 py-0.5">
-                {campaigns.length}
-              </span>
-            )}
           </div>
-          {/* Two-way. The old Hide set a sessionStorage flag with nothing to clear
-              it, so hiding was permanent for the rest of the tab session. */}
-          {campaigns.length > 0 && (
-            <button type="button" onClick={onToggleHidden}
-              className="text-xs font-semibold text-gray-400 hover:text-emerald-600 transition-colors flex-shrink-0">
-              {hidden ? 'Show' : 'Hide'}
-            </button>
-          )}
         </div>
 
-        {/* Collapsed state still advertises what is on offer, so hiding is never
-            a dead end -- the customer can always see there is something to claim. */}
-        {campaigns.length > 0 && hidden && (
-          <button type="button" onClick={onToggleHidden}
-            className="mt-3 w-full text-left rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-3 py-2.5">
-            <p className="text-[11px] font-bold text-violet-700 dark:text-violet-300">
-              {campaigns.length} offer{campaigns.length > 1 ? 's' : ''} available
-            </p>
-            <p className="text-[10px] text-violet-600 dark:text-violet-400 mt-0.5">Tap Show to view and apply</p>
-          </button>
-        )}
-
-        {campaigns.length > 0 && !hidden && (
+        {campaigns.length > 0 && (
           <div className="mt-3 space-y-2">
             {notice && (
               <p className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                 {notice}
               </p>
             )}
-            <p className="text-[11px] leading-tight text-gray-500 dark:text-slate-400">
-              Apply one offer. Coupon codes cannot be combined with another offer.
-            </p>
 
             {campaigns.map((c) => {
               const isApplied = applied?.id === c.id && !appliedCode;
               const isAppliedByCode = applied?.id === c.id && !!appliedCode;
               const headline = offerHeadline(c);
-              const desc = c.description || c.subtitle || headline;
+              const desc = formatOfferText(c.description || c.subtitle || headline);
               const bits = offerDetailBits(c);
               const done = isApplied || isAppliedByCode;
               return (
@@ -296,12 +273,11 @@ function OffersPanel(props: OffersPanelProps) {
                         the customer had not chosen. */}
                     <button
                       type="button"
-                      disabled={done}
-                      onClick={() => onApply(c)}
+                      onClick={() => done ? (isAppliedByCode ? onClearCode() : onRemoveOffer()) : onApply(c)}
                       className={`flex-shrink-0 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
-                        done ? 'bg-emerald-200 text-emerald-700 dark:bg-emerald-800 dark:text-emerald-300 cursor-default'
+                        done ? 'text-emerald-700 hover:text-red-600 dark:text-emerald-300'
                              : 'bg-violet-500 hover:bg-violet-600 text-white'}`}>
-                      {done ? 'Applied' : locked ? 'Apply & Save' : 'Apply'}
+                      {done ? 'Remove' : locked ? 'Apply & Save' : 'Apply'}
                     </button>
                   </div>
                 </div>
@@ -322,11 +298,13 @@ function OffersPanel(props: OffersPanelProps) {
                 {notice}
               </p>
             )}
-            <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">
-              {locked
-                ? 'Log in to unlock exclusive offers and discounts on your order.'
-                : 'No offers are available for this cart right now. You can still enter a coupon code below.'}
-            </p>
+            {!hasMinimumOrderNotice && (
+              <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-2">
+                {locked
+                  ? 'Log in to unlock exclusive offers and discounts on your order.'
+                  : 'No offers are available for this cart right now.'}
+              </p>
+            )}
             {locked && (
               <button type="button" onClick={() => onApply(null as any)}
                 className="w-full py-2.5 text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 rounded-xl transition-colors">
@@ -339,9 +317,9 @@ function OffersPanel(props: OffersPanelProps) {
         {/* Signed-in only. /campaigns/validate requires auth, so a guest typing
             here gets a bare "No token provided". Guests apply the campaign code
             with Apply & Save, and the code is printed in the offer details. */}
-        {!locked && (
+        {!locked && !applied && !hasCodeBasedOffer && !hasMinimumOrderNotice && (
         <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Coupon code</label>
+          <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Have a coupon code?</label>
           <div className="flex gap-2">
             <input type="text" value={codeInput} onChange={e => onCodeInput(e.target.value)} placeholder="Enter coupon code"
               className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
@@ -353,22 +331,6 @@ function OffersPanel(props: OffersPanelProps) {
           {codeSuccess && <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">{codeSuccess}</p>}
           {codeError && <p className="mt-1.5 text-xs text-red-500">{codeError}</p>}
         </div>
-        )}
-
-        {applied && (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-2">
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 break-words">{applied.title}</p>
-              <p className="text-[10px] text-emerald-600 dark:text-emerald-500">
-                {discount > 0 ? `-\u20b9${money(discount)} saved` : 'Free delivery applied'}
-                {appliedCode ? ` \u00b7 ${appliedCode}` : ''}
-              </p>
-            </div>
-            <button type="button" onClick={appliedCode ? onClearCode : onRemoveOffer}
-              className="p-1 text-emerald-600 hover:text-red-500 flex-shrink-0" aria-label="Remove offer">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
         )}
       </div>
     </div>
@@ -525,10 +487,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const [couponSuccess, setCouponSuccess] = useState('');
   const [billExpanded, setBillExpanded] = useState(false);
   const [offerNotice, setOfferNotice] = useState('');
-  // Offers are optional at checkout. Start collapsed on every new checkout so
-  // they do not interrupt the delivery and payment path.
-  const [offersHidden, setOffersHidden] = useState(true);
-  const toggleOffersHidden = () => setOffersHidden(hidden => !hidden);
 
   useEffect(() => {
     // Offers are explicitly selected for each checkout; never restore an old cart selection.
@@ -579,7 +537,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             const message = e?.response?.data?.error || 'Your cart changed, so the coupon was removed.';
             const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
             setOfferNotice(minimumMatch
-              ? `Add ₹${Math.max(0, Number(minimumMatch[1]) - cartSubtotal).toFixed(0)} more to use this coupon (minimum cart value ₹${minimumMatch[1]}).`
+              ? `Add ₹${Math.max(0, Number(minimumMatch[1]) - cartSubtotal).toFixed(0)} more to unlock this offer (minimum order ₹${minimumMatch[1]}).`
               : message);
           }
         } else {
@@ -671,7 +629,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       setCouponSuccess('');
       if (minimumMatch) {
         const minimumOrder = Number(minimumMatch[1]);
-        setOfferNotice(`Add ₹${Math.max(0, minimumOrder - sub).toFixed(0)} more to use this coupon (minimum cart value ₹${minimumOrder}).`);
+        setOfferNotice(`Add ₹${Math.max(0, minimumOrder - sub).toFixed(0)} more to unlock this offer (minimum order ₹${minimumOrder}).`);
       } else {
         setCouponError(message);
       }
@@ -1029,11 +987,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             campaigns={eligibleCampaigns}
             applied={appliedCampaign}
             appliedCode={appliedCouponCode}
-            discount={campaignDiscount}
             notice={offerNotice}
             locked={!isLoggedIn}
-            hidden={offersHidden}
-            onToggleHidden={toggleOffersHidden}
             codeInput={couponInput}
             onCodeInput={(v) => { setCouponInput(v.toUpperCase()); setCouponError(''); setCouponSuccess(''); }}
             codeLoading={couponLoading}

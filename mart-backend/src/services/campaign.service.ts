@@ -642,16 +642,6 @@ export class CampaignService {
     // Check usage limit
     if (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) throw new Error('This coupon has reached its usage limit');
 
-    // Check min order — the previous threshold stays valid during the grace
-    // window so a raised minimum does not strand an in-progress cart.
-    const previousMinMet = !!campaign.min_order_previous &&
-      !!campaign.min_order_grace_until &&
-      new Date(campaign.min_order_grace_until) > now &&
-      cartTotal >= Number(campaign.min_order_previous);
-    if (cartTotal < parseFloat(campaign.min_order_amount) && !previousMinMet) {
-      throw badRequest(`Add ₹${Number(campaign.min_order_amount) - cartTotal} more to use this coupon (minimum order ₹${Number(campaign.min_order_amount)})`);
-    }
-
     if (customerId) {
       // Check new customers only
       const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
@@ -679,6 +669,18 @@ export class CampaignService {
         [campaign.id, customerId]
       );
       if (parseInt(uses.rows[0].cnt) >= campaign.per_customer_limit) throw conflict('You have already used this coupon');
+    }
+
+    // Check min order after customer eligibility so an ineligible customer gets
+    // the actionable reason instead of being prompted to increase their cart.
+    // The previous threshold stays valid during the grace window so a raised
+    // minimum does not strand an in-progress cart.
+    const previousMinMet = !!campaign.min_order_previous &&
+      !!campaign.min_order_grace_until &&
+      new Date(campaign.min_order_grace_until) > now &&
+      cartTotal >= Number(campaign.min_order_previous);
+    if (cartTotal < parseFloat(campaign.min_order_amount) && !previousMinMet) {
+      throw badRequest(`Add ₹${Number(campaign.min_order_amount) - cartTotal} more to use this coupon (minimum order ₹${Number(campaign.min_order_amount)})`);
     }
 
     return campaign;
