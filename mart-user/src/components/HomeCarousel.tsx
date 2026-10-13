@@ -84,7 +84,7 @@ export default function HomeCarousel() {
   const isCampaignSlide = !!slide.campaign_id;
 
   return (
-    <div className="mt-4 mb-4">
+    <div className="mt-1 mb-2">
       {/* Mobile: full-width single slide */}
       <div className="sm:hidden">
         <div
