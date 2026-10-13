@@ -1262,7 +1262,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{deliveryAddress ? 'Change' : 'Add'}</span>
           </button>
 
-          <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
             {!canCheckout && sub < minOrder && (
               <p className="text-xs text-gray-500 dark:text-slate-400 text-center mb-2">Add ₹{(minOrder - sub).toFixed(0)} more to reach the ₹{minOrder} minimum order.</p>
             )}
