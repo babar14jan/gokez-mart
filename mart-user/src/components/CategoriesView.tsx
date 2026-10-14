@@ -4,6 +4,7 @@ import type { Category, Product } from '../services/api';
 import ProductCard from './ProductCard';
 import CategoryIcon from './CategoryIcon';
 import { track } from '../utils/track';
+import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 interface CategoriesViewProps {
   categories: Category[];
@@ -35,6 +36,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
   const visibleCategories = categories.filter(cat => products.some(p => p.categoryId === cat.id));
   const [activeCatId, setActiveCatId] = useState<string>(visibleCategories[0]?.id || '');
   const [search, setSearch] = useState('');
+  const { ref: inputRef, dismiss, onKeyDown, onSurfaceClick } = useKeyboardDismiss();
 
   useEffect(() => {
     if (!visibleCategories.some(category => category.id === activeCatId)) {
@@ -50,7 +52,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
   );
 
   return (
-    <div className="flex overflow-hidden" style={{ height: 'calc(100dvh - var(--kb, 0px) - 8rem)' }}>
+    <div className="flex overflow-hidden" style={{ height: 'calc(100dvh - var(--kb, 0px) - 8rem)' }} onClick={onSurfaceClick}>
 
       {/* Category sidebar */}
       <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">
@@ -75,15 +77,18 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
       </div>
 
       {/* Right — products */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto" onScroll={dismiss}>
         <div className="sticky top-0 z-30 isolate border-b border-gray-100 bg-white px-2 py-2 dark:border-slate-800 dark:bg-slate-900">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
             <input
+              ref={inputRef}
               type="text"
               inputMode="search"
+              enterKeyHint="search"
               value={search}
               onChange={event => setSearch(event.target.value)}
+              onKeyDown={onKeyDown}
               placeholder={activeCategory ? `Search in ${activeCategory.name}` : 'Search'}
               className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
             />
