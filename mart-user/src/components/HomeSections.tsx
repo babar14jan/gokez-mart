@@ -103,21 +103,31 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
         // The combo "View all" button appears once there are at least four.
         const visibleItems = items;
         const canViewAll = !isComboSection || items.length >= 4;
+        // One small, fit-to-text button sits next to each section's headline
+        // instead of a full-width bar under the row.
+        const viewAll = isComboSection
+          ? { label: 'View all combo', cls: 'bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:ring-indigo-500' }
+          : isDeals
+          ? { label: 'View all deals', cls: 'bg-pink-600 text-white hover:bg-pink-700 focus-visible:ring-pink-500' }
+          : isStoreFavourites
+          ? { label: 'View all products', cls: 'bg-sky-600 text-white hover:bg-sky-700 focus-visible:ring-sky-500' }
+          : { label: 'View all', cls: 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 focus-visible:ring-emerald-500' };
         return (
           <section key={section.id}>
-            <div className="flex items-end justify-between gap-3 mb-3">
+            <div className="flex items-center justify-between gap-3 mb-3">
               <div className="min-w-0">
                 <h2 className="text-base font-bold text-gray-900 dark:text-white">{section.title}</h2>
                 {section.subtitle && (
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{section.subtitle}</p>
                 )}
               </div>
-              {canViewAll && !isComboSection && !isStoreFavourites && !isDeals && (
+              {canViewAll && (
                 <button
+                  type="button"
                   onClick={() => onViewAll(section, items)}
-                  className="flex-shrink-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                  className={`flex-shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
                 >
-                  View All
+                  {viewAll.label}
                 </button>
               )}
             </div>
@@ -138,33 +148,6 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
               </div>
             )}
 
-            {isComboSection && canViewAll && (
-              <button
-                type="button"
-                onClick={() => onViewAll(section, items)}
-                className="mt-3 w-full rounded-xl border border-indigo-600 bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
-              >
-                View all Today&apos;s Combo
-              </button>
-            )}
-            {isStoreFavourites && canViewAll && (
-              <button
-                type="button"
-                onClick={() => onViewAll(section, items)}
-                className="mt-3 w-full rounded-xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
-              >
-                View all products
-              </button>
-            )}
-            {isDeals && canViewAll && (
-              <button
-                type="button"
-                onClick={() => onViewAll(section, items)}
-                className="mt-3 w-full rounded-xl border border-red-600 bg-red-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
-              >
-                View all Deals
-              </button>
-            )}
           </section>
         );
       })}
