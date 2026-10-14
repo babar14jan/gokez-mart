@@ -184,6 +184,14 @@ export default function App() {
     setClosedPrompt(current => { current?.resolve(false); return null; });
   }, []);
   const [catalogSearchOpen, setCatalogSearchOpen] = useState(false);
+  // The Fresh tab and the "top picks" view-all open the full-screen catalogue
+  // just to browse: no keyboard and no cursor in the search box. The search
+  // entry points (the home search box, the desktop navbar search) keep auto-focus.
+  const [catalogSearchAutoFocus, setCatalogSearchAutoFocus] = useState(true);
+  const openCatalogSearch = (autoFocus = true) => {
+    setCatalogSearchAutoFocus(autoFocus);
+    setCatalogSearchOpen(true);
+  };
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogRequest, setCatalogRequest] = useState(0);
@@ -746,7 +754,7 @@ export default function App() {
           activeView={view as 'home' | 'categories' | 'orders' | 'account'}
           onNavChange={handleNavChange}
           onCheckout={handleCheckout}
-          onSearchOpen={() => setCatalogSearchOpen(true)}
+          onSearchOpen={() => openCatalogSearch()}
           searchPrompt={searchPrompt}
         />
       )}
@@ -827,6 +835,7 @@ export default function App() {
           categories={categories}
           products={products}
           searchPrompt={searchPrompt}
+          autoFocus={catalogSearchAutoFocus}
           onClose={() => setCatalogSearchOpen(false)}
           onOpenCart={() => handleCheckout()}
         />
@@ -878,7 +887,7 @@ export default function App() {
           )}
 
           {/* Desktop search opens the complete store catalogue. */}
-          <button type="button" onClick={() => setCatalogSearchOpen(true)}
+          <button type="button" onClick={() => openCatalogSearch()}
             className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
             <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
@@ -923,7 +932,7 @@ export default function App() {
                     return;
                   }
                   if (section.sectionKey === 'top_picks') {
-                    setCatalogSearchOpen(true);
+                    openCatalogSearch(false);
                     return;
                   }
                   setView('categories');
@@ -1051,7 +1060,7 @@ export default function App() {
           is what the recent fix delivered, so do not gate it on other sheets. */}
       {!checkoutActive && (
         <div className="sm:hidden shrink-0">
-          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => setCatalogSearchOpen(true)} />
+          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => openCatalogSearch(false)} />
         </div>
       )}
     </div>
