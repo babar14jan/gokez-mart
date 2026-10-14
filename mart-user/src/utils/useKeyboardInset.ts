@@ -1,31 +1,85 @@
 import { useEffect } from 'react';
 
+/** Input types that do not open the on-screen keyboard. */
+const NON_TEXT_INPUT_TYPES = new Set([
+  'checkbox', 'radio', 'range', 'color', 'file', 'button', 'submit', 'reset', 'image', 'hidden',
+]);
+
+/** True for the elements that bring up the on-screen keyboard. */
+function isTextField(el: Element | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA') return true;
+  if (tag === 'SELECT') return true;
+  if (tag === 'INPUT') return !NON_TEXT_INPUT_TYPES.has((el as HTMLInputElement).type);
+  return false;
+}
+
 /**
- * Publishes how much of the layout viewport the on-screen keyboard is covering,
- * as the `--kb` custom property on <html>. Pair it with `.page-shell` in
- * index.css.
+ * Single, app-wide keyboard hook. Mount it once (App) and nothing else needs to
+ * know the keyboard exists. It publishes two things on <html>:
  *
- * Why this is needed at all: `min-h-screen` resolves to 100vh, which on a phone
- * is the height of the page WITHOUT the keyboard. So the moment a keyboard
- * opens, a full-height shell is still taller than anything visible -- the
- * customer gets a page that scrolls far past the fold with the form sitting
- * somewhere in the middle of it. That reads as "unstable".
+ *   1. `.input-focused` — set whenever any text field anywhere is focused, on
+ *      every phone. Pages use it in CSS to hide the bottom nav, drop the room
+ *      reserved for it, or otherwise step aside while the customer types.
+ *      Driven by document-level focusin/focusout, so a page never wires its own
+ *      onFocus/onBlur and the behaviour cannot drift between screens.
  *
- * Why one mechanism covers both platforms:
+ *   2. `--kb` and `.kb-open` — how much of the layout viewport the keyboard is
+ *      covering, from the VisualViewport API. Pair `--kb` with `.page-shell`
+ *      in index.css.
+ *
+ * Why both are needed:
  *
  *   Android honours `interactive-widget=resizes-content`, so it shrinks
  *   window.innerHeight itself. visualViewport.height then matches it and the
- *   inset computes to 0. No double counting -- 100dvh is already short enough.
+ *   inset computes to 0 -- 100dvh is already short enough, and `--kb` stays 0.
  *
  *   iOS ignores that directive. It keeps the layout viewport at full height and
  *   shrinks only the visual viewport, so innerHeight - visualViewport.height is
- *   the covered strip and --kb carries it.
+ *   the covered strip and `--kb` carries it.
  *
- * rAF-throttled because visualViewport fires resize and scroll in bursts while
- * the keyboard animates; writing the property on every event is itself a cause
- * of visible jitter.
+ * `.input-focused` is separate from `.kb-open` on purpose: some browsers report
+ * no inset while a hardware keyboard is attached, and the nav should still hide
+ * whenever a field owns the screen.
  */
 export function useKeyboardInset(): void {
+  // 1) A text field is focused -> .input-focused on <html>.
+  useEffect(() => {
+    const root = document.documentElement;
+
+    const sync = () => {
+      if (isTextField(document.activeElement)) root.classList.add('input-focused');
+      else root.classList.remove('input-focused');
+    };
+    const onFocusIn = () => { sync(); };
+    const onFocusOut = () => {
+      // focusout fires before the next element has received focus; re-check on
+      // the next frame so moving between two fields does not flicker the class.
+      requestAnimationFrame(sync);
+    };
+    // A sheet can unmount while its auto-focused input owns focus, and some
+    // browsers never fire focusout when the node is removed. Any later pointer
+    // interaction re-checks, so the nav can never stay stuck hidden.
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, select, [contenteditable]')) return;
+      requestAnimationFrame(sync);
+    };
+
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      root.classList.remove('input-focused');
+    };
+  }, []);
+
+  // 2) Publish the covered height as --kb / .kb-open.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;

@@ -213,8 +213,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   };
 
   const handlePhoneBlur = () => {
-    document.documentElement.classList.remove('login-field-focused');
-
     // iOS restores the visual viewport after blur, while Android first resizes
     // the layout viewport. Wait for either keyboard animation to finish before
     // restoring the page instead of leaving the login hero scrolled mid-page.
@@ -409,7 +407,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     onChange={e => setPhone(e.target.value.replace(/\D/g,'').slice(0,10))}
                     onFocus={() => {
                       trackOnce('login_field_focused');
-                      document.documentElement.classList.add('login-field-focused');
                     }}
                     onBlur={handlePhoneBlur}
                     placeholder="Enter mobile number"
