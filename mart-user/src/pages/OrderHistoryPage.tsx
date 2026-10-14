@@ -7,6 +7,7 @@ import { useLoginFlowStore } from '../store/loginFlowStore';
 import { useCartStore } from '../store/cartStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { printReceipt } from '../utils/printReceipt';
+import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 import {
   ActiveOrderCard, ClosedOrderCard, DeliveredOrderCard,
@@ -286,6 +287,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   const touchStartX = useRef<number | null>(null);
   const { addItem } = useCartStore();
   const { name: customerName, phone: customerPhone, isLoggedIn } = useCustomerAuthStore();
+  const { ref: searchInputRef, onKeyDown: handleSearchKeyDown, onSurfaceClick: handleSearchSurfaceClick } = useKeyboardDismiss();
 
   const fetchOrders = async (silent = false) => {
     if (!silent) setRefreshing(true);
@@ -517,7 +519,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   );
 
   return (
-    <div className="max-w-lg mx-auto px-3 py-4 space-y-4 pb-36" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="max-w-lg mx-auto px-3 py-4 space-y-4 pb-36" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onClick={handleSearchSurfaceClick}>
 
       <OrdersHeader />
 
@@ -574,15 +576,17 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
 
       {/* Past tab: search + filter */}
       {showTab === 'past' && pastOrders.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-2" onClick={handleSearchSurfaceClick}>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</span>
             <input
+              ref={searchInputRef}
               type="text" value={pastSearch}
               onChange={e => setPastSearch(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              inputMode="search" enterKeyHint="search"
               placeholder="Search by order #..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm border-0"
-            />
+              className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm border-0" />
             {pastSearch && (
               <button onClick={() => setPastSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
                 <X className="w-4 h-4" />

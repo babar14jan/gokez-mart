@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
 import { useCartStore } from '../store/cartStore';
+import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 interface CatalogSearchSheetProps {
   categories: Category[];
@@ -37,17 +38,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const totalItems = useCartStore(s => s.totalItems());
-  const inputRef = useRef<HTMLInputElement>(null);
-  // Drops the on-screen keyboard by removing focus from the search box. Callers
-  // use it on scroll, Enter, and any tap that isn't on an interactive element.
-  const dismissKeyboard = () => inputRef.current?.blur();
-  const handleSurfaceClick = (event: MouseEvent<HTMLDivElement>) => {
-    // Interaction must win: only a tap on blank space (padding, gaps, empty list)
-    // dismisses; buttons/links/inputs keep their own tap behaviour.
-    if (!(event.target as HTMLElement).closest('button, a, input, [role="button"]')) {
-      dismissKeyboard();
-    }
-  };
+  const { ref: inputRef, dismiss: dismissKeyboard, onKeyDown: handleKeyDown, onSurfaceClick: handleSurfaceClick } = useKeyboardDismiss();
   const query = search.trim().toLowerCase();
   const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
   const categoriesWithProducts = useMemo(
@@ -97,7 +88,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
             <div className="relative min-w-0 flex-1">
               <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
                 value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
-                onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); dismissKeyboard(); } }}
+                onKeyDown={handleKeyDown}
                 placeholder={searchPrompt}
                 className="w-full rounded-xl border-0 bg-gray-100 py-2.5 pl-4 pr-11 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
               {search && (
