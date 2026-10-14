@@ -52,7 +52,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
   );
 
   return (
-    <div className="flex overflow-hidden" style={{ height: 'calc(100dvh - var(--kb, 0px) - 8rem)' }} onClick={onSurfaceClick}>
+    <div className="categories-pane flex overflow-hidden" onClick={onSurfaceClick}>
 
       {/* Category sidebar */}
       <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">
@@ -89,12 +89,6 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
               value={search}
               onChange={event => setSearch(event.target.value)}
               onKeyDown={onKeyDown}
-              onFocus={() => document.documentElement.classList.add('login-field-focused')}
-              onBlur={() => {
-                document.documentElement.classList.remove('login-field-focused');
-                // Let the keyboard animate down on iOS before resetting scroll.
-                setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 240);
-              }}
               placeholder={activeCategory ? `Search in ${activeCategory.name}` : 'Search'}
               className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
             />
