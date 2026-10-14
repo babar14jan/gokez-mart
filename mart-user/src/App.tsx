@@ -318,6 +318,19 @@ export default function App() {
     return () => { cancelled = true; };
   }, [catalogRequest]);
 
+  // Remove the static launch splash (index.html) once the app has painted.
+  // useEffect runs after the first commit is painted, so the home page is
+  // already behind it and the splash can be dropped outright with no fade and
+  // therefore no green shade left over the home page. The short delay just
+  // holds the "Welcome to Gokez Mart" line long enough to be read; main.tsx
+  // keeps a longer timeout as a safety net if this never runs.
+  useEffect(() => {
+    const splash = document.getElementById('app-splash');
+    if (!splash) return;
+    const timer = window.setTimeout(() => splash.remove(), 500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // Catalog + settings for the active delivery zone. Refires whenever the zone
   // changes (navbar picker, "Use my location", Account toggle, GPS prefill) or
   // on "Try Again", so every switch goes through ONE path — previously the GPS

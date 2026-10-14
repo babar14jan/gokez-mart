@@ -160,26 +160,34 @@
 
       /* Launch splash. Continues the phone's own PWA splash (manifest
          background_color #02A034 + app icon) so the handoff paints the same
-         green instead of flashing white, then adds the wordmark below the icon
-         that the OS splash cannot render. Hidden for no-JS crawlers (the
-         .js class is set in <head> before first paint) and removed by
-         src/main.tsx once React has painted. */
+         green and the same icon in the same centred spot -- the "Welcome to
+         Gokez Mart" line is the only thing added, so the two read as ONE
+         splash instead of two. Hidden for no-JS crawlers (the .js class is set
+         in <head> before first paint) and removed by App once React has
+         painted. No fade: a translucent fade is what left a green shade over
+         the home page, so the splash is opaque until it is removed outright. */
       #app-splash {
         position: fixed;
         inset: 0;
         z-index: 2147483000;
         display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 1.5rem;
         background-color: #02A034;
-        transition: opacity 320ms ease-out;
       }
-      .js #app-splash { display: flex; }
-      #app-splash.app-splash-hide { opacity: 0; pointer-events: none; }
-      #app-splash img { width: 104px; height: 104px; display: block; }
+      .js #app-splash { display: block; }
+      #app-splash img {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 96px;
+        height: 96px;
+        transform: translate(-50%, -50%);
+        display: block;
+      }
       #app-splash .app-splash-title {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(50% + 4.75rem);
         margin: 0;
         padding: 0 1.5rem;
         text-align: center;
