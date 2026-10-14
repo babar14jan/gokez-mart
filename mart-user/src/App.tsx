@@ -1012,7 +1012,7 @@ export default function App() {
                 <section className="pb-5 sm:pb-0 sm:pr-8">
                   <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 sm:text-left">Contact Gokez Technologies</p>
                   <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
-                    <a href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
+                     <a href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent("Hi Gokez Team, I'm a customer on Gokez Mart — I'd like help with...")}`} target="_blank" rel="noopener noreferrer" className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
                       <WhatsAppIcon className="h-4 w-4" />
                       <span>WhatsApp</span>
                     </a>
