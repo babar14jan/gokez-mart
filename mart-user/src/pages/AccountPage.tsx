@@ -11,7 +11,7 @@ import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
 import NamePrompt from '../components/NamePrompt';
 import { track } from '../utils/track';
-import { useFinePointer } from '../utils/useFinePointer';
+import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 
 interface AccountPageProps {
@@ -32,7 +32,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 export default function AccountPage({ onBack, storeName, supportPhone, whatsappNumber }: AccountPageProps) {
-  const finePointer = useFinePointer();
+  const { ref: nameInputRef, onKeyDown: handleNameKeyDown, onSurfaceClick: handleNameSurfaceClick } = useKeyboardDismiss();
   const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
   const { } = useThemeStore();
@@ -302,8 +302,9 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
             </div>
             <div className="flex-1 min-w-0">
               {editingName ? (
-                <div className="flex items-center gap-2">
-                  <input autoFocus={finePointer} type="text" value={nameVal} onChange={e => setNameVal(e.target.value)}
+                <div className="flex items-center gap-2" onClick={handleNameSurfaceClick}>
+                  <input ref={nameInputRef} autoFocus type="text" value={nameVal} onChange={e => setNameVal(e.target.value)} onKeyDown={handleNameKeyDown}
+                    inputMode="text" enterKeyHint="done"
                     className="min-w-0 w-full flex-1 px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500" placeholder="Your full name" />
                   <div className="flex shrink-0 gap-1.5">
                     <button type="button" onClick={saveName} disabled={saving === 'name'} aria-label="Save profile name" title="Save"
@@ -317,7 +318,7 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" onClick={handleNameSurfaceClick}>
                   <p className="truncate text-[22px] font-bold leading-tight text-[#172033] dark:text-white">
                     {name || <span className="text-base font-normal text-gray-500 dark:text-slate-400">Add your name</span>}
                   </p>

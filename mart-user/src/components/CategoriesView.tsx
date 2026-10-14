@@ -89,6 +89,12 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
               value={search}
               onChange={event => setSearch(event.target.value)}
               onKeyDown={onKeyDown}
+              onFocus={() => document.documentElement.classList.add('login-field-focused')}
+              onBlur={() => {
+                document.documentElement.classList.remove('login-field-focused');
+                // Let the keyboard animate down on iOS before resetting scroll.
+                setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 240);
+              }}
               placeholder={activeCategory ? `Search in ${activeCategory.name}` : 'Search'}
               className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
             />
