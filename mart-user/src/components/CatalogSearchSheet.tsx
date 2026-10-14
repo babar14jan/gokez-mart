@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { ChevronLeft, X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
@@ -9,6 +9,7 @@ interface CatalogSearchSheetProps {
   categories: Category[];
   products: Product[];
   searchPrompt: string;
+  autoFocus?: boolean;
   onClose: () => void;
   onOpenCart: () => void;
 }
@@ -32,10 +33,21 @@ function matchScore(product: Product, query: string): number {
   return 7;
 }
 
-export default function CatalogSearchSheet({ categories, products, searchPrompt, onClose, onOpenCart }: CatalogSearchSheetProps) {
+export default function CatalogSearchSheet({ categories, products, searchPrompt, autoFocus = true, onClose, onOpenCart }: CatalogSearchSheetProps) {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const totalItems = useCartStore(s => s.totalItems());
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Drops the on-screen keyboard by removing focus from the search box. Callers
+  // use it on scroll, Enter, and any tap that isn't on an interactive element.
+  const dismissKeyboard = () => inputRef.current?.blur();
+  const handleSurfaceClick = (event: MouseEvent<HTMLDivElement>) => {
+    // Interaction must win: only a tap on blank space (padding, gaps, empty list)
+    // dismisses; buttons/links/inputs keep their own tap behaviour.
+    if (!(event.target as HTMLElement).closest('button, a, input, [role="button"]')) {
+      dismissKeyboard();
+    }
+  };
   const query = search.trim().toLowerCase();
   const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
   const categoriesWithProducts = useMemo(
@@ -72,7 +84,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
   };
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Search products">
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Search products" onClick={handleSurfaceClick}>
       <button type="button" aria-label="Close product search" onClick={onClose}
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
@@ -83,7 +95,9 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
               <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
             </button>
             <div className="relative min-w-0 flex-1">
-              <input autoFocus type="text" inputMode="search" value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
+              <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
+                value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
+                onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); dismissKeyboard(); } }}
                 placeholder={searchPrompt}
                 className="w-full rounded-xl border-0 bg-gray-100 py-2.5 pl-4 pr-11 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
               {search && (
@@ -97,8 +111,8 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
             {/* Cart — appears only once the shopper has added something; taps straight to checkout. */}
             {totalItems > 0 && (
               <button type="button" onClick={onOpenCart} aria-label={`View cart, ${totalItems} ${totalItems === 1 ? 'item' : 'items'}`}
-                className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700">
-                <ShoppingCart className="h-5 w-5" />
+                className="relative mr-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700">
+                <ShoppingCart className="h-6 w-6" />
                 <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
                   {totalItems}
                 </span>
@@ -109,11 +123,11 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
           {/* Live suggestions — compact white rows inside the yellow search area, bounded so results stay reachable. */}
           {query && suggestions.length > 0 && (
             <div className="border-b border-yellow-200/60 px-3 pt-2 dark:border-yellow-900/40">
-              <div className="max-h-56 space-y-1 overflow-y-auto">
+              <div className="max-h-56 space-y-1 overflow-y-auto" onScroll={dismissKeyboard}>
                 {suggestions.map(product => {
                   const category = categoryById.get(product.categoryId);
                   return (
-                    <button type="button" key={product.id} onClick={() => setSearch(product.name)}
+                    <button type="button" key={product.id} onClick={() => { setSearch(product.name); dismissKeyboard(); }}
                       className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
                         {product.photoUrl
@@ -134,7 +148,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
           )}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900" onScroll={dismissKeyboard}>
           {/* Initial state (empty query): browse categories. */}
           {!query && categoriesWithProducts.length > 1 && (
             <section className="mb-5">
