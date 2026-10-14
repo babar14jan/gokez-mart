@@ -73,6 +73,7 @@ function resolveStoreId(req: AdminRequest): string {
 
 export const getCategories = asyncHandler(async (_req: Request, res: Response) => {
   const categories = await CategoryService.findAll(true);
+  res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: categories });
 });
 
@@ -84,6 +85,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     excludeHidden: true,
     activeCategoryOnly: true,
   });
+  res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: products });
 });
 
@@ -91,6 +93,7 @@ export const getProduct = asyncHandler(async (req: Request, res: Response) => {
   const { storeId } = req.query;
   const product = await ProductService.findById(req.params.id, storeId as string);
   if (!product) { res.status(404).json({ success: false, error: 'Product not found' }); return; }
+  res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: product });
 });
 
@@ -106,6 +109,7 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   // The raw schedule rides along so the storefront can offer scheduled delivery
   // slots that run open→close on the store's own clock (IST), rather than
   // guessing a window. Null when the store posts no hours.
+  res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: { ...settings, openState, openingHours: store?.openingHours ?? null } });
 });
 
@@ -1968,6 +1972,7 @@ export const adminReorderCarouselSlides = asyncHandler(async (req: AdminRequest,
 export const getPublicHomeSections = asyncHandler(async (req: Request, res: Response) => {
   const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
   const sections = await HomeSectionService.publicSections(storeId);
+  res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: sections });
 });
 

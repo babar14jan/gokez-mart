@@ -157,6 +157,39 @@
       .seo-static a { color: #059669; }
       .seo-static nav { margin-top: 1.25rem; font-size: 0.875rem; display: flex; gap: 1rem; flex-wrap: wrap; }
       .js .seo-static { display: none; }
+
+      /* Launch splash. Continues the phone's own PWA splash (manifest
+         background_color #02A034 + app icon) so the handoff paints the same
+         green instead of flashing white, then adds the wordmark below the icon
+         that the OS splash cannot render. Hidden for no-JS crawlers (the
+         .js class is set in <head> before first paint) and removed by
+         src/main.tsx once React has painted. */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        background-color: #02A034;
+        transition: opacity 320ms ease-out;
+      }
+      .js #app-splash { display: flex; }
+      #app-splash.app-splash-hide { opacity: 0; pointer-events: none; }
+      #app-splash img { width: 104px; height: 104px; display: block; }
+      #app-splash .app-splash-title {
+        margin: 0;
+        padding: 0 1.5rem;
+        text-align: center;
+        color: #ffffff;
+        font-family: Poppins, Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-weight: 800;
+        font-size: clamp(1.75rem, 7vw, 2.75rem);
+        line-height: 1.15;
+        letter-spacing: 0.01em;
+      }
     </style>
   </head>
   <body>
@@ -178,6 +211,10 @@
         <a href="/feedback/">Feedback</a>
       </nav>
       <p>Gokez Mart is a product of <a href="https://gokez.com/" rel="noopener">Gokez Technologies</a>.</p>
+    </div>
+    <div id="app-splash" aria-hidden="true">
+      <img src="/icons/icon-192.png" alt="" width="104" height="104" fetchpriority="high" />
+      <p class="app-splash-title">Welcome to Gokez Mart</p>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
