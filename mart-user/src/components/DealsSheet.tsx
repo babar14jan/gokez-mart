@@ -43,7 +43,7 @@ export default function DealsSheet({ title, subtitle = 'Limited-time price drops
       <button type="button" aria-label="Close deals" onClick={onClose}
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
-        <header className="relative flex shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <header className="relative flex shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-800 dark:bg-slate-900">
           <button type="button" onClick={onClose} aria-label="Back to home"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
             <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
