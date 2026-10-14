@@ -56,9 +56,10 @@ body { background-color: #ffffff; color: #111827; }
 
 /* A fixed bar is re-anchored above the keyboard by Android's resizes-content
    viewport and newer iOS visual viewport handling. Keep it at its normal page
-   bottom while the phone input owns the screen; it returns after the keyboard
-   closes. */
-.login-field-focused .mobile-bottom-nav {
+   bottom while a field owns the screen; it returns after the keyboard closes.
+   `.input-focused` is published once by useKeyboardInset(), so this applies to
+   every page without any per-page handlers. */
+.input-focused .mobile-bottom-nav {
   opacity: 0;
   pointer-events: none;
   transform: translateY(calc(100% + env(safe-area-inset-bottom, 0px)));
@@ -174,4 +175,36 @@ body { background-color: #ffffff; color: #111827; }
     max-height: 34svh;
     object-fit: cover;
     object-position: top;
+  }
+
+  /* Category split view: a fixed-height pane that reserves room for the in-flow
+     bottom nav. */
+  .categories-pane {
+    height: calc(100dvh - var(--kb, 0px) - 8rem);
+  }
+
+  /* While a field is focused the bottom nav is hidden, so stop reserving its
+     room -- otherwise the pane ends a nav's height short and leaves a blank
+     strip above the keyboard. */
+  .input-focused .categories-pane {
+    height: calc(100dvh - var(--kb, 0px));
+  }
+
+  /* Checkout is a full-screen overlay with a sticky footer. It must keep the
+     real viewport height (no --kb subtraction) so the footer stays anchored to
+     the bottom edge instead of riding up to sit above the keyboard. */
+  .checkout-shell {
+    min-height: 100dvh;
+  }
+
+  @media all and (display-mode: standalone) {
+    .categories-pane {
+      height: calc(100lvh - var(--kb, 0px) - 8rem);
+    }
+    .input-focused .categories-pane {
+      height: calc(100lvh - var(--kb, 0px));
+    }
+    .checkout-shell {
+      min-height: 100lvh;
+    }
   }
