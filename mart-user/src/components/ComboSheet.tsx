@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, Package, Search, X } from 'lucide-react';
 import type { Product } from '../services/api';
 import ProductCard from './ProductCard';
+import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 interface ComboSheetProps {
   title: string;
@@ -12,6 +13,7 @@ interface ComboSheetProps {
 
 export default function ComboSheet({ title, subtitle, products, onClose }: ComboSheetProps) {
   const [search, setSearch] = useState('');
+  const { ref: inputRef, dismiss, onKeyDown, onSurfaceClick } = useKeyboardDismiss();
   const query = search.trim().toLowerCase();
   const matches = products.filter(product => !query ||
     product.name.toLowerCase().includes(query) ||
@@ -28,7 +30,7 @@ export default function ComboSheet({ title, subtitle, products, onClose }: Combo
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title} onClick={onSurfaceClick}>
       <button type="button" aria-label="Close combos" onClick={onClose}
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
@@ -49,7 +51,7 @@ export default function ComboSheet({ title, subtitle, products, onClose }: Combo
         <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
-            <input type="text" inputMode="search" value={search} onChange={event => setSearch(event.target.value)}
+            <input ref={inputRef} type="text" inputMode="search" enterKeyHint="search" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={onKeyDown}
               placeholder="Search combos..."
               className="w-full rounded-xl border-0 bg-gray-100 py-2.5 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300" />
             {search && (
@@ -61,7 +63,7 @@ export default function ComboSheet({ title, subtitle, products, onClose }: Combo
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]" onScroll={dismiss}>
           {matches.length ? (
             <>
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
