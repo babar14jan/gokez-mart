@@ -695,6 +695,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // A coupon is authoritative only after its validation request completes.
+    // Do not let a quick tap submit the order before its discount reaches state.
+    if (couponLoading) return;
     let name = checkoutName;
     const phone = checkoutPhone;
     if (!nameComplete) {
@@ -1278,9 +1281,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 <p className="text-[10px] text-gray-500 dark:text-slate-400">To pay</p>
                 <p className="text-lg font-bold text-gray-900 dark:text-white">₹{total.toFixed(0)}</p>
               </div>
-              <button type="submit" form="checkout-form" disabled={loading}
+              <button type="submit" form="checkout-form" disabled={loading || couponLoading}
                 className="flex-1 h-14 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-[#15803d] dark:text-white dark:hover:bg-[#166534]">
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                {loading || couponLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-[11px] font-medium leading-4 text-white/80">{couponLoading ? 'Checking offer' : 'Placing order'}</span>
+                  </>
+                ) : (
                   <>
                     <span className="text-lg font-extrabold leading-5">Place order</span>
                     <span className="text-[11px] font-normal leading-4 text-white/80 dark:text-white/80">Pay Cash / UPI On Delivery</span>
