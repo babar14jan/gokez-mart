@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, CheckCircle, Mail, BellRing } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
@@ -779,8 +780,13 @@ export default function App() {
       )}
 
       {/* Checkout — overlay on both mobile and desktop (above the search sheet so
-          the search results stay mounted underneath and return on back) */}
-      {checkoutActive && (
+          the search results stay mounted underneath and return on back).
+          Rendered through a portal to <body>: while it lived inside .app-scroll
+          (an overflow-y scroller whose height is calc(100dvh - var(--kb))), iOS
+          sized the fixed overlay to that scroller, so the checkout footer rose
+          to sit above the keyboard instead of staying pinned to the screen
+          bottom. At the document level it is anchored to the viewport again. */}
+      {checkoutActive && createPortal(
         <div className="fixed inset-0 z-[55]">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
             onClick={handleCheckoutClose} />
@@ -810,7 +816,8 @@ export default function App() {
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCatalogSearchOpen(false); setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
             />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {comboSheet && (
