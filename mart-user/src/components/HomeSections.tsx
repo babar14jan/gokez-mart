@@ -8,8 +8,11 @@ import ProductCard from './ProductCard';
  *   is not present for the current store we return nothing rather than ignoring
  *   the scope, so a mis-set slug can never widen a section beyond what the admin
  *   chose.
- * - `todays_combos` shows bundle products; `fresh_vegetables` shows the
- *   remaining (individual) products so the same item never appears twice.
+ * - `todays_combos` shows bundle products. The Hub auto-detects them and lets
+ *   the store person order (and trim) the row, so when `config.productIds` is set
+ *   that order wins; otherwise every bundle shows in catalogue order.
+ * - `fresh_vegetables` shows the remaining (individual) products so the same
+ *   item never appears twice.
  * - `deals` shows every product with a discount, biggest discount first (a deal
  *   is just a discounted item; discounts are set on the product in Hub).
  * - `top_picks` (Top Picks) shows the admin's hand-picked, ordered list.
@@ -40,8 +43,14 @@ export function resolveSectionItems(
       if (!category) return [];
       list = list.filter(p => p.categoryId === category.id);
     }
-    if (section.sectionKey === 'todays_combos') list = list.filter(p => p.isBundle);
-    else if (section.sectionKey === 'fresh_vegetables') list = list.filter(p => !p.isBundle);
+    if (section.sectionKey === 'todays_combos') {
+      list = list.filter(p => p.isBundle);
+      const ids = cfg.productIds || [];
+      if (ids.length) {
+        const byId = new Map(list.map(p => [p.id, p]));
+        list = ids.map(id => byId.get(id)).filter((p): p is Product => Boolean(p));
+      }
+    } else if (section.sectionKey === 'fresh_vegetables') list = list.filter(p => !p.isBundle);
     else if (section.sectionKey === 'deals')
       list = list
         .filter(p => (p.discountPercent || 0) > 0)
@@ -49,8 +58,9 @@ export function resolveSectionItems(
   }
 
   const limit = typeof cfg.limit === 'number' && cfg.limit > 0 ? cfg.limit : null;
-  // Combos always resolve the full bundle catalogue: home caps the preview at
-  // four and the remaining products belong in the dedicated Combo sheet.
+  // Combos resolve the full bundle catalogue (ordered by the Hub when set): the
+  // home row shows them all (horizontally scrollable) and the "View all" button
+  // opens the dedicated Combo sheet once there are four or more.
   if (section.sectionKey === 'todays_combos') return list;
   return limit ? list.slice(0, limit) : list;
 }
@@ -89,8 +99,10 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
         const isComboSection = section.sectionKey === 'todays_combos';
         const isStoreFavourites = section.sectionKey === 'top_picks';
         const isDeals = section.sectionKey === 'deals';
-        const visibleItems = isComboSection ? items.slice(0, 4) : items;
-        const canViewAll = !isComboSection || items.length > 4;
+        // The row shows every item the section selects, horizontally scrollable.
+        // The combo "View all" button appears once there are at least four.
+        const visibleItems = items;
+        const canViewAll = !isComboSection || items.length >= 4;
         return (
           <section key={section.id}>
             <div className="flex items-end justify-between gap-3 mb-3">

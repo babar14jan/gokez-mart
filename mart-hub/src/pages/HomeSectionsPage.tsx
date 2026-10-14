@@ -12,9 +12,10 @@ const SECTION_TYPES = [
   {
     key: 'todays_combos',
     label: "Today's Combos",
-    hint: 'A swipeable row of this store’s available combo (bundle) products.',
+    hint: 'Every combo (bundle) in your catalogue is detected automatically. Reorder them, or remove any you don’t want to feature.',
     icon: LayoutGrid,
-    usesProducts: false,
+    usesProducts: true,
+    productPool: 'bundles',
   },
   {
     key: 'fresh_vegetables',
@@ -22,6 +23,7 @@ const SECTION_TYPES = [
     hint: 'A grid of products from the chosen category.',
     icon: LayoutGrid,
     usesProducts: false,
+    productPool: 'all',
   },
   {
     key: 'deals',
@@ -29,6 +31,7 @@ const SECTION_TYPES = [
     hint: 'Every discounted product shows here automatically, biggest discount first — set discounts in the product form.',
     icon: Package,
     usesProducts: false,
+    productPool: 'all',
   },
   {
     key: 'top_picks',
@@ -36,6 +39,7 @@ const SECTION_TYPES = [
     hint: 'Pick the exact products (and their order) to feature. Leave empty to auto-show your bestsellers.',
     icon: Sparkles,
     usesProducts: true,
+    productPool: 'all',
   },
 ] as const;
 
@@ -91,24 +95,36 @@ export default function HomeSectionsPage() {
 
   const remainingTypes = SECTION_TYPES.filter(t => !sections.some(s => s.sectionKey === t.key));
 
+  // Combo sections are auto-detected: every bundle product is seeded (in catalogue
+  // order) so the store person only has to reorder or trim the list, never hunt
+  // for combos to add. Any stored ids that are no longer bundles are dropped.
+  const bundleIds = products.filter(p => p.isBundle).map(p => p.id);
+  const seedProductIds = (key: string, existing: string[]): string[] => {
+    if (key !== 'todays_combos') return existing;
+    const bundleIdSet = new Set(bundleIds);
+    const valid = existing.filter(id => bundleIdSet.has(id));
+    return valid.length ? valid : [...bundleIds];
+  };
+
   const openCreate = () => {
     const next = remainingTypes[0];
     if (!next) return;
     setEditing(null);
     setProductSearch('');
-    setForm(emptyForm(next.key, next.label));
+    setForm({ ...emptyForm(next.key, next.label), productIds: seedProductIds(next.key, []) });
     setShowModal(true);
   };
 
   const openEdit = (s: any) => {
     setEditing(s);
     setProductSearch('');
+    const storedIds = Array.isArray(s.config?.productIds) ? s.config.productIds : [];
     setForm({
       sectionKey: s.sectionKey,
       title: s.title || '',
       subtitle: s.subtitle || '',
       categorySlug: s.config?.categorySlug || '',
-      productIds: Array.isArray(s.config?.productIds) ? s.config.productIds : [],
+      productIds: seedProductIds(s.sectionKey, storedIds),
       limit: s.config?.limit != null ? String(s.config.limit) : '',
       layout: s.config?.layout || '',
       isEnabled: s.isEnabled,
@@ -184,7 +200,10 @@ export default function HomeSectionsPage() {
   const selectedProducts = form.productIds
     .map(id => products.find(p => p.id === id))
     .filter(Boolean);
-  const filteredProducts = products
+  const poolProducts = activeType?.productPool === 'bundles'
+    ? products.filter(p => p.isBundle)
+    : products;
+  const filteredProducts = poolProducts
     .filter(p => (p.name || '').toLowerCase().includes(productSearch.trim().toLowerCase()))
     .slice(0, 60);
 
@@ -232,7 +251,7 @@ export default function HomeSectionsPage() {
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-[10px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full">{typeLabel(s.sectionKey)}</span>
                       {s.config?.categorySlug && <span className="text-[10px] text-gray-500">· {s.config.categorySlug}</span>}
-                      {s.sectionKey === 'top_picks' && (s.config?.productIds?.length || 0) > 0 && (
+                      {(s.sectionKey === 'top_picks' || s.sectionKey === 'todays_combos') && (s.config?.productIds?.length || 0) > 0 && (
                         <span className="text-[10px] text-gray-500">· {s.config.productIds.length} picked</span>
                       )}
                       {s.config?.layout && <span className="text-[10px] text-gray-500">· {s.config.layout}</span>}
@@ -277,7 +296,7 @@ export default function HomeSectionsPage() {
                   <div className="space-y-2">
                     {remainingTypes.map(t => (
                       <button key={t.key} type="button"
-                        onClick={() => setForm(f => ({ ...f, sectionKey: t.key, title: t.label }))}
+                        onClick={() => setForm(f => ({ ...f, sectionKey: t.key, title: t.label, productIds: seedProductIds(t.key, []) }))}
                         className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${form.sectionKey === t.key ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-200 dark:border-slate-600'}`}>
                         <p className="text-sm font-semibold text-gray-900 dark:text-white">{t.label}</p>
                         <p className="text-xs text-gray-500 mt-0.5">{t.hint}</p>
@@ -310,9 +329,23 @@ export default function HomeSectionsPage() {
 
               {activeType?.usesProducts && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Picked products</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300">
+                      {activeType.productPool === 'bundles' ? 'Combos (auto-detected)' : 'Picked products'}
+                    </label>
+                    {activeType.productPool === 'bundles' && (
+                      <button type="button" onClick={() => setForm(f => ({ ...f, productIds: [...bundleIds] }))}
+                        className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">
+                        Reset to all combos
+                      </button>
+                    )}
+                  </div>
                   {selectedProducts.length === 0
-                    ? <p className="text-[11px] text-gray-400 mb-2">Nothing picked yet — add products below.</p>
+                    ? <p className="text-[11px] text-gray-400 mb-2">
+                        {activeType.productPool === 'bundles'
+                          ? 'No combos found in your catalogue yet — create a bundle product to feature it here.'
+                          : 'Nothing picked yet — add products below.'}
+                      </p>
                     : <div className="space-y-1.5 mb-3">
                         {selectedProducts.map((p: any, idx: number) => (
                           <div key={p.id} className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-600 px-2 py-1.5">
@@ -329,7 +362,7 @@ export default function HomeSectionsPage() {
                       </div>}
                   <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                    <input type="text" value={productSearch} onChange={e => setProductSearch(e.target.value)} className={`${inp} pl-9`} placeholder="Search products to add..." />
+                    <input type="text" value={productSearch} onChange={e => setProductSearch(e.target.value)} className={`${inp} pl-9`} placeholder={activeType.productPool === 'bundles' ? 'Search combos to add...' : 'Search products to add...'} />
                   </div>
                   <div className="max-h-52 overflow-y-auto rounded-xl border border-gray-100 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700">
                     {filteredProducts.length === 0 && <p className="text-[11px] text-gray-400 p-3">No products found.</p>}
@@ -347,7 +380,11 @@ export default function HomeSectionsPage() {
                       );
                     })}
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-1">Leave empty to auto-show bestsellers — picked products override and follow your order.</p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {activeType.productPool === 'bundles'
+                      ? 'Drag the arrows to set the order combos appear in. Remove any to hide from the row.'
+                      : 'Leave empty to auto-show bestsellers — picked products override and follow your order.'}
+                  </p>
                 </div>
               )}
 
