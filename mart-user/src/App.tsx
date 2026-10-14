@@ -347,9 +347,18 @@ export default function App() {
     return () => { cancelled = true; };
   }, [activeStoreId, catalogRequest]);
 
-  // Silent refresh — products + settings for current store every 3 mins + on tab focus
+  // Silent refresh — products + settings for current store every 3 mins, and on
+  // resume/focus. Installed PWAs freeze timers while backgrounded and iOS
+  // standalone doesn't reliably fire visibilitychange when recalled from the app
+  // switcher, so pageshow/focus are needed too or the catalogue stays stale until
+  // a full close + reopen. A short dedupe window collapses the burst of events
+  // that fire together (focus + pageshow + visibilitychange) into one fetch.
   useEffect(() => {
-    const refresh = async () => {
+    let lastRefresh = Date.now();
+    const refresh = async (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastRefresh < 15_000) return;
+      lastRefresh = now;
       try {
         const storeId = selectedZone?.storeId;
         const [catRes, prodRes, srRes, sectionsRes] = await Promise.all([
@@ -364,10 +373,17 @@ export default function App() {
         setHomeSections([...(sectionsRes.data.data || [])]);
       } catch {}
     };
-    const interval = setInterval(refresh, 3 * 60 * 1000);
-    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
+    const onResume = () => { if (document.visibilityState === 'visible') refresh(); };
+    const interval = setInterval(() => refresh(true), 3 * 60 * 1000);
+    document.addEventListener('visibilitychange', onResume);
+    window.addEventListener('focus', onResume);
+    window.addEventListener('pageshow', onResume);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onResume);
+      window.removeEventListener('focus', onResume);
+      window.removeEventListener('pageshow', onResume);
+    };
   }, [activeStoreId]);
 
   // The 3-minute poll above would leave a stale "closed" strip for up to three
