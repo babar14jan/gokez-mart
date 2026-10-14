@@ -54,15 +54,13 @@ body { background-color: #ffffff; color: #111827; }
   transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 
-/* A fixed bar is re-anchored above the keyboard by Android's resizes-content
-   viewport and newer iOS visual viewport handling. Keep it at its normal page
-   bottom while a field owns the screen; it returns after the keyboard closes.
-   `.input-focused` is published once by useKeyboardInset(), so this applies to
-   every page without any per-page handlers. */
+/* While a field owns the screen the bottom nav is hidden. It must leave the
+   layout entirely, not just fade: an in-flow bar that is only translated away
+   still reserves its height, which showed up as a full-width white strip above
+   the keyboard on the category page. `.input-focused` is published once by
+   useKeyboardInset(), so this applies to every page without per-page handlers. */
 .input-focused .mobile-bottom-nav {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(calc(100% + env(safe-area-inset-bottom, 0px)));
+  display: none;
 }
 
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
@@ -183,18 +181,11 @@ body { background-color: #ffffff; color: #111827; }
     height: calc(100dvh - var(--kb, 0px) - 8rem);
   }
 
-  /* While a field is focused the bottom nav is hidden, so stop reserving its
-     room -- otherwise the pane ends a nav's height short and leaves a blank
-     strip above the keyboard. */
+  /* While a field is focused the bottom nav leaves the layout, so stop
+     reserving its room -- otherwise the pane ends a nav's height short and
+     leaves a blank strip above the keyboard. */
   .input-focused .categories-pane {
     height: calc(100dvh - var(--kb, 0px));
-  }
-
-  /* Checkout is a full-screen overlay with a sticky footer. It must keep the
-     real viewport height (no --kb subtraction) so the footer stays anchored to
-     the bottom edge instead of riding up to sit above the keyboard. */
-  .checkout-shell {
-    min-height: 100dvh;
   }
 
   @media all and (display-mode: standalone) {
@@ -203,8 +194,5 @@ body { background-color: #ffffff; color: #111827; }
     }
     .input-focused .categories-pane {
       height: calc(100lvh - var(--kb, 0px));
-    }
-    .checkout-shell {
-      min-height: 100lvh;
     }
   }
