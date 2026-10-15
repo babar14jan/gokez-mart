@@ -110,8 +110,8 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
           : isDeals
           ? { label: 'View all deals', cls: 'bg-pink-600 text-white hover:bg-pink-700 focus-visible:ring-pink-500' }
           : isStoreFavourites
-          ? { label: 'View all products', cls: 'bg-sky-600 text-white hover:bg-sky-700 focus-visible:ring-sky-500' }
-          : { label: 'View all', cls: 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 focus-visible:ring-emerald-500' };
+          ? { label: 'View all vegetables', cls: 'bg-green-700 text-white hover:bg-green-800 focus-visible:ring-green-500' }
+          : { label: 'View all', cls: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500' };
         return (
           <section key={section.id}>
             <div className="flex items-center justify-between gap-3 mb-3">
@@ -121,11 +121,11 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{section.subtitle}</p>
                 )}
               </div>
-              {canViewAll && (
+              {canViewAll && !isStoreFavourites && (
                 <button
                   type="button"
                   onClick={() => onViewAll(section, items)}
-                  className={`flex-shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
+                  className={`flex-shrink-0 whitespace-nowrap rounded-xl px-5 py-2 text-sm font-bold shadow-md transition-all hover:shadow-lg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
                 >
                   {viewAll.label}
                 </button>
@@ -145,6 +145,18 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
                 {visibleItems.map(p => (
                   <ProductCard key={p.id} product={p} />
                 ))}
+              </div>
+            )}
+
+            {canViewAll && isStoreFavourites && (
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => onViewAll(section, items)}
+                  className={`flex-shrink-0 whitespace-nowrap rounded-xl px-8 py-3 text-base font-bold shadow-md transition-all hover:shadow-lg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
+                >
+                  {viewAll.label}
+                </button>
               </div>
             )}
 

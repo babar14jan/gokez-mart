@@ -138,8 +138,18 @@
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" />
     </noscript>
     <!-- Runs in <head>, before first paint, so the static block below is hidden
-         before it can flash for users who have JavaScript enabled. -->
-    <script>document.documentElement.classList.add('js');</script>
+         before it can flash for users who have JavaScript enabled. Also marks the
+         splash start time (used to guarantee a readable minimum) and arms the
+         last-resort timeout: if the app module never loads, the splash still
+         comes down on its own. -->
+    <script>
+      document.documentElement.classList.add('js');
+      window.__splashStart = Date.now();
+      window.setTimeout(function () {
+        var splash = document.getElementById('app-splash');
+        if (splash) splash.remove();
+      }, 8000);
+    </script>
     <style>
       /* Paint the app background before CSS/JS arrive. An update swap reloads
          through the service worker, but the window between unload and first
@@ -160,43 +170,69 @@
 
       /* Launch splash. Continues the phone's own PWA splash (manifest
          background_color #02A034 + app icon) so the handoff paints the same
-         green and the same icon in the same centred spot -- the "Welcome to
-         Gokez Mart" line is the only thing added, so the two read as ONE
-         splash instead of two. Hidden for no-JS crawlers (the .js class is set
-         in <head> before first paint) and removed by App once React has
-         painted. No fade: a translucent fade is what left a green shade over
-         the home page, so the splash is opaque until it is removed outright. */
+         green and the same icon in the same centred spot -- the animated brand
+         line is the only thing added, so the two read as ONE splash instead of
+         two. It doubles as the loading screen: App holds it until the catalogue,
+         settings and home sections have resolved, then removes it outright (no
+         fade, since a translucent fade left a green shade over the home page) so
+         the full home page appears in one clean swap. Hidden for no-JS crawlers
+         (the .js class is set in <head> before first paint). */
       #app-splash {
         position: fixed;
         inset: 0;
         z-index: 2147483000;
         display: none;
-        background-color: #02A034;
+        background-color: #14532d;
       }
       .js #app-splash { display: block; }
-      #app-splash img {
+      html.dark #app-splash { background-color: #18191a; }
+      #app-splash .app-splash-content {
         position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 96px;
-        height: 96px;
-        transform: translate(-50%, -50%);
-        display: block;
-      }
-      #app-splash .app-splash-title {
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: calc(50% + 4.75rem);
-        margin: 0;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
         padding: 0 1.5rem;
+      }
+      #app-splash .app-splash-logo {
+        width: min(68vw, 280px);
+        height: auto;
+        display: block;
+        animation: app-splash-float 2.4s ease-in-out infinite;
+      }
+      #app-splash .app-splash-tagline {
+        position: relative;
+        width: 100%;
+        max-width: 32rem;
+        height: 2rem;
+        margin: -0.6rem 0 0;
+      }
+      #app-splash .app-splash-tagline span {
+        position: absolute;
+        inset: 0;
         text-align: center;
-        color: #ffffff;
-        font-family: Poppins, Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-        font-weight: 800;
-        font-size: clamp(1.75rem, 7vw, 2.75rem);
-        line-height: 1.15;
-        letter-spacing: 0.01em;
+        color: rgba(255, 255, 255, 0.92);
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-weight: 600;
+        font-size: clamp(1.2rem, 5vw, 1.6rem);
+        line-height: 1.2;
+        opacity: 1;
+        animation: app-splash-tagline 2.2s ease-in-out infinite;
+      }
+
+      @keyframes app-splash-float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); }
+      }
+      @keyframes app-splash-tagline {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-6px); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-splash .app-splash-logo,
+        #app-splash .app-splash-tagline span { animation: none; }
+        #app-splash .app-splash-tagline span:first-child { transform: none; }
       }
     </style>
   </head>
@@ -221,8 +257,15 @@
       <p>Gokez Mart is a product of <a href="https://gokez.com/" rel="noopener">Gokez Technologies</a>.</p>
     </div>
     <div id="app-splash" aria-hidden="true">
-      <img src="/icons/icon-192.png" alt="" width="104" height="104" fetchpriority="high" />
-      <p class="app-splash-title">Welcome to Gokez Mart</p>
+      <div class="app-splash-content">
+        <picture>
+          <source srcSet="/mart_brand_new.webp" type="image/webp" />
+          <img class="app-splash-logo" src="/mart_brand_new.png" alt="Gokez Mart" width="384" height="256" fetchpriority="high" />
+        </picture>
+        <p class="app-splash-tagline">
+          <span>Shop Local &bull; Support Local</span>
+        </p>
+      </div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
