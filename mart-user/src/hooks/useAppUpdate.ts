@@ -12,6 +12,13 @@ const QUIET_MS = 60 * 1000;
 let reloadRequested = false;
 let updatePending = false;
 
+// Deploy mode, refreshed from /update-policy.json on every poll. This is the
+// single runtime switch for how a new build reaches running clients:
+//   silent (default) — apply on the next open / when the app goes to background.
+//   force            — reload the running app immediately, even mid-session, so
+//                      an open tab or installed PWA never has to be closed.
+let updateMode: 'silent' | 'force' = 'silent';
+
 // Reload the page the moment the app is no longer the thing the customer is
 // looking at. Everything needed to render the new version is already flooded
 // into the service worker cache during `registration.update()` below, so the
@@ -58,6 +65,16 @@ export function useAppUpdate() {
   };
 
   const check = async () => {
+    // Read the deploy mode first, so the reload decision below uses the mode of
+    // the build the edge is actually serving. Any failure keeps the last known
+    // mode (default silent), so a missing policy can never force a reload.
+    try {
+      const policyRes = await fetch(`/update-policy.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (policyRes.ok) {
+        const policy = await policyRes.json();
+        updateMode = policy?.mode === 'force' ? 'force' : 'silent';
+      }
+    } catch {}
     try {
       const res = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) return;
@@ -65,7 +82,9 @@ export function useAppUpdate() {
       if (currentVersion.current === null) {
         currentVersion.current = v;
       } else if (currentVersion.current !== v) {
-        stageUpdate();
+        // force = reload now; silent = wait for a quiet moment.
+        if (updateMode === 'force') requestReload();
+        else stageUpdate();
       }
     } catch {}
     // Browsers only re-check sw.js on their own roughly once a day. Ask now so
@@ -97,7 +116,11 @@ export function useAppUpdate() {
     // Skip the very first load, where the app starts uncontrolled and there is
     // nothing to refresh.
     if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
-    const onControllerChange = () => stageUpdate();
+    const onControllerChange = () => {
+      // A swap can be noticed here too; honor the same deploy mode.
+      if (updateMode === 'force') requestReload();
+      else stageUpdate();
+    };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
     return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
   }, []);

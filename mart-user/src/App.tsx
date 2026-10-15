@@ -82,19 +82,19 @@ export default function App() {
   const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
   const [view, setView] = useState<View>(() => {
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    // The public, crawlable pages keep their own view so direct links and the
+    // prerendered SEO documents still resolve. /delete-account is kept because it
+    // is a standalone account-deletion link.
     if (path === '/about') return 'about';
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
     if (path === '/grievance') return 'grievance';
     if (path === '/feedback') return 'feedback';
-    if (path === '/notification-settings') {
-      window.history.replaceState({}, '', '/account');
-      return 'account';
-    }
     if (path === '/delete-account') return 'delete-account';
-    if (path === '/account') return 'account';
-    if (path === '/categories') return 'categories';
-    if (path === '/deals') return 'deals';
+    // Everything else — including /account — boots to Home: the app must never
+    // open on the login / account screen. Normalise the address bar so it is not
+    // left showing a stale route (e.g. /account) over the Home view.
+    if (path !== '/') window.history.replaceState({}, '', '/');
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
@@ -787,7 +787,7 @@ export default function App() {
           position: fixed bar does on iOS Safari/standalone PWA. */}
       <div className="app-scroll" ref={scrollRef}>
 
-      {!isEmbed && (
+      {!isEmbed && !(view === 'account' && !isLoggedIn) && (
         <Navbar
           onUseMyLocation={useMyLocation}
           activeView={view as 'home' | 'categories' | 'orders' | 'account'}
@@ -799,7 +799,7 @@ export default function App() {
       )}
 
       {/* Closed-store notice: below the header, on every page, never blocking. */}
-      {!isEmbed && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
+      {!isEmbed && !(view === 'account' && !isLoggedIn) && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
 
       {/* One dialog for both checkout mounts. Resolved explicitly in both
           directions so CheckoutPage is never left awaiting a dead promise. */}

@@ -7,12 +7,9 @@ import LoginFlow, { LoginFlowProps } from './LoginFlow';
  * exact same login without forking it. This file is only the chrome: the scrim,
  * the dialog box, the scroll container and the dialog semantics.
  *
- * Those container paddings are load-bearing, not cosmetic — LoginFlow's flush
- * login art is arithmetically tied to this px-5 / safe-area padding here and to
- * the px-7 it switches to at sm (see the note beside the image). Changing them
- * means changing those widths too. overflow-hidden is load-bearing for the same
- * reason: the art has no radius of its own, so this is what gives it the dialog's
- * corners at sm and up.
+ * The container's safe-area top padding keeps the form clear of the notch on an
+ * installed iOS PWA. (The login hero art was removed, so there are no longer any
+ * flush-art width constants tied to this padding.)
  */
 export default function LoginModal(props: LoginFlowProps) {
   return (
