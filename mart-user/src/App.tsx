@@ -318,18 +318,22 @@ export default function App() {
     return () => { cancelled = true; };
   }, [catalogRequest]);
 
-  // Remove the static launch splash (index.html) once the app has painted.
-  // useEffect runs after the first commit is painted, so the home page is
-  // already behind it and the splash can be dropped outright with no fade and
-  // therefore no green shade left over the home page. The short delay just
-  // holds the "Welcome to Gokez Mart" line long enough to be read; main.tsx
-  // keeps a longer timeout as a safety net if this never runs.
+  // Remove the static launch splash (index.html) once the app is ready. The
+  // overlay doubles as the loading screen: it is held until the catalogue,
+  // settings and home sections for the active zone have resolved (loading ===
+  // false), then dropped outright -- no fade -- so the full home page appears in
+  // one clean swap instead of revealing its skeletons. A short minimum keeps the
+  // animated brand line readable when the request returns almost instantly.
+  // main.tsx and the inline timeout in index.html remain as safety nets.
   useEffect(() => {
+    if (loading) return;
     const splash = document.getElementById('app-splash');
     if (!splash) return;
-    const timer = window.setTimeout(() => splash.remove(), 500);
+    const start = (window as unknown as { __splashStart?: number }).__splashStart ?? Date.now();
+    const wait = Math.max(0, 1200 - (Date.now() - start));
+    const timer = window.setTimeout(() => splash.remove(), wait);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loading]);
 
   // Catalog + settings for the active delivery zone. Refires whenever the zone
   // changes (navbar picker, "Use my location", Account toggle, GPS prefill) or
@@ -922,14 +926,19 @@ export default function App() {
             </div>
           )}
 
-          {/* Desktop search opens the complete store catalogue. */}
-          <button type="button" onClick={() => openCatalogSearch()}
-            className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
-            <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
-          </button>
+          {/* The header's colour bleeds down and fades out across the carousel. */}
+          <div className="relative left-1/2 flow-root w-screen -translate-x-1/2 bg-gradient-to-b from-[#FACC15] via-[#FFDF70] to-transparent pb-6 dark:from-[#14532d] dark:via-[#14532d]/55">
+            <div className="mx-auto max-w-6xl px-3 sm:px-6 lg:px-8">
+              {/* Desktop search opens the complete store catalogue. */}
+              <button type="button" onClick={() => openCatalogSearch()}
+                className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
+                <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+              </button>
 
-          <HomeCarousel />
+              <HomeCarousel />
+            </div>
+          </div>
 
           {/* Products */}
           {loading ? (
@@ -1033,36 +1042,34 @@ export default function App() {
           </div>
 
           {/* Feature cards */}
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {['/f1.jpg', '/f2.jpg', '/f3.jpg', '/f4.jpg'].map(src => (
-              <div key={src} className="rounded-2xl shadow-md overflow-hidden">
-                <img src={src} alt="" className="w-full h-full object-contain" />
-              </div>
+          <div className="mt-4 grid grid-cols-4 items-center gap-1.5">
+            {['/f1.png', '/f2.png', '/f3.png', '/f4.png'].map(src => (
+              <img key={src} src={src} alt="" className="w-full" />
             ))}
           </div>
 
           {/* Footer */}
           <footer className="mt-8 border-t-2 border-emerald-200 bg-white/80 pb-5 pt-6 dark:border-emerald-900/60 dark:bg-slate-900/70">
             <div className="mx-auto max-w-xl sm:max-w-4xl">
-              <div className="grid grid-cols-1 divide-y divide-gray-200 dark:divide-slate-700 sm:grid-cols-[1fr_auto] sm:items-center sm:divide-x sm:divide-y-0">
+              <div className="grid grid-cols-1 divide-y divide-gray-200 dark:divide-slate-700 sm:grid-cols-[1fr_auto] sm:items-start sm:divide-x sm:divide-y-0">
                 <section className="pb-5 sm:pb-0 sm:pr-8">
-                  <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 sm:text-left">Contact Gokez Technologies</p>
-                  <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
-                     <a href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent("Hi Gokez Team, I'm a customer on Gokez Mart — I'd like help with...")}`} target="_blank" rel="noopener noreferrer" className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
+                  <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 sm:text-left">Contact</p>
+                  <div className="flex flex-col items-center gap-2 sm:items-start">
+                    <a href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent("Hi Gokez Team, I'm a customer on Gokez Mart — I'd like help with...")}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">
                       <WhatsAppIcon className="h-4 w-4" />
                       <span>WhatsApp</span>
                     </a>
-                    <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl bg-gray-900 px-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:ring-offset-slate-900">
+                    <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">
                       <Mail className="h-4 w-4" />
-                      <span className="break-all text-center">{GOKEZ_SUPPORT.email}</span>
+                      <span className="break-all">{GOKEZ_SUPPORT.email}</span>
                     </a>
                   </div>
                 </section>
-                <nav aria-label="Legal" className="flex flex-col items-center justify-center pt-4 sm:items-end sm:pl-8 sm:pt-0">
-                  <div className="flex items-center justify-center gap-3 sm:flex-col sm:items-end sm:gap-1.5">
-                    <a href="/privacy/" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Privacy Policy</a>
-                    <span className="text-[10px] text-gray-500 dark:text-slate-400 sm:hidden">·</span>
-                    <a href="/terms/" className="text-[10px] text-gray-500 transition-colors hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-300">Terms of Service</a>
+                <nav aria-label="Legal" className="flex flex-col items-center pt-4 sm:items-end sm:pl-8 sm:pt-0">
+                  <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Legal</p>
+                  <div className="flex flex-col items-center gap-2 sm:items-end">
+                    <a href="/privacy/" className="text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">Privacy Policy</a>
+                    <a href="/terms/" className="text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">Terms of Service</a>
                   </div>
                 </nav>
                 </div>

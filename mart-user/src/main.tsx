@@ -21,12 +21,12 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
-// The launch splash is removed by App once React has painted (see App.tsx).
-// This timeout is only a safety net so the overlay can never outlive a failed
-// render. It deliberately avoids requestAnimationFrame, which mobile browsers
-// throttle or suspend during a PWA cold start -- the reason the splash used to
-// stay on top of the home page.
-window.setTimeout(() => document.getElementById('app-splash')?.remove(), 3000);
+// The launch splash is removed by App once the first data load has finished
+// (see App.tsx). This timeout is only a safety net so the overlay can never
+// outlive a failed render, and index.html carries a slightly longer inline
+// fallback for the case where this module never runs at all. Kept comfortably
+// above a normal slow load so the splash is not cut short mid-animation.
+window.setTimeout(() => document.getElementById('app-splash')?.remove(), 6000);
 
 // After the first render on purpose: a throw in service-worker registration
 // would otherwise leave the document empty, with no boundary mounted yet to

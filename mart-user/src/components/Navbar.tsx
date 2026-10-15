@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, Moon, Sun, Loader2, LocateFixed } from 'lucide-react';
+import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
-import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
 
 type View = 'home' | 'categories' | 'orders' | 'account';
@@ -27,7 +26,6 @@ const navItems = [
   export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, onSearchOpen, searchPrompt }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
   const totalItems = useCartStore(s => s.totalItems());
-  const { isDark, toggle } = useThemeStore();
   // Delivery-area state is shared app-wide via the zone store, so the navbar
   // picker, the Account page toggle and the catalog loader always stay in sync.
   const zones = useZoneStore(s => s.zones);
@@ -54,8 +52,8 @@ const navItems = [
             ? <Loader2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 animate-spin" />
             : <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
           <div className="text-left">
-            <p className="text-[9px] text-slate-400 leading-none">Delivery Zone</p>
-            <p className="text-xs font-bold text-white leading-tight truncate max-w-[90px]">
+            <p className="text-[9px] text-black/70 dark:text-white/70 leading-none">Delivery Zone</p>
+            <p className="text-xs font-bold text-black dark:text-white leading-tight truncate max-w-[90px]">
               {selectedZone.name}
             </p>
           </div>
@@ -70,12 +68,12 @@ const navItems = [
           ? <Loader2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 animate-spin" />
           : <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
         <div className="text-left">
-          <p className="text-[9px] text-slate-400 leading-none">Delivery Zone</p>
-          <p className="text-xs font-bold text-white leading-tight truncate max-w-[90px]">
+          <p className="text-[9px] text-black/70 dark:text-white/70 leading-none">Delivery Zone</p>
+          <p className="text-xs font-bold text-black dark:text-white leading-tight truncate max-w-[90px]">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
         </div>
-        <ChevronDown className={`w-3 h-3 text-slate-400 flex-shrink-0 transition-transform ${zoneOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3 h-3 text-black/70 dark:text-white/70 flex-shrink-0 transition-transform ${zoneOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {zoneOpen && (
@@ -110,40 +108,36 @@ const navItems = [
   );
   };
 
-  const DarkToggle = ({ size = 'md' }: { size?: 'sm' | 'md' }) => (
-    <button onClick={toggle}
-      className={`rounded-xl transition-colors flex-shrink-0 bg-white/10 text-amber-300 hover:bg-white/20 ${
-        size === 'sm' ? 'p-1.5' : 'p-2'
-      }`}>
-      {isDark
-        ? <Sun className={size === 'sm' ? 'w-5 h-5' : 'w-5 h-5'} />
-        : <Moon className={size === 'sm' ? 'w-5 h-5' : 'w-5 h-5'} />
-      }
-    </button>
-  );
-
   return (
-    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-[#0f172a] dark:bg-[#18191a] shadow-sm">
+    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#FACC15] to-[#FACC15] shadow-sm dark:from-[#18191a] dark:to-[#14532d]">
 
       {/* Row 1 */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-3">
 
-        {/* Logo + slogan */}
-        <div className="flex-shrink-0 flex flex-col items-start justify-center leading-none">
-          <picture className="dark:hidden">
-            <source srcSet="/mart_brand_new.webp" type="image/webp" />
-            <img src="/mart_brand_new.png" alt="Gokez Mart" width="384" height="256"
-              className="h-[37px] w-[148px] sm:h-[45px] sm:w-[196px] object-contain object-left" />
-          </picture>
-          <picture className="hidden dark:block">
-            <source srcSet="/mart_brand_dark.webp" type="image/webp" />
-            <img src="/mart_brand_dark.png" alt="Gokez Mart" width="384" height="256"
-              className="h-[37px] w-[148px] sm:h-[45px] sm:w-[196px] object-contain object-left" />
-          </picture>
-          <p className="block -mt-1.5 text-[7px] sm:text-[9px] font-black uppercase tracking-wide leading-tight text-white whitespace-nowrap">
-            Shop Local <span className="align-middle">&bull;</span> Support Local
-          </p>
-        </div>
+        {/* Logo + slogan — home only */}
+        {activeView === 'home' && (
+          <div className="flex-shrink-0 flex flex-col items-start justify-center leading-none">
+            <picture className="dark:hidden">
+              <source srcSet="/mart_brand_black.webp" type="image/webp" />
+              <img src="/mart_brand_black.png" alt="Gokez Mart" width="384" height="256"
+                className="h-[48px] w-[192px] sm:h-[58px] sm:w-[232px] object-contain object-left" />
+            </picture>
+            <picture className="hidden dark:block">
+              <source srcSet="/mart_brand_dark.webp" type="image/webp" />
+              <img src="/mart_brand_dark.png" alt="Gokez Mart" width="384" height="256"
+                className="h-[48px] w-[192px] sm:h-[58px] sm:w-[232px] object-contain object-left" />
+            </picture>
+          </div>
+        )}
+
+        {/* Page title — non-home (moved out of page body) */}
+        {activeView !== 'home' && (
+          <div className="flex-shrink-0 min-w-0">
+            <h1 className="truncate text-lg sm:text-xl font-bold text-black dark:text-white">
+              {activeView === 'categories' ? 'Categories' : activeView === 'orders' ? 'My Orders' : 'Account'}
+            </h1>
+          </div>
+        )}
 
         {/* ── Desktop layout ── */}
         {/* Center: nav items + Cart */}
@@ -152,8 +146,8 @@ const navItems = [
             const isActive = activeView === id;
             return (
               <button key={id} onClick={() => onNavChange(id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                  isActive ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 hover:bg-white/10'
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
+                  isActive ? 'text-black bg-black/10 dark:text-white dark:bg-white/20' : 'text-black/75 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10'
                 }`}>
                 <Icon className="w-4 h-4" />
                 {label}
@@ -162,7 +156,7 @@ const navItems = [
           })}
           {/* Cart in center */}
           <button onClick={onCheckout}
-            className="relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-slate-400 hover:bg-white/10 transition-colors">
+            className="relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-black/75 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 transition-colors">
             <ShoppingCart className="w-4 h-4" />
             Cart
             {totalItems > 0 && (
@@ -173,15 +167,13 @@ const navItems = [
           </button>
         </nav>
 
-        {/* Right: Dark mode + Location only */}
+        {/* Right: Location only */}
         <div className="hidden sm:flex items-center gap-2 ml-auto">
-          <DarkToggle />
           <ZoneDropdown />
         </div>
 
-        {/* ── Mobile layout: dark mode + location right ── */}
+        {/* ── Mobile layout: location right ── */}
         <div className="flex sm:hidden items-center gap-1.5 ml-auto">
-          <DarkToggle size="sm" />
           <ZoneDropdown />
         </div>
       </div>
@@ -195,8 +187,6 @@ const navItems = [
           </button>
         </div>
       )}
-
-      <div className="border-b border-gray-100 dark:border-slate-800" />
     </header>
   );
 }
