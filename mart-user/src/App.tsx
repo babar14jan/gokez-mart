@@ -5,7 +5,7 @@ import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
-import { useZoneStore, SHAPOORJI_ZONE } from './store/zoneStore';
+import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore';
 import { getNotificationPermission, requestNotificationPermission, subscribeToPush } from './services/push';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
@@ -234,7 +234,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#18191a' : '#0f172a');
+    if (meta) meta.setAttribute('content', isDark ? '#18191a' : '#218044');
   }, [isDark, view]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
@@ -300,8 +300,11 @@ export default function App() {
         const fetchedZones = zonesRes.data.data || [];
         useZoneStore.getState().setZones(fetchedZones);
         useZoneStore.getState().setSelectedZone(prev => {
-          if (prev && fetchedZones.length > 0 && fetchedZones.some(z => z.id === prev.id)) return prev;
-          if (fetchedZones.length === 0) return SHAPOORJI_ZONE;
+          if (fetchedZones.length === 0) return prev ?? SHAPOORJI_ZONE;
+          // Keep the customer's chosen area (same id) but take the fresh object
+          // from /zones so a name/radius edited in the hub shows up immediately.
+          const sameZone = prev && fetchedZones.find(z => z.id === prev.id);
+          if (sameZone) return sameZone;
           return fetchedZones.find(zone => zone.storeId === SHAPOORJI_ZONE.storeId) || fetchedZones[0];
         });
         if (hasZoneSelected || cancelled) return;
@@ -546,7 +549,7 @@ export default function App() {
   // zone store does the detection + apply; App just surfaces the outcome as a
   // toast, so the navbar and the Account page behave identically. A failed
   // lookup is never a block — the customer picks an area manually instead.
-  const useMyLocation = async () => {
+  const useMyLocation = async (): Promise<ZoneAction> => {
     setLocationNotice(null);
     const result = await useZoneStore.getState().detectAndApply();
     switch (result.status) {
@@ -555,20 +558,21 @@ export default function App() {
         setLocationNotice(`Delivering to ${result.zone.name}`);
         break;
       case 'no_match':
-        setLocationNotice('We couldn\'t match your location to a delivery area. Pick one below — you can order to any available area.');
+        setLocationNotice('No delivery area at your location. Pick one below.');
         break;
       case 'denied':
-        setLocationNotice('Location is blocked. Allow it in your browser settings, or pick your area below.');
+        setLocationNotice('Location is off. Pick your delivery area below.');
         break;
       case 'unavailable':
-        setLocationNotice('Could not get your location. Please try again or pick your area below.');
+        setLocationNotice('Couldn\'t get your location. Pick your delivery area below.');
         break;
       case 'error':
-        setLocationNotice('Something went wrong while finding your area. Please try again.');
+        setLocationNotice('Couldn\'t find your area. Pick your delivery area below.');
         break;
       case 'busy':
         break;
     }
+    return result;
   };
 
   // Success screen
@@ -770,9 +774,10 @@ export default function App() {
 
         {showNamePrompt && <NamePrompt onDone={() => setShowNamePrompt(false)} />}
 
-      {/* Location feedback toast */}
+      {/* Location feedback toast — pinned above the bottom nav so it never
+          hides under the mobile status bar / notch. */}
       {locationNotice && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[70] w-max max-w-[calc(100vw-2rem)] rounded-full bg-slate-900 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-lg dark:bg-slate-700">
+        <div className="fixed bottom-[calc(8.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[70] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl bg-slate-900 px-4 py-3 text-center text-xs font-semibold text-white shadow-xl dark:bg-slate-700">
           {locationNotice}
         </div>
       )}
@@ -927,7 +932,7 @@ export default function App() {
           )}
 
           {/* The header's colour bleeds down and fades out across the carousel. */}
-          <div className="relative left-1/2 flow-root w-screen -translate-x-1/2 bg-gradient-to-b from-[#FACC15] via-[#FFDF70] to-transparent pb-6 dark:from-[#14532d] dark:via-[#14532d]/55">
+          <div className="relative left-1/2 flow-root w-screen -translate-x-1/2 bg-gradient-to-b from-[#2e8b57] to-transparent pb-6 dark:from-[#14532d] dark:via-[#14532d]/55">
             <div className="mx-auto max-w-6xl px-3 sm:px-6 lg:px-8">
               {/* Desktop search opens the complete store catalogue. */}
               <button type="button" onClick={() => openCatalogSearch()}

@@ -824,15 +824,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   if (items.length === 0) {
     return (
       <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
-        <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
+        <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
           <button type="button" onClick={onBack} aria-label="Back to shopping"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
           </button>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
-            <ShoppingBag className="h-5 w-5 text-emerald-500" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
+            <ShoppingBag className="h-5 w-5 text-white" />
           </span>
-          <h1 className="min-w-0 truncate text-base font-bold text-gray-900 dark:text-white">Checkout</h1>
+          <h1 className="min-w-0 truncate text-base font-bold text-white">Checkout</h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
@@ -852,14 +852,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
-        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+      <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
         </button>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
-          <ShoppingCart className="h-5 w-5 text-emerald-500" />
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
+          <ShoppingCart className="h-5 w-5 text-white" />
         </span>
-        <h1 className="min-w-0 truncate text-base font-bold text-gray-900 dark:text-white">My Cart</h1>
+        <h1 className="min-w-0 truncate text-base font-bold text-white">My Cart</h1>
       </div>
 
       <form id="checkout-form" onSubmit={handleSubmit}>

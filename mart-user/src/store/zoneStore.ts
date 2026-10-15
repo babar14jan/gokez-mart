@@ -109,8 +109,9 @@ export const useZoneStore = create<ZoneState>()(
           }
           if (current?.storeId === match.zone.storeId) {
             // Already delivering there — treat it as settled so a later visit
-            // won't re-probe GPS and switch the customer away.
-            set({ zoneSelected: true });
+            // won't re-probe GPS and switch the customer away. Still refresh the
+            // object so a zone renamed in the hub updates the label.
+            set({ selectedZone: match.zone, zoneSelected: true });
             return { status: 'kept', zone: match.zone };
           }
           set({ selectedZone: match.zone, zoneSelected: true });
