@@ -12,6 +12,7 @@ import LoginFlow, { type Step } from '../components/LoginFlow';
 import NamePrompt from '../components/NamePrompt';
 import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
+import { BRAND_SLOGAN } from '../constants/brand';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 
 interface AccountPageProps {
@@ -192,6 +193,9 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   // to branch on cartCount, which sent people to Checkout or Home regardless of
   // where they actually were.
   const loginStep = useRef<Step>('phone');
+  // Mirrors loginStep so the green header can render the heading for the current
+  // step (the phone step hands its heading over to the page).
+  const [loginStepView, setLoginStepView] = useState<Step>('phone');
 
   const leaveAsGuest = () => {
     // The flow's own GuestLink tracks this itself, but showGuestLink is off here,
@@ -231,12 +235,39 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   );
 
   if (!isLoggedIn) {
+    // The green brand header belongs to the phone step only. From OTP onwards the
+    // flow is a plain pale-green page: the step is vertically centred with a
+    // header-height gap at the top, and no header is drawn.
+    const showBrandHeader = loginStepView === 'phone';
     return (
-      <div className="page-shell bg-white dark:bg-slate-900 font-sans">
-        <div className="w-full sm:max-w-sm sm:mx-auto bg-white dark:bg-slate-800 sm:rounded-3xl sm:shadow-xl overflow-hidden">
-          <div className="px-5 py-6 space-y-4">
+      <div className={`page-shell relative font-sans ${
+        showBrandHeader
+          ? 'bg-white dark:bg-slate-900'
+          : 'flex flex-col justify-center bg-[#e8f5e9] pt-[64px] dark:bg-slate-900'
+      }`}>
+        {showBrandHeader && (
+          <div className="relative flex h-[42vh] flex-col items-center justify-end bg-gradient-to-b from-[#218044] to-[#2e8b57] px-6 pb-2 text-center dark:from-[#18191a] dark:to-[#14532d]">
+            <img
+              src="/Gokez_mart_brand_transparent.webp"
+              alt="Gokez Mart"
+              width={1554}
+              height={603}
+              className="h-[60px] w-auto object-contain"
+            />
+            <p className="mt-1 text-[clamp(10px,4.5vw,39px)] font-bold leading-tight text-white/95">{BRAND_SLOGAN}</p>
+            <h1 className="mt-10 text-[17px] font-black leading-tight text-white/80">Login or sign up</h1>
+            <p className="mt-1 text-[13px] text-white/80">Enter your mobile number to continue</p>
+          </div>
+        )}
+        <div className={`relative w-full overflow-hidden ${
+          showBrandHeader
+            ? 'bg-white sm:mx-auto sm:max-w-sm sm:rounded-3xl sm:shadow-xl dark:bg-slate-800'
+            : 'sm:mx-auto sm:max-w-sm'
+        }`}>
+          <div className={showBrandHeader ? "px-5 pb-6 pt-5 space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
 <LoginFlow
               variant="page"
+              showPhoneHeading={false}
               // Deliberately NOT pendingCheckout={cartCount > 0}. That flag is
               // persisted by beginOtp and read back on boot to auto-open the
               // overlay, so setting it here would turn any reload of /account
@@ -248,7 +279,7 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
               // to avoid showing the same action twice. The hero image is NOT --
               // the flow supplies it, so both hosts share one login visual.
               showGuestLink={false}
-              onStepChange={(s) => { loginStep.current = s; }}
+              onStepChange={(s) => { loginStep.current = s; setLoginStepView(s); }}
               onNavigateLegal={(path) => navigate(path)}
               // The page owns the guest exit (the flow's own is switched off above), so it
               // has to do the flow's cleanup itself. LoginFlow.handleGuest normally

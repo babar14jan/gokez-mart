@@ -16,6 +16,14 @@
 /cache-version.json
   Cache-Control: no-cache, no-store, must-revalidate
 
+# Runtime deploy switch, read by useAppUpdate on every poll. "silent" (default)
+# keeps the non-disruptive behavior; "force" makes open tabs and installed PWAs
+# reload themselves to a new build without the customer closing them. Must never
+# be cached, or a flipped mode would be invisible for the cache's lifetime.
+/update-policy.json
+  Content-Type: application/json
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
