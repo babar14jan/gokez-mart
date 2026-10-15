@@ -27,7 +27,7 @@ if (stored) {
     const { state } = JSON.parse(stored);
     const isDark = state?.isDark === true;
     document.documentElement.classList.toggle('dark', isDark);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#18191a' : '#0f172a');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#18191a' : '#218044');
   } catch { document.documentElement.classList.remove('dark'); }
 } else {
   document.documentElement.classList.remove('dark');

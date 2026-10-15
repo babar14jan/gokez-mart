@@ -80,9 +80,9 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
         <div className={`shrink-0 ${query ? 'bg-yellow-100/60 dark:bg-yellow-950/40' : 'bg-white dark:bg-slate-900'}`}>
-          <header className={`flex items-center gap-2 border-b px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] ${query ? 'border-yellow-200/60 dark:border-yellow-900/40' : 'border-gray-100 dark:border-slate-800'}`}>
+          <header className="flex items-center gap-2 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
             <button type="button" onClick={onClose} aria-label="Back to home"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
               <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
             </button>
             <div className="relative min-w-0 flex-1">
@@ -102,9 +102,9 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
             {/* Cart — appears only once the shopper has added something; taps straight to checkout. */}
             {totalItems > 0 && (
               <button type="button" onClick={onOpenCart} aria-label={`View cart, ${totalItems} ${totalItems === 1 ? 'item' : 'items'}`}
-                className="relative mr-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-700 transition-colors hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-700">
+                className="relative mr-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10">
                 <ShoppingCart className="h-6 w-6" />
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-[#14532d] ring-1 ring-black/5">
                   {totalItems}
                 </span>
               </button>
