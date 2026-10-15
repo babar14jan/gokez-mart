@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, Mail, Share2 } from 'lucide-react';
+import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, Mail, Share2, Moon, Sun } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
@@ -35,7 +35,7 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   const { ref: nameInputRef, onKeyDown: handleNameKeyDown, onSurfaceClick: handleNameSurfaceClick } = useKeyboardDismiss();
   const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
   const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
-  const { } = useThemeStore();
+  const { isDark, toggle } = useThemeStore();
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(name || '');
@@ -472,6 +472,21 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
         <section>
         <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Preferences</p>
         <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800 divide-y divide-[#e9edf2] dark:divide-slate-700">
+          <div className="flex min-h-[64px] items-center gap-3 px-4">
+            {isDark
+              ? <Sun className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              : <Moon className="w-4 h-4 text-indigo-500 flex-shrink-0" />}
+            <div className="flex-1 min-w-0">
+              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Dark mode</span>
+              <p className="text-[12px] text-[#687386] dark:text-slate-400">
+                {isDark ? 'On — using the dark theme' : 'Off — using the light theme'}
+              </p>
+            </div>
+            <button onClick={toggle} role="switch" aria-checked={isDark} aria-label="Toggle dark mode"
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isDark ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isDark ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
           <div className="flex min-h-[64px] items-center gap-3 px-4">
             <Navigation className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">

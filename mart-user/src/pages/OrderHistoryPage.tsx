@@ -259,14 +259,6 @@ function OrderDetailSheet({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 interface Props { onBack?: () => void; whatsappNumber?: string; nextOpenLabel?: string | null; }
 
-function OrdersHeader() {
-  return (
-    <div>
-      <h2 className="text-lg font-bold text-gray-900 dark:text-white">My Orders</h2>
-    </div>
-  );
-}
-
 export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, nextOpenLabel }: Props) {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -379,6 +371,8 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   const activeOrders = orders.filter(o => !ALL_CLOSED.includes(o.status));
   const deliveredOrders = orders.filter(o => isRecentlyDelivered(o));
   const pastOrders = orders.filter(o => ALL_CLOSED.includes(o.status) && !isRecentlyDelivered(o));
+  const pastDeliveredCount = pastOrders.filter(o => o.status === 'delivered').length;
+  const pastCancelledCount = pastOrders.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length;
 
   // Filtered past orders
   const filteredPast = pastOrders.filter(o => {
@@ -452,7 +446,6 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
 
     return (
       <div className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-36">
-        <OrdersHeader />
         {/* Same three cards the signed-in view uses. The only guest-specific
             input is canCancel: cancelling needs the order's tracking token, and
             an order whose token is missing cannot be proven to belong to this
@@ -521,8 +514,6 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   return (
     <div className="max-w-lg mx-auto px-3 py-4 space-y-4 pb-36" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onClick={handleSearchSurfaceClick}>
 
-      <OrdersHeader />
-
       {/* Reorder toast */}
       {reorderToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg">
@@ -540,11 +531,6 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
               : 'text-gray-500 dark:text-slate-400'
           }`}>
           Current
-          {(activeOrders.length + deliveredOrders.length) > 0 && (
-            <span className="w-5 h-5 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-              {activeOrders.length + deliveredOrders.length}
-            </span>
-          )}
         </button>
         <button
           onClick={() => setActiveTab('past')}
@@ -553,10 +539,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
               ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
               : 'text-gray-500 dark:text-slate-400'
           }`}>
-          Past
-          {pastOrders.length > 0 && (
-            <span className="text-[10px] text-gray-500 dark:text-slate-400 font-normal">({pastOrders.length})</span>
-          )}
+          History
         </button>
       </div>
 
@@ -585,7 +568,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
               onChange={e => setPastSearch(e.target.value)}
               onKeyDown={handleSearchKeyDown}
               inputMode="search" enterKeyHint="search"
-              placeholder="Search by order #..."
+              placeholder="Search by order number"
               className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm border-0" />
             {pastSearch && (
               <button onClick={() => setPastSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
@@ -594,16 +577,19 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
             )}
           </div>
           <div className="flex gap-2">
-            {(['all', 'delivered', 'cancelled'] as const).map(f => (
-              <button key={f} onClick={() => setPastFilter(f)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  pastFilter === f
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 shadow-sm'
-                }`}>
-                {f === 'all' ? 'All' : f === 'delivered' ? 'Delivered' : 'Cancelled'}
-              </button>
-            ))}
+            {(['all', 'delivered', 'cancelled'] as const).map(f => {
+              const count = f === 'all' ? pastOrders.length : f === 'delivered' ? pastDeliveredCount : pastCancelledCount;
+              return (
+                <button key={f} onClick={() => setPastFilter(f)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    pastFilter === f
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 shadow-sm'
+                  }`}>
+                  {f === 'all' ? 'All' : f === 'delivered' ? 'Delivered' : 'Cancelled'} ({count})
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
