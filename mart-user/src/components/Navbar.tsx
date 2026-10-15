@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
-import { useZoneStore } from '../store/zoneStore';
+import { useZoneStore, type ZoneAction } from '../store/zoneStore';
 
 type View = 'home' | 'categories' | 'orders' | 'account';
 
 
 interface NavbarProps {
-  onUseMyLocation?: () => void | Promise<void>;
+  onUseMyLocation?: () => void | Promise<ZoneAction | void>;
   activeView: View;
   onNavChange: (v: View) => void;
   onCheckout: () => void;
@@ -38,10 +38,16 @@ const navItems = [
   };
 
   const ZoneDropdown = () => {
-    const triggerMyLocation = () => {
+    const triggerMyLocation = async () => {
       if (!onUseMyLocation || locationBusy) return;
       setZoneOpen(false);
-      void onUseMyLocation();
+      const result = await onUseMyLocation();
+      // GPS never dead-ends: if it couldn't resolve a delivery area (no match,
+      // blocked, unavailable or error) reopen the picker so the customer can
+      // choose one manually from the dropdown.
+      if (result && result.status !== 'applied' && result.status !== 'kept' && result.status !== 'busy') {
+        setZoneOpen(true);
+      }
     };
     // Only show dropdown if more than 1 zone
     if (zones.length <= 1) {
@@ -49,11 +55,11 @@ const navItems = [
       return (
         <button type="button" onClick={triggerMyLocation} className="flex items-center gap-1 hover:opacity-80 transition-opacity">
           {locationBusy
-            ? <Loader2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 animate-spin" />
-            : <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
+            ? <Loader2 className="w-6 h-6 text-yellow-400 flex-shrink-0 animate-spin" />
+            : <MapPin className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
           <div className="text-left">
-            <p className="text-[9px] text-black/70 dark:text-white/70 leading-none">Delivery Zone</p>
-            <p className="text-xs font-bold text-black dark:text-white leading-tight truncate max-w-[90px]">
+            <p className="text-[9px] text-white leading-none">Delivery Zone</p>
+            <p className="text-xs font-bold text-white leading-tight">
               {selectedZone.name}
             </p>
           </div>
@@ -65,42 +71,43 @@ const navItems = [
       <button onClick={() => setZoneOpen(o => !o)}
         className="flex items-center gap-1 hover:opacity-80 transition-opacity">
         {locationBusy
-          ? <Loader2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 animate-spin" />
-          : <MapPin className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />}
+          ? <Loader2 className="w-6 h-6 text-yellow-400 flex-shrink-0 animate-spin" />
+          : <MapPin className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
         <div className="text-left">
-          <p className="text-[9px] text-black/70 dark:text-white/70 leading-none">Delivery Zone</p>
-          <p className="text-xs font-bold text-black dark:text-white leading-tight truncate max-w-[90px]">
+          <p className="text-[9px] text-white leading-none">Delivery Zone</p>
+          <p className="text-xs font-bold text-white leading-tight">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
         </div>
-        <ChevronDown className={`w-3 h-3 text-black/70 dark:text-white/70 flex-shrink-0 transition-transform ${zoneOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3 h-3 self-end mb-0.5 text-white/80 flex-shrink-0 transition-transform ${zoneOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {zoneOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setZoneOpen(false)} />
-          <div className="absolute top-full mt-1 right-0 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 py-2 z-20">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-3 pb-1.5">Delivery Areas</p>
+          <div className="absolute left-0 top-full z-20 mt-2 max-h-[70vh] w-56 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-xl border border-gray-100 bg-white py-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">Delivery Areas</p>
             {onUseMyLocation && (
               <button onClick={triggerMyLocation} disabled={locationBusy}
-                className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60">
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-gray-50 disabled:opacity-60 dark:hover:bg-slate-700">
                 {locationBusy
-                  ? <Loader2 className="w-4 h-4 text-emerald-500 flex-shrink-0 animate-spin" />
-                  : <LocateFixed className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">{locationBusy ? 'Finding location...' : 'Use my location'}</span>
+                  ? <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-emerald-500" />
+                  : <LocateFixed className="h-4 w-4 flex-shrink-0 text-emerald-500" />}
+                <span className="text-[13px] font-semibold text-gray-900 dark:text-white">{locationBusy ? 'Finding location...' : 'Use my location'}</span>
               </button>
             )}
+            <div className="my-1 border-t border-gray-100 dark:border-slate-700" />
             {zones.map(zone => (
               <button key={zone.id} onClick={() => selectZone(zone)}
-                className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{zone.name}</p>
-                  <p className="text-[10px] text-gray-500">{zone.radiusKm}km radius</p>
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-700">
+                <div className="min-w-0 text-left">
+                  <p className="truncate text-[13px] font-semibold text-gray-900 dark:text-white">{zone.name}</p>
+                  <p className="text-[10px] text-gray-500">{zone.radiusKm} km radius</p>
                 </div>
-                {selectedZone?.id === zone.id && <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+                {selectedZone?.id === zone.id && <Check className="h-4 w-4 flex-shrink-0 text-emerald-500" />}
               </button>
             ))}
-            {zones.length === 0 && <p className="text-xs text-gray-500 px-3 py-2">No areas available</p>}
+            {zones.length === 0 && <p className="px-3 py-2 text-xs text-gray-500">No areas available</p>}
           </div>
         </>
       )}
@@ -109,35 +116,15 @@ const navItems = [
   };
 
   return (
-    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#FACC15] to-[#FACC15] shadow-sm dark:from-[#18191a] dark:to-[#14532d]">
+    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#218044] to-[#2e8b57] shadow-sm dark:from-[#18191a] dark:to-[#14532d]">
 
       {/* Row 1 */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-3">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] flex items-center gap-3">
 
-        {/* Logo + slogan — home only */}
-        {activeView === 'home' && (
-          <div className="flex-shrink-0 flex flex-col items-start justify-center leading-none">
-            <picture className="dark:hidden">
-              <source srcSet="/mart_brand_black.webp" type="image/webp" />
-              <img src="/mart_brand_black.png" alt="Gokez Mart" width="384" height="256"
-                className="h-[48px] w-[192px] sm:h-[58px] sm:w-[232px] object-contain object-left" />
-            </picture>
-            <picture className="hidden dark:block">
-              <source srcSet="/mart_brand_dark.webp" type="image/webp" />
-              <img src="/mart_brand_dark.png" alt="Gokez Mart" width="384" height="256"
-                className="h-[48px] w-[192px] sm:h-[58px] sm:w-[232px] object-contain object-left" />
-            </picture>
-          </div>
-        )}
-
-        {/* Page title — non-home (moved out of page body) */}
-        {activeView !== 'home' && (
-          <div className="flex-shrink-0 min-w-0">
-            <h1 className="truncate text-lg sm:text-xl font-bold text-black dark:text-white">
-              {activeView === 'categories' ? 'Categories' : activeView === 'orders' ? 'My Orders' : 'Account'}
-            </h1>
-          </div>
-        )}
+        {/* Location — left */}
+        <div className="flex items-center gap-1.5">
+          <ZoneDropdown />
+        </div>
 
         {/* ── Desktop layout ── */}
         {/* Center: nav items + Cart */}
@@ -166,16 +153,6 @@ const navItems = [
             )}
           </button>
         </nav>
-
-        {/* Right: Location only */}
-        <div className="hidden sm:flex items-center gap-2 ml-auto">
-          <ZoneDropdown />
-        </div>
-
-        {/* ── Mobile layout: location right ── */}
-        <div className="flex sm:hidden items-center gap-1.5 ml-auto">
-          <ZoneDropdown />
-        </div>
       </div>
 
       {/* Row 2: Search — the Categories view owns its own category-scoped filter. */}

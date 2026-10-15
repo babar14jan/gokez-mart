@@ -100,16 +100,16 @@ export default function AddressSheet({
     <div className="fixed inset-0 z-[70] bg-white dark:bg-slate-900">
       {/* Same full-height surface as the cart: header row, then the scrolling body */}
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex shrink-0 items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
           <button type="button" onClick={canReturnToList ? () => setEditingId(null) : onClose}
             aria-label={canReturnToList ? 'Back to saved addresses' : 'Close address'}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
           </button>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
-            <MapPin className="h-5 w-5 text-emerald-500" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
+            <MapPin className="h-5 w-5 text-white" />
           </span>
-          <h1 className="min-w-0 truncate text-base font-bold text-gray-900 dark:text-white">{title}</h1>
+          <h1 className="min-w-0 truncate text-base font-bold text-white">{title}</h1>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom,0px)]">
