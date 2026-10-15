@@ -1,0 +1,5 @@
+{
+  "mode": "silent",
+  "_mode_values": ["silent", "force"],
+  "_note": "silent = a new deploy is picked up on the next open/background (never interrupts a live session). force = any open tab or installed PWA reloads itself to the new build within ~2 minutes without being closed. Set to \"force\" only for a planned deploy, then set back to silent."
+}

@@ -100,7 +100,7 @@ export default function AddressSheet({
     <div className="fixed inset-0 z-[70] bg-white dark:bg-slate-900">
       {/* Same full-height surface as the cart: header row, then the scrolling body */}
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+        <div className="flex shrink-0 items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
           <button type="button" onClick={canReturnToList ? () => setEditingId(null) : onClose}
             aria-label={canReturnToList ? 'Back to saved addresses' : 'Close address'}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">

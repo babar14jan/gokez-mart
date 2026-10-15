@@ -34,6 +34,12 @@ export interface LoginFlowProps {
    * supply this simply gets non-navigating buttons.
    */
   onNavigateLegal?: (path: string) => void;
+  /**
+   * The Account page draws the phone step's heading in its own green header, so
+   * it switches this off to avoid showing the same "Login or sign up" twice. The
+   * overlay keeps it (default true).
+   */
+  showPhoneHeading?: boolean;
 }
 
 export type Step = 'phone' | 'otp' | 'profile' | 'offer';
@@ -51,10 +57,10 @@ export type Step = 'phone' | 'otp' | 'profile' | 'offer';
  * what lets one flow sit inside the checkout overlay and inside the Account page.
  * `variant` covers the two things that genuinely differ: the overlay can be
  * dismissed with Escape and cancels its own safe-area top padding, while the page
- * cancels its py-6 instead. Everything else -- steps, OTP, analytics, the guest
- * exit and the login art -- is identical.
+ * cancels its py-6 instead. Everything else -- steps, OTP, analytics and the guest
+ * exit -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onNameRequested, onStepChange, onNavigateLegal }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onNameRequested, onStepChange, onNavigateLegal, showPhoneHeading = true }: LoginFlowProps) {
   const isModal = variant === 'modal';
   // See useFinePointer: auto-focusing a field on a phone opens the keyboard on
   // arrival and the browser scrolls to it, which is the page shake we are avoiding.
@@ -321,46 +327,18 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             </>
           ) : step === 'phone' ? (
             <>
-              {/* One login visual for the whole app. The overlay used to show a
-                    separate illustration from the Account page, so the same login
-                    looked like two different screens; the page's Guest_page.webp is
-                    now the only one, supplied by the flow for both hosts.
+              {showPhoneHeading && (
+                <div className="mb-5 text-center">
+                  <h2 id="login-title" className="text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
+                    Login or sign up
+                  </h2>
+                  <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
+                    Enter your mobile number to continue
+                  </p>
+                </div>
+              )}
 
-                    Never cropped: sized by its own intrinsic ratio (936x913) rather
-                    than a capped-height object-cover box, which used to cut about a
-                    third of it off on a phone. The host scrolls, so all of it shows.
-
-                    Flush to the host edges at EVERY width, which is why there is no
-                    inset/rounded "framed" variant on desktop. Two things that bit
-                    here, both worth keeping in mind before editing:
-
-                    1. `max-w-none` is load-bearing. Tailwind's preflight sets
-                       `img { max-width: 100% }`, which clamps the bleed width back
-                       to the container's content box no matter how wide `width`
-                       says. Combined with -mx-5 that left a 40px gap down the right
-                       and a flush left edge. This was the real cause; the `w-full`
-                       clash below was only the secondary one.
-
-                    2. `w-full` must NOT appear alongside the bleed width. Both set
-                       `width`, so the one emitted later in the stylesheet wins the
-                       cascade regardless of class order in the attribute -- and
-                       Tailwind happened to emit `.w-full` after it. Only one width
-                       rule per breakpoint, never two.
-
-                    3. The bleed is arithmetically tied to each host's own padding:
-                       px-5 (2.5rem) for the Account page at all widths, but the
-                       overlay switches to px-7 (3.5rem) from sm up. Change either
-                       host's padding and these two numbers have to move with it.
-                       Both hosts clip (overflow-hidden) so the flush art takes the
-                       card/dialog corner radius instead of needing its own. */}
-              <img src="/Guest_page.webp" alt="Welcome to Gokez Mart"
-                width={936} height={913} decoding="async"
-                className={`login-art mb-4 block h-auto max-w-none -mx-5 w-[calc(100%_+_2.5rem)] rounded-none ${
-                  isModal
-                    ? '-mt-[max(1rem,env(safe-area-inset-top))] sm:-mx-7 sm:w-[calc(100%_+_3.5rem)]'
-                    : '-mt-6'}`} />
-
-              <form onSubmit={handleSendOtp} className="mt-6 space-y-3">
+              <form onSubmit={handleSendOtp} className="space-y-3">
                 <ErrorNote id="login-error" />
 
                 <label htmlFor="login-phone" className="sr-only">Mobile number</label>
@@ -431,13 +409,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             </>
           ) : (
             <>
-              <img src="/otp_page.webp" alt="Enter the verification code"
-                width={1254} height={654} decoding="async"
-                className={`login-art mb-4 block h-auto max-w-none -mx-5 w-[calc(100%_+_2.5rem)] rounded-none ${
-                  isModal
-                    ? '-mt-[max(1rem,env(safe-area-inset-top))] sm:-mx-7 sm:w-[calc(100%_+_3.5rem)]'
-                    : '-mt-6'}`} />
-
               <div className="text-center">
                 <h2 id="login-title" className="text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
                   OTP Verification

@@ -824,7 +824,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   if (items.length === 0) {
     return (
       <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
-        <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+        <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
           <button type="button" onClick={onBack} aria-label="Back to shopping"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
@@ -852,7 +852,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+      <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
         <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
         </button>

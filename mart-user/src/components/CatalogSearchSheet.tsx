@@ -80,7 +80,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
         <div className={`shrink-0 ${query ? 'bg-yellow-100/60 dark:bg-yellow-950/40' : 'bg-white dark:bg-slate-900'}`}>
-          <header className="flex items-center gap-2 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+          <header className="flex items-center gap-2 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
             <button type="button" onClick={onClose} aria-label="Back to home"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
               <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
@@ -90,7 +90,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
                 value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
                 onKeyDown={handleKeyDown}
                 placeholder={searchPrompt}
-                className="w-full rounded-xl border-0 bg-gray-100 py-2.5 pl-4 pr-11 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
+                className="w-full rounded-xl border-0 bg-white py-2 pl-4 pr-11 text-sm text-gray-900 shadow-sm ring-1 ring-black/5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/70 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
               {search && (
                 <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
                   className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">

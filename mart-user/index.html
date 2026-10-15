@@ -170,7 +170,7 @@
       .js .seo-static { display: none; }
 
       /* Launch splash. Continues the phone's own PWA splash (manifest
-         background_color #02A034 + app icon) so the handoff paints the same
+         background_color #218044 + app icon) so the handoff paints the same
          green and the same icon in the same centred spot -- the animated brand
          line is the only thing added, so the two read as ONE splash instead of
          two. It doubles as the loading screen: App holds it until the catalogue,
@@ -183,7 +183,7 @@
         inset: 0;
         z-index: 2147483000;
         display: none;
-        background-color: #14532d;
+        background-color: #218044;
       }
       .js #app-splash { display: block; }
       html.dark #app-splash { background-color: #18191a; }
@@ -197,7 +197,7 @@
         padding: 0 1.5rem;
       }
       #app-splash .app-splash-logo {
-        width: min(68vw, 280px);
+        width: min(56vw, 220px);
         height: auto;
         display: block;
         animation: app-splash-float 2.4s ease-in-out infinite;
@@ -207,7 +207,7 @@
         width: 100%;
         max-width: 32rem;
         height: 2rem;
-        margin: -0.6rem 0 0;
+        margin: 0.75rem 0 0;
       }
       #app-splash .app-splash-tagline span {
         position: absolute;
@@ -259,10 +259,7 @@
     </div>
     <div id="app-splash" aria-hidden="true">
       <div class="app-splash-content">
-        <picture>
-          <source srcSet="/mart_brand_new.webp" type="image/webp" />
-          <img class="app-splash-logo" src="/mart_brand_new.png" alt="Gokez Mart" width="384" height="256" fetchpriority="high" />
-        </picture>
+        <img class="app-splash-logo" src="/Gokez_mart_brand_transparent.webp" alt="Gokez Mart" width="1554" height="603" fetchpriority="high" />
         <p class="app-splash-tagline">
           <span>Shop Local &bull; Support Local</span>
         </p>
