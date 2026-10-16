@@ -145,11 +145,22 @@
          comes down on its own. -->
     <script>
       document.documentElement.classList.add('js');
+      var skipLaunchSplash = false;
+      try {
+        skipLaunchSplash = sessionStorage.getItem('mart-pull-refresh') === '1';
+        if (skipLaunchSplash) sessionStorage.removeItem('mart-pull-refresh');
+      } catch {}
+      if (skipLaunchSplash) document.documentElement.classList.add('skip-launch-splash');
+      var standaloneLaunch = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+        || navigator.standalone === true;
+      if (standaloneLaunch) document.documentElement.classList.add('installed-pwa');
       window.__splashStart = Date.now();
-      window.setTimeout(function () {
-        var splash = document.getElementById('app-splash');
-        if (splash) splash.remove();
-      }, 8000);
+      if (!skipLaunchSplash && !standaloneLaunch) {
+        window.setTimeout(function () {
+          var splash = document.getElementById('app-splash');
+          if (splash) splash.remove();
+        }, 8000);
+      }
     </script>
     <style>
       /* Paint the app background before CSS/JS arrive. An update swap reloads
@@ -169,15 +180,8 @@
       .seo-static nav { margin-top: 1.25rem; font-size: 0.875rem; display: flex; gap: 1rem; flex-wrap: wrap; }
       .js .seo-static { display: none; }
 
-      /* Launch splash. Continues the phone's own PWA splash (manifest
-         background_color #218044 + app icon) so the handoff paints the same
-         green and the same icon in the same centred spot -- the animated brand
-         line is the only thing added, so the two read as ONE splash instead of
-         two. It doubles as the loading screen: App holds it until the catalogue,
-         settings and home sections have resolved, then removes it outright (no
-         fade, since a translucent fade left a green shade over the home page) so
-         the full home page appears in one clean swap. Hidden for no-JS crawlers
-         (the .js class is set in <head> before first paint). */
+      /* Browser-tab launch splash. Installed PWAs use the platform splash and
+        reveal the app's loading UI directly, avoiding a second splash layer. */
       #app-splash {
         position: fixed;
         inset: 0;
@@ -186,7 +190,8 @@
         background-color: #218044;
       }
       .js #app-splash { display: block; }
-      html.dark #app-splash { background-color: #18191a; }
+      .skip-launch-splash #app-splash { display: none !important; }
+      .installed-pwa #app-splash { display: none !important; }
       #app-splash .app-splash-content {
         position: absolute;
         inset: 0;

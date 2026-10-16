@@ -105,6 +105,12 @@ router.post('/funnel/event',   ctrl.postFunnelEvent);
 router.post('/funnel/cart',    authenticateCustomerIfPresent, ctrl.postFunnelCart);
 router.post('/funnel/campaign', ctrl.postFunnelCampaignTouch);
 
+// ── Install analytics (separate from marketing funnel) ─────────────────────────
+router.post('/install/event', ctrl.postInstallEvent);
+
+// ── Install analytics (admin) ─────────────────────────────────────────────────
+router.get('/admin/install-analytics', authenticate, requireSuperAdmin, ctrl.adminGetInstallAnalytics);
+
 // ── Admin settings ────────────────────────────────────────────────────────────
 router.get('/admin/settings',          authenticate, ctrl.adminGetSettings);     // ?storeId=
 router.put('/admin/settings',          authenticate, ctrl.adminUpdateSettings);

@@ -6,10 +6,10 @@ import AddressForm, { type AddressCoordinates } from './AddressForm';
 import ConfirmDialog from './ConfirmDialog';
 
 /**
- * Shared address sheet used by both the account page and checkout.
+ * Shared address sheet used by both the profile page and checkout.
  *
  * `select` mode (checkout): the shopper taps a saved address to deliver to.
- * `manage` mode (account): the shopper taps an address to edit it, with
+ * `manage` mode (profile): the shopper taps an address to edit it, with
  * set-as-default and delete offered alongside the form.
  *
  * Both modes render the same full-screen sheet, header, rows and form, so the
@@ -38,12 +38,15 @@ export interface AddressSheetProps {
   nameSlot?: React.ReactNode;
   requiresName?: boolean;
   focusFirstField?: boolean;
+  /** Overlay stacking class. Raise it when hosted above a full-screen page. */
+  zClassName?: string;
 }
 
 export default function AddressSheet({
   addresses, mode, onClose, selectedAddress, onSelectAddress,
   onAddAddress, onUpdateAddress, onDeleteAddress, onSetDefaultAddress,
   initialEditingId = null, nameSlot, requiresName = false, focusFirstField = false,
+  zClassName = 'z-[70]',
 }: AddressSheetProps) {
   const [editingId, setEditingId] = useState<string | 'new' | null>(initialEditingId);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -97,18 +100,15 @@ export default function AddressSheet({
   // or stacking context) can push it down or paint the app header on top of it.
   // The sheet is full-screen from the very top (safe-area padded) to the bottom.
   return createPortal(
-    <div className="fixed inset-0 z-[70] bg-white dark:bg-slate-900">
+    <div className={`fixed inset-0 ${zClassName} bg-white dark:bg-slate-900`}>
       {/* Same full-height surface as the cart: header row, then the scrolling body */}
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+        <div className="flex shrink-0 items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#18191a]">
           <button type="button" onClick={canReturnToList ? () => setEditingId(null) : onClose}
             aria-label={canReturnToList ? 'Back to saved addresses' : 'Close address'}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
           </button>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
-            <MapPin className="h-5 w-5 text-white" />
-          </span>
           <h1 className="min-w-0 truncate text-base font-bold text-white">{title}</h1>
         </div>
 
@@ -158,25 +158,33 @@ export default function AddressSheet({
                   {addresses.map(address => {
                     const selected = mode === 'select' && address.address === selectedAddress;
                     return (
-                      <button type="button" key={address.id}
-                        onClick={() => (mode === 'select' ? handleSelect(address) : setEditingId(address.id))}
-                        className="flex w-full items-start gap-3 px-5 py-3.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700">
-                        <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl ${selected || address.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
-                          <MapPin className={`h-3.5 w-3.5 ${selected || address.isDefault ? 'text-emerald-500' : 'text-gray-500'}`} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-gray-700 dark:text-slate-300">{address.label}</span>
-                            {address.isDefault && (
-                              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Default</span>
-                            )}
+                      <div key={address.id} className="flex items-stretch">
+                        <button type="button"
+                          onClick={() => (mode === 'select' ? handleSelect(address) : setEditingId(address.id))}
+                          className="flex min-w-0 flex-1 items-start gap-3 px-5 py-3.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700">
+                          <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl ${selected || address.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
+                            <MapPin className={`h-3.5 w-3.5 ${selected || address.isDefault ? 'text-emerald-500' : 'text-gray-500'}`} />
                           </div>
-                          <p className="mt-0.5 text-[11px] leading-snug text-gray-500">{address.address}</p>
-                        </div>
-                        {mode === 'select'
-                          ? (selected && <Check className="mt-1 h-4 w-4 flex-shrink-0 text-emerald-500" />)
-                          : <PenLine className="mt-1 h-4 w-4 flex-shrink-0 text-gray-400" />}
-                      </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-gray-700 dark:text-slate-300">{address.label}</span>
+                              {address.isDefault && (
+                                <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Default</span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-[11px] leading-snug text-gray-500">{address.address}</p>
+                          </div>
+                          {mode === 'select'
+                            ? (selected && <Check className="mt-1 h-4 w-4 flex-shrink-0 text-emerald-500" />)
+                            : <PenLine className="mt-1 h-4 w-4 flex-shrink-0 text-gray-400" />}
+                        </button>
+                        {mode === 'select' && onUpdateAddress && (
+                          <button type="button" onClick={() => setEditingId(address.id)} aria-label={`Edit ${address.label} address`}
+                            className="flex w-12 shrink-0 items-center justify-center text-gray-400 transition-colors hover:bg-gray-50 hover:text-emerald-600 dark:hover:bg-slate-700 dark:hover:text-emerald-400">
+                            <PenLine className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

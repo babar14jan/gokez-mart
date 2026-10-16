@@ -179,6 +179,10 @@ export const customerLeadsApi = {
   downloadMarketingCsv: () => api.get('/admin/customer-leads/export', { responseType: 'blob' }),
 };
 
+export const installAnalyticsApi = {
+  getSummary: (from?: string, to?: string) => api.get('/admin/install-analytics', { params: { from, to } }),
+};
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 export const settingsApi = {
   getAll: (storeId?: string) => api.get('/admin/settings', { params: storeId ? { storeId } : {} }),

@@ -1,6 +1,6 @@
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, CheckCircle, Mail, BellRing } from 'lucide-react';
+import { Search, CheckCircle, BellRing, RefreshCw } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -23,7 +23,6 @@ import LoginModal from './components/LoginModal';
 import CheckoutPage from './pages/CheckoutPage';
 import DealsPage from './pages/DealsPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
-import NamePrompt from './components/NamePrompt';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
 import { useCartStore } from './store/cartStore';
@@ -33,18 +32,34 @@ import { useKeyboardInset } from './utils/useKeyboardInset';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
+import { useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
-import { GOKEZ_SUPPORT } from './constants/gokezSupport';
-import WhatsAppIcon from './components/WhatsAppIcon';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
 type View = 'home' | 'about' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
+
+// Canonical URL for each view. Used to give every tab its own history entry so a
+// sub-page opened from it can return there with the back button.
+const VIEW_PATH: Record<View, string> = {
+  home: '/',
+  about: '/about',
+  categories: '/categories',
+  deals: '/deals',
+  orders: '/orders',
+  account: '/account',
+  privacy: '/privacy',
+  terms: '/terms',
+  grievance: '/grievance',
+  'delete-account': '/delete-account',
+  feedback: '/feedback',
+};
 
 type PermissionPrompt = 'order-notifications' | null;
 
 const PERMISSION_PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const ORDER_NOTIFICATION_PROMPT_KEY = 'mart_order_notification_prompted_at';
+const PULL_REFRESH_THRESHOLD = 76;
 
 function isPermissionPromptDue(storageKey: string): boolean {
   const lastPromptedAt = Number(localStorage.getItem(storageKey) || 0);
@@ -91,10 +106,11 @@ export default function App() {
     if (path === '/grievance') return 'grievance';
     if (path === '/feedback') return 'feedback';
     if (path === '/delete-account') return 'delete-account';
-    // Everything else — including /account — boots to Home: the app must never
-    // open on the login / account screen. Normalise the address bar so it is not
-    // left showing a stale route (e.g. /account) over the Home view.
-    if (path !== '/') window.history.replaceState({}, '', '/');
+    if (path === '/account') return 'account';
+    if (path === '/') return useCustomerAuthStore.getState().isLoggedIn ? 'home' : 'account';
+    // Unrecognized/private routes boot to Home and are normalized so the address
+    // bar is not left showing a stale route over the Home view.
+    window.history.replaceState({}, '', '/');
     return 'home';
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
@@ -119,6 +135,20 @@ export default function App() {
 
   const { isLoggedIn } = useCustomerAuthStore();
 
+  // Guest "Hi Guest" login on the Account tab: opened from the header or the
+  // page's "Continue Login" card (both read the shared store), and closed the
+  // moment the tab is left so a return visit lands on the Account page rather
+  // than mid-login.
+  const accountLoginOpen = useAccountLoginStore((s) => s.open);
+  useEffect(() => {
+    if (view !== 'account') useAccountLoginStore.getState().closeLogin();
+  }, [view]);
+
+  // Secondary Account/Profile sub-pages render their own green header (see
+  // PageHeader), so the browsing Navbar — with its delivery-zone selector —
+  // must not stack above it. Embed mode is already handled by `isEmbed`.
+  const accountSubPage = view === 'feedback' || view === 'grievance' || view === 'privacy' || view === 'terms' || view === 'delete-account' || view === 'about';
+
   // Load the customer's address book from the backend on login.
   // (No longer auto-migrates "legacy local" addresses — that path could pick up
   // whatever was left in the shared local store from a previous session/customer.)
@@ -127,7 +157,6 @@ export default function App() {
     useCustomerStore.getState().loadAddresses();
   }, [isLoggedIn]);
   const [showLoginModal, setShowLoginModal] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()));
-  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [permissionPrompt, setPermissionPrompt] = useState<PermissionPrompt>(null);
   const [orderNotificationError, setOrderNotificationError] = useState('');
   const [enablingOrderNotifications, setEnablingOrderNotifications] = useState(false);
@@ -225,6 +254,54 @@ export default function App() {
   // so opening and closing it leaves `view` untouched and the offset survives.
   const showingSuccess = Boolean(successData);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pullStart = useRef<{ x: number; y: number } | null>(null);
+  const pullDistance = useRef(0);
+  const [pullDistanceVisible, setPullDistanceVisible] = useState(0);
+
+  const handlePullTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1 || scrollRef.current?.scrollTop !== 0) return;
+    if (checkoutActive || showLoginModal || catalogSearchOpen || comboSheet || dealsSheet) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
+    const touch = event.touches[0];
+    pullStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handlePullTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const start = pullStart.current;
+    const touch = event.touches[0];
+    if (!start || !touch) return;
+    const deltaY = touch.clientY - start.y;
+    const deltaX = Math.abs(touch.clientX - start.x);
+    if (deltaY <= 0 || deltaX > Math.max(16, deltaY * 0.6)) {
+      pullStart.current = null;
+      pullDistance.current = 0;
+      setPullDistanceVisible(0);
+      return;
+    }
+    pullDistance.current = deltaY;
+    setPullDistanceVisible(Math.min(deltaY, PULL_REFRESH_THRESHOLD));
+  };
+
+  const finishPullGesture = () => {
+    pullStart.current = null;
+    if (pullDistance.current >= PULL_REFRESH_THRESHOLD) {
+      try {
+        sessionStorage.setItem('mart-pull-refresh', '1');
+      } catch {}
+      window.setTimeout(() => window.location.reload(), 180);
+      return;
+    }
+    pullDistance.current = 0;
+    setPullDistanceVisible(0);
+  };
+
+  const cancelPullGesture = () => {
+    pullStart.current = null;
+    pullDistance.current = 0;
+    setPullDistanceVisible(0);
+  };
+
   useEffect(() => {
     window.scrollTo(0, 0);
     // The page now scrolls inside .app-scroll, not the document, so reset it too.
@@ -321,12 +398,9 @@ export default function App() {
     return () => { cancelled = true; };
   }, [catalogRequest]);
 
-  // Remove the static launch splash (index.html) once the app is ready. The
-  // overlay doubles as the loading screen: it is held until the catalogue,
-  // settings and home sections for the active zone have resolved (loading ===
-  // false), then dropped outright -- no fade -- so the full home page appears in
-  // one clean swap instead of revealing its skeletons. A short minimum keeps the
-  // animated brand line readable when the request returns almost instantly.
+  // Remove the browser-tab launch splash (index.html) once the app is ready.
+  // Installed PWAs hide this overlay and show their loading UI beneath the
+  // platform splash instead.
   // main.tsx and the inline timeout in index.html remain as safety nets.
   useEffect(() => {
     if (loading) return;
@@ -440,6 +514,12 @@ export default function App() {
   const handleNavChange = (v: View) => {
     setCatalogSearchOpen(false);
     setView(v);
+    // Give each tab its own history entry so a sub-page opened from it (feedback,
+    // grievance, privacy, terms, delete account) returns here on back instead of
+    // falling through to Home, since the tab itself created no entry.
+    const nextPath = VIEW_PATH[v];
+    const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+    if (currentPath !== nextPath) window.history.pushState({}, '', nextPath);
   };
 
 
@@ -473,6 +553,7 @@ export default function App() {
     setCheckoutActive(false);
     setCatalogSearchOpen(false);
     setShowLoginModal(false);
+    useAccountLoginStore.getState().openLogin();
     window.history.pushState({}, '', '/account');
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
@@ -740,11 +821,7 @@ export default function App() {
   return (
     <div className={`app-shell ${view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
-      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNameRequested={() => {
-        // Checkout must resume immediately after authentication. Elsewhere, the
-        // optional sheet can ask once without changing the destination.
-        if (!pendingCheckout) setShowNamePrompt(true);
-      }} onNavigateLegal={(path) => {
+      {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNavigateLegal={(path) => {
         // Reading Terms/Privacy leaves the login behind: close the overlay so the
         // page is not hidden under it, but keep the in-progress OTP flow so
         // returning to Account restores where they were.
@@ -772,8 +849,6 @@ export default function App() {
         }
       }} />}
 
-        {showNamePrompt && <NamePrompt onDone={() => setShowNamePrompt(false)} />}
-
       {/* Location feedback toast — pinned above the bottom nav so it never
           hides under the mobile status bar / notch. */}
       {locationNotice && (
@@ -785,9 +860,30 @@ export default function App() {
       {/* Single scroll area. The bottom nav below is a flex sibling of this
           scroller, so it is structurally pinned and cannot drift the way a
           position: fixed bar does on iOS Safari/standalone PWA. */}
-      <div className="app-scroll" ref={scrollRef}>
+      <div
+        className="app-scroll"
+        ref={scrollRef}
+        onTouchStart={handlePullTouchStart}
+        onTouchMove={handlePullTouchMove}
+        onTouchEnd={finishPullGesture}
+        onTouchCancel={cancelPullGesture}
+      >
 
-      {!isEmbed && !(view === 'account' && !isLoggedIn) && (
+      {pullDistanceVisible > 0 && (
+        <div
+          className="flex items-center justify-center gap-2 overflow-hidden text-xs font-medium text-emerald-700 transition-[height] dark:text-emerald-300"
+          style={{ height: `${pullDistanceVisible}px` }}
+          aria-live="polite"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${pullDistance.current >= PULL_REFRESH_THRESHOLD ? 'animate-spin' : ''}`}
+            aria-hidden="true"
+          />
+          {pullDistance.current >= PULL_REFRESH_THRESHOLD ? 'Release to refresh' : 'Pull to refresh'}
+        </div>
+      )}
+
+      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
         <Navbar
           onUseMyLocation={useMyLocation}
           activeView={view as 'home' | 'categories' | 'orders' | 'account'}
@@ -799,7 +895,7 @@ export default function App() {
       )}
 
       {/* Closed-store notice: below the header, on every page, never blocking. */}
-      {!isEmbed && !(view === 'account' && !isLoggedIn) && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
+      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
 
       {/* One dialog for both checkout mounts. Resolved explicitly in both
           directions so CheckoutPage is never left awaiting a dead promise. */}
@@ -914,11 +1010,11 @@ export default function App() {
       ) : view === 'account' ? (
         <div className={PAGE_BOTTOM}>
           <DeferredPage><AccountPage
-            onBack={() => setView('home')}
             storeName={settings.store_name}
+            storeAddress={settings.store_address}
             supportName={settings.support_name}
             supportPhone={settings.support_phone}
-            whatsappNumber={settings.whatsapp_number}
+            whatsappNumber={settings.support_phone}
           /></DeferredPage>
         </div>
       ) : (
@@ -931,18 +1027,15 @@ export default function App() {
             </div>
           )}
 
-          {/* The header's colour bleeds down and fades out across the carousel. */}
-          <div className="relative left-1/2 flow-root w-screen -translate-x-1/2 bg-gradient-to-b from-[#2e8b57] to-transparent pb-6 dark:from-[#14532d] dark:via-[#14532d]/55">
-            <div className="mx-auto max-w-6xl px-3 sm:px-6 lg:px-8">
-              {/* Desktop search opens the complete store catalogue. */}
-              <button type="button" onClick={() => openCatalogSearch()}
-                className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
-                <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
-              </button>
+          <div className="pb-6">
+            {/* Desktop search opens the complete store catalogue. */}
+            <button type="button" onClick={() => openCatalogSearch()}
+              className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
+              <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+            </button>
 
-              <HomeCarousel />
-            </div>
+            <HomeCarousel />
           </div>
 
           {/* Products */}
@@ -1056,32 +1149,9 @@ export default function App() {
           {/* Footer */}
           <footer className="mt-8 border-t-2 border-emerald-200 bg-white/80 pb-5 pt-6 dark:border-emerald-900/60 dark:bg-slate-900/70">
             <div className="mx-auto max-w-xl sm:max-w-4xl">
-              <div className="grid grid-cols-1 divide-y divide-gray-200 dark:divide-slate-700 sm:grid-cols-[1fr_auto] sm:items-start sm:divide-x sm:divide-y-0">
-                <section className="pb-5 sm:pb-0 sm:pr-8">
-                  <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300 sm:text-left">Contact</p>
-                  <div className="flex flex-col items-center gap-2 sm:items-start">
-                    <a href={`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent("Hi Gokez Team, I'm a customer on Gokez Mart — I'd like help with...")}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">
-                      <WhatsAppIcon className="h-4 w-4" />
-                      <span>WhatsApp</span>
-                    </a>
-                    <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">
-                      <Mail className="h-4 w-4" />
-                      <span className="break-all">{GOKEZ_SUPPORT.email}</span>
-                    </a>
-                  </div>
-                </section>
-                <nav aria-label="Legal" className="flex flex-col items-center pt-4 sm:items-end sm:pl-8 sm:pt-0">
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Legal</p>
-                  <div className="flex flex-col items-center gap-2 sm:items-end">
-                    <a href="/privacy/" className="text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">Privacy Policy</a>
-                    <a href="/terms/" className="text-sm font-medium text-gray-700 transition-colors hover:text-emerald-700 hover:underline dark:text-slate-300 dark:hover:text-emerald-400">Terms of Service</a>
-                  </div>
-                </nav>
-                </div>
-
-              <p className="mt-5 text-center text-[11px] text-gray-500 dark:text-slate-400">
+              <p className="text-center text-[11px] text-gray-500 dark:text-slate-400">
                 &copy; {new Date().getFullYear()} {BRAND_NAME}{' · '}A product of{' '}
-                <a href={PARENT_COMPANY_URL} target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-emerald-600 dark:hover:text-emerald-400 hover:underline">
+                <a href={PARENT_COMPANY_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline">
                   {PARENT_COMPANY}
                 </a>
               </p>

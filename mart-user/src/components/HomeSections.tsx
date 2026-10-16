@@ -106,11 +106,11 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
         // One small, fit-to-text button sits next to each section's headline
         // instead of a full-width bar under the row.
         const viewAll = isComboSection
-          ? { label: 'View all combo', cls: 'bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:ring-indigo-500' }
+          ? { label: 'View all combo', cls: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500' }
           : isDeals
-          ? { label: 'View all deals', cls: 'bg-pink-600 text-white hover:bg-pink-700 focus-visible:ring-pink-500' }
+          ? { label: 'View all deals', cls: 'bg-purple-600 text-white hover:bg-purple-700 focus-visible:ring-purple-500' }
           : isStoreFavourites
-          ? { label: 'View all vegetables', cls: 'bg-green-700 text-white hover:bg-green-800 focus-visible:ring-green-500' }
+          ? { label: 'View all vegetables', cls: 'bg-pink-600 text-white hover:bg-pink-700 focus-visible:ring-pink-500' }
           : { label: 'View all', cls: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500' };
         return (
           <section key={section.id}>
@@ -153,7 +153,7 @@ export default function HomeSections({ entries, onViewAll }: HomeSectionsProps) 
                 <button
                   type="button"
                   onClick={() => onViewAll(section, items)}
-                  className={`flex-shrink-0 whitespace-nowrap rounded-xl px-8 py-3 text-base font-bold shadow-md transition-all hover:shadow-lg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
+                  className={`flex-shrink-0 whitespace-nowrap rounded-xl px-5 py-2 text-sm font-bold shadow-md transition-all hover:shadow-lg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
                 >
                   {viewAll.label}
                 </button>

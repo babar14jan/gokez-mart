@@ -63,7 +63,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               o.delivery_note as "deliveryNote",
               o.delivery_sequence as "deliverySequence",
               o.batch_id as "batchId",
-              o.fulfilled_by as "fulfilledBy",
+              COALESCE((SELECT s.name FROM mart_stores s WHERE s.id = o.store_id), o.fulfilled_by) as "fulfilledBy",
               -- Closure fields: staff need to know an order was taken after
               -- hours so it is held for the next opening rather than treated as
               -- a late order, and so a manual closure is not mistaken for a
@@ -133,16 +133,18 @@ export class OrderService {
 
   static async create(data: CreateOrderDto) {
     if (data.campaignId && data.couponCodeUsed) {
-      throw new Error('Select either an offer or a coupon code, not both');
+      throw badRequest('Select either an offer or a coupon code, not both');
     }
     const settings = await SettingsService.getPublic(data.storeId);
     const deliveryCharge = parseFloat(settings.delivery_charge || '0');
     const freeAbove = parseFloat(settings.free_delivery_above || '0');
     const minOrderAmount = parseFloat(settings.min_order_amount || '0');
+    const enforceInventoryAvailability = settings.inventory_tracking === 'true'
+      && settings.auto_out_of_stock === 'on_zero';
 
     // Normalize phone once so leads, orders, and funnels all match
     const cleanPhone = data.guestPhone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) throw new Error('Invalid phone number');
+    if (cleanPhone.length !== 10) throw badRequest('Invalid phone number');
 
     // The token is a guest's only credential for reading their order without an
     // account, so it must be unguessable and unique per order.
@@ -253,19 +255,21 @@ export class OrderService {
         productIds.add(item.productId);
         const product = await client.query(
             `SELECT p.name, p.is_bundle as "isBundle", sp.price::float AS price,
-              sp.discount_percent::float AS "discountPercent", sp.unit
+              sp.discount_percent::float AS "discountPercent", sp.unit,
+              sp.is_available as "isAvailable", sp.availability_status as "availabilityStatus"
            FROM mart_store_products sp
            JOIN mart_products p ON p.id = sp.product_id
            WHERE sp.store_id = $1 AND sp.product_id = $2
-             AND sp.is_available = true AND sp.availability_status = 'available'
            FOR SHARE`,
           [data.storeId, item.productId]
         );
         const catalogItem = product.rows[0] as {
           name: string; isBundle: boolean; price: number; discountPercent: number; unit: string;
+          isAvailable: boolean; availabilityStatus: string;
         } | undefined;
-        if (!catalogItem || catalogItem.unit !== item.unit) {
-          throw new Error('One or more products are unavailable or have changed');
+        if (!catalogItem || catalogItem.unit !== item.unit || (enforceInventoryAvailability
+          && (!catalogItem.isAvailable || catalogItem.availabilityStatus !== 'available'))) {
+          throw badRequest('One or more products are unavailable or have changed');
         }
         const effectivePrice = catalogItem.discountPercent > 0
           ? Math.round(catalogItem.price * (1 - catalogItem.discountPercent / 100))
@@ -273,20 +277,24 @@ export class OrderService {
         if (catalogItem.isBundle) {
           const components = await client.query(
             `SELECT bc.component_product_id as "productId", p.name,
-                    COALESCE(bc.deduction_unit, sp.unit) as unit, bc.quantity::float as quantity
+                    COALESCE(bc.deduction_unit, sp.unit) as unit, bc.quantity::float as quantity,
+                    sp.is_available as "isAvailable", sp.availability_status as "availabilityStatus"
              FROM mart_bundle_components bc
              JOIN mart_store_products sp
                ON sp.store_id = bc.store_id AND sp.product_id = bc.component_product_id
              JOIN mart_products p ON p.id = bc.component_product_id
              WHERE bc.store_id = $1 AND bc.bundle_product_id = $2
-               AND sp.is_available = true AND sp.availability_status = 'available'
              FOR SHARE`,
             [data.storeId, item.productId]
           );
-          if (components.rows.length < 2) throw new Error('This combo is no longer available');
+          if (components.rows.length < 2) throw badRequest('This combo is no longer available');
           const componentRows = components.rows as Array<{
             productId: string; name: string; unit: string; quantity: number;
+            isAvailable: boolean; availabilityStatus: string;
           }>;
+          if (enforceInventoryAvailability && componentRows.some(component =>
+            !component.isAvailable || component.availabilityStatus !== 'available'
+          )) throw badRequest('This combo is no longer available');
           bundleComponentsByProduct.set(item.productId, componentRows);
         }
         resolvedItems.push({
@@ -317,7 +325,7 @@ export class OrderService {
         );
         campaign = campaignResult.rows[0];
         const now = new Date();
-        if (!campaign) throw new Error('Campaign is no longer eligible for this order');
+        if (!campaign) throw badRequest('Campaign is no longer eligible for this order');
         const minOrderMet = subtotal >= Number(campaign.min_order_amount);
         if (!['active', 'scheduled'].includes(campaign.status) ||
           (campaign.status === 'scheduled' && (!campaign.valid_from || new Date(campaign.valid_from) > now)) ||
@@ -326,10 +334,10 @@ export class OrderService {
             (campaign.valid_until && new Date(campaign.valid_until) < now) ||
             (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) ||
             !minOrderMet) {
-          throw new Error('Campaign is no longer eligible for this order');
+          throw badRequest('Campaign is no longer eligible for this order');
         }
         if (data.campaignId && campaign.coupon_code) {
-          throw new Error('Enter the coupon code to redeem this campaign');
+          throw badRequest('Enter the coupon code to redeem this campaign');
         }
 
         const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
@@ -352,7 +360,7 @@ export class OrderService {
           const lastOrderAt = priorDelivery.rows[0]?.last_order_at;
           const cutoff = new Date(now.getTime() - Number(campaign.inactive_days) * 24 * 60 * 60 * 1000);
           if (!lastOrderAt || new Date(lastOrderAt) > cutoff) {
-            throw new Error(`This offer is for customers inactive for ${campaign.inactive_days} days`);
+            throw badRequest(`This offer is for customers inactive for ${campaign.inactive_days} days`);
           }
         }
         if (eligibilityType === 'targeted_customers') {
@@ -360,7 +368,7 @@ export class OrderService {
             `SELECT 1 FROM mart_campaign_targets WHERE campaign_id = $1 AND customer_id = $2`,
             [campaign.id, customerId]
           );
-          if (!target.rows[0]) throw new Error('This offer is not available for this customer');
+          if (!target.rows[0]) throw badRequest('This offer is not available for this customer');
         }
         const useCount = await client.query(
           `SELECT COUNT(*)::int as count FROM mart_campaign_uses
@@ -368,7 +376,7 @@ export class OrderService {
           [campaign.id, customerId]
         );
         if (useCount.rows[0].count >= campaign.per_customer_limit) {
-          throw new Error('Campaign use limit reached for this customer');
+          throw badRequest('Campaign use limit reached for this customer');
         }
       }
 
@@ -786,6 +794,7 @@ export class OrderService {
       try {
         const items = await this.getInventoryItemsForOrder(id);
         const settings = await SettingsService.getPublic(order.storeId);
+        if (settings.inventory_tracking !== 'true') return order;
         const autoOutOfStock = (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero';
         const threshold = parseFloat(settings.low_stock_threshold ?? '5');
         await InventoryService.deductForOrder(
@@ -879,15 +888,17 @@ export class OrderService {
       }
       if (status === 'delivered') {
         try {
-          const items = await this.getInventoryItemsForOrder(id, client);
-          await InventoryService.deductForOrder(
-            id,
-            existing.storeId,
-            items,
-            (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
-            parseFloat(settings.low_stock_threshold ?? '5'),
-            client
-          );
+          if (settings.inventory_tracking === 'true') {
+            const items = await this.getInventoryItemsForOrder(id, client);
+            await InventoryService.deductForOrder(
+              id,
+              existing.storeId,
+              items,
+              (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
+              parseFloat(settings.low_stock_threshold ?? '5'),
+              client
+            );
+          }
         } catch (err) {
           // Never block a delivery over inventory bookkeeping. Loss/unit issues
           // are logged and skipped so the order still marks delivered, matching

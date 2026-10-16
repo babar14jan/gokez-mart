@@ -27,7 +27,6 @@ export interface CustomerState {
   setDefaultAddress: (id: string) => Promise<void>;
   getDefaultAddress: () => SavedAddress | null;
   setHasAskedPhone: () => void;
-  deduplicateAddresses: () => void;
   clear: () => void;
 }
 
@@ -74,19 +73,6 @@ export const useCustomerStore = create<CustomerState>()(
           await addressApi.remove(id);
           await get().loadAddresses();
         } catch { /* silent */ }
-      },
-
-      // Deduplicate existing addresses (legacy — kept as a no-op safeguard for old local caches)
-      deduplicateAddresses: () => {
-        const addresses = get().addresses;
-        const seen = new Set<string>();
-        const deduped = addresses.filter(a => {
-          const key = a.address.trim().toLowerCase();
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        if (deduped.length !== addresses.length) set({ addresses: deduped });
       },
 
       setDefaultAddress: async (id) => {

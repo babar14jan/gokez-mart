@@ -224,6 +224,26 @@ export function trackCampaignTouch(campaignId: string | number | null | undefine
   });
 }
 
+export type InstallEventName =
+  | 'install_prompt_shown'
+  | 'install_prompt_accepted'
+  | 'install_prompt_declined'
+  | 'install_guide_opened'
+  | 'install_guide_dismissed'
+  | 'app_installed';
+
+export function trackInstall(eventName: InstallEventName, platform: 'android' | 'ios'): void {
+  try {
+    if (!isApiConfigured && isDevelopment) return;
+    post('/install/event', {
+      sessionId: getFunnelSessionId(),
+      visitorId: getFunnelVisitorId(),
+      platform,
+      eventName,
+    });
+  } catch { /* noop */ }
+}
+
 /**
  * Emits an event at most once per session. Used for the funnel steps that
  * describe reaching a screen rather than an action, so a shopper who reopens
