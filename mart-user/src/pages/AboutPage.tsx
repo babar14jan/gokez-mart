@@ -1,8 +1,10 @@
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from '../constants/brand';
+import PageHeader from '../components/PageHeader';
 
 export default function AboutPage() {
   return (
     <main className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
+      <PageHeader title="About Gokez Mart" />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 pb-36">
         <p className="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 mb-2">{BRAND_SLOGAN}</p>
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4">About {BRAND_NAME}</h1>

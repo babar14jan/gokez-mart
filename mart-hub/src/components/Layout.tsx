@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, Tag, Image as ImageIcon, ClipboardList,
   Users, Settings, Shield, QrCode, Boxes, UserPlus,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
-  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid,
+  Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, settingsApi } from '../services/api';
@@ -24,6 +24,7 @@ export const NAV_ALL = [
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin'] },
   { label: 'Leads',              href: '/customer-leads',      icon: UserPlus,        roles: ['super_admin'] },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'] },
+  { label: 'Install Analytics',  href: '/install-analytics',   icon: Smartphone,      roles: ['super_admin'] },
   { label: 'Categories',         href: '/categories',          icon: Tag,             roles: ['super_admin', 'store_owner'] },
   { label: 'Catalog',          href: '/catalog',             icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Feedback',         href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager'] },

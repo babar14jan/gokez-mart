@@ -14,8 +14,6 @@ export interface LoginFlowProps {
   pendingCheckout?: boolean;
   onGuest?: () => void;
   variant?: 'modal' | 'page';
-  /** Invoked after a new customer signs in without a saved name. */
-  onNameRequested?: () => void;
   /**
    * The overlay has no other way out, so it needs the guest escape inline. A page
    * host that renders its own "Continue as guest" must switch this off, or the
@@ -36,10 +34,17 @@ export interface LoginFlowProps {
   onNavigateLegal?: (path: string) => void;
   /**
    * The Account page draws the phone step's heading in its own green header, so
-   * it switches this off to avoid showing the same "Login or sign up" twice. The
+   * it switches this off to avoid showing the same "Log in or sign up" twice. The
    * overlay keeps it (default true).
    */
   showPhoneHeading?: boolean;
+  /**
+   * The Account page renders the OTP step's green app bar, so its back chevron
+   * lives outside this component. It bumps this counter to ask the flow to return
+   * to the phone step; a counter (not a boolean) so a second press fires again.
+   * Ignored on any step but otp.
+   */
+  backSignal?: number;
 }
 
 export type Step = 'phone' | 'otp' | 'profile' | 'offer';
@@ -60,7 +65,7 @@ export type Step = 'phone' | 'otp' | 'profile' | 'offer';
  * cancels its py-6 instead. Everything else -- steps, OTP, analytics and the guest
  * exit -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onNameRequested, onStepChange, onNavigateLegal, showPhoneHeading = true }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onStepChange, onNavigateLegal, showPhoneHeading = true, backSignal }: LoginFlowProps) {
   const isModal = variant === 'modal';
   // See useFinePointer: auto-focusing a field on a phone opens the keyboard on
   // arrival and the browser scrolls to it, which is the page shake we are avoiding.
@@ -73,6 +78,15 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   const stepChangeRef = useRef(onStepChange);
   stepChangeRef.current = onStepChange;
   useEffect(() => { stepChangeRef.current?.(step); }, [step]);
+
+  // Back chevron hosted by the Account page's green app bar: it is outside this
+  // component, so it nudges the flow back to the phone step through this counter.
+  useEffect(() => {
+    if (!backSignal) return;
+    setStep(prev => (prev === 'otp' ? 'phone' : prev));
+    setOtp('');
+    setError('');
+  }, [backSignal]);
   const [phone, setPhone] = useState(() => restoredFlow?.phone || '');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,6 +94,11 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   const [welcomeOffer, setWelcomeOffer] = useState<any | null>(null);
   const [resendTimer, setResendTimer] = useState(() => restoredFlow ? Math.max(0, Math.ceil((restoredFlow.resendAvailableAt - Date.now()) / 1000)) : 0);
   const [newName, setNewName] = useState('');
+  // A new customer's verified token, held until the mandatory name (and any
+  // welcome offer) is done. We deliberately do NOT commit the login at OTP
+  // verification: committing flips `isLoggedIn`, which unmounts this flow on the
+  // Account page and would cut the profile/offer steps short.
+  const stagedAuthRef = useRef<{ token: string; customer: any } | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
 
   const { login } = useCustomerAuthStore();
@@ -134,33 +153,25 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
       track('login_verified');
       const { token, customer } = res.data.data;
       loginFlow.clear();
-      login(token, customer);
       savePhone(customer.phone);
-      if (customer.name) setName(customer.name);
-      if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
-      // If returning customer (has name) — check for offers then done
+      // Returning customer (already has a name) — commit straight away.
       if (customer.name) {
-        // Don't show welcome offer again to returning users who already have an account
+        login(token, customer);
+        setName(customer.name);
+        if (customer.address) addAddress({ label: 'Home', address: customer.address, isDefault: true });
         onSuccess?.();
         onClose?.();
       } else {
-        // New user after OTP - check for welcome offers
+        // New customer: the name is mandatory. Stage the verified token instead
+        // of logging in yet (see stagedAuthRef) and go to the full-page "Almost
+        // there" capture. The welcome offer (if any) is fetched meanwhile and
+        // plays after the name is saved — see handleSaveProfile.
+        stagedAuthRef.current = { token, customer };
         campaignApi.getWelcome(0, '').then(r => {
           const offers = r.data.data || [];
-          if (offers.length > 0) {
-            trackCampaignTouch(offers[0].id);
-            setWelcomeOffer(offers[0]);
-            setStep('offer');
-          } else {
-            if (!sessionStorage.getItem('mart_name_prompt_skipped')) onNameRequested?.();
-            onSuccess?.();
-            onClose?.();
-          }
-        }).catch(() => {
-          if (!sessionStorage.getItem('mart_name_prompt_skipped')) onNameRequested?.();
-          onSuccess?.();
-          onClose?.();
-        });
+          if (offers.length > 0) setWelcomeOffer(offers[0]);
+        }).catch(() => { /* offer is optional; name capture still proceeds */ });
+        setStep('profile');
       }
     } catch (err: any) {
       track('otp_verification_failed', {
@@ -185,6 +196,21 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     } finally { setLoading(false); }
   };
 
+  // Commits the staged new-customer login. Runs only once the mandatory name (and
+  // the optional welcome offer) is finished, which is what keeps this flow mounted
+  // through those steps.
+  const finalizeLogin = () => {
+    const staged = stagedAuthRef.current;
+    if (staged) {
+      const finalName = useCustomerAuthStore.getState().name || undefined;
+      login(staged.token, { ...staged.customer, name: finalName });
+      if (staged.customer.address) addAddress({ label: 'Home', address: staged.customer.address, isDefault: true });
+      stagedAuthRef.current = null;
+    }
+    onSuccess?.();
+    onClose?.();
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedName = newName.trim().replace(/\s+/g, ' ');
@@ -194,11 +220,17 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     }
     setSavingProfile(true); setError('');
     try {
-      await authApi.updateProfile({ name: normalizedName });
+      await authApi.updateProfile({ name: normalizedName }, stagedAuthRef.current?.token);
       useCustomerAuthStore.getState().updateProfile({ name: normalizedName });
       setName(normalizedName);
-      onSuccess?.();
-      onClose?.();
+      if (welcomeOffer) {
+        // New customers with an active welcome campaign see it once, right after
+        // giving their name.
+        trackCampaignTouch(welcomeOffer.id);
+        setStep('offer');
+      } else {
+        finalizeLogin();
+      }
     } catch {
       setError('Failed to save. Please try again.');
     } finally { setSavingProfile(false); }
@@ -236,7 +268,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
    * so binding Escape there would hijack the key for the whole page.
    */
   useEffect(() => {
-    if (!isModal || step === 'profile') return;
+    if (!isModal || (step !== 'phone' && step !== 'otp')) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -295,42 +327,52 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   </div>
                 )}
               </div>
-                <button onClick={() => { onSuccess?.(); onClose?.(); }} className={primaryBtn()}>
+                <button onClick={finalizeLogin} className={primaryBtn()}>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" /> Start Shopping
               </button>
             </>
           ) : step === 'profile' ? (
-            <>
-              <div className="text-center mb-5">
-                <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="text-2xl" aria-hidden="true">👋</span>
-                </div>
-                <h2 id="login-title" className="text-base font-bold text-gray-900 dark:text-white mb-1">Almost there!</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-500">Add your name to finish setting up your account.</p>
+            // Capturing the name is mandatory for a new customer, so this is a
+            // self-contained full-page sheet with its own green app bar (no back
+            // button and no guest exit). It renders above whatever hosted the
+            // flow, so the account page and the checkout overlay behave the same.
+            <div className="fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900">
+              <div className="relative shrink-0 bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
+                <div className="h-14" />
               </div>
-              <ErrorNote id="login-error" />
-              <form onSubmit={handleSaveProfile} className="space-y-3">
-                <label htmlFor="login-name" className="sr-only">Your full name</label>
-                <input id="login-name" name="name" type="text" value={newName} autoComplete="name"
-                  onChange={e => setNewName(e.target.value)}
-                  placeholder="Your full name *"
-                  aria-invalid={Boolean(error)}
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-                  autoFocus={finePointer} />
-                <button type="submit" disabled={savingProfile || !newName.trim()} className={primaryBtn(Boolean(newName.trim()))}>
-                  {savingProfile
-                    ? <Spinner />
-                    : <><ArrowRight className="h-4 w-4" aria-hidden="true" /> {pendingCheckout ? 'Continue to Checkout' : 'Continue'}</>
-                  }
-                </button>
-              </form>
-            </>
+
+              <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-9">
+                <h2 id="login-title" className="text-[clamp(22px,7vw,30px)] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white">
+                  Almost there.
+                </h2>
+                <p className="mt-2 max-w-[24rem] text-[14px] leading-snug text-slate-500 dark:text-slate-400">
+                  Tell us your name so we know who to hand the order to
+                </p>
+
+                <form onSubmit={handleSaveProfile} className="mt-6 space-y-3">
+                  <ErrorNote id="login-error" />
+                  <label htmlFor="login-name" className="sr-only">Your full name</label>
+                  <input id="login-name" name="name" type="text" value={newName} autoComplete="name"
+                    onChange={e => setNewName(e.target.value)}
+                    placeholder="Your full name *"
+                    aria-invalid={Boolean(error)}
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    autoFocus={finePointer} />
+                  <button type="submit" disabled={savingProfile || !newName.trim()} className={primaryBtn(Boolean(newName.trim()))}>
+                    {savingProfile
+                      ? <Spinner />
+                      : <><ArrowRight className="h-4 w-4" aria-hidden="true" /> {pendingCheckout ? 'Continue to Checkout' : 'Continue'}</>
+                    }
+                  </button>
+                </form>
+              </div>
+            </div>
           ) : step === 'phone' ? (
             <>
               {showPhoneHeading && (
                 <div className="mb-5 text-center">
                   <h2 id="login-title" className="text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
-                    Login or sign up
+                    Log in or sign up
                   </h2>
                   <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
                     Enter your mobile number to continue
@@ -400,7 +442,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 <GuestLink />
               </form>
 
-              <p className="mt-3 text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
+              <p className="!mt-1 text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
                 By continuing, you agree to our{' '}
                 <button type="button" onClick={() => onNavigateLegal?.('/terms/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Terms</button>{' '}
                 and{' '}
@@ -446,9 +488,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   className="flex min-h-[44px] w-full items-center justify-center rounded-2xl py-2 text-sm font-bold text-emerald-700 transition-colors hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300">
                   {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
                 </button>
-                <p className="!mt-0 text-center text-[10px] leading-4 text-slate-400 dark:text-slate-500">
-                  Do not share this code with anyone.
-                </p>
                 <GuestLink />
               </form>
             </>
