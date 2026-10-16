@@ -69,6 +69,7 @@ export class ProductService {
     available?: boolean;
     excludeHidden?: boolean;
     activeCategoryOnly?: boolean;
+    onlyFulfillableBundles?: boolean;
   }): Promise<MartProduct[]> {
     const conditions: string[] = [];
     const params: unknown[] = [];
@@ -92,6 +93,27 @@ export class ProductService {
     if (filters?.activeCategoryOnly) {
       conditions.push(`p.category_id IS NOT NULL`);
       conditions.push(`c.is_active = true`);
+    }
+    if (filters?.onlyFulfillableBundles) {
+      conditions.push(`(
+        p.is_bundle = false
+        OR (
+          (SELECT COUNT(*) FROM mart_bundle_components bc
+           WHERE bc.store_id = sp.store_id AND bc.bundle_product_id = p.id) >= 2
+          AND NOT EXISTS (
+            SELECT 1
+            FROM mart_bundle_components bc
+            LEFT JOIN mart_store_products component_sp
+              ON component_sp.store_id = bc.store_id
+             AND component_sp.product_id = bc.component_product_id
+            WHERE bc.store_id = sp.store_id
+              AND bc.bundle_product_id = p.id
+              AND (component_sp.product_id IS NULL
+                OR component_sp.is_available IS NOT TRUE
+                OR component_sp.availability_status <> 'available')
+          )
+        )
+      )`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

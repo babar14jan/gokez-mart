@@ -28,6 +28,7 @@ import { CustomerAnalyticsService } from '../services/customerAnalytics.service'
 import { emitOrderEvent, orderEventBus, type OrderLiveEvent } from '../services/orderEventBus';
 import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.service';
 import { FunnelCartService } from '../services/funnelCart.service';
+import { InstallAnalyticsService } from '../services/installAnalytics.service';
 import { evaluateStoreOpen } from '../utils/storeHours';
 import { config } from '../config';
 
@@ -79,11 +80,14 @@ export const getCategories = asyncHandler(async (_req: Request, res: Response) =
 
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   const { categoryId, storeId } = req.query;
+  const resolvedStoreId = (storeId as string) || SHAPOORJI_ID;
+  const settings = await SettingsService.getPublic(resolvedStoreId);
   const products = await ProductService.findAll({
-    storeId: (storeId as string) || SHAPOORJI_ID,
+    storeId: resolvedStoreId,
     categoryId: categoryId as string,
     excludeHidden: true,
     activeCategoryOnly: true,
+    onlyFulfillableBundles: settings.inventory_tracking === 'true' && settings.auto_out_of_stock === 'on_zero',
   });
   res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: products });
@@ -1245,6 +1249,23 @@ export const postFunnelCampaignTouch = asyncHandler(async (req: Request, res: Re
   }
   await FunnelEventService.recordCampaignTouch(sessionId, campaignId);
   res.json({ success: true });
+});
+
+export const postInstallEvent = asyncHandler(async (req: Request, res: Response) => {
+  const { sessionId, visitorId, platform, eventName } = req.body ?? {};
+  if (!sessionId || !platform || !eventName) {
+    res.status(400).json({ success: false, error: 'sessionId, platform and eventName required' });
+    return;
+  }
+  const recorded = await InstallAnalyticsService.recordEvent({ sessionId, visitorId, platform, eventName });
+  if (!recorded) { res.status(400).json({ success: false, error: 'Invalid platform or eventName' }); return; }
+  res.json({ success: true, data: { recorded } });
+});
+
+export const adminGetInstallAnalytics = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { from, to } = req.query as { from?: string; to?: string };
+  const summary = await InstallAnalyticsService.getSummary(from, to);
+  res.json({ success: true, data: summary });
 });
 
 export const customerGetMe = asyncHandler(async (req: CustomerRequest, res: Response) => {

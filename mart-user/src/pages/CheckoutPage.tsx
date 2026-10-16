@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { ChevronLeft, Loader2, Plus, Minus, Trash2, MapPin, X, Tag, Check, MessageCircle, ChevronUp, ChevronRight, Clock, User, ShoppingBag, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronUp, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi } from '../services/api';
 import type { PublicSettings, Product, StoreOpeningHours } from '../services/api';
-import { useCustomerStore } from '../store/customerStore';
+import { useCustomerStore, type SavedAddress } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { type AddressCoordinates } from '../components/AddressForm';
 import AddressSheet from '../components/AddressSheet';
+import AddressButton from '../components/AddressButton';
 import ProductCard from '../components/ProductCard';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 
@@ -357,9 +358,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const guestNameInput = useRef<HTMLInputElement>(null);
   const guestPhoneInput = useRef<HTMLInputElement>(null);
   const profileNameInput = useRef<HTMLInputElement>(null);
-  const { items, updateQty, subtotal, clearCart } = useCartStore();
-  const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress } = useCustomerStore();
-  const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile } = useCustomerAuthStore();
+  const { items, updateQty, removeItem, subtotal, clearCart } = useCartStore();
+  const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress, updateAddress } = useCustomerStore();
+  const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile, setGuestProfile } = useCustomerAuthStore();
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
@@ -432,10 +433,27 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   }, [authName]);
 
   useEffect(() => {
+    if (!isLoggedIn) {
+      try {
+        const gName = localStorage.getItem('guest_name');
+        const gPhone = localStorage.getItem('guest_phone');
+        const gAddr = localStorage.getItem('guest_address');
+        setGuestProfile({ name: gName, phone: gPhone, address: gAddr });
+      } catch {}
+    }
+  }, [isLoggedIn, guestName, guestPhone, guestAddress, setGuestProfile]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined' && !isLoggedIn && guestPhone) {
       localStorage.setItem('guest_phone', guestPhone);
     }
   }, [guestPhone, isLoggedIn]);
+
+  const checkoutAddresses: SavedAddress[] = isLoggedIn
+    ? addresses
+    : guestAddress
+      ? [{ id: 'guest', label: guestAddressLabel, address: guestAddress, latitude: guestAddressCoordinates?.latitude ?? null, longitude: guestAddressCoordinates?.longitude ?? null, isDefault: true }]
+      : [];
 
   // Address
   const [showAddressList, setShowAddressList] = useState(false);
@@ -459,7 +477,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       return false;
     }
     try {
-      await authApi.updateProfile({ name: normalizedName });
+      const token = useCustomerAuthStore.getState().token;
+      if (token) await authApi.updateProfile({ name: normalizedName }, token);
+      else localStorage.setItem('guest_name', normalizedName);
       updateProfile({ name: normalizedName });
       setProfileNameDraft(normalizedName);
       setValidationField(null);
@@ -682,6 +702,19 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   ].filter(Boolean) as string[];
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
   const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
+  // The account page and checkout share one address control. Checkout may not
+  // have a SavedAddress to hand over (a guest, or a profile address outside the
+  // book), so present whatever is in use as one.
+  const checkoutAddress: SavedAddress | null = deliveryAddress
+    ? {
+        id: selectedAddress?.id ?? 'current',
+        label: selectedLabel,
+        address: deliveryAddress,
+        latitude: selectedAddress?.latitude ?? guestAddressCoordinates?.latitude ?? null,
+        longitude: selectedAddress?.longitude ?? guestAddressCoordinates?.longitude ?? null,
+        isDefault: Boolean(selectedAddress?.isDefault),
+      }
+    : null;
   const currentNote = showCustomNote ? (customNote || '✏️ Custom note') : deliveryNote;
 
   // Reaching checkout is a distinct funnel stage, and it is also recorded on
@@ -776,13 +809,32 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       clearCart();
       onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, confirmedCampaignDiscount || undefined, orderData);
     } catch (err: any) {
-      console.error('[checkout] order placement failed', err);
+      const responseStatus = err?.response?.status;
+      const responseError = err?.response?.data?.error;
+      if (!err?.response || responseStatus >= 500) {
+        console.error('[checkout] order placement failed', err);
+      } else {
+        console.info('[checkout] order rejected', { status: responseStatus, error: responseError });
+      }
       if (!err?.response) {
         setError('We could not connect right now. Check your internet connection and try again.');
       } else if (err.response.status >= 500) {
         setError('We could not place your order right now. Your cart is still saved. Please try again shortly.');
       } else {
-        setError(err.response.data?.error || 'We could not place your order. Please review your details and try again.');
+        if (responseError === 'This combo is no longer available') {
+          try {
+            const liveCatalog = await storeApi.getProducts(undefined, storeId);
+            const liveProductIds = new Set((liveCatalog.data.data || []).map(product => product.id));
+            const staleItems = items.filter(item => !liveProductIds.has(item.productId));
+            if (staleItems.length > 0) {
+              staleItems.forEach(item => removeItem(item.productId, item.unit));
+              const labels = staleItems.map(item => item.productName).join(', ');
+              setError(`${labels} is no longer available and was removed from your cart.`);
+              return;
+            }
+          } catch {}
+        }
+        setError(responseError || 'We could not place your order. Please review your details and try again.');
       }
     } finally { setLoading(false); }
   };
@@ -824,14 +876,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   if (items.length === 0) {
     return (
       <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
-        <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+        <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#18191a]">
           <button type="button" onClick={onBack} aria-label="Back to shopping"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
           </button>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
-            <ShoppingBag className="h-5 w-5 text-white" />
-          </span>
           <h1 className="min-w-0 truncate text-base font-bold text-white">Checkout</h1>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -852,13 +901,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#14532d]">
+      <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#18191a]">
         <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
         </button>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
-          <ShoppingCart className="h-5 w-5 text-white" />
-        </span>
         <h1 className="min-w-0 truncate text-base font-bold text-white">My Cart</h1>
       </div>
 
@@ -940,10 +986,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
           {showAddressList && (
             <AddressSheet
               mode="select"
-              addresses={addresses}
+              addresses={checkoutAddresses}
               selectedAddress={deliveryAddress}
               onClose={closeAddressSheet}
-              initialEditingId={!isLoggedIn || addresses.length === 0 ? 'new' : null}
+              initialEditingId={checkoutAddresses.length === 0 ? 'new' : null}
               nameSlot={profileNameField}
               requiresName={requiresName}
               focusFirstField={validationField === 'address'}
@@ -961,6 +1007,18 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   // Guests have no server address book yet; hold the address
                   // for this checkout and let the order land it in the book
                   // server-side.
+                  setGuestAddress(address);
+                  setGuestAddressLabel(label.trim() || 'Home');
+                  setGuestAddressCoordinates(coordinates);
+                }
+                setValidationField(null);
+                return true;
+              }}
+              onUpdateAddress={async (id, label, address, coordinates) => {
+                if (!(await saveProfileNameIfProvided())) return false;
+                if (isLoggedIn) {
+                  await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
+                } else {
                   setGuestAddress(address);
                   setGuestAddressLabel(label.trim() || 'Home');
                   setGuestAddressCoordinates(coordinates);
@@ -1248,24 +1306,17 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       {/* ── Sticky address + Place Order footer ── */}
       <div className="sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
-          {/* Address row — tappable, opens sheet */}
-          <button type="button" onClick={() => { track('checkout_address_started'); openAddressSheet(); }} aria-invalid={validationField === 'address'}
-            className={`w-full flex items-center gap-2.5 px-4 pt-3 pb-2 text-left ${validationField === 'address' ? 'bg-red-50 dark:bg-red-950/20' : ''}`}>
-            <ChevronUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                <span className="text-sm font-bold text-gray-900 dark:text-white">Delivering to {selectedLabel}</span>
-              </div>
-              {deliveryAddress
-                ? <p className="text-xs text-gray-500 dark:text-slate-400 truncate mt-0.5">{deliveryAddress}</p>
-                : <p className="text-xs text-red-600 dark:text-red-400 font-semibold mt-0.5">Add a complete delivery address</p>
-              }
-            </div>
-            <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">{deliveryAddress ? 'Change' : 'Add'}</span>
-          </button>
+          {/* Address row — the same control as the account page, opens the sheet */}
+          <div className="px-3 pt-2.5">
+            <AddressButton
+              address={checkoutAddress}
+              error={validationField === 'address'}
+              emptyLabel="Add a complete delivery address"
+              onClick={() => { track('checkout_address_started'); openAddressSheet(); }}
+            />
+          </div>
 
-          <div className="px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
+          <div className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
             {!canCheckout && sub < minOrder && (
               <p className="text-xs text-gray-500 dark:text-slate-400 text-center mb-2">Add ₹{(minOrder - sub).toFixed(0)} more to reach the ₹{minOrder} minimum order.</p>
             )}

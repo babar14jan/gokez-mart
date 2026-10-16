@@ -7,6 +7,7 @@ import { subscribeAdminToPush } from './services/push';
 import { startOrderStream, stopOrderStream } from './services/realtime';
 import Layout from './components/Layout';
 import InstallPrompt from './components/InstallPrompt';
+import NetworkStatus from './components/NetworkStatus';
 import { lazyWithRetry, isChunkLoadError, recoverFromChunkError } from './utils/lazyWithRetry';
 
 const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
@@ -18,6 +19,8 @@ const CustomersPage = lazyWithRetry(() => import('./pages/CustomersPage'));
 const CustomerLeadsPage = lazyWithRetry(() => import('./pages/CustomerLeadsPage'));
 const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'));
 const AnalyticsPage = lazyWithRetry(() => import('./pages/AnalyticsPage'));
+const InstallAnalyticsPage = lazyWithRetry(() => import('./pages/InstallAnalyticsPage'));
+
 const ProfilePage = lazyWithRetry(() => import('./pages/ProfilePage'));
 const ChangePasswordPage = lazyWithRetry(() => import('./pages/ChangePasswordPage'));
 const StoresPage = lazyWithRetry(() => import('./pages/StoresPage'));
@@ -75,7 +78,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/settings', '/stores', '/subscriptions', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/install-analytics', '/settings', '/stores', '/subscriptions', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -130,10 +133,11 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <InstallPrompt />
-      <RouteErrorBoundary>
-      <Suspense fallback={<RouteLoading />}>
-      <Routes>
+      <NetworkStatus>
+        <InstallPrompt />
+        <RouteErrorBoundary>
+        <Suspense fallback={<RouteLoading />}>
+        <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/"                element={<ProtectedRoute path="/"><DashboardPage /></ProtectedRoute>} />
         <Route path="/orders"          element={<ProtectedRoute path="/orders"><OrdersPage /></ProtectedRoute>} />
@@ -142,6 +146,7 @@ export default function App() {
         <Route path="/customers"       element={<ProtectedRoute path="/customers"><CustomersPage /></ProtectedRoute>} />
         <Route path="/customer-leads"   element={<ProtectedRoute path="/customer-leads"><CustomerLeadsPage /></ProtectedRoute>} />
         <Route path="/analytics"       element={<ProtectedRoute path="/analytics"><AnalyticsPage /></ProtectedRoute>} />
+        <Route path="/install-analytics" element={<ProtectedRoute path="/install-analytics"><InstallAnalyticsPage /></ProtectedRoute>} />
         <Route path="/settings"        element={<ProtectedRoute path="/settings"><SettingsPage /></ProtectedRoute>} />
         <Route path="/stores"          element={<ProtectedRoute path="/stores"><StoresPage /></ProtectedRoute>} />
         <Route path="/subscriptions"   element={<ProtectedRoute path="/subscriptions"><SubscriptionsPage /></ProtectedRoute>} />
@@ -164,9 +169,10 @@ export default function App() {
         <Route path="/carousel"          element={<ProtectedRoute path="/carousel"><CarouselPage /></ProtectedRoute>} />
         <Route path="/home-sections"     element={<ProtectedRoute path="/home-sections"><HomeSectionsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      </Suspense>
-      </RouteErrorBoundary>
+        </Routes>
+        </Suspense>
+        </RouteErrorBoundary>
+      </NetworkStatus>
     </BrowserRouter>
   );
 }

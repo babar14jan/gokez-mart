@@ -107,7 +107,20 @@ export const authApi = {
     api.post('/auth/verify-otp', { phone, otp, ...(funnelSessionId ? { funnelSessionId } : {}) }),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
-  updateProfile: (data: { name?: string; address?: string; address2?: string; photoUrl?: string }) => api.put('/auth/profile', data),
+  // `token` is supplied only by the new-customer name capture, which runs before
+  // the login is committed (see LoginFlow). Everywhere else the request
+  // interceptor attaches the stored token as usual.
+  updateProfile: async (data: { name?: string; address?: string; address2?: string; photoUrl?: string }, token?: string) => {
+    const effectiveToken = token || (() => {
+      try {
+        const stored = localStorage.getItem('mart-customer-auth');
+        const { state } = JSON.parse(stored || '{}');
+        return state?.token || null;
+      } catch { return null; }
+    })();
+    if (!effectiveToken) return Promise.reject(new Error('No auth token available'));
+    return api.put('/auth/profile', data, { headers: { Authorization: `Bearer ${effectiveToken}` } });
+  },
   getOrders: () => api.get('/auth/orders'),
   uploadPhoto: (file: File) => {
     const form = new FormData();
@@ -154,8 +167,6 @@ export const storeApi = {
       params: storeId ? { storeId } : {},
     }),
   getZones: () => api.get<{ success: boolean; data: MartZone[] }>('/zones'),
-  reverseGeocode: (latitude: number, longitude: number) =>
-    api.post<{ success: boolean; data: { house: string; building: string; locality: string; landmark: string; city: string; pincode: string } }>('/geocode/reverse', { latitude, longitude }),
   placeOrder: (data: {
     guestName: string; guestPhone: string; guestAddress: string;
     guestAddressLabel?: string;

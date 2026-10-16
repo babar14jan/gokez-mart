@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useZoneStore, type ZoneAction } from '../store/zoneStore';
+import AccountGreeting from './AccountGreeting';
 
 type View = 'home' | 'categories' | 'orders' | 'account';
 
@@ -116,14 +117,14 @@ const navItems = [
   };
 
   return (
-    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#218044] to-[#2e8b57] shadow-sm dark:from-[#18191a] dark:to-[#14532d]">
+    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#218044] to-[#2e8b57] shadow-sm dark:from-[#18191a] dark:to-[#18191a]">
 
       {/* Row 1 */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] flex items-center gap-3">
 
-        {/* Location — left */}
+        {/* Location / account identity — left */}
         <div className="flex items-center gap-1.5">
-          <ZoneDropdown />
+          {activeView === 'account' ? <AccountGreeting /> : <ZoneDropdown />}
         </div>
 
         {/* ── Desktop layout ── */}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle } from 'lucide-react';
 import { authApi, storeApi } from '../services/api';
 import { readTrackingTokens } from '../utils/guestTracking';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -14,6 +14,7 @@ import {
   ALL_CLOSED, STATUS_LABELS,
   isRecentlyDelivered, hasActiveOrder, formatDateTime,
 } from '../components/OrderCards';
+import PageHeader from '../components/PageHeader';
 function OrderDetailSheet({
   order, onClose, onOrderAgain, nextOpenLabel, whatsappNumber, fallbackName, fallbackPhone,
   canCancel, confirmCancel, cancelling, cancelError, onCancel, onRequestCancel, onDismissConfirm,
@@ -46,16 +47,7 @@ function OrderDetailSheet({
   return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-50 dark:bg-slate-900">
       <div className="page-shell bg-gray-50 dark:bg-slate-900">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-100 bg-white px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:border-slate-700 dark:bg-slate-900">
-          <button type="button" onClick={onClose} aria-label="Back to orders"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
-            <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
-          </button>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/20">
-            <ShoppingBag className="h-5 w-5 text-emerald-500" />
-          </span>
-          <h1 className="min-w-0 truncate text-base font-bold text-gray-900 dark:text-white">Order details</h1>
-        </header>
+        <PageHeader title="Order details" onBack={onClose} />
 
         <div className="mx-auto max-w-lg space-y-4 px-4 py-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
           <div className="rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-800">

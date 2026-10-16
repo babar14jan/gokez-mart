@@ -1,23 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MapPin, Save, Loader2, Pencil, Plus, X, MessageCircle, Bell, Navigation, Download, ShieldCheck, FileText, Camera, ChevronRight, Mail, Share2, Moon, Sun } from 'lucide-react';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, ChevronLeft, Headphones, MessageSquare, Share2, Moon, Sun } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
-import { useCustomerStore } from '../store/customerStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
 import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush } from '../services/push';
-import AddressSheet from '../components/AddressSheet';
+import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
-import NamePrompt from '../components/NamePrompt';
 import { track } from '../utils/track';
-import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 import { BRAND_SLOGAN } from '../constants/brand';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 
+const GUEST_ORDER_NOTIFICATIONS_KEY = 'mart_guest_order_notifications';
+const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
+
 interface AccountPageProps {
-  onBack?: () => void;
   storeName?: string;
+  storeAddress?: string;
   supportName?: string;
   supportPhone?: string;
   whatsappNumber?: string;
@@ -32,17 +32,13 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-export default function AccountPage({ onBack, storeName, supportPhone, whatsappNumber }: AccountPageProps) {
-  const { ref: nameInputRef, onKeyDown: handleNameKeyDown, onSurfaceClick: handleNameSurfaceClick } = useKeyboardDismiss();
-  const { name, phone, photoUrl, updateProfile, logout, isLoggedIn } = useCustomerAuthStore();
-  const { setName: syncName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress } = useCustomerStore();
+export default function AccountPage({ storeName, storeAddress, supportPhone, whatsappNumber }: AccountPageProps) {
+  const { isLoggedIn } = useCustomerAuthStore();
   const { isDark, toggle } = useThemeStore();
+  const accountLoginOpen = useAccountLoginStore(s => s.open);
+  const openLogin = useAccountLoginStore(s => s.openLogin);
+  const closeLogin = useAccountLoginStore(s => s.closeLogin);
 
-  const [editingName, setEditingName] = useState(false);
-  const [nameVal, setNameVal] = useState(name || '');
-  const [saving, setSaving] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
-  const [error, setError] = useState('');
   const [locationPermission, setLocationPermission] = useState<string>('prompt');
   // Shared with the navbar picker and the catalog loader: toggling this actually
   // runs the same location lookup the navbar uses, so it switches delivery area
@@ -54,35 +50,35 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
   const [notificationSubscribed, setNotificationSubscribed] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
-  const [exportLoading, setExportLoading] = useState(false);
-  const [exportReady, setExportReady] = useState(false);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const [editingAddressId, setEditingAddressId] = useState<string | 'new' | null>(null);
-  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
-
-  useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
-
-
-
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    setPhotoUploading(true);
-    try {
-      const res = await authApi.uploadPhoto(file);
-      updateProfile({ photoUrl: res.data.data.url });
-    } catch { alert('Failed to upload photo. Please try again.'); }
-    finally { setPhotoUploading(false); e.target.value = ''; }
-  };
 
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
   }, []);
 
   useEffect(() => {
+    const refreshNotificationPermission = () => setNotificationPermission(getNotificationPermission());
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshNotificationPermission();
+    };
+    refreshNotificationPermission();
+    window.addEventListener('focus', refreshNotificationPermission);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshNotificationPermission);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isLoggedIn) {
-      setMarketingConsent(false);
-      setNotificationSubscribed(false);
+      try {
+        setMarketingConsent(localStorage.getItem(GUEST_MARKETING_CONSENT_KEY) === 'true');
+        setNotificationSubscribed(localStorage.getItem(GUEST_ORDER_NOTIFICATIONS_KEY) === 'true');
+      } catch {
+        setMarketingConsent(false);
+        setNotificationSubscribed(false);
+      }
       return;
     }
 
@@ -132,6 +128,13 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   };
 
   const handleOrderNotifications = async () => {
+    if (!isLoggedIn) {
+      const next = !notificationSubscribed;
+      try { localStorage.setItem(GUEST_ORDER_NOTIFICATIONS_KEY, String(next)); }
+      catch { return; }
+      setNotificationSubscribed(next);
+      return;
+    }
     if (notificationPermission === 'granted') {
       if (notificationSubscribed) {
         await unsubscribeFromPush();
@@ -167,26 +170,14 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   const handleMarketingNotifications = async () => {
     const next = !marketingConsent;
     setMarketingConsent(next);
+    if (!isLoggedIn) {
+      try { localStorage.setItem(GUEST_MARKETING_CONSENT_KEY, String(next)); }
+      catch { setMarketingConsent(!next); }
+      return;
+    }
     try { await authApi.updateMarketingConsent(next); }
     catch { setMarketingConsent(!next); }
   };
-
-  const saveName = async () => {
-    setSaving('name'); setError('');
-    try {
-      await authApi.updateProfile({ name: nameVal.trim() });
-      updateProfile({ name: nameVal.trim() });
-      syncName(nameVal.trim());
-      setSaved('name'); setTimeout(() => setSaved(null), 2000);
-      setEditingName(false);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to save');
-    } finally { setSaving(null); }
-  };
-
-  const initial = name
-    ? name.trim().split(/\s+/).slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
-    : (phone || '?')[0].toUpperCase();
 
   // Declining login returns to the page this visit started from: the tab the
   // customer tapped, or '/orders' for the guest "Track My Orders" CTA. It used
@@ -196,6 +187,9 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   // Mirrors loginStep so the green header can render the heading for the current
   // step (the phone step hands its heading over to the page).
   const [loginStepView, setLoginStepView] = useState<Step>('phone');
+  // Bumped by the OTP app bar's back chevron to ask LoginFlow to return to the
+  // phone step (the bar is page chrome, so it cannot reach the flow's step state).
+  const [loginBackSignal, setLoginBackSignal] = useState(0);
 
   const leaveAsGuest = () => {
     // The flow's own GuestLink tracks this itself, but showGuestLink is off here,
@@ -207,7 +201,8 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
     const { guestReturnPath } = useLoginFlowStore.getState();
     useLoginFlowStore.getState().clear();
     useLoginFlowStore.getState().setGuestReturnPath(null);
-    navigate(guestReturnPath || '/');
+    closeLogin();
+    navigate(guestReturnPath || '/account');
   };
 
   const navigate = (path: string) => {
@@ -217,13 +212,6 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
 
   const footer = (
     <div className="mt-2 flex flex-col items-center gap-1.5 pb-36">
-      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
-        <button onClick={() => navigate('/privacy/')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Privacy Policy</button>
-        <span className="text-gray-500 dark:text-slate-400 text-[10px]">·</span>
-        <button onClick={() => navigate('/terms/')} className="text-[10px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300">Terms of Service</button>
-        <span className="text-gray-500 dark:text-slate-400 text-[10px]">·</span>
-        <button onClick={() => navigate('/delete-account')} className="text-[10px] text-gray-500 transition-colors hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400">Delete my account</button>
-      </div>
       <span className="text-xs text-gray-500 dark:text-slate-400">
         A product of{' '}
         <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
@@ -234,29 +222,64 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
     </div>
   );
 
-  if (!isLoggedIn) {
-    // The green brand header belongs to the phone step only. From OTP onwards the
-    // flow is a plain pale-green page: the step is vertically centred with a
-    // header-height gap at the top, and no header is drawn.
+  if (!isLoggedIn && accountLoginOpen) {
+    // The phone step gets the tall green hero. The OTP step gets a slim green app
+    // bar with a back chevron: the chevron is page chrome (it lives outside the
+    // flow and nudges it back via loginBackSignal). Profile/offer stay plain pale
+    // green with a header-height gap at the top.
     const showBrandHeader = loginStepView === 'phone';
+    const showOtpHeader = loginStepView === 'otp';
     return (
       <div className={`page-shell relative font-sans ${
         showBrandHeader
           ? 'bg-white dark:bg-slate-900'
-          : 'flex flex-col justify-center bg-[#e8f5e9] pt-[64px] dark:bg-slate-900'
+          : showOtpHeader
+            ? 'flex flex-col bg-white dark:bg-slate-900'
+            : 'flex flex-col justify-start bg-[#e8f5e9] pt-[64px] dark:bg-slate-900'
       }`}>
         {showBrandHeader && (
-          <div className="relative flex h-[42vh] flex-col items-center justify-end bg-gradient-to-b from-[#218044] to-[#2e8b57] px-6 pb-2 text-center dark:from-[#18191a] dark:to-[#14532d]">
+          <div className="relative bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#14532d]">
+            <div className="flex h-14 items-center pl-1 pr-3">
+              <button
+                type="button"
+                aria-label="Back to home"
+                onClick={() => {
+                  useLoginFlowStore.getState().clear();
+                  closeLogin();
+                  setLoginStepView('phone');
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              >
+                <ChevronLeft className="h-6 w-6" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
+        {showOtpHeader && (
+          <div className="relative bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#14532d]">
+            <div className="flex h-14 items-center pl-1 pr-3">
+              <button
+                type="button"
+                aria-label="Back to mobile number"
+                onClick={() => setLoginBackSignal((n) => n + 1)}
+                className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              >
+                <ChevronLeft className="h-6 w-6" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
+        {showBrandHeader && (
+          <div className="flex flex-col items-center px-6 pt-7 text-center">
             <img
-              src="/Gokez_mart_brand_transparent.webp"
+              src="/mart_brand_new.png"
               alt="Gokez Mart"
-              width={1554}
-              height={603}
-              className="h-[60px] w-auto object-contain"
+              width={1536}
+              height={1024}
+              className="-mb-3 h-[54px] w-auto object-contain"
             />
-            <p className="mt-1 text-[clamp(10px,4.5vw,39px)] font-bold leading-tight text-white/95">{BRAND_SLOGAN}</p>
-            <h1 className="mt-10 text-[17px] font-black leading-tight text-white/80">Login or sign up</h1>
-            <p className="mt-1 text-[13px] text-white/80">Enter your mobile number to continue</p>
+            <p className="mt-0 text-[clamp(9px,calc(4vw-6px),29px)] font-bold leading-tight text-slate-900 dark:text-white">{BRAND_SLOGAN}</p>
+            <h1 className="mt-8 text-[15px] font-black leading-tight text-slate-500 dark:text-slate-400">Log in or sign up</h1>
           </div>
         )}
         <div className={`relative w-full overflow-hidden ${
@@ -264,10 +287,11 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
             ? 'bg-white sm:mx-auto sm:max-w-sm sm:rounded-3xl sm:shadow-xl dark:bg-slate-800'
             : 'sm:mx-auto sm:max-w-sm'
         }`}>
-          <div className={showBrandHeader ? "px-5 pb-6 pt-5 space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
+          <div className={showBrandHeader ? "px-5 pb-6 pt-1 space-y-4" : showOtpHeader ? "px-5 pb-6 pt-6 space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
 <LoginFlow
               variant="page"
               showPhoneHeading={false}
+              backSignal={loginBackSignal}
               // Deliberately NOT pendingCheckout={cartCount > 0}. That flag is
               // persisted by beginOtp and read back on boot to auto-open the
               // overlay, so setting it here would turn any reload of /account
@@ -280,22 +304,23 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
               // the flow supplies it, so both hosts share one login visual.
               showGuestLink={false}
               onStepChange={(s) => { loginStep.current = s; setLoginStepView(s); }}
-              onNavigateLegal={(path) => navigate(path)}
+              onNavigateLegal={(path) => { closeLogin(); navigate(path); }}
               // The page owns the guest exit (the flow's own is switched off above), so it
               // has to do the flow's cleanup itself. LoginFlow.handleGuest normally
               // calls loginFlow.clear() before leaving; without that, a shopper who
               // abandons login here leaves an unexpired OTP flow in sessionStorage,
               // which App reads on next boot and turns into a surprise modal.
               onGuest={leaveAsGuest}
-              onNameRequested={() => setShowNamePrompt(true)}
               onSuccess={() => {
                 // Honour an explicit redirect intent (for example, Orders). A
                 // customer who began login from Account belongs back on Account.
                 const redirect = useLoginFlowStore.getState().postLoginPath || '/account';
                 useLoginFlowStore.getState().setPostLoginPath(null);
                 useLoginFlowStore.getState().setGuestReturnPath(null);
+                closeLogin();
                 navigate(redirect);
               }}
+              onClose={closeLogin}
             />
             {!isLoggedIn && <div className="text-center">
               <button
@@ -314,130 +339,35 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
   return (
     <div className="page-shell bg-[#f7f8fa] dark:bg-slate-900 font-sans">
       <div className="mx-auto max-w-2xl space-y-7 px-4 py-5 pb-10 sm:px-6 sm:py-7">
-        <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-[#e9edf2] bg-white p-5 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-shrink-0">
-              <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full border-2 border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30">
-                {photoUrl
-                  ? <img src={photoUrl} alt={name || ''} className="w-full h-full object-cover" />
-                  : <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{initial}</span>
-                }
-              </div>
-              <label aria-label="Change profile photo" className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#e9edf2] bg-white shadow-sm transition-colors hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-700 dark:hover:bg-slate-600">
-                {photoUploading
-                  ? <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
-                  : <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                }
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
-              </label>
-            </div>
-            <div className="flex-1 min-w-0">
-              {editingName ? (
-                <div className="flex items-center gap-2" onClick={handleNameSurfaceClick}>
-                  <input ref={nameInputRef} autoFocus type="text" value={nameVal} onChange={e => setNameVal(e.target.value)} onKeyDown={handleNameKeyDown}
-                    inputMode="text" enterKeyHint="done"
-                    className="min-w-0 w-full flex-1 px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-emerald-500" placeholder="Your full name" />
-                  <div className="flex shrink-0 gap-1.5">
-                    <button type="button" onClick={saveName} disabled={saving === 'name'} aria-label="Save profile name" title="Save"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-white transition-colors hover:bg-emerald-600 disabled:opacity-60">
-                      {saving === 'name' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    </button>
-                    <button type="button" onClick={() => { setEditingName(false); setNameVal(name || ''); }} aria-label="Cancel profile name editing" title="Cancel"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition-colors hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2" onClick={handleNameSurfaceClick}>
-                  <p className="truncate text-[22px] font-bold leading-tight text-[#172033] dark:text-white">
-                    {name || <span className="text-base font-normal text-gray-500 dark:text-slate-400">Add your name</span>}
-                  </p>
-                  <button onClick={() => setEditingName(true)} aria-label="Edit profile name"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700">
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="flex items-center gap-1 text-sm font-medium text-[#687386] dark:text-slate-300"><Phone className="h-3.5 w-3.5" />+91 {phone}</span>
-                <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-                  <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  Verified
-                </span>
-              </div>
-              {saved === 'name' && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">Name saved ✓</p>}
-              {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
-            </div>
+        {!isLoggedIn && (
+        <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-[#e9edf2] bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
+          <div className="min-w-0">
+              <p className="text-lg font-bold leading-tight text-[#172033] dark:text-white">Your account</p>
+              <p className="mt-2 text-xs text-[#687386] dark:text-slate-400">Log in or sign up to access complete account.</p>
+              <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-[#172033] px-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-[#172033] dark:hover:bg-slate-200">Continue login</button>
           </div>
         </div>
-
-        <section>
-          <div className="mb-3 flex items-center justify-between px-1">
-            <p className="text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">My Gokez Mart</p>
-            <div className="flex items-center gap-2">
-              {shareNotice && <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400" role="status">{shareNotice}</span>}
-              <button type="button" onClick={handleShareApp} aria-label="Share Gokez Mart" title="Share Gokez Mart"
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gray-950 px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200">
-                <Share2 className="h-3.5 w-3.5" />
-                Share
-              </button>
-            </div>
-          </div>
-          <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
-          <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-            <p className="text-[15px] font-semibold text-[#172033] dark:text-white">My addresses</p>
-            <button onClick={() => setEditingAddressId('new')}
-              className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-700">
-              <Plus className="w-3 h-3" /> {addresses.length > 0 ? 'Add new address' : 'Add address'}
-            </button>
-          </div>
-          {addresses.length === 0 && (
-            <div className="border-t border-[#e9edf2] px-4 py-4 dark:border-slate-700">
-              <p className="text-sm text-[#687386] dark:text-slate-400">Save an address for faster checkout.</p>
-            </div>
-          )}
-          {addresses.map(addr => (
-            <button type="button" key={addr.id} onClick={() => setEditingAddressId(addr.id)}
-              className="flex w-full items-start gap-2 border-t border-[#e9edf2] px-4 py-3.5 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
-              <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${addr.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
-                <MapPin className={`h-4 w-4 ${addr.isDefault ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="mb-1 flex items-center gap-1.5">
-                  <span className="text-sm font-semibold text-[#172033] dark:text-slate-200">{addr.label}</span>
-                  {addr.isDefault && (
-                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Default</span>
-                  )}
-                </div>
-                <p className="line-clamp-2 text-[13px] leading-snug text-[#687386] dark:text-slate-400">{addr.address}</p>
-              </div>
-              <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-gray-300" />
-            </button>
-          ))}
-          </div>
-        </section>
-
-        {editingAddressId && (
-          <AddressSheet
-            mode="manage"
-            addresses={addresses}
-            initialEditingId={editingAddressId}
-            onClose={() => setEditingAddressId(null)}
-            onAddAddress={async (label, value, coordinates) => {
-              await addAddress({ label, address: value, isDefault: addresses.length === 0, ...coordinates });
-              return true;
-            }}
-            onUpdateAddress={async (id, label, value, coordinates) => {
-              await updateAddress(id, label, value, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
-              return true;
-            }}
-            onDeleteAddress={(id) => removeAddress(id)}
-            onSetDefaultAddress={(id) => setDefaultAddress(id)}
-          />
         )}
 
-        {(supportPhone || whatsappNumber) && (
+        <section>
+          <div className="grid grid-cols-3 gap-2">
+            <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-md border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+              <Headphones className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              <span>Support</span>
+            </a>
+            <button type="button" onClick={() => navigate('/feedback/')} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-md border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+              <MessageSquare className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <span>Feedback</span>
+            </button>
+            <button type="button" onClick={handleShareApp} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-md border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+              <Share2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <span>Share App</span>
+            </button>
+          </div>
+          {shareNotice && <p className="mt-2 text-center text-[11px] font-medium text-emerald-600 dark:text-emerald-400" role="status">{shareNotice}</p>}
+        </section>
+
+        {(storeName || storeAddress || supportPhone || whatsappNumber) && (
           <section>
             <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Your local store</p>
             <div className="rounded-[18px] border border-[#e9edf2] bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
@@ -447,7 +377,10 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-semibold text-[#172033] dark:text-white">{storeName || 'Your delivery store'}</p>
-                  <p className="mt-0.5 text-[13px] text-[#687386] dark:text-slate-400">{storeName ? 'Your orders are fulfilled by this store.' : 'Order and delivery help'}</p>
+                  {storeAddress && <p className="mt-0.5 text-xs text-[#687386] dark:text-slate-400">({storeAddress})</p>}
+                  <p className="mt-0.5 text-[13px] text-[#687386] dark:text-slate-400">
+                    {storeName ? 'Your orders are fulfilled by this store.' : 'Order and delivery help'}
+                  </p>
                 </div>
               </div>
               {(supportPhone || whatsappNumber) && (
@@ -470,35 +403,6 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
             </div>
           </section>
         )}
-
-        <section>
-          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Contact Gokez</p>
-          <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
-          <a href={`mailto:${GOKEZ_SUPPORT.email}`}
-            className="flex min-h-[64px] items-center gap-3 px-4 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20">
-              <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">{GOKEZ_SUPPORT.email}</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-gray-300" />
-          </a>
-          </div>
-        </section>
-
-        <button
-          onClick={() => navigate('/feedback/')}
-          className="flex w-full items-center justify-between rounded-[18px] border border-amber-100 bg-amber-50/70 px-4 py-4 text-left transition-colors hover:bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 dark:hover:bg-amber-950/30">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-lg shadow-sm dark:bg-slate-800" aria-hidden="true">★</span>
-            <div>
-              <p className="text-[15px] font-semibold text-[#172033] dark:text-white">Share feedback</p>
-              <p className="mt-0.5 text-[13px] text-[#687386] dark:text-slate-400">Tell us how Gokez Mart can improve.</p>
-            </div>
-          </div>
-          <ChevronRight className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-        </button>
 
         <section>
         <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Preferences</p>
@@ -546,13 +450,17 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
             <div className="flex-1 min-w-0">
               <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Order notifications</span>
               <p className="text-[12px] text-[#687386] dark:text-slate-400">
-                {notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
+                {!isLoggedIn ? 'Preference saved on this device' : notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
                  notificationPermission === 'denied' ? 'Blocked - enable in browser settings' :
                  notificationPermission === 'unsupported' ? 'Not supported on this browser' :
                  'Get delivery and order status alerts'}
               </p>
             </div>
-            {notificationPermission === 'denied' ? (
+            {!isLoggedIn ? (
+              <button onClick={handleOrderNotifications} role="switch" aria-checked={notificationSubscribed} aria-label="Toggle order notifications" className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notificationSubscribed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${notificationSubscribed ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            ) : notificationPermission === 'denied' ? (
               <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">Blocked</span>
             ) : notificationPermission === 'unsupported' ? (
               <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
@@ -567,9 +475,9 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
             <MessageCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Promotional notifications</span>
-              <p className="text-[12px] text-[#687386] dark:text-slate-400">Offers, deals and new arrivals</p>
+              <p className="text-[12px] text-[#687386] dark:text-slate-400">{isLoggedIn ? 'Offers, deals and new arrivals' : 'Preference saved on this device'}</p>
             </div>
-            <button onClick={handleMarketingNotifications} role="switch" aria-checked={marketingConsent}
+            <button onClick={handleMarketingNotifications} role="switch" aria-checked={marketingConsent} aria-label="Toggle promotional notifications"
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${marketingConsent ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
               <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${marketingConsent ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
@@ -580,49 +488,11 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
         <section>
         <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Privacy &amp; data</p>
         <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
-          <div className="flex min-h-[64px] items-center gap-3 px-4">
-            <MessageCircle className="w-4 h-4 text-violet-500 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-300">Submit a grievance</p>
-              <p className="text-[12px] text-[#687386] dark:text-slate-400">Complaint or concern about your data or service</p>
-            </div>
-            <button
-              onClick={() => navigate('/grievance/')}
-              className="text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 px-2.5 py-1 rounded-lg hover:bg-violet-100 transition-colors flex-shrink-0">
-              Open
-            </button>
-          </div>
-          <div className="flex min-h-[64px] items-center gap-3 border-t border-[#e9edf2] px-4 dark:border-slate-700">
-            <Download className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-slate-400" />
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-[#172033] dark:text-slate-300">Download my data</p>
-              <p className="text-[12px] text-[#687386] dark:text-slate-400">Export your profile, orders &amp; history</p>
-            </div>
-            <button
-              disabled={exportLoading}
-              onClick={async () => {
-                setExportLoading(true);
-                try {
-                  await authApi.requestDataExport();
-                  const res = await authApi.getDataExport();
-                  const data = res.data.data?.data;
-                  if (data) {
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url; a.download = 'my-gokez-data.json'; a.click();
-                    URL.revokeObjectURL(url);
-                    setExportReady(true);
-                  } else {
-                    alert('Export not ready. Please try again.');
-                  }
-                } catch { alert('Failed to export data. Please try again.'); }
-                finally { setExportLoading(false); }
-              }}
-              className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 disabled:opacity-50 transition-colors">
-              {exportLoading ? 'Preparing...' : exportReady ? 'Downloaded ✓' : 'Export'}
-            </button>
-          </div>
+          <button onClick={() => navigate('/grievance/')} className="flex min-h-[56px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
+            <MessageCircle className="h-4 w-4 text-gray-500 dark:text-slate-400" />
+            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Submit a grievance</span>
+            <ChevronRight className="h-4 w-4 text-gray-300" />
+          </button>
           <button onClick={() => navigate('/privacy/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#e9edf2] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
             <ShieldCheck className="h-4 w-4 text-gray-500 dark:text-slate-400" />
             <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Privacy policy</span>
@@ -637,18 +507,10 @@ export default function AccountPage({ onBack, storeName, supportPhone, whatsappN
         </section>
 
         <section className="pt-1 text-center">
-          <button onClick={async () => {
-            try { await authApi.logout(); } catch {}
-            logout(); onBack?.();
-          }}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/10">
-            Sign Out
-          </button>
-          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.0.1</p>
+          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.0.2</p>
           {footer}
         </section>
       </div>
-      {showNamePrompt && <NamePrompt onDone={() => setShowNamePrompt(false)} />}
     </div>
   );
 }

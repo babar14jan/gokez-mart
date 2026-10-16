@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
+import PageHeader from '../components/PageHeader';
 
 const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400';
 
@@ -33,12 +34,7 @@ export default function DeleteAccountPage() {
 
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
-      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 px-4 py-3 flex items-center gap-3">
-        <button onClick={() => window.history.back()} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
-          <svg className="w-5 h-5 text-gray-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-        </button>
-        <h1 className="text-sm font-bold text-gray-900 dark:text-white">Delete My Account</h1>
-      </div>
+      <PageHeader title="Delete My Account" />
 
       <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 pb-36 space-y-4">
 
