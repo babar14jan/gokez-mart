@@ -848,7 +848,7 @@ export default function App() {
         useLoginFlowStore.getState().setPostLoginPath(null);
         setShowLoginModal(false);
         if (pendingCheckout) {
-    setPendingCheckout(true);
+          setPendingCheckout(false);
           setCheckoutActive(true);
         } else if (redirect === '/orders') {
           // Signed in to see order history — that is where they asked to go.

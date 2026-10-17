@@ -43,16 +43,16 @@ export default function ComboSheet({ title, products, onClose }: ComboSheetProps
           backSize="sm"
         />
 
-        <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <div className="shrink-0 bg-white px-3 py-2.5 dark:bg-slate-900">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
             <input ref={inputRef} type="text" inputMode="search" enterKeyHint="search" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={onKeyDown}
               placeholder="Search combos..."
-              className="w-full rounded-xl border-0 bg-gray-100 py-2.5 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300" />
+              className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-400 dark:focus:ring-emerald-500/40" />
             {search && (
               <button type="button" onClick={() => setSearch('')} aria-label="Clear combo search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
-                <X className="h-4 w-4" />
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
               </button>
             )}
           </div>
