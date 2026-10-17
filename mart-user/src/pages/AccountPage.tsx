@@ -310,7 +310,10 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               className="-mb-3 h-[54px] w-auto object-contain"
             />
             <p className="mt-0 text-[clamp(9px,calc(4vw-6px),29px)] font-bold leading-tight text-slate-900 dark:text-white">{BRAND_SLOGAN}</p>
-            <p className="mt-6 text-center font-black leading-none tracking-tight text-[clamp(12px,3.75vw,28px)] text-slate-900 dark:text-white">
+            <p
+              className="mt-[80px] text-center font-black leading-none tracking-tight text-[clamp(12px,3.75vw,28px)] text-slate-900 dark:text-white"
+              style={{ marginTop: '5lh' }}
+            >
               From your Neighbourhood Store to your door
             </p>
             <h1 className="mt-3 text-[15px] font-black leading-tight text-slate-500 dark:text-slate-400">Log in or sign up</h1>

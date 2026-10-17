@@ -266,6 +266,7 @@ export default function App() {
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const pullDistance = useRef(0);
   const [pullDistanceVisible, setPullDistanceVisible] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handlePullTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
     if (event.touches.length !== 1 || scrollRef.current?.scrollTop !== 0) return;
@@ -295,10 +296,14 @@ export default function App() {
   const finishPullGesture = () => {
     pullStart.current = null;
     if (pullDistance.current >= PULL_REFRESH_THRESHOLD) {
+      // Spin in place (no page translation) then reload. The old implementation
+      // grew an in-flow indicator, which pushed the sticky navbar down into the
+      // status bar on Android and looked like the whole page was being pulled.
+      setRefreshing(true);
       try {
         sessionStorage.setItem('mart-pull-refresh', '1');
       } catch {}
-      window.setTimeout(() => window.location.reload(), 180);
+      window.setTimeout(() => window.location.reload(), 220);
       return;
     }
     pullDistance.current = 0;
@@ -828,7 +833,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-shell ${view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
+    <div className={`app-shell relative ${view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
 
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNavigateLegal={(path) => {
         // Reading Terms/Privacy leaves the login behind: close the overlay so the
@@ -866,6 +871,27 @@ export default function App() {
         </div>
       )}
 
+      {/* In-place refresh spinner. Absolutely positioned so the gesture never
+          shifts the page or the navbar — it just rotates where it is. */}
+      {(refreshing || pullDistanceVisible > 0) && (
+        <div
+          className="pointer-events-none absolute left-1/2 z-[80] -translate-x-1/2"
+          style={{
+            top: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+            opacity: refreshing ? 1 : Math.min(1, pullDistanceVisible / 40),
+          }}
+          aria-live="polite"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-md ring-1 ring-black/5 backdrop-blur dark:bg-slate-800/90 dark:ring-white/10">
+            <RefreshCw
+              className={`h-4 w-4 text-emerald-600 dark:text-emerald-300 ${refreshing || pullDistanceVisible >= PULL_REFRESH_THRESHOLD ? 'animate-spin' : ''}`}
+              style={refreshing || pullDistanceVisible >= PULL_REFRESH_THRESHOLD ? undefined : { transform: `rotate(${pullDistanceVisible * 4}deg)` }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Single scroll area. The bottom nav below is a flex sibling of this
           scroller, so it is structurally pinned and cannot drift the way a
           position: fixed bar does on iOS Safari/standalone PWA. */}
@@ -877,20 +903,6 @@ export default function App() {
         onTouchEnd={finishPullGesture}
         onTouchCancel={cancelPullGesture}
       >
-
-      {pullDistanceVisible > 0 && (
-        <div
-          className="flex items-center justify-center gap-2 overflow-hidden text-xs font-medium text-emerald-700 transition-[height] dark:text-emerald-300"
-          style={{ height: `${pullDistanceVisible}px` }}
-          aria-live="polite"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${pullDistance.current >= PULL_REFRESH_THRESHOLD ? 'animate-spin' : ''}`}
-            aria-hidden="true"
-          />
-          {pullDistance.current >= PULL_REFRESH_THRESHOLD ? 'Release to refresh' : 'Pull to refresh'}
-        </div>
-      )}
 
       {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
         <Navbar

@@ -867,6 +867,10 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
   // Empty pattern keeps the search clause a no-op while avoiding a null param.
   const searchPattern = search ? `%${search}%` : '';
+  // Counts and money come live from the order rows: completed (delivered) and
+  // cancelled (any side, any reason, terminated included) are kept apart, and
+  // spend only counts delivered orders. Materialised mart_customers counters
+  // drift once an order is cancelled or backfilled, so they are not read here.
   const SORTS: Record<string, string> = {
     orders_desc: '"orderCount" DESC, "createdAt" DESC',
     spend_desc: '"totalSpent" DESC, "orderCount" DESC',
@@ -884,14 +888,28 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
   const [customers, counts, stats] = await Promise.all([
     query(
       `WITH classified AS (
-         SELECT c.id, c.phone, c.name, c.address, c.order_count as "orderCount",
-                c.total_spent::float as "totalSpent", c.created_at as "createdAt",
-                ${identitySql} as "identityType"
+         SELECT c.id, c.phone, c.name, c.address, c.created_at,
+                ${identitySql} as "identityType",
+                NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
          FROM mart_customers c
+       ), order_agg AS (
+         SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS ckey,
+                COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS "completedOrders",
+                COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS "canceledOrders",
+                COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS "totalSpent"
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+         GROUP BY 1
        )
-       SELECT * FROM classified
-       WHERE ($1 = 'all' OR "identityType" = $1)
-         AND ($4 = '' OR name ILIKE $4 OR phone ILIKE $4)
+       SELECT c.id, c.phone, c.name, c.address, c.created_at as "createdAt", c."identityType",
+              COALESCE(a."completedOrders", 0)::int AS "completedOrders",
+              COALESCE(a."canceledOrders", 0)::int AS "canceledOrders",
+              (COALESCE(a."completedOrders", 0) + COALESCE(a."canceledOrders", 0))::int AS "orderCount",
+              COALESCE(a."totalSpent", 0)::float AS "totalSpent"
+       FROM classified c
+       LEFT JOIN order_agg a ON a.ckey = c.ckey
+       WHERE ($1 = 'all' OR c."identityType" = $1)
+         AND ($4 = '' OR c.name ILIKE $4 OR c.phone ILIKE $4)
        ORDER BY ${orderBy}
        LIMIT $2 OFFSET $3`,
       [identity, limit, offset, searchPattern]
