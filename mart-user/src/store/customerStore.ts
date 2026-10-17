@@ -20,11 +20,11 @@ export interface CustomerState {
 
   setPhone: (phone: string) => void;
   setName: (name: string) => void;
-  loadAddresses: () => Promise<void>;
-  addAddress: (address: Omit<SavedAddress, 'id'>) => Promise<void>;
-  updateAddress: (id: string, label: string, address: string, latitude?: number | null, longitude?: number | null) => Promise<void>;
-  removeAddress: (id: string) => Promise<void>;
-  setDefaultAddress: (id: string) => Promise<void>;
+  loadAddresses: () => Promise<boolean>;
+  addAddress: (address: Omit<SavedAddress, 'id'>) => Promise<boolean>;
+  updateAddress: (id: string, label: string, address: string, latitude?: number | null, longitude?: number | null) => Promise<boolean>;
+  removeAddress: (id: string) => Promise<boolean>;
+  setDefaultAddress: (id: string) => Promise<boolean>;
   getDefaultAddress: () => SavedAddress | null;
   setHasAskedPhone: () => void;
   clear: () => void;
@@ -49,30 +49,45 @@ export const useCustomerStore = create<CustomerState>()(
         try {
           const res = await addressApi.list();
           set({ addresses: (res.data.data || []).map(fromBackend), addressesLoaded: true });
-        } catch { /* stay on cached/local addresses if offline */ }
+          return true;
+        } catch {
+          // Keep whatever is cached so an offline read does not blank the list.
+          return false;
+        }
       },
 
       addAddress: async (addr) => {
         const trimmed = addr.address.trim().toLowerCase();
-        if (get().addresses.some(a => a.address.trim().toLowerCase() === trimmed)) return;
+        // Same text already cached — treat as a no-op success rather than a
+        // duplicate row. Only reachable with a fresh list, never a stale one.
+        if (get().addresses.some(a => a.address.trim().toLowerCase() === trimmed)) return true;
         try {
           await addressApi.add(addr.label, addr.address, addr.isDefault, addr.latitude, addr.longitude);
           await get().loadAddresses();
-        } catch { /* silent — best effort */ }
+          return true;
+        } catch {
+          return false;
+        }
       },
 
       updateAddress: async (id, label, address, latitude, longitude) => {
         try {
           await addressApi.update(id, label, address, latitude, longitude);
           await get().loadAddresses();
-        } catch { /* silent */ }
+          return true;
+        } catch {
+          return false;
+        }
       },
 
       removeAddress: async (id) => {
         try {
           await addressApi.remove(id);
           await get().loadAddresses();
-        } catch { /* silent */ }
+          return true;
+        } catch {
+          return false;
+        }
       },
 
       setDefaultAddress: async (id) => {
@@ -80,7 +95,13 @@ export const useCustomerStore = create<CustomerState>()(
         try {
           await addressApi.setDefault(id);
           await get().loadAddresses();
-        } catch { /* silent — optimistic update already applied */ }
+          return true;
+        } catch {
+          // Roll the optimistic flip back so the UI never claims a default the
+          // server never accepted.
+          await get().loadAddresses();
+          return false;
+        }
       },
 
       getDefaultAddress: () =>

@@ -54,12 +54,13 @@ interface AddressFormProps {
   initialCoordinates?: AddressCoordinates | null;
   focusFirstField?: boolean;
   saving: boolean;
+  error?: string | null;
   onSave: (label: string, address: string, coordinates: AddressCoordinates | null) => Promise<void>;
   onCancel: () => void;
   nameSlot?: React.ReactNode;
 }
 
-export default function AddressForm({ stored = null, initialLabel = 'Home', initialCoordinates = null, focusFirstField = false, saving, onSave, onCancel, nameSlot }: AddressFormProps) {
+export default function AddressForm({ stored = null, initialLabel = 'Home', initialCoordinates = null, focusFirstField = false, saving, error = null, onSave, onCancel, nameSlot }: AddressFormProps) {
   const label = initialLabel;
   const [fields, setFields] = useState<AddressFields>(() => parseAddress(stored));
   const [coordinates, setCoordinates] = useState<AddressCoordinates | null>(initialCoordinates);
@@ -73,6 +74,11 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
   return (
     <div className="space-y-4 pb-20">
       <p className="text-[13px] text-gray-500 dark:text-slate-400">Fields marked <span className="font-bold text-red-500" aria-hidden="true">*</span> are required for delivery.</p>
+      {error && (
+        <p className="rounded-xl bg-red-50 px-3 py-2 text-[12px] font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400" role="alert">
+          {error}
+        </p>
+      )}
       {nameSlot}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Flat / House No." required value={fields.house} onChange={update('house')} placeholder="Enter house number" autoFocus forceAutoFocus={focusFirstField} />

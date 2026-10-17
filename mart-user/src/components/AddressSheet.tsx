@@ -52,6 +52,7 @@ export default function AddressSheet({
   const [editingId, setEditingId] = useState<string | 'new' | null>(initialEditingId);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // The page behind must not scroll under the sheet (iOS rubber-banding shows the
   // app header reappearing at the very top when the body is scrolled).
@@ -70,20 +71,33 @@ export default function AddressSheet({
 
   const handleSave = async (label: string, address: string, coordinates: AddressCoordinates | null) => {
     setSaving(true);
+    setSaveError(null);
     try {
       const ok = editingId === 'new'
         ? await onAddAddress(label, address, coordinates)
         : editingId && onUpdateAddress
           ? await onUpdateAddress(editingId, label, address, coordinates)
           : true;
-      if (ok !== false) onClose();
+      // `false` means the host is handling the problem itself (e.g. an invalid
+      // name) — stay open without a duplicate message. A throw is an unexpected
+      // failure (network, expired session, server reject) and must be shown, not
+      // swallowed into a false "saved".
+      if (ok === false) return;
+      onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error && err.message ? err.message : 'Could not save this address. Please try again.');
     } finally { setSaving(false); }
   };
 
   const handleSelect = async (address: SavedAddress) => {
     if (!onSelectAddress) return;
-    const ok = await onSelectAddress(address);
-    if (ok !== false) onClose();
+    setSaveError(null);
+    try {
+      const ok = await onSelectAddress(address);
+      if (ok !== false) onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error && err.message ? err.message : 'Could not select this address. Please try again.');
+    }
   };
 
   const handleDelete = async () => {
@@ -140,6 +154,7 @@ export default function AddressSheet({
                   : null}
                 focusFirstField={focusFirstField}
                 saving={saving}
+                error={saveError}
                 onSave={handleSave}
                 onCancel={() => (addresses.length > 0 ? setEditingId(null) : onClose())}
                 nameSlot={nameSlot}
@@ -147,6 +162,11 @@ export default function AddressSheet({
             </div>
           ) : (
             <>
+              {saveError && (
+                <p className="mx-5 mt-4 rounded-xl bg-red-50 px-3 py-2 text-[12px] font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400" role="alert">
+                  {saveError}
+                </p>
+              )}
               {requiresName && nameSlot && (
                 <div className="border-b border-gray-100 px-5 py-4 dark:border-slate-700">{nameSlot}</div>
               )}

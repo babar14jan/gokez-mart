@@ -15,6 +15,11 @@ input, select, textarea {
 body { background-color: #ffffff; color: #111827; }
 .dark body { background-color: #18191a; color: #e4e6eb; }
 
+/* Kill the native browser pull-to-refresh (Chrome/Android) and the iOS
+   rubber-band bounce. The app has its own in-place refresh gesture (App.tsx);
+   without this the browser also reloads and the whole page visibly pulls. */
+html, body { overscroll-behavior-y: none; }
+
 /* Facebook-style dark mode custom properties */
 :root.dark {
   --dark-bg:       #18191a;
@@ -110,6 +115,10 @@ body { background-color: #ffffff; color: #111827; }
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
+    /* Stop the scroll from chaining to the document at the top edge: this is
+       what triggers Chrome/Android's native pull-to-refresh and lets the page
+       rubber-band on iOS. The app owns the gesture instead. */
+    overscroll-behavior-y: none;
     /* Do NOT restore -webkit-overflow-scrolling: touch here. On iOS it makes
        .app-scroll a stacking context and a containing block for fixed
        descendants, so full-screen overlays opened from inside it (checkout,

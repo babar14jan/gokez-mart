@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 
@@ -37,8 +37,20 @@ export default function HomeCarousel() {
   const [slides, setSlides] = useState<Slide[]>(FALLBACK);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const touchStartX = useRef<number | null>(null);
-  const [copied, setCopied] = useState(false);
+  const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const displayIndexRef = useRef(1);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const n = slides.length;
+  const loop = n > 1;
+  // A clone of the last slide is prepended and a clone of the first is appended
+  // so the strip can keep scrolling forward forever. Landing on either clone is
+  // silently snapped back onto the matching real slide — identical pixels, so
+  // the wrap is invisible and it reads as a continuous cycle.
+  const offset = loop ? 1 : 0;
+  const displaySlides: Slide[] = loop ? [slides[n - 1], ...slides, slides[0]] : slides;
 
   useEffect(() => {
     campaignApi.getCarousel()
@@ -52,127 +64,183 @@ export default function HomeCarousel() {
       .catch(() => {}); // fallback to static
   }, [isLoggedIn]);
 
-  const startTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setActive(a => (a + 1) % slides.length), 4000);
-  };
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }, []);
+
+  // Content offset that centres a display slot in the viewport.
+  const centerOf = useCallback((di: number): number | null => {
+    const track = trackRef.current;
+    const el = itemRefs.current[di];
+    if (!track || !el) return null;
+    return el.offsetLeft - (track.clientWidth - el.offsetWidth) / 2;
+  }, []);
+
+  const scrollToDisplay = useCallback((di: number, behavior: ScrollBehavior = 'smooth') => {
+    const track = trackRef.current;
+    const left = centerOf(di);
+    if (track && left != null) track.scrollTo({ left, behavior });
+  }, [centerOf]);
+
+  // When a clone settles in the centre, hop to the real slide without animating.
+  const normalize = useCallback((d: number) => {
+    if (!loop) return;
+    if (d === 0) { scrollToDisplay(n, 'auto'); displayIndexRef.current = n; }
+    else if (d === n + 1) { scrollToDisplay(1, 'auto'); displayIndexRef.current = 1; }
+  }, [loop, n, scrollToDisplay]);
+
+  // Scroll-driven scale/opacity for the peek effect, plus loop bookkeeping.
+  const handleScroll = useCallback(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const center = track.scrollLeft + track.clientWidth / 2;
+    let best = offset;
+    let bestDist = Infinity;
+    itemRefs.current.forEach((el, di) => {
+      if (!el) return;
+      const dist = Math.abs(el.offsetLeft + el.offsetWidth / 2 - center);
+      const norm = Math.max(0, 1 - dist / (el.offsetWidth * 0.8));
+      el.style.transform = `scale(${0.9 + 0.1 * norm})`;
+      el.style.opacity = `${0.55 + 0.45 * norm}`;
+      if (dist < bestDist) { bestDist = dist; best = di; }
+    });
+    displayIndexRef.current = best;
+    const real = ((best - offset) % n + n) % n;
+    setActive(prev => (prev === real ? prev : real));
+
+    // Wait until the scroll settles before hopping off a clone, so momentum and
+    // snap have finished and the swap is invisible.
+    if (settleRef.current) clearTimeout(settleRef.current);
+    settleRef.current = setTimeout(() => normalize(displayIndexRef.current), 90);
+  }, [n, offset, normalize]);
+
+  const startTimer = useCallback(() => {
+    stopTimer();
+    if (!loop) return;
+    timerRef.current = setInterval(() => {
+      scrollToDisplay(displayIndexRef.current + 1);
+    }, 4000);
+  }, [loop, stopTimer, scrollToDisplay]);
 
   useEffect(() => {
     startTimer();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [slides.length]);
+    return () => { stopTimer(); if (settleRef.current) clearTimeout(settleRef.current); };
+  }, [startTimer, stopTimer]);
 
-  const goTo = (i: number) => { setActive(i); startTimer(); };
+  // Park the strip on the first real slide whenever the slide set changes.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      scrollToDisplay(offset, 'auto');
+      handleScroll();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [slides, offset, scrollToDisplay, handleScroll]);
 
-  const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    const diff = touchStartX.current - e.changedTouches[0].clientX;
-    if (Math.abs(diff) > 40) { setActive(a => diff > 0 ? (a + 1) % slides.length : (a - 1 + slides.length) % slides.length); startTimer(); }
-    touchStartX.current = null;
-  };
+  const goTo = (i: number) => { setActive(i); scrollToDisplay(i + offset); startTimer(); };
 
-  const copyCode = (code: string) => {
+  const copyCode = (code: string, id: string) => {
     navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const slide = slides[active];
-  if (!slide) return null;
-
-  const isCampaignSlide = !!slide.campaign_id;
+  if (slides.length === 0) return null;
 
   return (
     <div className="mt-1 mb-2">
-      {/* Mobile: full-width single slide */}
+      {/* Mobile: centered peek carousel (snap + scale), looping */}
       <div className="sm:hidden">
         <div
-          className="relative w-full overflow-hidden rounded-2xl shadow-lg"
-          style={{ aspectRatio: '16/9' }}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
+          ref={trackRef}
+          onScroll={handleScroll}
+          onPointerDown={stopTimer}
+          onPointerUp={startTimer}
+          onPointerCancel={startTimer}
+          className="flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory py-1"
+          style={{ paddingLeft: '5%', paddingRight: '5%', WebkitOverflowScrolling: 'touch' }}
         >
-        {/* Background — image or gradient */}
-        {slide.image_url ? (
-          <img
-            src={slide.image_url}
-            alt={slide.title || ''}
-            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
-            loading="eager"
-            decoding="async"
-          />
-        ) : (
-          <div className={`absolute inset-0 bg-gradient-to-br ${slide.gradient}`}>
-            <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white/10 pointer-events-none" />
-            <div className="absolute right-6 -bottom-10 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
+          {displaySlides.map((s, di) => {
+            const isCamp = !!s.campaign_id;
+            return (
+              <div
+                key={`${s.id}-${di}`}
+                ref={el => { itemRefs.current[di] = el; }}
+                className="relative flex-shrink-0 snap-center overflow-hidden rounded-2xl shadow-lg"
+                style={{ width: '90%', aspectRatio: '16/9', transform: 'scale(0.9)', opacity: 0.55 }}
+              >
+                {/* Background — image or gradient */}
+                {s.image_url ? (
+                  <img
+                    src={s.image_url}
+                    alt={s.title || ''}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loading="eager"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className={`absolute inset-0 bg-gradient-to-br ${s.gradient}`}>
+                    <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white/10 pointer-events-none" />
+                    <div className="absolute right-6 -bottom-10 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
+                  </div>
+                )}
+
+                {/* Uploaded artwork remains unobstructed. */}
+                {isCamp && !s.image_url && <div className="absolute inset-0 bg-black/20" />}
+
+                {/* Campaign content — used when no custom artwork is supplied */}
+                {isCamp && !s.image_url && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-10">
+                    {s.campaignBadge && (
+                      <span className="inline-block text-[11px] font-bold bg-white/25 text-white px-3 py-1 rounded-full mb-3 backdrop-blur-sm border border-white/30">
+                        {s.campaignBadge}
+                      </span>
+                    )}
+                    {discountLabel(s) && (
+                      <p className="text-4xl font-black text-white drop-shadow-lg leading-none mb-2">
+                        {discountLabel(s)}
+                      </p>
+                    )}
+                    {s.title && (
+                      <p className="text-sm font-bold text-white/90 mb-1">{s.title}</p>
+                    )}
+                    {s.subtitle && (
+                      <p className="text-xs text-white/70 mb-3">{s.subtitle}</p>
+                    )}
+                    {s.couponCode ? (
+                      <button
+                        onClick={() => copyCode(s.couponCode!, s.id)}
+                        className="flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white text-xs font-bold px-4 py-2 rounded-xl border border-white/30 hover:bg-white/30 transition-colors">
+                        <span className="font-mono tracking-wider">{s.couponCode}</span>
+                        <span className="text-[10px] opacity-80">{copiedId === s.id ? '✓ Copied!' : 'Tap to copy'}</span>
+                      </button>
+                    ) : s.campaign_id && (
+                      <span className="text-[11px] text-white/80 bg-white/15 px-3 py-1 rounded-full border border-white/20">
+                        ✨ Auto-applied at checkout
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Title overlay — only for gradient slides with no image */}
+                {!isCamp && s.title && !s.image_url && (
+                  <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/40 to-transparent z-10">
+                    <p className="text-xs font-bold text-white drop-shadow">{s.title}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Dots — mobile only */}
+        {loop && (
+          <div className="flex items-center justify-center gap-1.5 mt-2.5">
+            {slides.map((_, i) => (
+              <button key={i} onClick={() => goTo(i)} aria-label={`Go to slide ${i + 1}`}
+                className={`rounded-full transition-all duration-300 ${active === i ? 'w-5 h-1.5 bg-emerald-500' : 'w-1.5 h-1.5 bg-gray-300 dark:bg-slate-600'}`} />
+            ))}
           </div>
         )}
-
-        {/* Text stays on generated gradients; uploaded artwork remains unobstructed. */}
-        {isCampaignSlide && !slide.image_url && (
-          <div className="absolute inset-0 bg-black/20" />
-        )}
-
-        {/* Campaign content — used when no custom artwork is supplied */}
-        {isCampaignSlide && !slide.image_url && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-10">
-            {slide.campaignBadge && (
-              <span className="inline-block text-[11px] sm:text-xs font-bold bg-white/25 text-white px-3 py-1 rounded-full mb-3 backdrop-blur-sm border border-white/30">
-                {slide.campaignBadge}
-              </span>
-            )}
-            {discountLabel(slide) && (
-              <p className="text-4xl sm:text-5xl font-black text-white drop-shadow-lg leading-none mb-2">
-                {discountLabel(slide)}
-              </p>
-            )}
-            {slide.title && (
-              <p className="text-sm sm:text-base font-bold text-white/90 mb-1">{slide.title}</p>
-            )}
-            {slide.subtitle && (
-              <p className="text-xs sm:text-sm text-white/70 mb-3">{slide.subtitle}</p>
-            )}
-            {slide.couponCode ? (
-              <button
-                onClick={() => copyCode(slide.couponCode!)}
-                className="flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl border border-white/30 hover:bg-white/30 transition-colors">
-                <span className="font-mono tracking-wider">{slide.couponCode}</span>
-                <span className="text-[10px] sm:text-xs opacity-80">{copied ? '✓ Copied!' : 'Tap to copy'}</span>
-              </button>
-            ) : slide.campaign_id && (
-              <span className="text-[11px] sm:text-xs text-white/80 bg-white/15 px-3 py-1 rounded-full border border-white/20">
-                ✨ Auto-applied at checkout
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Title overlay — only for gradient slides with no image */}
-        {!isCampaignSlide && slide.title && !slide.image_url && (
-          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/40 to-transparent z-10">
-            <p className="text-xs font-bold text-white drop-shadow">{slide.title}</p>
-          </div>
-        )}
-
-        {/* Arrow buttons — desktop */}
-        <button onClick={() => goTo((active - 1 + slides.length) % slides.length)}
-          className="hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full items-center justify-center transition-colors z-10 text-lg">
-          ‹
-        </button>
-        <button onClick={() => goTo((active + 1) % slides.length)}
-          className="hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full items-center justify-center transition-colors z-10 text-lg">
-          ›
-        </button>
-      </div>
-
-      {/* Dots — mobile only */}
-      <div className="sm:hidden flex items-center justify-center gap-1.5 mt-2.5">
-        {slides.map((_, i) => (
-          <button key={i} onClick={() => goTo(i)}
-            className={`rounded-full transition-all duration-300 ${active === i ? 'w-5 h-1.5 bg-emerald-500' : 'w-1.5 h-1.5 bg-gray-300 dark:bg-slate-600'}`} />
-        ))}
-      </div>
       </div>{/* end mobile-only */}
 
       {/* Desktop: horizontal scroll strip of smaller cards */}
