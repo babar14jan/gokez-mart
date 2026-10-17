@@ -8,6 +8,7 @@ import { useAccountLoginStore } from '../store/accountLoginStore';
 import AddressButton from './AddressButton';
 import AddressSheet from './AddressSheet';
 import PageHeader from './PageHeader';
+import { readGuestAddress, writeGuestAddress, clearGuestAddress } from '../utils/guestAddress';
 
 // The Account view's top-bar identity: the customer's avatar plus a "Hi, <name>"
 // greeting. Tapping it opens a full-screen profile page where the name can be
@@ -37,17 +38,15 @@ export default function AccountGreeting() {
     try {
       const gName = localStorage.getItem('guest_name');
       const gPhone = localStorage.getItem('guest_phone');
-      const gAddr = localStorage.getItem('guest_address');
+      const gAddr = readGuestAddress();
       if (gName || gPhone || gAddr) {
-        setGuestProfile({ name: gName, phone: gPhone, address: gAddr });
+        setGuestProfile({ name: gName, phone: gPhone, address: gAddr?.address ?? null });
         if (gAddr) {
-          const exists = useCustomerStore.getState().addresses.some((a) => (a.address || '').trim() === gAddr.trim());
+          const exists = useCustomerStore.getState().addresses.some((a) => (a.address || '').trim() === gAddr.address.trim());
           if (!exists) {
             // Guests have no server-side address book — seed it locally so the
             // saved guest address is visible without logging in.
-            useCustomerStore.setState({
-              addresses: [{ id: 'guest', label: 'Home', address: gAddr, latitude: null, longitude: null, isDefault: true }],
-            });
+            useCustomerStore.setState({ addresses: [gAddr] });
           }
         }
       }
@@ -304,15 +303,39 @@ export default function AccountGreeting() {
               initialEditingId={addressSheetInitial}
               onClose={() => setShowAddressSheet(false)}
               onAddAddress={async (label, address, coordinates) => {
-                await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
+                if (!isLoggedIn) {
+                  writeGuestAddress(label, address, coordinates);
+                  const saved = readGuestAddress();
+                  useCustomerStore.setState({ addresses: saved ? [saved] : [] });
+                  return true;
+                }
+                const ok = await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
+                if (!ok) throw new Error('Could not save your address. Please check your connection and try again.');
                 return true;
               }}
               onUpdateAddress={async (id, label, address, coordinates) => {
-                await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
+                if (!isLoggedIn) {
+                  writeGuestAddress(label, address, coordinates);
+                  const saved = readGuestAddress();
+                  useCustomerStore.setState({ addresses: saved ? [saved] : [] });
+                  return true;
+                }
+                const ok = await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
+                if (!ok) throw new Error('Could not save your address. Please check your connection and try again.');
                 return true;
               }}
-              onDeleteAddress={(id) => removeAddress(id)}
-              onSetDefaultAddress={(id) => setDefaultAddress(id)}
+              onDeleteAddress={async (id) => {
+                if (!isLoggedIn) {
+                  clearGuestAddress();
+                  useCustomerStore.setState({ addresses: [] });
+                  return;
+                }
+                await removeAddress(id);
+              }}
+              onSetDefaultAddress={async (id) => {
+                if (!isLoggedIn) return;
+                await setDefaultAddress(id);
+              }}
             />
           )}
         </div>,

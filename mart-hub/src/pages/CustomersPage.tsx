@@ -7,7 +7,8 @@ import { customersApi, type CustomerSort, type CustomerStats } from '../services
 
 interface Customer {
   id: string; phone: string; name: string | null; address: string | null;
-  orderCount: number; totalSpent: number; createdAt: string;
+  orderCount: number; completedOrders: number; canceledOrders: number;
+  totalSpent: number; createdAt: string;
   identityType: 'signed_in' | 'guest_checkout';
 }
 
@@ -245,7 +246,9 @@ export default function CustomersPage() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-gray-900 dark:text-white">₹{c.totalSpent.toFixed(0)}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{c.orderCount} order{c.orderCount !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    {c.completedOrders} completed · {c.canceledOrders} canceled
+                  </p>
                 </div>
               </div>
             ))}

@@ -13,6 +13,7 @@ import AddressButton from '../components/AddressButton';
 import PageHeader from '../components/PageHeader';
 import ProductCard from '../components/ProductCard';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
+import { readGuestAddress, writeGuestAddress } from '../utils/guestAddress';
 
 interface CheckoutPageProps {
   settings: PublicSettings;
@@ -391,21 +392,35 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   // A guest supplies their delivery address inline (the address book is behind
   // login). It rides inside the order and the server files it into the same
   // address book when the order lands, so a later login with the same phone
-  // finds it again.
+  // finds it again. The full address (label + coordinates) is kept in
+  // localStorage so a reload does not silently degrade it to a bare string.
   const [guestAddress, setGuestAddress] = useState(() => {
     if (typeof window !== 'undefined' && !isLoggedIn) {
-      return localStorage.getItem('guest_address') || '';
+      return readGuestAddress()?.address || '';
     }
     return '';
   });
-  const [guestAddressLabel, setGuestAddressLabel] = useState('Home');
-  const [guestAddressCoordinates, setGuestAddressCoordinates] = useState<AddressCoordinates | null>(null);
+  const [guestAddressLabel, setGuestAddressLabel] = useState(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn) {
+      return readGuestAddress()?.label || 'Home';
+    }
+    return 'Home';
+  });
+  const [guestAddressCoordinates, setGuestAddressCoordinates] = useState<AddressCoordinates | null>(() => {
+    if (typeof window !== 'undefined' && !isLoggedIn) {
+      const saved = readGuestAddress();
+      return saved && saved.latitude != null && saved.longitude != null
+        ? { latitude: saved.latitude, longitude: saved.longitude }
+        : null;
+    }
+    return null;
+  });
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoggedIn && guestAddress) {
-      localStorage.setItem('guest_address', guestAddress);
+    if (typeof window !== 'undefined' && !isLoggedIn) {
+      writeGuestAddress(guestAddressLabel, guestAddress, guestAddressCoordinates);
     }
-  }, [guestAddress, isLoggedIn]);
+  }, [guestAddress, guestAddressLabel, guestAddressCoordinates, isLoggedIn]);
 
   const deliveryAddress = defaultAddr?.address || (isLoggedIn ? authAddress : null) || guestAddress || null;
 
@@ -985,18 +1000,30 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               focusFirstField={validationField === 'address'}
               onSelectAddress={async (address) => {
                 if (!(await saveProfileNameIfProvided())) return false;
-                setDefaultAddress(address.id);
+                if (isLoggedIn) {
+                  const ok = await setDefaultAddress(address.id);
+                  if (!ok) throw new Error('Could not select this address. Please try again.');
+                } else {
+                  setGuestAddress(address.address);
+                  setGuestAddressLabel(address.label || 'Home');
+                  setGuestAddressCoordinates(
+                    address.latitude != null && address.longitude != null
+                      ? { latitude: address.latitude, longitude: address.longitude }
+                      : null,
+                  );
+                }
                 setValidationField(null);
                 return true;
               }}
               onAddAddress={async (label, address, coordinates) => {
                 if (!(await saveProfileNameIfProvided())) return false;
                 if (isLoggedIn) {
-                  await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
+                  const ok = await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
+                  if (!ok) throw new Error('Could not save your address. Please check your connection and try again.');
                 } else {
-                  // Guests have no server address book yet; hold the address
-                  // for this checkout and let the order land it in the book
-                  // server-side.
+                  // Guests have no server address book yet; hold the full address
+                  // for this checkout (persisted) and let the order land it in the
+                  // book server-side.
                   setGuestAddress(address);
                   setGuestAddressLabel(label.trim() || 'Home');
                   setGuestAddressCoordinates(coordinates);
@@ -1007,7 +1034,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               onUpdateAddress={async (id, label, address, coordinates) => {
                 if (!(await saveProfileNameIfProvided())) return false;
                 if (isLoggedIn) {
-                  await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
+                  const ok = await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
+                  if (!ok) throw new Error('Could not save your address. Please check your connection and try again.');
                 } else {
                   setGuestAddress(address);
                   setGuestAddressLabel(label.trim() || 'Home');

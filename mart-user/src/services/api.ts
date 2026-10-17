@@ -20,6 +20,30 @@ api.interceptors.request.use(config => {
   return config;
 });
 
+// A 401 means the stored token is no longer valid (expired, or the customer was
+// signed out elsewhere). Without this the app keeps isLoggedIn=true forever and
+// every authenticated call — including the address book — fails silently, so a
+// shopper sees "saved" but nothing persists. Drop the session instead of lying.
+api.interceptors.response.use(
+  response => response,
+  async error => {
+    const status = error?.response?.status;
+    const url: string = error?.config?.url || '';
+    // OTP verification answers 401 for a wrong code while nobody is signed in;
+    // the generic handler must not treat that as an expired session.
+    if (status === 401 && !url.includes('/auth/send-otp') && !url.includes('/auth/verify-otp')) {
+      try {
+        const { useCustomerAuthStore } = await import('../store/customerAuthStore');
+        if (useCustomerAuthStore.getState().isLoggedIn) {
+          useCustomerAuthStore.getState().logout();
+          window.dispatchEvent(new CustomEvent('mart:auth-expired'));
+        }
+      } catch {}
+    }
+    return Promise.reject(error);
+  }
+);
+
 export interface Category {
   id: string; name: string; slug: string; icon: string; productCount: number;
 }
