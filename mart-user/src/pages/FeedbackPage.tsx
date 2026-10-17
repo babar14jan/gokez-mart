@@ -42,7 +42,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
     <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       <PageHeader title="Share Feedback" />
 
-      <div className="max-w-lg mx-auto px-4 py-6 pb-36 space-y-5">
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
         {done ? (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">🎉</div>

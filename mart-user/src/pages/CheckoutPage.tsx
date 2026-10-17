@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { ChevronLeft, Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronUp, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
+import { Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronUp, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi } from '../services/api';
 import type { PublicSettings, Product, StoreOpeningHours } from '../services/api';
@@ -10,6 +10,7 @@ import { useLoginFlowStore } from '../store/loginFlowStore';
 import { type AddressCoordinates } from '../components/AddressForm';
 import AddressSheet from '../components/AddressSheet';
 import AddressButton from '../components/AddressButton';
+import PageHeader from '../components/PageHeader';
 import ProductCard from '../components/ProductCard';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 
@@ -876,13 +877,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   if (items.length === 0) {
     return (
       <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
-        <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#18191a]">
-          <button type="button" onClick={onBack} aria-label="Back to shopping"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-            <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
-          </button>
-          <h1 className="min-w-0 truncate text-base font-bold text-white">Checkout</h1>
-        </div>
+        <PageHeader title="Checkout" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
             <ShoppingBag className="w-7 h-7 text-gray-300" />
@@ -901,12 +896,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#18191a]">
-        <button type="button" onClick={onBack} aria-label="Back to shopping" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-          <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
-        </button>
-        <h1 className="min-w-0 truncate text-base font-bold text-white">My Cart</h1>
-      </div>
+      <PageHeader title="My Cart" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
 
       <form id="checkout-form" onSubmit={handleSubmit}>
         <div className="max-w-lg mx-auto px-4 py-4 pb-8 space-y-3">

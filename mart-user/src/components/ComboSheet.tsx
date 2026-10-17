@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, Package, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import type { Product } from '../services/api';
 import ProductCard from './ProductCard';
+import PageHeader from './PageHeader';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 interface ComboSheetProps {
   title: string;
-  subtitle?: string;
   products: Product[];
   onClose: () => void;
 }
 
-export default function ComboSheet({ title, subtitle, products, onClose }: ComboSheetProps) {
+export default function ComboSheet({ title, products, onClose }: ComboSheetProps) {
   const [search, setSearch] = useState('');
   const { ref: inputRef, dismiss, onKeyDown, onSurfaceClick } = useKeyboardDismiss();
   const query = search.trim().toLowerCase();
@@ -34,19 +34,14 @@ export default function ComboSheet({ title, subtitle, products, onClose }: Combo
       <button type="button" aria-label="Close combos" onClick={onClose}
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
-        <header className="relative flex shrink-0 items-center gap-3 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#18191a]">
-          <button type="button" onClick={onClose} aria-label="Back to home"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-            <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
-          </button>
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
-            <Package className="h-5 w-5 text-white" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="truncate text-base font-bold text-white">{title}</h1>
-            {subtitle && <p className="truncate text-xs text-white/80">{subtitle}</p>}
-          </div>
-        </header>
+        <PageHeader
+          title={title}
+          onBack={onClose}
+          backLabel="Back to home"
+          position="static"
+          backStyle="square"
+          backSize="sm"
+        />
 
         <div className="shrink-0 border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div className="relative">
@@ -63,7 +58,7 @@ export default function ComboSheet({ title, subtitle, products, onClose }: Combo
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]" onScroll={dismiss}>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]" onScroll={dismiss}>
           {matches.length ? (
             <>
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">

@@ -6,6 +6,6 @@ interface CategoryIconProps {
 
 export default function CategoryIcon({ icon, name, className = 'w-6 h-6 object-contain' }: CategoryIconProps) {
   const isUrl = icon?.startsWith('/') || icon?.startsWith('http');
-  if (isUrl) return <img src={icon} alt={name} className={className} loading="eager" fetchPriority="high" />;
+  if (isUrl) return <img src={icon} alt={name} className={className} loading="eager" {...{ fetchpriority: 'high' }} />;
   return <span>{icon}</span>;
 }

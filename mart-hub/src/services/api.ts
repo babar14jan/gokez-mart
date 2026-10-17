@@ -49,9 +49,12 @@ export const productsApi = {
   create: (data: any) => api.post('/admin/products', data),
   update: (id: string, data: any) => api.put(`/admin/products/${id}`, data),
   delete: (id: string) => api.delete(`/admin/products/${id}`),
-  uploadPhoto: (file: File) => {
+  uploadPhoto: (file: File, maxDimension?: number) => {
     const form = new FormData();
     form.append('photo', file);
+    // Icons are drawn tiny in the customer app; cap them server-side so the
+    // stored/served WebP stays a few KB instead of the default 1600px.
+    if (maxDimension) form.append('maxDimension', String(maxDimension));
     return api.post('/admin/upload/photo', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

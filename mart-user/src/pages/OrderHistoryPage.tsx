@@ -412,7 +412,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
 
     if (!hasLocalTokens || orders.length === 0) {
       return (
-        <div className="mx-auto max-w-lg px-5 py-16 pb-36 text-center">
+        <div className="mx-auto max-w-lg px-5 py-16 text-center">
           <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800">
             <ShoppingBag className="h-9 w-9 text-gray-300 dark:text-slate-500" />
           </div>
@@ -437,7 +437,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     }
 
     return (
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-36">
+      <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
         {/* Same three cards the signed-in view uses. The only guest-specific
             input is canCancel: cancelling needs the order's tracking token, and
             an order whose token is missing cannot be proven to belong to this
@@ -504,7 +504,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   );
 
   return (
-    <div className="max-w-lg mx-auto px-3 py-4 space-y-4 pb-36" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onClick={handleSearchSurfaceClick}>
+    <div className="max-w-lg mx-auto px-3 py-4 space-y-4" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onClick={handleSearchSurfaceClick}>
 
       {/* Reorder toast */}
       {reorderToast && (

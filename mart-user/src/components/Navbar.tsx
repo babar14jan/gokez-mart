@@ -59,8 +59,8 @@ const navItems = [
             ? <Loader2 className="w-6 h-6 text-yellow-400 flex-shrink-0 animate-spin" />
             : <MapPin className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
           <div className="text-left">
-            <p className="text-[9px] text-white leading-none">Delivery Zone</p>
-            <p className="text-xs font-bold text-white leading-tight">
+            <p className="text-[8px] font-semibold text-white leading-none">Delivery zone</p>
+            <p className="text-[13px] font-bold text-white leading-tight">
               {selectedZone.name}
             </p>
           </div>
@@ -75,8 +75,8 @@ const navItems = [
           ? <Loader2 className="w-6 h-6 text-yellow-400 flex-shrink-0 animate-spin" />
           : <MapPin className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
         <div className="text-left">
-          <p className="text-[9px] text-white leading-none">Delivery Zone</p>
-          <p className="text-xs font-bold text-white leading-tight">
+          <p className="text-[8px] font-semibold text-white leading-none">Delivery zone</p>
+          <p className="text-[13px] font-bold text-white leading-tight">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
         </div>
@@ -119,8 +119,9 @@ const navItems = [
   return (
     <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#218044] to-[#2e8b57] shadow-sm dark:from-[#18191a] dark:to-[#18191a]">
 
-      {/* Row 1 */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] flex items-center gap-3">
+      {/* Row 1 — 56px (3.5rem), the same app-bar height as PageHeader, the
+          Profile header and the OTP/brand bars so every header matches. */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[56px] flex items-center gap-3">
 
         {/* Location / account identity — left */}
         <div className="flex items-center gap-1.5">
@@ -158,7 +159,7 @@ const navItems = [
 
       {/* Row 2: Search — the Categories view owns its own category-scoped filter. */}
       {activeView !== 'account' && activeView !== 'orders' && activeView !== 'categories' && (
-        <div className="sm:hidden px-4 pb-2.5">
+        <div className="sm:hidden px-4 py-1">
           <button type="button" onClick={onSearchOpen} className="relative w-full text-left">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
             <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl bg-gray-100 py-2.5 pl-10 pr-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>

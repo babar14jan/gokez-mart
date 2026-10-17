@@ -13,6 +13,12 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="preload" as="image" href="/mart_brand_new.webp" type="image/webp" />
+    <!-- Bottom nav's centre "Vegetables" button. This is the only image the app
+         shell renders on first paint, and it lives in public/ (not a Vite-hashed
+         bundle asset), so nothing else kicks off its download until React mounts
+         BottomNav. Preloading it puts the request on the HTML round-trip instead
+         of waiting for the JS bundle to parse and render. -->
+    <link rel="preload" as="image" href="/fresh-veg.webp" type="image/webp" fetchpriority="high" />
 
     <!-- interactive-widget=resizes-content: on Android the keyboard shrinks the
          LAYOUT viewport instead of only the visual one, so focused fields stay
@@ -199,10 +205,21 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 0 1.5rem;
+        padding: 0 1rem;
+      }
+      /* Logo + tagline ride together and are lifted ~35px as a unit. The offset
+         lives on this wrapper (not the logo) because the logo's float animation
+         already owns `transform`, so a transform here would be overwritten. The
+         headline sits outside the wrapper, so it does not move. */
+      #app-splash .app-splash-brand {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translateY(-35px);
       }
       #app-splash .app-splash-logo {
-        width: min(56vw, 220px);
+        width: min(44vw, 175px);
         height: auto;
         display: block;
         animation: app-splash-float 2.4s ease-in-out infinite;
@@ -221,10 +238,25 @@
         color: rgba(255, 255, 255, 0.92);
         font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
         font-weight: 600;
-        font-size: clamp(1.2rem, 5vw, 1.6rem);
+        font-size: clamp(0.95rem, 3.9vw, 1.25rem);
         line-height: 1.2;
         opacity: 1;
         animation: app-splash-tagline 2.2s ease-in-out infinite;
+      }
+      /* Static one-line headline under the rotating tagline. Warm gold gives it
+         the strongest pop against the splash green (white stays on the logo and
+         tagline); the clamp keeps it on one line from a 320px phone up. */
+      #app-splash .app-splash-headline {
+        width: 100%;
+        max-width: 32rem;
+        margin: 0.6rem 0 0;
+        text-align: center;
+        color: #fcd34d;
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-weight: 900;
+        font-size: clamp(0.78rem, 3.9vw, 1.5rem);
+        line-height: 1.15;
+        letter-spacing: -0.02em;
       }
 
       @keyframes app-splash-float {
@@ -264,10 +296,13 @@
     </div>
     <div id="app-splash" aria-hidden="true">
       <div class="app-splash-content">
-        <img class="app-splash-logo" src="/Gokez_mart_brand_transparent.webp" alt="Gokez Mart" width="1554" height="603" fetchpriority="high" />
-        <p class="app-splash-tagline">
-          <span>Shop Local &bull; Support Local</span>
-        </p>
+        <div class="app-splash-brand">
+          <img class="app-splash-logo" src="/Gokez_mart_brand_transparent.webp" alt="Gokez Mart" width="1554" height="603" fetchpriority="high" />
+          <p class="app-splash-tagline">
+            <span>Shop Local &bull; Support Local</span>
+          </p>
+        </div>
+        <p class="app-splash-headline">From your Neighbourhood Store to your door</p>
       </div>
     </div>
     <div id="root"></div>
