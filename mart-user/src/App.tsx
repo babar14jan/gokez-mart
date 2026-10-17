@@ -229,6 +229,15 @@ export default function App() {
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
   const cartItems = useCartStore(s => s.totalItems());
+
+  // The floating cart is a browsing aid for the main product surfaces (home,
+  // categories, orders). It deliberately does NOT appear on the account page,
+  // the legal/info sub-pages, or the combo/deals sheets (which are short and
+  // back out to Home, where the cart already lives), so none of those reserve
+  // bottom clearance for it.
+  const productPage = view === 'home' || view === 'categories' || view === 'orders';
+  const productPageBottom = cartItems > 0 ? PAGE_BOTTOM_CART : PAGE_BOTTOM;
+
   const searchPrompt = useRotatingSearchPrompt(products);
   // Delivery-area state lives in the shared zone store so the navbar picker, the
   // Account page toggle and this catalog loader all read/write one source of truth.
@@ -957,7 +966,6 @@ export default function App() {
       {comboSheet && (
         <ComboSheet
           title={comboSheet.title}
-          subtitle={comboSheet.subtitle}
           products={comboSheet.products}
           onClose={() => setComboSheet(null)}
         />
@@ -986,7 +994,7 @@ export default function App() {
       {view === 'about' ? (
         <DeferredPage><AboutPage /></DeferredPage>
       ) : view === 'categories' ? (
-        <div className={PAGE_BOTTOM}>
+        <div className={productPageBottom}>
           <CategoriesView categories={categories} products={products} />
         </div>
       ) : view === 'deals' ? (
@@ -994,32 +1002,30 @@ export default function App() {
           <DealsPage products={products} onBack={() => setView('home')} />
         </div>
       ) : view === 'grievance' ? (
-        <div className={PAGE_BOTTOM}><DeferredPage><GrievancePage /></DeferredPage></div>
+        <DeferredPage><GrievancePage /></DeferredPage>
       ) : view === 'feedback' ? (
-        <div className={PAGE_BOTTOM}><DeferredPage><FeedbackPage storeId={selectedZone?.storeId} /></DeferredPage></div>
+        <DeferredPage><FeedbackPage storeId={selectedZone?.storeId} /></DeferredPage>
       ) : view === 'delete-account' ? (
-        <div className={PAGE_BOTTOM}><DeferredPage><DeleteAccountPage /></DeferredPage></div>
+        <DeferredPage><DeleteAccountPage /></DeferredPage>
       ) : view === 'privacy' ? (
-        <div className={PAGE_BOTTOM}><DeferredPage><PrivacyPage embed={isEmbed} /></DeferredPage></div>
+        <DeferredPage><PrivacyPage embed={isEmbed} /></DeferredPage>
       ) : view === 'terms' ? (
-        <div className={PAGE_BOTTOM}><DeferredPage><TermsPage embed={isEmbed} /></DeferredPage></div>
+        <DeferredPage><TermsPage embed={isEmbed} /></DeferredPage>
       ) : view === 'orders' ? (
-        <div className={PAGE_BOTTOM}>
+        <div className={productPageBottom}>
           <DeferredPage><OrderHistoryPage onBack={() => setView('home')} whatsappNumber={settings.whatsapp_number} nextOpenLabel={openState?.nextOpenLabel ?? null} /></DeferredPage>
         </div>
       ) : view === 'account' ? (
-        <div className={PAGE_BOTTOM}>
-          <DeferredPage><AccountPage
-            storeName={settings.store_name}
-            storeAddress={settings.store_address}
-            supportName={settings.support_name}
-            supportPhone={settings.support_phone}
-            whatsappNumber={settings.support_phone}
-          /></DeferredPage>
-        </div>
+        <DeferredPage><AccountPage
+          storeName={settings.store_name}
+          storeAddress={settings.store_address}
+          supportName={settings.support_name}
+          supportPhone={settings.support_phone}
+          whatsappNumber={settings.support_phone}
+        /></DeferredPage>
       ) : (
         /* Home */
-        <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${cartItems > 0 ? PAGE_BOTTOM_CART : PAGE_BOTTOM}`}>
+        <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${productPageBottom}`}>
 
           {settings.store_open === 'false' && (
             <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium px-4 py-3 rounded-2xl text-center">
@@ -1165,7 +1171,7 @@ export default function App() {
       {/* Floating cart bar — mobile only. Hidden in checkout, and on the account
           page while signed out so it never competes with the login/OTP screens;
           it reappears once the customer is signed in. */}
-      <FloatingCart onOpen={handleCheckout} hidden={checkoutActive || (view === 'account' && !isLoggedIn)} />
+      <FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />
 
       {/* Bottom nav — mobile only. In-flow (not fixed) so it stays pinned.
           Hidden while checkout is open: in iOS standalone the 100lvh shell is

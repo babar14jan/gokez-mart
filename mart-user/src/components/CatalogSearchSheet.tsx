@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, X, ShoppingCart } from 'lucide-react';
+import { X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
+import PageHeader from './PageHeader';
 import { useCartStore } from '../store/cartStore';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
@@ -80,11 +81,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
         className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
       <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
         <div className={`shrink-0 ${query ? 'bg-yellow-100/60 dark:bg-yellow-950/40' : 'bg-white dark:bg-slate-900'}`}>
-          <header className="flex items-center gap-2 bg-gradient-to-b from-[#218044] to-[#2e8b57] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] min-h-[calc(64px_+_env(safe-area-inset-top))] dark:from-[#18191a] dark:to-[#18191a]">
-            <button type="button" onClick={onClose} aria-label="Back to home"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-              <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
-            </button>
+          <PageHeader onBack={onClose} backLabel="Back to home" position="static" backStyle="square" backSize="sm">
             <div className="relative min-w-0 flex-1">
               <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
                 value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
@@ -109,7 +106,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
                 </span>
               </button>
             )}
-          </header>
+          </PageHeader>
 
           {/* Live suggestions — compact white rows inside the yellow search area, bounded so results stay reachable. */}
           {query && suggestions.length > 0 && (
@@ -139,7 +136,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
           )}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900" onScroll={dismissKeyboard}>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900" onScroll={dismissKeyboard}>
           {/* Initial state (empty query): browse categories. */}
           {!query && categoriesWithProducts.length > 1 && (
             <section className="mb-5">

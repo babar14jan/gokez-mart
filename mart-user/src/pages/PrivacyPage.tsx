@@ -5,7 +5,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       {!embed && <PageHeader title="Privacy Policy" />}
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 pb-36">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
         <p className="text-xs text-gray-500 dark:text-slate-400 mb-8">Last updated: {updated}</p>
 
         <div className="space-y-8 text-sm text-gray-600 dark:text-slate-400 leading-relaxed">

@@ -101,7 +101,7 @@ export default function CategoriesView({ categories, products }: CategoriesViewP
           </div>
         </div>
 
-        <div className="p-2 pb-36">
+        <div className="p-2">
           {filteredProducts.length === 0 ? (
             <div className="text-center py-16 text-gray-500 dark:text-slate-400">
               <p className="text-sm">{query ? 'No matching products in this category' : 'No products in this category'}</p>

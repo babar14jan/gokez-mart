@@ -1729,7 +1729,14 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
 
   const bucket = config.supabase.bucket;
-  const image = await prepareImage(req.file.buffer, 1600);
+  // Callers can ask for a tighter cap: a category icon is painted at ~32px in
+  // the app, so storing it at the default 1600px wastes bandwidth on every
+  // category view. Clamped so a client can never request an unbounded size.
+  const requested = Number(req.body?.maxDimension);
+  const maxDimension = Number.isFinite(requested)
+    ? Math.min(Math.max(Math.round(requested), 64), 1600)
+    : 1600;
+  const image = await prepareImage(req.file.buffer, maxDimension);
   const baseName = req.file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
   const filename = `${Date.now()}-${baseName || 'image'}.${image.extension}`;
 

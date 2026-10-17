@@ -36,7 +36,7 @@ export default function DeleteAccountPage() {
     <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       <PageHeader title="Delete My Account" />
 
-      <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 pb-36 space-y-4">
+      <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 space-y-4">
 
         {loading ? (
           <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
