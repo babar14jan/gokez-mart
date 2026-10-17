@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, ChevronLeft, Headphones, MessageSquare, Share2, Moon, Sun } from 'lucide-react';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
@@ -8,7 +8,9 @@ import { getLocationPermission, getNotificationPermission, requestNotificationPe
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
-import { track } from '../utils/track';
+import PageHeader from '../components/PageHeader';
+import { track, trackInstall } from '../utils/track';
+import { useInstallGuide } from '../utils/install';
 import { BRAND_SLOGAN } from '../constants/brand';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 
@@ -51,6 +53,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const [notificationSubscribed, setNotificationSubscribed] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
+  // Offered on phones until the app is actually installed to the home screen.
+  const installGuide = useInstallGuide();
 
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
@@ -150,21 +154,51 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   };
 
   const handleShareApp = async () => {
-    const url = new URL('/', window.location.href).href;
-    const shareData = {
-      title: 'Gokez Mart',
-      text: 'Shop local. Support local. Order everyday essentials from nearby stores.',
-      url,
-    };
+    const base = window.location.origin;
+    const url = `${base}/`;
+    const shareText = 'Shop local. Support local. Order everyday essentials from nearby stores.';
     try {
-      if (navigator.share) {
-        await navigator.share(shareData);
+      let files: File[] | undefined;
+      const nav = navigator as any;
+      if ('canShare' in nav || nav.share) {
+        try {
+          const res = await fetch(`${base}/share_app.webp`);
+          if (res.ok) {
+            const blob = await res.blob();
+            if (blob.type.startsWith('image/')) {
+              files = [new File([blob], 'share_app.webp', { type: blob.type || 'image/webp' })];
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const shareData: ShareData & { files?: File[] } = {
+        title: 'Gokez Mart',
+        text: shareText,
+        url,
+      };
+      if (files?.length) shareData.files = files;
+
+      if (nav.share) {
+        if (files?.length && nav.canShare && !nav.canShare(shareData)) {
+          // skip files if not supported
+          delete shareData.files;
+        }
+        await nav.share(shareData);
         return;
       }
       await navigator.clipboard.writeText(url);
       setShareNotice('Link copied');
       window.setTimeout(() => setShareNotice(''), 2500);
-    } catch {}
+    } catch {
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareNotice('Link copied');
+        window.setTimeout(() => setShareNotice(''), 2500);
+      } catch {}
+    }
   };
 
   const handleMarketingNotifications = async () => {
@@ -211,10 +245,10 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   };
 
   const footer = (
-    <div className="mt-2 flex flex-col items-center gap-1.5 pb-36">
+    <div className="mt-2 flex flex-col items-center gap-1.5">
       <span className="text-xs text-gray-500 dark:text-slate-400">
         A product of{' '}
-        <span className="font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
+        <span className="font-bold text-black dark:text-white">
           Gokez Technologies Pvt. Ltd.
         </span>
         {' '}&copy; {new Date().getFullYear()}
@@ -238,36 +272,33 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             : 'flex flex-col justify-start bg-[#e8f5e9] pt-[64px] dark:bg-slate-900'
       }`}>
         {showBrandHeader && (
-          <div className="relative bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#14532d]">
-            <div className="flex h-14 items-center pl-1 pr-3">
-              <button
-                type="button"
-                aria-label="Back to home"
-                onClick={() => {
-                  useLoginFlowStore.getState().clear();
-                  closeLogin();
-                  setLoginStepView('phone');
-                }}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-              >
-                <ChevronLeft className="h-6 w-6" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
+          <PageHeader
+            onBack={() => {
+              const flow = useLoginFlowStore.getState();
+              const guestReturnPath = flow.guestReturnPath;
+              flow.clear();
+              flow.setGuestReturnPath(null);
+              closeLogin();
+              setLoginStepView('phone');
+              navigate(guestReturnPath || '/');
+            }}
+            backLabel={(() => {
+              const { guestReturnPath } = useLoginFlowStore.getState();
+              return guestReturnPath ? 'Back to checkout' : 'Back to home';
+            })()}
+            position="static"
+            gradient="r"
+            darkTo="#18191a"
+          />
         )}
         {showOtpHeader && (
-          <div className="relative bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#14532d]">
-            <div className="flex h-14 items-center pl-1 pr-3">
-              <button
-                type="button"
-                aria-label="Back to mobile number"
-                onClick={() => setLoginBackSignal((n) => n + 1)}
-                className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-              >
-                <ChevronLeft className="h-6 w-6" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
+          <PageHeader
+            onBack={() => setLoginBackSignal((n) => n + 1)}
+            backLabel="Back to mobile number"
+            position="static"
+            gradient="r"
+            darkTo="#18191a"
+          />
         )}
         {showBrandHeader && (
           <div className="flex flex-col items-center px-6 pt-7 text-center">
@@ -279,7 +310,10 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               className="-mb-3 h-[54px] w-auto object-contain"
             />
             <p className="mt-0 text-[clamp(9px,calc(4vw-6px),29px)] font-bold leading-tight text-slate-900 dark:text-white">{BRAND_SLOGAN}</p>
-            <h1 className="mt-8 text-[15px] font-black leading-tight text-slate-500 dark:text-slate-400">Log in or sign up</h1>
+            <p className="mt-6 text-center font-black leading-none tracking-tight text-[clamp(12px,3.75vw,28px)] text-slate-900 dark:text-white">
+              From your Neighbourhood Store to your door
+            </p>
+            <h1 className="mt-3 text-[15px] font-black leading-tight text-slate-500 dark:text-slate-400">Log in or sign up</h1>
           </div>
         )}
         <div className={`relative w-full overflow-hidden ${
@@ -351,21 +385,61 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
         <section>
           <div className="grid grid-cols-3 gap-2">
-            <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-md border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+            <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
               <Headphones className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
               <span>Support</span>
             </a>
-            <button type="button" onClick={() => navigate('/feedback/')} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-md border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+            <button type="button" onClick={() => navigate('/feedback/')} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
               <MessageSquare className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
               <span>Feedback</span>
             </button>
-            <button type="button" onClick={handleShareApp} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-md border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+            <button type="button" onClick={handleShareApp} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
               <Share2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
               <span>Share App</span>
             </button>
           </div>
           {shareNotice && <p className="mt-2 text-center text-[11px] font-medium text-emerald-600 dark:text-emerald-400" role="status">{shareNotice}</p>}
         </section>
+
+        {installGuide.visible && (
+        <section>
+          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Get the app</p>
+          {/* The guide is a phone screenshot anyone can follow, and opening the
+              raw image is the "steps" — no modal, the browser's own image view is
+              the viewer. The whole card is one stretched link. */}
+          <div className="group relative overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800">
+            <a
+              href={installGuide.guideSrc}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Add Gokez Mart to your home screen — view install steps"
+              onClick={() => { if (installGuide.platform) trackInstall('install_guide_opened', installGuide.platform); }}
+              className="absolute inset-0 z-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            />
+            <div className="pointer-events-none relative z-10 flex items-center gap-4 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-bold leading-snug text-[#172033] dark:text-white">Add Gokez Mart to your home screen</p>
+                <p className="mt-1 text-xs text-[#687386] dark:text-slate-400">Install the app for one-tap ordering and live order updates.</p>
+                <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition-colors group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:group-hover:bg-emerald-900/50">
+                  <Smartphone className="h-3.5 w-3.5" aria-hidden="true" /> View install steps
+                  <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+              </div>
+              {/* 2:3 portrait frame matches the 1024x1536 guide so object-cover
+                  shows it whole instead of cropping it. */}
+              <div className="h-36 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-[#e9edf2] bg-[#f7f8fa] dark:border-slate-700 dark:bg-slate-900">
+                <img
+                  src={installGuide.guideSrc}
+                  alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover object-top"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+        )}
 
         {(storeName || storeAddress || supportPhone || whatsappNumber) && (
           <section>
@@ -387,15 +461,15 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 <div className="mt-4 flex gap-2 border-t border-[#e9edf2] pt-3 dark:border-slate-700">
                   {supportPhone && (
                     <a href={`tel:${supportPhone}`}
-                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50">
-                      <Phone className="w-4 h-4" /> Call store
+                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-blue-500/60">
+                      <Phone className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Call store
                     </a>
                   )}
                   {whatsappNumber && (
                     <a href={`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I need help with my order on Gokez Mart.`)}`}
                       target="_blank" rel="noopener noreferrer"
-                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 text-xs font-semibold text-green-700 transition-colors hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:hover:bg-green-900/30">
-                      <WhatsAppIcon className="h-4 w-4" /> WhatsApp
+                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-green-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-green-500/60">
+                      <WhatsAppIcon className="h-4 w-4 text-green-600 dark:text-green-400" /> WhatsApp
                     </a>
                   )}
                 </div>

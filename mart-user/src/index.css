@@ -188,6 +188,21 @@ body { background-color: #ffffff; color: #111827; }
     height: calc(100dvh - var(--kb, 0px));
   }
 
+  /* iOS 26 Safari bug: 100dvh leaves a gap below the bottom nav in browser tab.
+     Use 100lvh for iOS WebKit. Standalone also uses lvh. */
+  html.ios-webkit .app-shell {
+    height: calc(100lvh - var(--kb, 0px));
+  }
+  html.ios-webkit .page-shell {
+    min-height: calc(100lvh - var(--kb, 0px));
+  }
+  html.ios-webkit .categories-pane {
+    height: calc(100lvh - var(--kb, 0px) - 8rem);
+  }
+  html.ios-webkit .input-focused .categories-pane {
+    height: calc(100lvh - var(--kb, 0px));
+  }
+
   @media all and (display-mode: standalone) {
     .categories-pane {
       height: calc(100lvh - var(--kb, 0px) - 8rem);

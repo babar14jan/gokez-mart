@@ -1,12 +1,13 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, Check, ChevronLeft, Download, Loader2, Pencil, User } from 'lucide-react';
+import { Camera, Check, Download, Loader2, Pencil, User } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import AddressButton from './AddressButton';
 import AddressSheet from './AddressSheet';
+import PageHeader from './PageHeader';
 
 // The Account view's top-bar identity: the customer's avatar plus a "Hi, <name>"
 // greeting. Tapping it opens a full-screen profile page where the name can be
@@ -167,7 +168,7 @@ export default function AccountGreeting() {
               ? <img src={photoUrl} alt="" className="h-full w-full object-cover" />
               : <span className="text-sm font-bold text-white">{initials}</span>}
           </span>
-          <span className="max-w-[10rem] truncate text-sm font-bold leading-tight text-white">Hi, {firstName}</span>
+          <span className="max-w-[10rem] truncate text-base font-bold leading-tight text-white">Hi, {firstName}</span>
         </button>
       ) : (
         <button type="button" onClick={openProfile} aria-label="Open profile"
@@ -175,21 +176,13 @@ export default function AccountGreeting() {
           <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-white/40 bg-white/20">
             <User className="h-4 w-4 text-white" />
           </span>
-          <span className="max-w-[10rem] truncate text-sm font-bold leading-tight text-white">Hi Guest</span>
+          <span className="max-w-[10rem] truncate text-base font-bold leading-tight text-white">Hi, Guest</span>
         </button>
       )}
 
       {open && createPortal(
         <div className="fixed inset-0 z-[80] flex flex-col bg-[#f7f8fa] font-sans dark:bg-slate-900">
-          <header className="bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
-            <div className="flex min-h-[64px] items-center gap-1 px-2">
-              <button type="button" onClick={closeProfile} aria-label="Back"
-                className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15">
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <h1 className="text-base font-bold text-white">Profile</h1>
-            </div>
-          </header>
+          <PageHeader title="Profile" onBack={closeProfile} position="static" gradient="r" />
 
           <div className="flex-1 overflow-y-auto px-4 py-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
             <div className="mx-auto max-w-2xl">

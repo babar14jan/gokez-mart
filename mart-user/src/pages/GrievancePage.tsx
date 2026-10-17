@@ -45,7 +45,7 @@ export default function GrievancePage() {
     <div className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       <PageHeader title="Submit a Grievance" />
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 space-y-4 pb-36">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 space-y-4">
 
         <p className="px-1 text-[13px] text-[#687386] dark:text-slate-400">
           Complaint or concern about your data or service. Under the DPDP Act 2023, we will respond within 30 days.

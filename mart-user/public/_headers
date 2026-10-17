@@ -54,3 +54,24 @@
 /icons/*
   Content-Type: image/png
   Cache-Control: public, max-age=86400
+
+# The bottom nav's centre "Vegetables" icon. It is the only image the app shell
+# paints, lives in public/ under a stable (unhashed) path, and is deliberately
+# preloaded from index.html, so it must have a deterministic cache policy: without
+# one the browser and the Cloudflare edge fall back to heuristics and re-validate
+# on a cold visit. One day mirrors the favicon rule above — long enough that a
+# return visit paints it from cache, short enough that new artwork still lands.
+/fresh-veg.webp
+  Content-Type: image/webp
+  Cache-Control: public, max-age=86400
+
+# "Add to home screen" guide screenshots, opened from the Account page. Stable
+# public/ paths like the icon above, so they get the same one-day policy. Only
+# fetched on a phone that has not installed the app (see utils/install.ts).
+/iphone.webp
+  Content-Type: image/webp
+  Cache-Control: public, max-age=86400
+
+/android.webp
+  Content-Type: image/webp
+  Cache-Control: public, max-age=86400
