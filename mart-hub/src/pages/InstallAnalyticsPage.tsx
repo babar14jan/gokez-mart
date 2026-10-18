@@ -77,7 +77,7 @@ export default function InstallAnalyticsPage() {
           <option value="today">Today</option>
           <option value="7d">Last 7 days</option>
           <option value="30d">Last 30 days</option>
-          <option value="all">All time</option>
+          <option value="all">All</option>
         </select>
       </div>
 

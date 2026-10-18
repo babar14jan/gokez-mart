@@ -70,8 +70,7 @@ export default function CustomerLeadsPage() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">Leads</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+          <p className="text-sm text-gray-500 dark:text-slate-400">
             People who entered their mobile number but never completed OTP verification. These are prospects, not yet customers — verified and guest customers live on the Customers page. Reporting uses India time.
           </p>
         </div>
@@ -83,7 +82,7 @@ export default function CustomerLeadsPage() {
           aria-label="Download verified customers who granted marketing consent as CSV"
         >
           <Download className="h-4 w-4" aria-hidden="true" />
-          {downloading ? 'Preparing CSV...' : 'Download marketing list'}
+          {downloading ? 'Preparing CSV...' : 'Marketing list'}
           <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">Verified + consented</span>
         </button>
       </div>

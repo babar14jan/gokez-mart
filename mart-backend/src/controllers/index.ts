@@ -342,7 +342,13 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     { expiresIn: config.jwt.expiresIn } as any
   );
 
-  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  // Stamp the session row from the token's own exp so the middleware's
+  // `expires_at > NOW()` check and the JWT lifetime can never disagree (this
+  // used to be a hardcoded 90 days regardless of the configured expiry). The
+  // fallback below only exists for a decode failure and matches the default
+  // configured lifetime.
+  const decoded = jwt.decode(token) as { exp?: number } | null;
+  const expiresAt = decoded?.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
   await query(
     `INSERT INTO mart_admin_sessions (admin_id, token_jti, ip_address, user_agent, expires_at)
@@ -350,17 +356,11 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     [admin.id, jti, req.ip || null, req.headers['user-agent'] || null, expiresAt]
   );
 
-  const activeSessions = await query(
-    `SELECT id FROM mart_admin_sessions WHERE admin_id = $1 AND is_active = true AND expires_at > NOW() ORDER BY created_at DESC`,
-    [admin.id]
-  );
-
-  if (activeSessions.rows.length > 2) {
-    const sessionsToRevoke = activeSessions.rows.slice(2);
-    for (const session of sessionsToRevoke) {
-      await query(`UPDATE mart_admin_sessions SET is_active = false, revoked_at = NOW() WHERE id = $1`, [session.id]);
-    }
-  }
+  // A login used to revoke every session beyond the two most recent, so
+  // signing in on a second device (or re-signing in on the same phone) silently
+  // kicked the admin off everywhere else — the next API call got 401 "Session
+  // expired or revoked" and the hub bounced to /login. Sessions now end only
+  // when revoked by logout (POST /admin/logout) or by expiry.
 
   res.json({ success: true, data: {
     token,

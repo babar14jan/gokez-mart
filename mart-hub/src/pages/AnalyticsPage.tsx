@@ -1,17 +1,17 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { TrendingUp, ShoppingBag, Users, CreditCard, Wallet, Smartphone, CheckCircle, XCircle, Star, Package, Tag, Calendar } from 'lucide-react';
-import { ordersApi, productsApi, customersApi, categoriesApi, type OrderSummary, type CustomerAggregates, type SummaryRange } from '../services/api';
+import { TrendingUp, ShoppingBag, CreditCard, Wallet, Smartphone, CheckCircle, XCircle, Package, Tag, Calendar } from 'lucide-react';
+import { ordersApi, productsApi, type OrderSummary, type SummaryRange } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
 
-type Tab = 'revenue' | 'orders' | 'customers';
-type DateRange = 'today' | 'week' | 'month' | 'last_month' | 'custom';
+type Tab = 'revenue' | 'orders' | 'products';
+type DateRange = 'today' | 'week' | 'month' | 'last_month' | 'all' | 'custom';
 
 const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
 
 const mapDateRange = (r: DateRange): SummaryRange =>
-  r === 'today' ? 'today' : r === 'week' ? '7d' : r === 'month' ? '30d' : r === 'last_month' ? 'last_month' : 'custom';
+  r === 'today' ? 'today' : r === 'week' ? '7d' : r === 'month' ? '30d' : r === 'last_month' ? 'last_month' : r === 'all' ? 'all' : 'custom';
 
 const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, delivered: 0, cancelled: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
 
@@ -96,9 +96,10 @@ function DateSelector({ range, setRange, customFrom, setCustomFrom, customTo, se
 }) {
   const tabs: { id: DateRange; label: string }[] = [
     { id: 'today', label: 'Today' },
-    { id: 'week', label: '7 Days' },
-    { id: 'month', label: '30 Days' },
+    { id: 'week', label: '7D' },
+    { id: 'month', label: '30D' },
     { id: 'last_month', label: 'Last Month' },
+    { id: 'all', label: 'All' },
     { id: 'custom', label: 'Custom' },
   ];
   return (
@@ -214,7 +215,7 @@ function RevenueTab({ orders }: { orders: any[] }) {
     const dayDelivered = dayOrders.filter(o => o.status === 'delivered');
     return {
       date: d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }),
-      orders: dayOrders.length,
+      orders: dayDelivered.length,
       revenue: dayDelivered.reduce((s, o) => s + o.total, 0),
       avg: dayDelivered.length ? Math.round(dayDelivered.reduce((s, o) => s + o.total, 0) / dayDelivered.length) : 0,
     };
@@ -266,12 +267,12 @@ function RevenueTab({ orders }: { orders: any[] }) {
         <div className="page-card">
           <div className="page-card-header"><p className="page-card-title">Revenue by Day</p></div>
           <div className="hidden sm:grid grid-cols-4 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-            <div>Date</div><div className="text-center">Orders</div><div className="text-center">Avg Value</div><div className="text-right">Revenue</div>
+            <div>Date</div><div className="text-center">Delivered</div><div className="text-center">Avg Value</div><div className="text-right">Revenue</div>
           </div>
           {dailyTable.slice(0, 14).map((r, i) => (
             <div key={i} className="grid grid-cols-3 sm:grid-cols-4 gap-3 px-4 py-2.5 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs">
               <div className="font-medium text-gray-900 dark:text-white">{r.date}</div>
-              <div className="text-right sm:text-center text-gray-600 dark:text-slate-400">{r.orders} orders</div>
+              <div className="text-right sm:text-center text-gray-600 dark:text-slate-400">{r.orders} delivered</div>
               <div className="hidden sm:block text-center text-gray-600 dark:text-slate-400">₹{r.avg}</div>
               <div className="text-right font-bold text-gray-900 dark:text-white">₹{r.revenue.toFixed(0)}</div>
             </div>
@@ -399,33 +400,18 @@ function OrdersTab({ orders }: { orders: any[] }) {
 }
 
 
-// ── Customers Tab ─────────────────────────────────────────────────────────────
-function CustomersTab({ orders, products }: { orders: any[]; products: any[]; categories?: any[] }) {
+// ── Products Tab ──────────────────────────────────────────────────────────────
+function ProductsTab({ orders, products }: { orders: any[]; products: any[] }) {
   const [range, setRange] = useState<DateRange>('month');
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
-  const [agg, setAgg] = useState<CustomerAggregates>({ totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
-  const paramsRef = useLatestParams(range, customFrom, customTo);
 
-  const loadAggregates = useCallback(() => {
-    const p = paramsRef.current;
-    customersApi.getAggregates({
-      storeId: getActiveStoreId(),
-      range: mapDateRange(p.range),
-      from: p.customFrom || undefined,
-      to: p.customTo || undefined,
-    }).then(r => { if (paramsRef.current === p) setAgg(r.data.data || { totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] }); })
-      .catch(() => {});
-  }, [paramsRef]);
-
-  useEffect(() => { loadAggregates(); }, [loadAggregates]);
-  useLivePoll(loadAggregates);
-
-  const scoped = useMemo(() => filterByDate(orders, range, customFrom, customTo), [orders, range, customFrom, customTo]);
-  const repeatCustomers = agg.repeatCustomers;
-  const newCustomers = agg.newCustomers;
-  const avgOrders = agg.avgOrders ? agg.avgOrders.toFixed(1) : '0';
-  const topCustomers = agg.top;
+  // Units and revenue count only successfully delivered orders, so the figures
+  // reflect products actually sold rather than baskets cancelled after checkout.
+  const scoped = useMemo(
+    () => filterByDate(orders, range, customFrom, customTo).filter(o => o.status === 'delivered'),
+    [orders, range, customFrom, customTo],
+  );
 
   const productCount: Record<string, { name: string; units: number; revenue: number }> = {};
   for (const order of scoped) {
@@ -452,18 +438,12 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
     <div className="space-y-6">
       <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
 
-      <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Unique Customers" value={agg.totalCustomers} sub={`${newCustomers} new · ${repeatCustomers} repeat`} icon={<Users className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
-        <SummaryCard label="Repeat Customers" value={repeatCustomers} sub={`${agg.totalCustomers > 0 ? Math.round((repeatCustomers / agg.totalCustomers) * 100) : 0}% returning`} icon={<Star className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
-        <SummaryCard label="Avg Orders" value={avgOrders} sub="delivered per customer" icon={<ShoppingBag className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
-      </div>
-
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="page-card">
           <div className="page-card-header">
             <div className="flex items-center gap-2"><Package className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Top Products by Units Sold</p></div>
           </div>
-          {topProducts.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No order data yet</p> : (
+          {topProducts.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No delivered orders yet</p> : (
             <div>
               {topProducts.map((p, i) => (
                 <div key={p.name} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
@@ -483,7 +463,7 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
           <div className="page-card-header">
             <div className="flex items-center gap-2"><Tag className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Orders by Category</p></div>
           </div>
-          {topCats.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No order data yet</p> : (
+          {topCats.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No delivered orders yet</p> : (
             <div>
               {topCats.map(([name, count], i) => (
                 <div key={name} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
@@ -501,43 +481,6 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
           )}
         </div>
       </div>
-
-      <div className="page-card">
-        <div className="page-card-header"><div className="flex items-center gap-2"><Users className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Top Customers by Spend</p></div></div>
-        {topCustomers.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No customers yet</p> : (
-          <div>
-            <div className="hidden sm:grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-              <div className="col-span-1">#</div><div className="col-span-4">Customer</div><div className="col-span-3">Phone</div><div className="col-span-2 text-center">Orders</div><div className="col-span-2 text-right">Spent</div>
-            </div>
-            {topCustomers.map((c: any, i: number) => {
-              const initial = (c.name || c.phone || '?')[0].toUpperCase();
-              return (
-              <div key={c.id} className="grid grid-cols-1 sm:grid-cols-12 gap-1 sm:gap-3 px-4 py-3 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/50 items-center">
-                <div className="sm:hidden flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-xs font-bold text-emerald-700">{initial}</span>
-                    </div>
-                    <div><p className="text-xs font-semibold text-gray-900 dark:text-white">{c.name || 'Guest'}</p><p className="text-[10px] text-gray-500 dark:text-slate-400">{c.phone || '—'} · {c.orderCount} orders</p></div>
-                  </div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">₹{c.totalSpent.toFixed(0)}</p>
-                </div>
-                <div className="hidden sm:block col-span-1 text-xs font-bold text-gray-500 dark:text-slate-400">#{i + 1}</div>
-                <div className="hidden sm:flex col-span-4 items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-emerald-700">{initial}</span>
-                  </div>
-                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{c.name || 'Guest'}</p>
-                </div>
-                <div className="hidden sm:block col-span-3 text-xs text-gray-600 dark:text-slate-400">{c.phone || '—'}</div>
-                <div className="hidden sm:block col-span-2 text-center text-xs font-semibold text-gray-900 dark:text-white">{c.orderCount}</div>
-                <div className="hidden sm:block col-span-2 text-right text-sm font-bold text-gray-900 dark:text-white">₹{c.totalSpent.toFixed(0)}</div>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -546,16 +489,15 @@ function CustomersTab({ orders, products }: { orders: any[]; products: any[]; ca
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('revenue');
-  const [data, setData] = useState({ orders: [], products: [], categories: [] });
+  const [data, setData] = useState({ orders: [], products: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       ordersApi.getAll({ limit: 500 } as any),
       productsApi.getAll(),
-      categoriesApi.getAll(),
-    ]).then(([o, p, cat]) => {
-      setData({ orders: o.data.data || [], products: p.data.data || [], categories: cat.data.data || [] });
+    ]).then(([o, p]) => {
+      setData({ orders: o.data.data || [], products: p.data.data || [] });
     }).finally(() => setLoading(false));
   }, []);
 
@@ -564,7 +506,7 @@ export default function AnalyticsPage() {
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'revenue',   label: 'Revenue',   icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'orders',    label: 'Orders',    icon: <ShoppingBag className="w-4 h-4" /> },
-    { id: 'customers', label: 'Customers', icon: <Users className="w-4 h-4" /> },
+    { id: 'products',  label: 'Products',  icon: <Package className="w-4 h-4" /> },
   ];
 
   return (
@@ -586,7 +528,7 @@ export default function AnalyticsPage() {
 
       {tab === 'revenue'   && <RevenueTab   orders={data.orders} />}
       {tab === 'orders'    && <OrdersTab    orders={data.orders} />}
-      {tab === 'customers' && <CustomersTab orders={data.orders} products={data.products} categories={data.categories} />}
+      {tab === 'products'  && <ProductsTab  orders={data.orders} products={data.products} />}
     </div>
   );
 }

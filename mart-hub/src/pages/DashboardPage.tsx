@@ -59,7 +59,7 @@ const RANGES: { id: Range; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: '7d',    label: '7 Days' },
   { id: '30d',   label: '30 Days' },
-  { id: 'all',   label: 'All Time' },
+  { id: 'all',   label: 'All' },
   { id: 'custom',label: 'Custom' },
 ];
 
@@ -67,6 +67,15 @@ export default function DashboardPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('today');
+  // The range to return to when Custom is clicked a second time (the date
+  // range toggles closed instead of staying stuck open).
+  const prevRangeRef = useRef<Range>('today');
+  const handleRangeClick = (id: Range) => {
+    if (id !== 'custom') { setRange(id); return; }
+    if (range === 'custom') { setRange(prevRangeRef.current); return; }
+    prevRangeRef.current = range;
+    setRange('custom');
+  };
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
   const [storeName, setStoreName] = useState('');
@@ -190,7 +199,7 @@ export default function DashboardPage() {
       {/* Date range tabs */}
       <div className="flex items-center gap-2 flex-wrap">
         {RANGES.map(r => (
-          <button key={r.id} onClick={() => setRange(r.id)}
+          <button key={r.id} onClick={() => handleRangeClick(r.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               range === r.id
                 ? 'bg-emerald-500 text-white shadow-sm'

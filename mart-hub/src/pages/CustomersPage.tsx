@@ -128,9 +128,9 @@ export default function CustomersPage() {
               <k.icon className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{k.value}</p>
-              <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1 truncate">{k.label}</p>
-              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 truncate">{k.sub}</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white leading-none sm:truncate">{k.value}</p>
+              <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1 sm:truncate">{k.label}</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 sm:truncate">{k.sub}</p>
             </div>
           </div>
         ))}
