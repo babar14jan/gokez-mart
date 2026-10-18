@@ -111,9 +111,11 @@ export default function CustomerLeadsPage() {
       )}
 
       {loading ? (
-        <div className="flex h-64 items-center justify-center" aria-live="polite">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" aria-hidden="true" />
+        <div className="space-y-3 animate-pulse" aria-live="polite">
           <span className="sr-only">Loading leads...</span>
+          {Array.from({ length: 5 }, (_, i) => (
+            <div key={i} className="h-14 rounded-lg bg-gray-100 dark:bg-slate-800" />
+          ))}
         </div>
       ) : leads.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 bg-white py-16 text-center text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">

@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload } from 'lucide-react';
 import { categoriesApi, catalogApi, productsApi } from '../services/api';
 import CategoryIcon from '../components/CategoryIcon';
+import PageSkeleton from '../components/PageSkeleton';
 
 interface CatalogProduct {
   id: string;
@@ -147,11 +148,7 @@ export default function CatalogPage() {
     } finally { setDeleting(false); }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-4">

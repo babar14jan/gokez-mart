@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import { orderDisplayName } from '../utils/orderName';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
+import PageSkeleton from '../components/PageSkeleton';
 
 type Range = 'today' | '7d' | '30d' | 'custom' | 'all';
 
@@ -155,11 +156,7 @@ export default function DashboardPage() {
     : RANGES.find(r => r.id === range)?.label || '';
   const navigate = useNavigate();
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-4">

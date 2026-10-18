@@ -3,6 +3,7 @@ import { TrendingUp, ShoppingBag, Users, CreditCard, Wallet, Smartphone, CheckCi
 import { ordersApi, productsApi, customersApi, categoriesApi, type OrderSummary, type CustomerAggregates, type SummaryRange } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
+import PageSkeleton from '../components/PageSkeleton';
 
 type Tab = 'revenue' | 'orders' | 'customers';
 type DateRange = 'today' | 'week' | 'month' | 'last_month' | 'custom';
@@ -558,11 +559,7 @@ export default function AnalyticsPage() {
     }).finally(() => setLoading(false));
   }, []);
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'revenue',   label: 'Revenue',   icon: <TrendingUp className="w-4 h-4" /> },

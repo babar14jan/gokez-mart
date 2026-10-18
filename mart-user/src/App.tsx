@@ -60,6 +60,11 @@ type PermissionPrompt = 'order-notifications' | null;
 const PERMISSION_PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const ORDER_NOTIFICATION_PROMPT_KEY = 'mart_order_notification_prompted_at';
 const PULL_REFRESH_THRESHOLD = 76;
+// Mirrors the active tab so a reload (pull-to-refresh, browser refresh, PWA
+// resume) can come back to it. The URL alone is not enough: a guest booting at
+// '/' is deliberately sent to Account, which made every refresh dump shoppers
+// on the login page no matter which tab they were on.
+const LAST_VIEW_KEY = 'mart-last-view';
 
 function isPermissionPromptDue(storageKey: string): boolean {
   const lastPromptedAt = Number(localStorage.getItem(storageKey) || 0);
@@ -107,7 +112,27 @@ export default function App() {
     if (path === '/feedback') return 'feedback';
     if (path === '/delete-account') return 'delete-account';
     if (path === '/account') return 'account';
-    if (path === '/') return useCustomerAuthStore.getState().isLoggedIn ? 'home' : 'account';
+    // The tab paths are real views, not just history markers: a reload on
+    // /categories, /orders or /deals has to come back to that tab instead of
+    // being normalised to Home (the popstate handler already resolved them).
+    if (path === '/orders') return 'orders';
+    if (path === '/categories') return 'categories';
+    if (path === '/deals') return 'deals';
+    if (path === '/') {
+      // A refresh keeps whatever tab the shopper was on. The last view is
+      // mirrored into sessionStorage on every change and wins over the
+      // guest→Account boot rule below, which stays the first-visit default.
+      if (!isEmbed) {
+        let stored: string | null = null;
+        try { stored = sessionStorage.getItem(LAST_VIEW_KEY); } catch {}
+        const storedView = (Object.keys(VIEW_PATH) as View[]).find(v => VIEW_PATH[v] === stored);
+        if (storedView) {
+          window.history.replaceState({}, '', VIEW_PATH[storedView]);
+          return storedView;
+        }
+      }
+      return useCustomerAuthStore.getState().isLoggedIn ? 'home' : 'account';
+    }
     // Unrecognized/private routes boot to Home and are normalized so the address
     // bar is not left showing a stale route over the Home view.
     window.history.replaceState({}, '', '/');
@@ -321,6 +346,13 @@ export default function App() {
     // The page now scrolls inside .app-scroll, not the document, so reset it too.
     scrollRef.current?.scrollTo(0, 0);
   }, [view, showingSuccess]);
+
+  // Keep the last-view mirror fresh for the next boot (pull-to-refresh, browser
+  // refresh, PWA resume). Checkout deliberately stays out: it is an overlay, and
+  // the pending-checkout flow (not the view) is what restores it after a reload.
+  useEffect(() => {
+    try { sessionStorage.setItem(LAST_VIEW_KEY, VIEW_PATH[view]); } catch {}
+  }, [view]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
