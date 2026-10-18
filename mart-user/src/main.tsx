@@ -38,6 +38,10 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
+// Signals the inline watchdog in index.html that the app module ran, so it does
+// not mistake a slow start for a stale cached shell and clear the caches.
+(window as any).__gokezBooted = true;
+
 // The launch splash is removed by App once the first data load has finished
 // (see App.tsx). This timeout is only a safety net so the overlay can never
 // outlive a failed render, and index.html carries a slightly longer inline

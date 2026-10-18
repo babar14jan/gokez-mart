@@ -78,8 +78,13 @@ self.addEventListener('install', (e) => {
           // Precache each URL independently. `addAll` rejects the whole batch if
           // a single request 404s, which previously could leave the app with no
           // cached shell at all — a blank screen on the next offline launch.
+          // `cache: 'reload'` skips the HTTP cache so the shell and every chunk
+          // are the exact bytes of this deploy, never a stale mix that would
+          // reference a chunk the edge no longer serves.
           Promise.allSettled(
-            [...new Set([...SHELL_URLS, ...BUILD_ASSETS])].map(url => cache.add(url))
+            [...new Set([...SHELL_URLS, ...BUILD_ASSETS])].map(url =>
+              cache.add(new Request(url, { cache: 'reload' }))
+            )
           )
         )
       )
@@ -109,26 +114,27 @@ self.addEventListener('fetch', (e) => {
   // Never intercept API calls
   if (e.request.url.includes('/api/')) return;
 
-  // For navigation requests (opening the app) — cache first, network only on a
-  // miss. Serving the cached shell is instant and offline-proof: on iOS WebKit a
-  // network-first navigation can sit on a white screen while the request hangs,
-  // and a revalidated shell can end up referencing chunks that are not cached
-  // yet. The shell and its chunks share one cache version and are refreshed
-  // together by the worker update, so they can never fall out of sync.
+  // For navigation requests (opening the app) — network first, so an online
+  // load always gets the shell that matches the chunks the edge is currently
+  // serving. Serving a cached shell first is what let a stale build point at a
+  // chunk the deploy had already replaced; the edge answers that missing chunk
+  // with the SPA fallback (HTML), the module never executes, and the app shows a
+  // blank screen even with a working connection. The timeout keeps a hanging
+  // request (iOS) from sitting on white, then the cached shell — written by the
+  // same build as its chunks — boots offline.
   if (e.request.mode === 'navigate') {
     e.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
-      const cached =
-        (await cache.match('/index.html')) ||
-        (await cache.match('/')) ||
-        (await cache.match(e.request, { ignoreSearch: true }));
-      if (cached) return cached;
       try {
         const response = await withTimeout(fetch(e.request), NAVIGATION_TIMEOUT_MS);
         if (response && response.ok) cache.put('/index.html', response.clone()).catch(() => {});
         return response;
       } catch {
-        return offlineDocument();
+        const cached =
+          (await cache.match('/index.html')) ||
+          (await cache.match('/')) ||
+          (await cache.match(e.request, { ignoreSearch: true }));
+        return cached || offlineDocument();
       }
     })());
     return;
