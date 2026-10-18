@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,9 +54,21 @@ if (existsSync(swPath)) {
   try {
     const html = readFileSync(indexPath, 'utf8');
     assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map(m => m[1]);
-    assets = [...new Set(assets)];
   } catch {
     throw new Error('dist/index.html is missing — run vite build first');
+  }
+
+  // Also precache every code-split chunk. The index.html only references the
+  // entry files, so without this a lazily-loaded route would fail to open while
+  // offline (which previously triggered a reload loop that ended on the
+  // browser's native offline page).
+  try {
+    const chunks = readdirSync(join(dist, 'assets'))
+      .filter(name => name.endsWith('.js') || name.endsWith('.css'))
+      .map(name => `/assets/${name}`);
+    assets = [...new Set([...assets, ...chunks])];
+  } catch {
+    /* no assets dir — entry-only precache */
   }
 
   const manifestHeader = `/* asset-manifest */ self.__BUILD_ASSETS__ = ${JSON.stringify(assets)};\n`;
