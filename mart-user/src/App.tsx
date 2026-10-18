@@ -35,6 +35,7 @@ import { useLoginFlowStore } from './store/loginFlowStore';
 import { useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
+import { buildWhatsAppLink, normalizeWhatsAppNumber } from './utils/whatsapp';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
 type View = 'home' | 'about' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
@@ -820,8 +821,8 @@ export default function App() {
             className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-2xl transition-colors border border-gray-200 dark:border-slate-700">
             Continue Shopping
           </button>
-          {settings.whatsapp_number && (
-            <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer"
+          {normalizeWhatsAppNumber(settings.whatsapp_number) && (
+            <a href={buildWhatsAppLink(settings.whatsapp_number)} target="_blank" rel="noopener noreferrer"
               className="block text-center text-xs text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
               Need help? Chat on WhatsApp →
             </a>
@@ -1067,7 +1068,7 @@ export default function App() {
           storeAddress={settings.store_address}
           supportName={settings.support_name}
           supportPhone={settings.support_phone}
-          whatsappNumber={settings.support_phone}
+          whatsappNumber={settings.whatsapp_number}
         /></DeferredPage>
       ) : (
         /* Home */

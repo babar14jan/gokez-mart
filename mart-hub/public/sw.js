@@ -129,7 +129,14 @@ self.addEventListener('activate', (e) => {
       if (hadOldBuild && !(await state.match(RECOVERY_KEY))) {
         await state.put(RECOVERY_KEY, new Response('1'));
         const clients = await self.clients.matchAll({ type: 'window' });
-        await Promise.all(clients.map(c => c.navigate(c.url).catch(() => {})));
+        // Ask each open page to reload itself first. This is the reliable path:
+        // navigate() is refused ("Cannot navigate to URL") — or can hang — while
+        // the browser still treats the previous worker as the client's controller.
+        // The app installs a listener for this message in registerServiceWorker().
+        clients.forEach(c => { try { c.postMessage({ type: 'GOKEZ_FORCE_RELOAD' }); } catch {} });
+        // Belt-and-braces for clients with no listener. Never awaited, so a hung
+        // or rejected navigate() cannot block activation.
+        clients.forEach(c => { try { c.navigate(c.url).catch(() => {}); } catch {} });
       }
     } catch {}
   })());
