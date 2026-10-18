@@ -46,6 +46,9 @@ export function clearChunkReloadFlag(): void {
 
 /** Silent, de-duplicated reload for a stale-chunk error. Returns true if the reload was started. */
 export function recoverFromChunkError(): boolean {
+  // A reload while offline cannot fetch the missing build and, on iOS, can land
+  // on a blank screen. Let the error boundary show its recovery screen instead.
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
   let last = 0;
   try {
     last = Number(sessionStorage.getItem(RELOAD_FLAG) || 0);

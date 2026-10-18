@@ -55,6 +55,13 @@
   Content-Type: image/png
   Cache-Control: public, max-age=86400
 
+# iOS launch images referenced from index.html. Stable public/ paths like the
+# icons above, so the same one-day policy applies: long enough that a reinstall
+# reuses them from cache, short enough that new artwork still lands.
+/splash/*
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+
 # The bottom nav's centre "Vegetables" icon. It is the only image the app shell
 # paints, lives in public/ under a stable (unhashed) path, and is deliberately
 # preloaded from index.html, so it must have a deterministic cache policy: without
