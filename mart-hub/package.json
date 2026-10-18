@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 5178",
     "build": "tsc && vite build && node scripts/write-version.mjs",
+    "gen:ios-splash": "node scripts/gen-ios-splash.mjs",
     "preview": "vite preview --port 5178"
   },
   "dependencies": {
