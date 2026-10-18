@@ -18,3 +18,9 @@
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# iOS launch images referenced from index.html. Stable public/ paths, deliberately
+# NOT immutable, so updated artwork still reaches a reinstalled PWA.
+/splash/*
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400

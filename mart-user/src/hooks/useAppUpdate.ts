@@ -71,6 +71,20 @@ export function useAppUpdate() {
     document.addEventListener('visibilitychange', onHidden);
   };
 
+  // Force mode must land the *new* build, not just reload into the same cached
+  // one. Ask the browser to install the new worker first; controllerchange then
+  // fires the reload once the new build is actually what gets served. The timer
+  // is only a fallback for the case where the worker does not change.
+  const forceSwap = () => {
+    if (reloadRequested) return;
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then((r) => r?.update()).catch(() => {});
+      }
+    } catch {}
+    window.setTimeout(() => requestReload(), 4000);
+  };
+
   const check = async () => {
     // Read the deploy mode first, so the reload decision below uses the mode of
     // the build the edge is actually serving. Any failure keeps the last known
@@ -89,8 +103,10 @@ export function useAppUpdate() {
       if (currentVersion.current === null) {
         currentVersion.current = v;
       } else if (currentVersion.current !== v) {
-        // force = reload now; silent = wait for a quiet moment.
-        if (updateMode === 'force') requestReload();
+        // Record the new id so a later poll cannot trigger the same swap twice.
+        currentVersion.current = v;
+        // force = land the new build now; silent = wait for a quiet moment.
+        if (updateMode === 'force') forceSwap();
         else stageUpdate();
       }
     } catch {}
