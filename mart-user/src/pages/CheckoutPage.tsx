@@ -13,6 +13,7 @@ import AddressButton from '../components/AddressButton';
 import PageHeader from '../components/PageHeader';
 import ProductCard from '../components/ProductCard';
 import SmartImage from '../components/SmartImage';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 import { useGuestAddressStore } from '../store/guestAddressStore';
 
@@ -149,6 +150,14 @@ const isValidDeliveryAddress = (address: string | null) => {
   const normalized = address?.trim() || '';
   return normalized.length >= 10 && normalized.length <= 500;
 };
+
+/* "name", "name and mobile number", "name, mobile number and address" — reads
+   as one sentence so the checkout can name everything that is still missing. */
+function joinList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
 
 type CheckoutValidationField = 'address' | 'name' | 'phone' | null;
 
@@ -553,6 +562,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
 
   const [loading, setLoading] = useState(false);
+  // The "To pay" figure frozen at the moment Place order was tapped, shown while
+  // the request is in flight so the number the customer committed to cannot move.
+  const [submittedTotal, setSubmittedTotal] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [validationField, setValidationField] = useState<CheckoutValidationField>(null);
   const [showMissingDetails, setShowMissingDetails] = useState(false);
@@ -725,7 +737,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const deliveryCharge = parseFloat(settings.delivery_charge || '0');
   const freeAbove = parseFloat(settings.free_delivery_above || '0');
   const minOrder = parseFloat(settings.min_order_amount || '0');
-  const sub = subtotal();
+  // Derived straight off the live cart items, so the "To pay" figure recomputes
+  // on every +/- and every "You may also like" tap — no chance of a stale total.
+  const sub = useMemo(() => items.reduce((s2, i) => s2 + i.price * i.quantity, 0), [items]);
   const campaignMeetsMinimum = !appliedCampaign || Number(appliedCampaign.min_order_amount || 0) <= sub;
   const displayedCampaignDiscount = appliedCampaign && campaignMeetsMinimum
     ? calcDiscount(appliedCampaign, sub)
@@ -748,6 +762,33 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
     !isValidIndianMobile(checkoutPhone) && 'mobile number',
     !isValidDeliveryAddress(resolvedAddress) && 'delivery address',
   ].filter(Boolean) as string[];
+
+  // Everything a delivery needs, named in one line, in the order it appears on
+  // the page. Null the moment the order is ready to place.
+  const missingFirstField: CheckoutValidationField =
+    !nameComplete ? 'name'
+    : !isValidIndianMobile(checkoutPhone) ? 'phone'
+    : !isValidDeliveryAddress(resolvedAddress) ? 'address'
+    : null;
+  const missingDetailsMessage = incompleteCheckoutDetails.length
+    ? `Please add your ${joinList(incompleteCheckoutDetails)} before placing the order.`
+    : '';
+  // Sends the customer to the top-most missing field, opening the address sheet
+  // when that is what is left to fill in.
+  const focusFirstMissingField = () => {
+    if (!nameComplete) {
+      if (isLoggedIn) {
+        openAddressSheet();
+        window.setTimeout(() => profileNameInput.current?.focus(), 50);
+      } else {
+        guestNameInput.current?.focus();
+      }
+      return;
+    }
+    if (!isValidIndianMobile(checkoutPhone)) { guestPhoneInput.current?.focus(); return; }
+    if (!isValidDeliveryAddress(resolvedAddress)) openAddressSheet();
+  };
+
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
   const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
   // The account page and checkout share one address control. Checkout may not
@@ -781,46 +822,36 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
     if (couponLoading) return;
     let name = checkoutName;
     const phone = checkoutPhone;
-    if (!nameComplete) {
+    // Gate the whole order on every delivery detail at once and explain the
+    // full shortfall in a single dialog, rather than bouncing the customer
+    // field by field. Nothing is sent until name, mobile and address are in.
+    if (missingFirstField) {
       setError('');
+      setValidationField(missingFirstField);
       setShowMissingDetails(true);
-      setValidationField('name');
-      if (isLoggedIn) {
-        openAddressSheet();
-        window.setTimeout(() => profileNameInput.current?.focus(), 50);
-      } else {
-        guestNameInput.current?.focus();
-      }
       return;
     }
     if (isLoggedIn && requiresName) {
       if (!(await saveProfileNameIfProvided())) return;
       name = profileNameDraft.trim();
     }
-    if (!phone?.trim() || !isValidIndianMobile(phone)) {
-      setError('');
-      setShowMissingDetails(true);
-      setValidationField('phone');
-      guestPhoneInput.current?.focus();
-      return;
-    }
-    if (!isValidDeliveryAddress(resolvedAddress)) {
-      setError('');
-      setShowMissingDetails(true);
-      setValidationField('address');
-      openAddressSheet();
-      return;
-    }
     if (!canCheckout) return;
     const orderAddress = resolvedAddress!.trim();
-    track('checkout_address_completed', { itemCount: items.length });
-    track('checkout_reviewed', { itemCount: items.length, subtotal: sub });
+    // Lock the basket the instant Place order is tapped. The items and the "To
+    // pay" figure are snapshotted here, so a change while the confirm dialog is
+    // open or while the request is in flight can never make the order differ
+    // from what the customer saw. The qty/add controls are also disabled while
+    // `loading` so the cart cannot move underneath them.
+    const lockedItems = items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity }));
+    const lockedSubtotal = sub;
+    track('checkout_address_completed', { itemCount: lockedItems.length });
+    track('checkout_reviewed', { itemCount: lockedItems.length, subtotal: lockedSubtotal });
     // After validation, before the request: a customer with a form problem
     // should be told about that, not asked to confirm a delay they have not
     // reached yet. Defaulting to "proceed" keeps checkout working if this page
     // is ever rendered without the prop.
     if (confirmOrder && !(await confirmOrder())) return;
-    setLoading(true); setError(''); setValidationField(null); setShowMissingDetails(false);
+    setLoading(true); setError(''); setValidationField(null); setShowMissingDetails(false); setSubmittedTotal(total);
     try {
       const res = await storeApi.placeOrder({
         guestName: name, guestPhone: phone.replace(/\D/g, ''),
@@ -828,7 +859,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
         guestAddressLabel: isLoggedIn ? undefined : guestAddressLabel,
         latitude: selectedAddress?.latitude ?? guestAddressCoordinates?.latitude ?? null,
         longitude: selectedAddress?.longitude ?? guestAddressCoordinates?.longitude ?? null,
-        items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
+        items: lockedItems,
         zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
         scheduledFor: deliveryPreference === 'scheduled' && scheduledSlot ? scheduledSlot.at.toISOString() : undefined,
@@ -840,8 +871,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
         funnelSessionId: getFunnelSessionId(),
       }, orderRequestKey.current);
       const confirmedCampaignDiscount = Number(res.data.data.campaignDiscount) || 0;
-      track('order_placed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
-      track('order_completed', { orderNumber: res.data.data.orderNumber, itemCount: items.length, value: res.data.data.total });
+      track('order_placed', { orderNumber: res.data.data.orderNumber, itemCount: lockedItems.length, value: res.data.data.total });
+      track('order_completed', { orderNumber: res.data.data.orderNumber, itemCount: lockedItems.length, value: res.data.data.total });
       const orderData = {
         orderNumber: res.data.data.orderNumber,
         trackingToken: res.data.data.trackingToken,
@@ -884,7 +915,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
         }
         setError(responseError || 'We could not place your order. Please review your details and try again.');
       }
-    } finally { setLoading(false); }
+    } finally { setLoading(false); setSubmittedTotal(null); }
   };
 
   const card = 'bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden';
@@ -967,13 +998,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                     <p className="text-xs text-gray-500">{item.unit} · ₹{item.price}</p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity - 1)}
-                      className="w-7 h-7 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center">
+                    <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity - 1)} disabled={loading}
+                      aria-disabled={loading}
+                      className="w-7 h-7 bg-gray-100 dark:bg-slate-700 rounded-lg flex items-center justify-center disabled:opacity-40">
                       {item.quantity === 1 ? <Trash2 className="w-3 h-3 text-red-400" /> : <Minus className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />}
                     </button>
                     <span className="text-sm font-bold text-gray-900 dark:text-white w-5 text-center">{item.quantity}</span>
-                    <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity + 1)}
-                      className="w-7 h-7 bg-emerald-500 text-white rounded-lg flex items-center justify-center">
+                    <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity + 1)} disabled={loading}
+                      aria-disabled={loading}
+                      className="w-7 h-7 bg-emerald-500 text-white rounded-lg flex items-center justify-center disabled:opacity-40">
                       <Plus className="w-3.5 h-3.5" strokeWidth={3.5} />
                     </button>
                   </div>
@@ -994,8 +1027,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             {/* Missed something */}
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-50 dark:border-slate-700">
               <span className="text-sm text-gray-500 dark:text-slate-400">Missed something?</span>
-              <button type="button" onClick={onHome}
-                className="flex items-center gap-1.5 bg-gray-900 dark:bg-slate-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg">
+              <button type="button" onClick={onHome} disabled={loading}
+                className="flex items-center gap-1.5 bg-gray-900 dark:bg-slate-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg disabled:opacity-40">
                 <Plus className="w-3.5 h-3.5" /> Add more items
               </button>
             </div>
@@ -1008,12 +1041,12 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
               <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
                 {visibleSuggestions.map(product => (
                   <div key={product.id} className="w-32 shrink-0 snap-start">
-                    <ProductCard product={product} />
+                    <ProductCard product={product} disabled={loading} />
                   </div>
                 ))}
                 <div className="flex w-32 shrink-0 snap-start">
-                  <button type="button" onClick={onHome}
-                    className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40">
+                  <button type="button" onClick={onHome} disabled={loading}
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40 disabled:opacity-40">
                     <ChevronRight className="h-6 w-6" />
                     <span className="text-sm font-bold">View all</span>
                   </button>
@@ -1076,6 +1109,20 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 setValidationField(null);
                 return true;
               }}
+            />
+          )}
+
+          {/* One dialog for whatever a delivery still needs — name, mobile
+              number or address. Place order is never sent while it is open. */}
+          {showMissingDetails && (
+            <ConfirmDialog
+              title="Add your details"
+              message={missingDetailsMessage}
+              confirmLabel="Add details"
+              cancelLabel="Not now"
+              danger={false}
+              onConfirm={() => { setShowMissingDetails(false); focusFirstMissingField(); }}
+              onCancel={() => setShowMissingDetails(false)}
             />
           )}
 
@@ -1380,7 +1427,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             <div className="flex items-center gap-3">
               <div className="w-16 flex-shrink-0 text-center">
                 <p className="text-[10px] text-gray-500 dark:text-slate-400">To pay</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">₹{total.toFixed(0)}</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">₹{(loading && submittedTotal != null ? submittedTotal : total).toFixed(0)}</p>
               </div>
               <button type="submit" form="checkout-form" disabled={loading || couponLoading}
                 className="flex-1 h-14 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-[#15803d] dark:text-white dark:hover:bg-[#166534]">
