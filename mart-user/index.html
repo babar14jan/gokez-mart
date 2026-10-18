@@ -307,5 +307,36 @@
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Safety net for a stale cached shell: if the app module never boots
+         (its entry chunk was replaced by a deploy while a cached index.html
+         still points at the old one), drop the service worker and caches and
+         reload once. This runs from the HTML itself, so it works even when the
+         app's JavaScript never executes — the exact blank-screen-with-a-
+         connection case. Skipped offline, where a reload could not help. -->
+    <script>
+      (function () {
+        window.setTimeout(function () {
+          if (window.__gokezBooted || !navigator.onLine) return;
+          try {
+            var last = Number(sessionStorage.getItem('gokez-recover-at') || 0);
+            if (Date.now() - last < 60000) return;
+            sessionStorage.setItem('gokez-recover-at', String(Date.now()));
+          } catch (e) { return; }
+          var jobs = [];
+          try {
+            jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+              return Promise.all(rs.map(function (r) { return r.unregister(); }));
+            }));
+          } catch (e) {}
+          try {
+            jobs.push(caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            }));
+          } catch (e) {}
+          Promise.all(jobs).then(reload, reload);
+          function reload() { window.location.reload(); }
+        }, 9000);
+      })();
+    </script>
   </body>
 </html>
