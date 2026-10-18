@@ -3,6 +3,7 @@ import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import ProductDetailSheet from './ProductDetailSheet';
 import CartQuantityControl from './CartQuantityControl';
+import SmartImage from './SmartImage';
 
 interface ProductCardProps {
   product: Product;
@@ -30,12 +31,13 @@ export default function ProductCard({ product }: ProductCardProps) {
       >
         {/* Image */}
         <div className="relative bg-gray-50 dark:bg-slate-700 aspect-square overflow-hidden rounded-t-2xl">
-          {product.photoUrl
-            ? <img src={product.photoUrl} alt={product.name}
-                className={`w-full h-full object-cover ${isOutOfStock ? 'opacity-40' : ''}`}
-                loading="lazy" decoding="async" />
-            : <div className="w-full h-full flex items-center justify-center text-4xl">🥦</div>
-          }
+          <SmartImage
+            src={product.photoUrl}
+            alt={product.name}
+            className="h-full w-full"
+            imgClassName={`object-cover ${isOutOfStock ? 'opacity-40' : ''}`}
+            fallback={<div className="w-full h-full flex items-center justify-center text-4xl">🥦</div>}
+          />
 
           {/* Discount badge */}
           {savings > 0 && !isOutOfStock && (

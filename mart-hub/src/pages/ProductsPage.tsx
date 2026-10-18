@@ -8,6 +8,7 @@ import { productsApi, categoriesApi, settingsApi, inventoryApi, catalogApi } fro
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
+import SmartImage from '../components/SmartImage';
 import { useToast, ToastContainer } from '../hooks/useToast';
 import { useHeaderAction } from '../store/headerActionStore';
 import PageSkeleton from '../components/PageSkeleton';
@@ -439,14 +440,17 @@ export default function ProductsPage() {
       >
         {reorderMode && <GripVertical className="w-5 h-5 text-gray-300 flex-shrink-0" />}
 
-        {p.photoUrl ? (
-          <img src={p.photoUrl} alt={p.name} loading="lazy" decoding="async"
-            className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border-2 border-emerald-200 bg-gray-100 dark:bg-slate-700" />
-        ) : (
-          <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-            <Package className="w-5 h-5 text-gray-300" />
-          </div>
-        )}
+        <SmartImage
+          src={p.photoUrl}
+          alt={p.name}
+          className="w-10 h-10 rounded-xl flex-shrink-0 border-2 border-emerald-200 bg-gray-100 dark:bg-slate-700"
+          imgClassName="object-cover"
+          fallback={
+            <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+              <Package className="w-5 h-5 text-gray-300" />
+            </div>
+          }
+        />
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{p.name}</p>
@@ -1073,10 +1077,13 @@ export default function ProductsPage() {
                           isSelected ? 'border-indigo-400 ring-2 ring-indigo-300 dark:ring-indigo-700' : 'border-gray-100 dark:border-slate-700 hover:border-emerald-300'
                         } bg-white dark:bg-slate-700`}>
                         <div className="aspect-square bg-gray-50 dark:bg-slate-600">
-                          {item.photoUrl
-                            ? <img src={item.photoUrl} alt={item.name} className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-2xl">🥦</div>
-                          }
+                          <SmartImage
+                            src={item.photoUrl}
+                            alt={item.name}
+                            className="h-full w-full"
+                            imgClassName="object-cover"
+                            fallback={<div className="w-full h-full flex items-center justify-center text-2xl">🥦</div>}
+                          />
                           {catalogBrowserMode === 'bulk' && (
                             <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
                               isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white/80 border-gray-300'

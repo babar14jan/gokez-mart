@@ -12,6 +12,7 @@ import { useAuthStore } from '../store/authStore';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
+import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
 
 type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
@@ -891,10 +892,12 @@ export default function OrdersPage() {
                     {(order.items || []).map((item: any, i: number) => (
                       <div key={i} className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          {item.photoUrl && (
-                            <img src={item.photoUrl} alt={item.productName}
-                              className="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-gray-100 dark:border-slate-600" />
-                          )}
+                          <SmartImage
+                            src={item.photoUrl}
+                            alt={item.productName}
+                            className="w-8 h-8 rounded-lg flex-shrink-0 border border-gray-100 dark:border-slate-600"
+                            imgClassName="object-cover"
+                          />
                           <div className="min-w-0">
                             <p className="break-words text-xs text-gray-700 dark:text-slate-300">
                               {item.productName} <span className="text-gray-500 dark:text-slate-400">({item.unit})</span> × {item.quantity}

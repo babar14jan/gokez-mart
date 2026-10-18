@@ -4,6 +4,8 @@ import {
   XCircle,
 } from 'lucide-react';
 
+import SmartImage from './SmartImage';
+
 /**
  * Shared order cards.
  *
@@ -92,10 +94,13 @@ function ItemThumbnails({ items }: { items: any[] }) {
     <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
       {items.map((item: any, i: number) => (
         <div key={i} className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0">
-          {item.photoUrl
-            ? <img src={item.photoUrl} alt={item.productName} className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-xl">🥦</div>
-          }
+          <SmartImage
+            src={item.photoUrl}
+            alt={item.productName}
+            className="h-full w-full"
+            imgClassName="object-cover"
+            fallback={<div className="w-full h-full flex items-center justify-center text-xl">🥦</div>}
+          />
         </div>
       ))}
     </div>

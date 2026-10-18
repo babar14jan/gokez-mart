@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, GripVertical, Eye, EyeOff, Image } from 'lucide-react';
 import { carouselApi, campaignsApi } from '../services/api';
 import PageSkeleton from '../components/PageSkeleton';
+import SmartImage from '../components/SmartImage';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -134,10 +135,13 @@ export default function CarouselPage() {
                 <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 {/* Preview */}
                 <div className={`w-16 h-10 rounded-xl flex-shrink-0 overflow-hidden ${!s.image_url ? 'bg-gradient-to-r ' + (s.gradient || GRADIENTS[0]) : ''}`}>
-                  {s.image_url
-                    ? <img src={s.image_url} alt={s.title} className="w-full h-full object-cover" />
-                    : <div className="w-full h-full" />
-                  }
+                  <SmartImage
+                    src={s.image_url}
+                    alt={s.title}
+                    className="h-full w-full"
+                    imgClassName="object-cover"
+                    fallback={<div className="w-full h-full" />}
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{s.title || 'Untitled slide'}</p>

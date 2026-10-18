@@ -40,6 +40,24 @@ api.interceptors.response.use(
         }
       } catch {}
     }
+    // Feed the global offline/server screen with real request outcomes, so it
+    // reacts the moment a call actually fails instead of waiting for its own
+    // /health probe to time out. A transport-level failure (no HTTP response at
+    // all) means the backend is unreachable — almost always no usable network —
+    // while an HTTP 5xx means it answered but is unhealthy. 4xx is left alone:
+    // that is a request problem, not a connectivity one.
+    if (typeof window !== 'undefined') {
+      try {
+        if (!error?.response) {
+          const timedOut = error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT';
+          window.dispatchEvent(new CustomEvent('mart:api-failed', {
+            detail: timedOut ? { timeout: true } : { offline: true },
+          }));
+        } else if ((status ?? 0) >= 500) {
+          window.dispatchEvent(new CustomEvent('mart:api-failed', { detail: { server: true } }));
+        }
+      } catch {}
+    }
     return Promise.reject(error);
   }
 );

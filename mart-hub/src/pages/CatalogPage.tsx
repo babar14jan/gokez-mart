@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload } from 'lucide-react';
 import { categoriesApi, catalogApi, productsApi } from '../services/api';
 import CategoryIcon from '../components/CategoryIcon';
+import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
 
 interface CatalogProduct {
@@ -202,10 +203,13 @@ export default function CatalogPage() {
           {filtered.map(p => (
             <div key={p.id} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm flex flex-col">
               <div className="relative aspect-square bg-gray-50 dark:bg-slate-700">
-                {p.photoUrl
-                  ? <img src={p.photoUrl} alt={p.name} className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-3xl">🥦</div>
-                }
+                <SmartImage
+                  src={p.photoUrl}
+                  alt={p.name}
+                  className="h-full w-full"
+                  imgClassName="object-cover"
+                  fallback={<div className="w-full h-full flex items-center justify-center text-3xl">🥦</div>}
+                />
                 {p.categoryName && (
                   <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[9px] font-bold bg-black/50 text-white px-1.5 py-0.5 rounded-md">
                     <CategoryIcon icon={p.categoryIcon || ''} name={p.categoryName} className="w-3 h-3 object-contain" />

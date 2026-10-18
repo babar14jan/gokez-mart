@@ -18,6 +18,7 @@ import HomeSections, { resolveSectionItems } from './components/HomeSections';
 import ComboSheet from './components/ComboSheet';
 import DealsSheet from './components/DealsSheet';
 import CatalogSearchSheet from './components/CatalogSearchSheet';
+import SmartImage from './components/SmartImage';
 import LoginModal from './components/LoginModal';
 
 import CheckoutPage from './pages/CheckoutPage';
@@ -188,6 +189,10 @@ export default function App() {
   const [enablingOrderNotifications, setEnablingOrderNotifications] = useState(false);
 
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
+  // Outcome of the pull-to-refresh gesture, surfaced as a toast. Unlike the launch
+  // error panel this never blanks the store: a failed refresh keeps the catalogue
+  // that is already on screen and only explains what went wrong.
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -270,6 +275,24 @@ export default function App() {
   const selectedZone = useZoneStore(s => s.selectedZone);
   const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
 
+  // The ONE fetch path for the home catalogue (categories, products, settings and
+  // sections). Shared by the silent resume/poll refresh and the pull gesture, so a
+  // manual refresh updates data in place instead of reloading the document — the
+  // current view, scroll position, search text and already-decoded images all
+  // survive, and it never shows the skeleton (that is first-load only).
+  const refreshCatalog = useCallback(async (storeId?: string) => {
+    const [catRes, prodRes, settingsRes, sectionsRes] = await Promise.all([
+      storeApi.getCategories(),
+      storeApi.getProducts(undefined, storeId),
+      storeApi.getSettings(storeId),
+      storeApi.getHomeSections(storeId),
+    ]);
+    setCategories([...(catRes.data.data || [])]);
+    setProducts([...(prodRes.data.data || [])]);
+    setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
+    setHomeSections([...(sectionsRes.data.data || [])]);
+  }, []);
+
   // Keeps .page-shell equal to the visible height; see the hook for why one
   // mechanism covers both iOS and Android.
   useKeyboardInset();
@@ -322,14 +345,26 @@ export default function App() {
   const finishPullGesture = () => {
     pullStart.current = null;
     if (pullDistance.current >= PULL_REFRESH_THRESHOLD) {
-      // Spin in place (no page translation) then reload. The old implementation
-      // grew an in-flow indicator, which pushed the sticky navbar down into the
-      // status bar on Android and looked like the whole page was being pulled.
+      // Refresh in place. The document is never reloaded, so the view, scroll
+      // position, search text, cart and already-decoded images all survive —
+      // the old implementation called location.reload(), which blanked the
+      // screen and reset everything.
       setRefreshing(true);
-      try {
-        sessionStorage.setItem('mart-pull-refresh', '1');
-      } catch {}
-      window.setTimeout(() => window.location.reload(), 220);
+      pullDistance.current = 0;
+      setPullDistanceVisible(0);
+      const startedAt = Date.now();
+      refreshCatalog(activeStoreId)
+        .then(() => setRefreshNotice(null))
+        .catch(() => setRefreshNotice(
+          navigator.onLine
+            ? 'Couldn\u2019t refresh. Please try again.'
+            : 'You\u2019re offline. Check your connection and try again.',
+        ))
+        .finally(() => {
+          // Hold the spinner briefly so even a fast refresh reads as "done".
+          const remaining = Math.max(0, 450 - (Date.now() - startedAt));
+          window.setTimeout(() => setRefreshing(false), remaining);
+        });
       return;
     }
     pullDistance.current = 0;
@@ -500,32 +535,26 @@ export default function App() {
       const now = Date.now();
       if (!force && now - lastRefresh < 15_000) return;
       lastRefresh = now;
-      try {
-        const storeId = selectedZone?.storeId;
-        const [catRes, prodRes, srRes, sectionsRes] = await Promise.all([
-          storeApi.getCategories(),
-          storeApi.getProducts(undefined, storeId),
-          storeApi.getSettings(storeId),
-          storeApi.getHomeSections(storeId),
-        ]);
-        setCategories([...(catRes.data.data || [])]);
-        setProducts([...(prodRes.data.data || [])]);
-        setSettings(srRes.data.data || DEFAULT_SETTINGS);
-        setHomeSections([...(sectionsRes.data.data || [])]);
-      } catch {}
+      try { await refreshCatalog(selectedZone?.storeId); } catch {}
     };
     const onResume = () => { if (document.visibilityState === 'visible') refresh(); };
+    // Reconnect is a hard signal that the catalogue may be stale: refresh at once
+    // and skip the dedupe window, so the store repopulates the moment the network
+    // is usable again without ever clearing what is on screen.
+    const onReconnect = () => refresh(true);
     const interval = setInterval(() => refresh(true), 3 * 60 * 1000);
     document.addEventListener('visibilitychange', onResume);
     window.addEventListener('focus', onResume);
     window.addEventListener('pageshow', onResume);
+    window.addEventListener('online', onReconnect);
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onResume);
       window.removeEventListener('focus', onResume);
       window.removeEventListener('pageshow', onResume);
+      window.removeEventListener('online', onReconnect);
     };
-  }, [activeStoreId]);
+  }, [selectedZone?.storeId, refreshCatalog]);
 
   // The 3-minute poll above would leave a stale "closed" strip for up to three
   // minutes after the store actually opens, so schedule an exact refetch for the
@@ -643,6 +672,12 @@ export default function App() {
     const t = setTimeout(() => setLocationNotice(null), 4000);
     return () => clearTimeout(t);
   }, [locationNotice]);
+
+  useEffect(() => {
+    if (!refreshNotice) return;
+    const t = setTimeout(() => setRefreshNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [refreshNotice]);
 
   const dismissPermissionPrompt = () => {
     if (permissionPrompt === 'order-notifications') {
@@ -793,10 +828,13 @@ export default function App() {
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
                 {(successData.items || []).map((item: any, i: number) => (
                   <div key={i} className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0">
-                    {item.photoUrl
-                      ? <img src={item.photoUrl} alt={item.productName} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-xl">🥦</div>
-                    }
+                    <SmartImage
+                      src={item.photoUrl}
+                      alt={item.productName}
+                      className="h-full w-full"
+                      imgClassName="object-cover"
+                      fallback={<div className="w-full h-full flex items-center justify-center text-xl">🥦</div>}
+                    />
                   </div>
                 ))}
               </div>
@@ -896,11 +934,11 @@ export default function App() {
         }
       }} />}
 
-      {/* Location feedback toast — pinned above the bottom nav so it never
-          hides under the mobile status bar / notch. */}
-      {locationNotice && (
+      {/* Location / refresh feedback toast — pinned above the bottom nav so it
+          never hides under the mobile status bar / notch. */}
+      {(locationNotice || refreshNotice) && (
         <div className="fixed bottom-[calc(8.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[70] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl bg-slate-900 px-4 py-3 text-center text-xs font-semibold text-white shadow-xl dark:bg-slate-700">
-          {locationNotice}
+          {locationNotice || refreshNotice}
         </div>
       )}
 
@@ -984,6 +1022,7 @@ export default function App() {
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
+              catalog={products}
               onBack={handleCheckoutClose}
               onHome={() => { setCatalogSearchOpen(false); setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
@@ -997,6 +1036,7 @@ export default function App() {
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
+              catalog={products}
               onBack={handleCheckoutClose}
               onHome={() => { setCatalogSearchOpen(false); setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}

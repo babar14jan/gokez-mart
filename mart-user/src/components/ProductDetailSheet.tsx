@@ -4,6 +4,7 @@ import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { trackOnce } from '../utils/track';
 import CartQuantityControl from './CartQuantityControl';
+import SmartImage from './SmartImage';
 
 function displayName(product: Product): string {
   const eng = product.name?.trim();
@@ -95,12 +96,15 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
         <div className="min-h-0 flex-1 overflow-y-auto">
           {/* Large hero image — full-width, clearly bigger than the home card */}
           <div className="relative h-48 w-full overflow-hidden bg-gray-50 sm:h-56 dark:bg-slate-700">
-            {product.photoUrl ? (
-              <img src={product.photoUrl} alt={product.name}
-                className={`h-full w-full object-contain ${isOutOfStock ? 'opacity-50' : ''}`} />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-7xl">🥦</div>
-            )}
+            <SmartImage
+              src={product.photoUrl}
+              alt={product.name}
+              className="h-full w-full"
+              imgClassName={`object-contain ${isOutOfStock ? 'opacity-50' : ''}`}
+              loading="eager"
+              fetchPriority="high"
+              fallback={<div className="flex h-full w-full items-center justify-center text-7xl">🥦</div>}
+            />
             {savings > 0 && !isOutOfStock && (
               <span className="absolute left-0 top-0 rounded-br-lg bg-red-500 px-2 py-1 text-[11px] font-extrabold text-white">
                 {product.discountPercent}% OFF
