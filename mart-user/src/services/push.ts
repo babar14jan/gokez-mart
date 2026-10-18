@@ -27,6 +27,16 @@ export async function registerServiceWorker(): Promise<void> {
     return;
   }
 
+  // The worker asks the page to reload itself when it takes over from a build
+  // that left this device stuck; navigate() alone is refused by some browsers.
+  // Guarded so it can never reload in a loop within one session.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'GOKEZ_FORCE_RELOAD' && !sessionStorage.getItem('gokez-sw-reloaded')) {
+      sessionStorage.setItem('gokez-sw-reloaded', '1');
+      window.location.reload();
+    }
+  });
+
   try { await navigator.serviceWorker.register(SW_URL); }
   catch (e) { console.warn('[SW] Registration failed:', e); }
 }

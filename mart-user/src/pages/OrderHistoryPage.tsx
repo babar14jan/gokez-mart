@@ -7,6 +7,7 @@ import { useLoginFlowStore } from '../store/loginFlowStore';
 import { useCartStore } from '../store/cartStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { printReceipt } from '../utils/printReceipt';
+import { buildWhatsAppLink } from '../utils/whatsapp';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 import {
@@ -186,7 +187,7 @@ function OrderDetailSheet({
                   const message = `Need help regarding Order #${order.orderNumber} placed at ${formatDateTime(order.createdAt)}. Customer: ${name}. Phone: ${phone}.`;
                   return (
                     <a
-                      href={`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`}
+                      href={buildWhatsAppLink(whatsappNumber, message)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"

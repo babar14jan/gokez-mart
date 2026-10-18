@@ -13,6 +13,7 @@ import { track, trackInstall } from '../utils/track';
 import { useInstallGuide } from '../utils/install';
 import { BRAND_SLOGAN } from '../constants/brand';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
+import { buildWhatsAppLink } from '../utils/whatsapp';
 
 const GUEST_ORDER_NOTIFICATIONS_KEY = 'mart_guest_order_notifications';
 const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
@@ -469,7 +470,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                     </a>
                   )}
                   {whatsappNumber && (
-                    <a href={`https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi, I need help with my order on Gokez Mart.`)}`}
+                    <a href={buildWhatsAppLink(whatsappNumber, 'Hi, I need help with my order on Gokez Mart.')}
                       target="_blank" rel="noopener noreferrer"
                       className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-green-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-green-500/60">
                       <WhatsAppIcon className="h-4 w-4 text-green-600 dark:text-green-400" /> WhatsApp
