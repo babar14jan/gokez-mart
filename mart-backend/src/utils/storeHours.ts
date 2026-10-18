@@ -57,6 +57,12 @@ export interface StoreOpenState {
   nextOpenLabel: string | null;
   /** Preformatted IST label for the current closing time, when open. */
   closesAtLabel: string | null;
+  /**
+   * UTC ISO instant the store closes today, when it is currently open. Lets a
+   * client detect the open→closed flip without a DB write (the catalog stamp
+   * folds this in). Null whenever the store is closed.
+   */
+  closesAt?: string | null;
 }
 
 // ── IST primitives ────────────────────────────────────────────────────────────
@@ -206,8 +212,15 @@ export function evaluateStoreOpen(
   const today = dayWindow(openingHours, p.day);
   if (today && contains(today, nowMinutes)) {
     const closesIn = isOvernight(today) ? today.close + 24 * 60 : today.close;
+    // An overnight window still open past its own close minute (22:00-02:00 at
+    // 23:00) closes TOMORROW; one still inside the pre-close spill (at 01:00)
+    // closes today.
+    const closesAt = isOvernight && nowMinutes >= today.close
+      ? istInstant(now, 1, today.close)
+      : istInstant(now, 0, today.close);
     return {
       isOpen: true, closedReason: null, nextOpenAt: null, nextOpenLabel: null,
+      closesAt: closesAt.toISOString(),
       closesAtLabel: closesIn >= 24 * 60
         ? formatIstTime(closesIn - 24 * 60)
         : formatIstTime(closesIn),
@@ -218,6 +231,7 @@ export function evaluateStoreOpen(
   if (yesterday && isOvernight(yesterday) && nowMinutes < yesterday.close) {
     return {
       isOpen: true, closedReason: null, nextOpenAt: null, nextOpenLabel: null,
+      closesAt: istInstant(now, 0, yesterday.close).toISOString(),
       closesAtLabel: formatIstTime(yesterday.close),
     };
   }

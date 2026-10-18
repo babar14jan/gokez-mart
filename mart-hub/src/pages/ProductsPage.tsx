@@ -181,11 +181,11 @@ export default function ProductsPage() {
     } finally { setBulkAdding(false); }
   };
 
-  const load = async () => {
+  const load = async (fresh = false) => {
     const [p, c, s] = await Promise.all([
-      productsApi.getAll(storeId),
-      categoriesApi.getAll(),
-      settingsApi.getAll(storeId),
+      productsApi.getAll(storeId, { fresh }),
+      categoriesApi.getAll({ fresh }),
+      settingsApi.getAll(storeId, { fresh }),
     ]);
     setProducts([...(p.data.data || [])]);
     setCategories([...(c.data.data || [])]);
@@ -196,7 +196,7 @@ export default function ProductsPage() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') load(true); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);

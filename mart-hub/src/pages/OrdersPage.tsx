@@ -210,8 +210,8 @@ export default function OrdersPage() {
   const canDispatch = false;
   const canAssignDelivery = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
 
-  const load = () =>
-    ordersApi.getAll({ limit: 500, storeId: getActiveStoreId() } as any)
+  const load = (fresh = false) =>
+    ordersApi.getAll({ limit: 500, storeId: getActiveStoreId() } as any, { fresh })
       .then(r => setAllOrders(r.data.data || []))
       .finally(() => setLoading(false));
 
@@ -222,23 +222,24 @@ export default function OrdersPage() {
       .catch(() => {});
   }, []);
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') load(true); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
   // Live refresh: instant via SSE events (weak-network friendly), plus a quiet
   // polling fallback so a missed/lost event can never hide an order for long.
+  // Live paths pass fresh=true: they must hit the server, not the nav cache.
   useEffect(() => {
     let lastRefresh = 0;
     const refresh = () => {
       const now = Date.now();
       if (now - lastRefresh < 2000) return;
       lastRefresh = now;
-      load();
+      load(true);
     };
     const offEvent = onOrderEvent(refresh);
-    const offConnect = onOrderStreamConnect(load);
-    const poll = setInterval(load, 30000);
+    const offConnect = onOrderStreamConnect(() => load(true));
+    const poll = setInterval(() => load(true), 30000);
     return () => { offEvent(); offConnect(); clearInterval(poll); };
   }, []);
 

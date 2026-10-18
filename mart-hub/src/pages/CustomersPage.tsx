@@ -124,13 +124,15 @@ export default function CustomersPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">
         {kpis.map(k => (
           <div key={k.label} className="kpi-card h-full cursor-default">
-            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${k.gradient} flex items-center justify-center flex-shrink-0`}>
-              <k.icon className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-3 w-full min-w-0">
+              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${k.gradient} flex items-center justify-center flex-shrink-0`}>
+                <k.icon className="w-4 h-4 text-white" />
+              </div>
+              <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{k.value}</p>
             </div>
-            <div className="min-w-0">
-              <p className="text-xl font-bold text-gray-900 dark:text-white leading-none sm:truncate">{k.value}</p>
-              <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1 sm:truncate">{k.label}</p>
-              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 sm:truncate">{k.sub}</p>
+            <div className="min-w-0 w-full">
+              <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 truncate">{k.label}</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 truncate">{k.sub}</p>
             </div>
           </div>
         ))}
