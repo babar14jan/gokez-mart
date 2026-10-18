@@ -22,6 +22,13 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     const startRecovery = () => {
       if (recoveryStarted) return;
       recoveryStarted = true;
+      // `navigator.onLine === false` is a definitive "no connection" signal, so
+      // show the offline screen immediately. Only the ambiguous "online but the
+      // server is not answering" case waits out the confirmation delay.
+      if (!navigator.onLine) {
+        setStatus('failed');
+        return;
+      }
       setStatus('checking');
       failureTimer = setTimeout(() => {
         if (!disposed) setStatus('failed');
@@ -74,6 +81,13 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
       window.removeEventListener('online', onOnline);
     };
   }, [retryKey]);
+
+  // When we take over the screen the app never mounts, so its usual splash
+  // dismissal never runs — clear the launch splash ourselves, otherwise the
+  // offline screen stays hidden behind it on a cold offline launch.
+  useEffect(() => {
+    if (status === 'failed') document.getElementById('app-splash')?.remove();
+  }, [status]);
 
   // A probe that is merely re-checking (a slow response, a cold backend, a
   // burst of requests on launch) must never blank the store: the app only

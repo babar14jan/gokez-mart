@@ -22,6 +22,13 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     const startRecovery = () => {
       if (recoveryStarted) return;
       recoveryStarted = true;
+      // `navigator.onLine === false` is a definitive "no connection" signal, so
+      // show the offline screen immediately. Only the ambiguous "online but the
+      // server is not answering" case waits out the confirmation delay.
+      if (!navigator.onLine) {
+        setStatus('failed');
+        return;
+      }
       setStatus('checking');
       failureTimer = setTimeout(() => {
         if (!disposed) setStatus('failed');

@@ -11,6 +11,53 @@ let CACHE_NAME = 'gokez-mart-v__BUILD_VERSION__';
 let IMAGE_CACHE_NAME = 'gokez-mart-images-v__BUILD_VERSION__';
 const MAX_IMAGE_ENTRIES = 60;
 const BUILD_ASSETS = Array.isArray(self.__BUILD_ASSETS__) ? self.__BUILD_ASSETS__ : [];
+// A navigation fetch while offline can hang on iOS WebKit instead of rejecting,
+// which leaves a blank white screen until the browser gives up. Time it out and
+// fall back to the cached shell.
+const NAVIGATION_TIMEOUT_MS = 3000;
+
+const SHELL_URLS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  // The offline / server-unreachable screens render these while the network is
+  // down, so they must already be cached to display.
+  '/offline.webp',
+  '/server_unreachable.webp',
+];
+
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+// Last-resort page for a first-ever offline load, before anything is cached.
+// A bare 503/text body leaves a blank tab on a phone, so this carries enough to
+// explain the state and offer a way back.
+function offlineDocument() {
+  const html =
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>No Internet Connection</title><style>' +
+    'body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;' +
+    'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#fff;color:#111}' +
+    'img{width:220px;max-width:70vw;height:auto}h1{margin:24px 0 8px;font-size:1.25rem}' +
+    'p{margin:0 auto;max-width:20rem;color:#555;font-size:.9rem;line-height:1.6}' +
+    'button{margin-top:24px;padding:11px 18px;border:0;border-radius:12px;background:#059669;color:#fff;font-size:.875rem;font-weight:600}' +
+    '@media (prefers-color-scheme:dark){body{background:#0f172a;color:#fff}p{color:#94a3b8}}' +
+    '</style></head><body><div><img src="/offline.webp" alt="" onerror="this.style.display=\'none\'">' +
+    '<h1>No Internet Connection</h1>' +
+    '<p>It looks like your device isn\u2019t connected to the internet. Please check your connection and try again.</p>' +
+    '<button onclick="location.reload()">Try Again</button></div></body></html>';
+  return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
 
 async function cacheImage(request, response) {
   if (!response.ok && response.type !== 'opaque') return;
@@ -27,21 +74,13 @@ self.addEventListener('install', (e) => {
       .then(({ v }) => { CACHE_NAME = `gokez-mart-v${v}`; IMAGE_CACHE_NAME = `gokez-mart-images-v${v}`; })
       .catch(() => {})
       .then(() =>
-        caches.open(CACHE_NAME).then(c =>
-          // Cache the app shell plus every hashed chunk — critical for home
-          // screen launch and for an instant, network-independent update swap.
-          c.addAll([
-            '/',
-            '/index.html',
-            '/manifest.json',
-            '/icons/icon-192.png',
-            '/icons/icon-512.png',
-            // The offline / server-unreachable screens render these while the
-            // network is down, so they must already be cached to display.
-            '/offline.webp',
-            '/server_unreachable.webp',
-            ...BUILD_ASSETS,
-          ]).catch(() => {})
+        caches.open(CACHE_NAME).then(cache =>
+          // Precache each URL independently. `addAll` rejects the whole batch if
+          // a single request 404s, which previously could leave the app with no
+          // cached shell at all — a blank screen on the next offline launch.
+          Promise.allSettled(
+            [...new Set([...SHELL_URLS, ...BUILD_ASSETS])].map(url => cache.add(url))
+          )
         )
       )
       .then(() => self.skipWaiting())
@@ -70,26 +109,28 @@ self.addEventListener('fetch', (e) => {
   // Never intercept API calls
   if (e.request.url.includes('/api/')) return;
 
-  // For navigation requests (opening the app) — network first, fallback to cached index.html
+  // For navigation requests (opening the app) — network first with a timeout,
+  // then the cached shell. Always resolving HTML means the browser never gets a
+  // chance to replace our offline screen with its own native "no internet" page.
   if (e.request.mode === 'navigate') {
-    e.respondWith(
-      fetch(e.request)
-        .then(response => {
-          // Cache the fresh response
+    e.respondWith((async () => {
+      try {
+        const response = await withTimeout(fetch(e.request), NAVIGATION_TIMEOUT_MS);
+        if (response && response.ok) {
+          // Keep the newest shell keyed at /index.html so the offline fallback
+          // always serves the current build rather than a stale route entry.
           const clone = response.clone();
-          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-          return response;
-        })
-        .catch(() =>
-          // Offline or error — serve cached index.html
-          caches.match('/index.html')
-            .then(r => r || caches.match('/'))
-            .then(r => r || new Response('App is offline. Please check your connection.', {
-              status: 503,
-              headers: { 'Content-Type': 'text/plain' },
-            }))
-        )
-    );
+          caches.open(CACHE_NAME).then(c => c.put('/index.html', clone)).catch(() => {});
+        }
+        return response;
+      } catch {
+        const cached =
+          (await caches.match('/index.html')) ||
+          (await caches.match('/')) ||
+          (await caches.match(e.request, { ignoreSearch: true }));
+        return cached || offlineDocument();
+      }
+    })());
     return;
   }
 

@@ -33,6 +33,13 @@ export function useAppUpdate() {
 
   const requestReload = () => {
     if (reloadRequested) return;
+    // A reload while offline cannot be served by the network and, on iOS, can
+    // land on a blank screen or the browser's own offline page. Wait for the
+    // connection to return, then swap.
+    if (!navigator.onLine) {
+      window.addEventListener('online', () => requestReload(), { once: true });
+      return;
+    }
     // Never cut off an in-progress OTP — the customer would lose the code they
     // are typing. Defer until the flow ends (see the effect below).
     if (useLoginFlowStore.getState().getActiveOtpFlow()) {
