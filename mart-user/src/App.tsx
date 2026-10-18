@@ -1012,6 +1012,7 @@ export default function App() {
           title={comboSheet.title}
           products={comboSheet.products}
           onClose={() => setComboSheet(null)}
+          onOpenCart={() => handleCheckout()}
         />
       )}
 
@@ -1020,6 +1021,7 @@ export default function App() {
           title={dealsSheet.title}
           products={dealsSheet.products}
           onClose={() => setDealsSheet(null)}
+          onOpenCart={() => handleCheckout()}
         />
       )}
 

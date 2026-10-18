@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { CloudOff, RefreshCw, Store } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 
 const HEALTH_TIMEOUT_MS = 3500;
@@ -80,38 +80,56 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
   // app only leaves the screen once the outage is confirmed, 10s in.
   if (status !== 'failed') return children;
 
+  // Distinguish "no connection at all" from "we're online but the server is not
+  // answering" — the fix the person can try is different in each case.
   const online = typeof navigator === 'undefined' || navigator.onLine;
 
+  const retry = () => {
+    setStatus('checking');
+    setRetryKey((key) => key + 1);
+  };
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f6faf7] px-6 text-center text-gray-900 dark:bg-[#18191a] dark:text-white">
-      <section className="w-full max-w-sm" role="status" aria-live="polite">
-        <>
-            <div className="relative mx-auto mb-6 flex h-36 w-40 items-center justify-center">
-              <div className="flex h-28 w-28 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                <Store className="h-14 w-14" strokeWidth={1.5} aria-hidden="true" />
-              </div>
-              <span className="absolute bottom-1 right-3 flex h-12 w-12 items-center justify-center rounded-full border-4 border-[#f6faf7] bg-white text-rose-600 dark:border-[#18191a] dark:bg-[#242526] dark:text-rose-300">
-                <CloudOff className="h-6 w-6" aria-hidden="true" />
-              </span>
-            </div>
-            <h1 className="text-xl font-semibold">{online ? 'Hub is taking a break' : 'You’re offline'}</h1>
+    <main className="flex min-h-screen items-center justify-center bg-[#f6faf7] px-6 py-10 text-center text-gray-900 dark:bg-[#18191a] dark:text-white">
+      <section className="w-full max-w-md" role="status" aria-live="polite">
+        {online ? (
+          <>
+            <img
+              src="/server_unreachable.webp"
+              alt=""
+              width={590}
+              height={423}
+              className="mx-auto h-auto w-56 sm:w-64"
+            />
+            <h1 className="mt-6 text-xl font-semibold">Oops! Something Went Wrong</h1>
             <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-gray-600 dark:text-slate-400">
-              {online
-                ? 'We can’t reach the server right now. We’ll keep trying to reconnect.'
-                : 'Check your internet connection. We’ll reconnect as soon as you’re back online.'}
+              We couldn&rsquo;t load the page. Please try again.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setStatus('checking');
-                setRetryKey((key) => key + 1);
-              }}
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#18191a]"
-            >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              Try again
-            </button>
-        </>
+          </>
+        ) : (
+          <>
+            <img
+              src="/offline.webp"
+              alt=""
+              width={586}
+              height={426}
+              className="mx-auto h-auto w-56 sm:w-64"
+            />
+            <h1 className="mt-6 text-xl font-semibold">No Internet Connection</h1>
+            <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-gray-600 dark:text-slate-400">
+              It looks like your device isn&rsquo;t connected to the internet. Please check your
+              connection and try again.
+            </p>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={retry}
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#18191a]"
+        >
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          Try Again
+        </button>
       </section>
     </main>
   );

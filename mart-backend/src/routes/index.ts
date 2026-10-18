@@ -30,6 +30,7 @@ router.get('/products/:id',        ctrl.getProduct);         // ?storeId=
 router.get('/settings/public',     ctrl.getPublicSettings);  // ?storeId=
 router.post('/geocode/reverse',    ctrl.reverseGeocode);
 router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
+router.post('/guest-details',      ctrl.saveGuestDetails);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 router.get('/orders/track/tokens',  ctrl.trackGuestOrdersByTokens);
 router.post('/orders/track/:id/cancel', ctrl.guestCancelOrder);

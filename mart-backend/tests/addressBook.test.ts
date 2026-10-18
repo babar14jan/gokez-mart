@@ -50,6 +50,10 @@ let addressCount = 0;
 let updateReturningRows: Array<Record<string, unknown>> = [];
 let deleteReturningRows: Array<Record<string, unknown>> = [];
 let setDefaultTargetRows: Array<Record<string, unknown>> = [];
+// saveGuestDetails: the phone lookup decides whether the guest write proceeds,
+// and guestAddressRows is the one address slot a guest is allowed.
+let guestLookupRows: Array<Record<string, unknown>> = [];
+let guestAddressRows: Array<Record<string, unknown>> = [];
 
 const existingAddress = {
   id: 'addr-1',
@@ -98,12 +102,14 @@ const pg = require('pg');
         if (/SELECT id FROM mart_customer_addresses[\s\S]*FOR UPDATE/.test(text)) {
           return { rows: setDefaultTargetRows };
         }
-        if (/UPDATE mart_customer_addresses SET label/.test(text)) return { rows: updateReturningRows };
+        if (/UPDATE mart_customer_addresses\s+SET label/.test(text)) return { rows: updateReturningRows };
         if (/FROM mart_customer_addresses/.test(text)) {
           // addAddress's check-then-insert duplicate probe.
           if (/lower\(btrim\(address_line\)\)/.test(text)) return { rows: addressDupeRows };
           // getAddresses listing.
           if (/ORDER BY is_default DESC, created_at DESC/.test(text)) return { rows: addressListRows };
+          // saveGuestDetails: the guest's one existing address slot.
+          if (/ORDER BY is_default DESC, created_at ASC/.test(text)) return { rows: guestAddressRows };
           return { rows: [] };
         }
 
@@ -112,6 +118,8 @@ const pg = require('pg');
         if (/SELECT 1 FROM mart_orders WHERE order_number/.test(text)) return { rows: [] };
         if (/FROM mart_orders WHERE idempotency_key/.test(text)) return { rows: [] };
         if (/INSERT INTO mart_customers \(/.test(text)) return { rows: [] };
+        // saveGuestDetails: the guest write is gated on this phone lookup.
+        if (/FROM mart_customers c[\s\S]*FOR UPDATE/.test(text)) return { rows: guestLookupRows };
         if (/SELECT id FROM mart_customers WHERE phone/.test(text)) {
           return { rows: [{ id: PHONE_DERIVED_CUSTOMER_ID }] };
         }
@@ -160,6 +168,8 @@ beforeEach(() => {
   updateReturningRows = [];
   deleteReturningRows = [];
   setDefaultTargetRows = [];
+  guestLookupRows = [];
+  guestAddressRows = [];
 });
 
 async function call(method: string, path: string, body?: unknown, token?: string, headers: Record<string, string> = {}) {
@@ -253,7 +263,7 @@ describe('Authenticated address book CRUD', () => {
       label: 'Work', addressLine: '7, FC Road, Pune 411004', latitude: 18.5308, longitude: 73.8478,
     }, customerToken());
     assert.equal(status, 200);
-    const update = queriesRun.find(q => /UPDATE mart_customer_addresses SET label/.test(q.text))!;
+    const update = queriesRun.find(q => /UPDATE mart_customer_addresses\s+SET label/.test(q.text))!;
     assert.ok(update, 'the update was issued');
     assert.match(update.text, /WHERE id = \$\d+ AND customer_id = \$\d+/,
       'ownership is part of the statement, not a separate check');
@@ -350,5 +360,86 @@ describe('Every order carries an address snapshot', () => {
     const insert = queriesRun.find(q => /INSERT INTO mart_orders/.test(q.text))!;
     assert.ok(insert.params.includes(orderBody.guestAddress));
     assert.ok(insert.params.includes(null), 'absent coordinates are stored as null, not dropped');
+  });
+});
+
+describe('A guest can update their details before the next order', () => {
+  const detailsBody = {
+    phone: '9876543210',
+    name: 'Test Guest',
+    address: '9, New Street, Kothrud, Pune 411045',
+    label: 'Home',
+    latitude: 18.5074,
+    longitude: 73.8077,
+  };
+
+  test('an unverified guest updates the existing customer row and their one address slot', async () => {
+    guestLookupRows = [{ id: PHONE_DERIVED_CUSTOMER_ID, verified: false }];
+    guestAddressRows = [{ id: 'addr-1' }];
+    const { status } = await call('POST', '/api/v1/guest-details', detailsBody);
+    assert.equal(status, 200);
+
+    const customerUpdate = queriesRun.find(q => /UPDATE mart_customers/.test(q.text))!;
+    assert.ok(customerUpdate, 'the customer row is updated');
+    assert.match(customerUpdate.text, /address = \$2/);
+    assert.ok(customerUpdate.params.includes(PHONE_DERIVED_CUSTOMER_ID), 'scoped to the customer row');
+    assert.ok(customerUpdate.params.includes(detailsBody.address));
+
+    const addressUpdate = queriesRun.find(q => /UPDATE mart_customer_addresses\s+SET label/.test(q.text))!;
+    assert.ok(addressUpdate, 'the guest’s single address row is updated in place');
+    assert.ok(addressUpdate.params.includes(detailsBody.address));
+    assert.ok(
+      !queriesRun.some(q => /INSERT INTO mart_customer_addresses/.test(q.text)),
+      'no second address row is created for a guest',
+    );
+  });
+
+  test('a guest with no address row yet gets one inserted as the default', async () => {
+    guestLookupRows = [{ id: PHONE_DERIVED_CUSTOMER_ID, verified: false }];
+    guestAddressRows = [];
+    const { status } = await call('POST', '/api/v1/guest-details', detailsBody);
+    assert.equal(status, 200);
+    const insert = queriesRun.find(q => /INSERT INTO mart_customer_addresses/.test(q.text))!;
+    assert.ok(insert, 'the first guest address is filed');
+    assert.equal(insert.params[5], true, 'and becomes the default');
+  });
+
+  test('a verified phone is left to its signed-in owner, never rewritten by phone alone', async () => {
+    guestLookupRows = [{ id: PHONE_DERIVED_CUSTOMER_ID, verified: true }];
+    const { status } = await call('POST', '/api/v1/guest-details', detailsBody);
+    assert.equal(status, 200);
+    assert.ok(
+      !queriesRun.some(q => /UPDATE mart_customers/.test(q.text) || /INSERT INTO mart_customer_addresses/.test(q.text)),
+      'no write runs for a verified phone',
+    );
+  });
+
+  test('a phone that has never ordered is a no-op (nothing in the hub to update)', async () => {
+    guestLookupRows = [];
+    const { status } = await call('POST', '/api/v1/guest-details', detailsBody);
+    assert.equal(status, 200);
+    assert.ok(
+      !queriesRun.some(q => /UPDATE mart_customers/.test(q.text) || /INSERT INTO mart_customer_addresses/.test(q.text)),
+      'a guest who never ordered is not written to the customer table',
+    );
+  });
+
+  test('a malformed address is rejected before any query runs', async () => {
+    guestLookupRows = [{ id: PHONE_DERIVED_CUSTOMER_ID, verified: false }];
+    const { status } = await call('POST', '/api/v1/guest-details', { ...detailsBody, address: 'short' });
+    assert.equal(status, 400);
+    assert.equal(queriesRun.length, 0);
+  });
+
+  test('a malformed phone is rejected before any query runs', async () => {
+    const { status } = await call('POST', '/api/v1/guest-details', { ...detailsBody, phone: '12345' });
+    assert.equal(status, 400);
+    assert.equal(queriesRun.length, 0);
+  });
+
+  test('invalid coordinates are rejected before any query runs', async () => {
+    const { status } = await call('POST', '/api/v1/guest-details', { ...detailsBody, latitude: 999, longitude: 999 });
+    assert.equal(status, 400);
+    assert.equal(queriesRun.length, 0);
   });
 });

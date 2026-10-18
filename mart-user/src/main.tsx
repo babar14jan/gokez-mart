@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstallPrompt from './components/InstallPrompt';
+import NetworkStatus from './components/NetworkStatus';
 import { registerServiceWorker } from './services/push';
 
 // The static block in index.html exists only for crawlers that do not run
@@ -29,8 +30,10 @@ try {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
-      <InstallPrompt />
+      <NetworkStatus>
+        <App />
+        <InstallPrompt />
+      </NetworkStatus>
     </ErrorBoundary>
   </StrictMode>
 );
