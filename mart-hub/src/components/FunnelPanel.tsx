@@ -7,8 +7,8 @@ const RANGES: Array<{ id: FunnelRange; label: string }> = [
   { id: 'today', label: 'Today' },
   { id: '7d', label: '7 days' },
   { id: '30d', label: '30 days' },
+  { id: 'all', label: 'All' },
   { id: 'custom', label: 'Custom' },
-  { id: 'all', label: 'All time' },
 ];
 
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
@@ -64,8 +64,8 @@ export default function FunnelPanel({ range: controlledRange, from: controlledFr
   const newCustomerShare = canonical ? pct(canonical.customerLifecycle.newCustomers, lifecycleCustomers) : 0;
   const returningCustomerShare = canonical ? pct(canonical.customerLifecycle.returningCustomers, lifecycleCustomers) : 0;
   const channelRows = canonical
-    ? canonical.channels.map(row => ({ channel: `${row.source} / ${row.medium}`, campaign: row.campaign, sessions: row.sessions, carts: row.cartSessions, checkout: row.checkoutSessions, ordered: row.orders }))
-    : (summary?.channels ?? []).map(row => ({ ...row, campaign: null as string | null, carts: null as number | null, checkout: null as number | null }));
+    ? canonical.channels.map(row => ({ channel: row.source, sessions: row.sessions, carts: row.cartSessions, checkout: row.checkoutSessions, ordered: row.orders }))
+    : (summary?.channels ?? []).map(row => ({ channel: row.channel, sessions: row.sessions, carts: null as number | null, checkout: null as number | null, ordered: row.ordered }));
   // Bars scale against the largest stage, not the first one. Keying off
   // stages[0] collapses every bar to its 6% floor on a period where nobody
   // requested an OTP but later stages still have counts.
@@ -346,8 +346,7 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                 <table className="min-w-[640px] w-full text-left text-xs">
                   <thead className="bg-gray-50 text-[11px] uppercase text-gray-500 dark:bg-slate-900/40 dark:text-slate-400">
                     <tr>
-                      <th className="px-3 py-2 font-semibold">Channel</th>
-                      <th className="px-3 py-2 font-semibold">Campaign</th>
+                      <th className="px-3 py-2 font-semibold">Source</th>
                       <th className="px-3 py-2 text-right font-semibold">Visits</th>
                       <th className="px-3 py-2 text-right font-semibold">Carts</th>
                       <th className="px-3 py-2 text-right font-semibold">Checkout</th>
@@ -360,7 +359,6 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                         <td className="px-3 py-2 font-medium text-gray-800 dark:text-slate-200">
                           {row.channel}
                         </td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{row.campaign || '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.sessions}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.carts ?? '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.checkout ?? '—'}</td>

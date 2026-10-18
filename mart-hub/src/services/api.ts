@@ -41,6 +41,10 @@ api.interceptors.response.use(
 export const authApi = {
   login: (username: string, password: string) =>
     api.post('/admin/login', { username, password }),
+  // Revokes this device's session server-side (mart_admin_sessions). Called on
+  // manual logout so the session ends for real instead of lingering until the
+  // JWT expires; failures are ignored — the local sign-out always proceeds.
+  logout: () => api.post('/admin/logout'),
 };
 
 // ── Products ──────────────────────────────────────────────────────────────────
@@ -171,7 +175,7 @@ export interface FunnelSummary {
     eventTotals: { key: string; count: number }[];
     otp: { mobileInteractions: number; otpRequests: number; otpVerified: number };
     orders: { placed: number; accepted: number; preparing: number; outForDelivery: number; delivered: number; paid: number; cancelled: number; gmv: number };
-    channels: { source: string; medium: string; campaign: string | null; sessions: number; cartSessions: number; checkoutSessions: number; orders: number }[];
+    channels: { source: string; sessions: number; cartSessions: number; checkoutSessions: number; orders: number }[];
     reconciliation: { orderTableCount: number; attributedOrderCount: number; unattributedOrderCount: number; guestOrderCount: number; customerLinkedOrderCount: number };
   };
 }

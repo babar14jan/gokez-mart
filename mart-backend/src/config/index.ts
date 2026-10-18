@@ -30,6 +30,10 @@ export const config = {
       }
       return jwtSecret;
     })(),
+    // Admin sessions last this long and end earlier only on manual logout
+    // (POST /admin/logout). Overridable per deployment via
+    // MART_JWT_EXPIRES_IN; the mart_admin_sessions row is stamped from the
+    // signed token's exp, so the two can never drift apart.
     expiresIn: process.env.MART_JWT_EXPIRES_IN || '90d',
   },
   supabase: {

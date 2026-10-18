@@ -6,6 +6,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { subscribeAdminToPush } from './services/push';
 import { startOrderStream, stopOrderStream } from './services/realtime';
 import Layout from './components/Layout';
+import PageSkeleton from './components/PageSkeleton';
 import InstallPrompt from './components/InstallPrompt';
 import NetworkStatus from './components/NetworkStatus';
 import { lazyWithRetry, isChunkLoadError, recoverFromChunkError } from './utils/lazyWithRetry';
@@ -41,8 +42,14 @@ const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazyWithRetry(() => import('./pages/CarouselPage'));
 const HomeSectionsPage = lazyWithRetry(() => import('./pages/HomeSectionsPage'));
 
+// Fallback for the public routes (no app shell yet): same page-shaped
+// skeleton as the rest of the hub, so nothing flashes a bare dark screen.
 function RouteLoading() {
-  return <div className="flex min-h-screen items-center justify-center bg-white text-sm font-medium text-gray-500 dark:bg-slate-900 dark:text-slate-400">Loading...</div>;
+  return (
+    <div className="min-h-screen bg-white p-4 sm:p-6 lg:p-8 dark:bg-slate-900">
+      <PageSkeleton />
+    </div>
+  );
 }
 
 class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; recovering: boolean }> {
@@ -95,7 +102,11 @@ function ProtectedRoute({ children, path }: { children: React.ReactNode; path: s
   // protected route. The backend remains the authoritative check regardless.
   const allowed = role ? ROLE_ROUTES[role] : undefined;
   if (!allowed || !allowed.includes(path)) return <Navigate to="/hub" replace />;
-  return <Layout>{children}</Layout>;
+  // The Suspense boundary sits INSIDE Layout on purpose. When a page is still
+  // a lazily-fetched chunk, only the content area falls back: the header,
+  // sidebar and bottom nav stay mounted, so switching pages never blanks the
+  // whole screen into the full-page fallback before the content appears.
+  return <Layout><Suspense fallback={<PageSkeleton />}>{children}</Suspense></Layout>;
 }
 
 export default function App() {

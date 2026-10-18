@@ -3,6 +3,7 @@ import { Loader2, Save, Upload, MapPin, Plus, Trash2, Pencil, X, Store, Clock } 
 import { settingsApi, productsApi, zonesApi, storesApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PageSkeleton from '../components/PageSkeleton';
 
 interface Setting { key: string; value: string; label: string; }
 
@@ -314,7 +315,7 @@ export default function SettingsPage() {
     } catch { alert('Failed to save zone'); } finally { setSavingZone(false); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-6 max-w-2xl">

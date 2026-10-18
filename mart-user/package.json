@@ -8,7 +8,8 @@
     "build": "tsc && vite build && node scripts/write-version.mjs && node scripts/prerender-public-pages.mjs && node scripts/seo-check.mjs",
     "seo:check": "node scripts/seo-check.mjs",
     "preview": "vite preview --port 5177",
-    "seo:check:full": "node --import tsx scripts/seo-check.mjs"
+    "seo:check:full": "node --import tsx scripts/seo-check.mjs",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "axios": "^1.6.2",

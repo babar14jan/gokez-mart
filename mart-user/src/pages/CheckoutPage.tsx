@@ -453,8 +453,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       try {
         const gName = localStorage.getItem('guest_name');
         const gPhone = localStorage.getItem('guest_phone');
-        const gAddr = localStorage.getItem('guest_address');
-        setGuestProfile({ name: gName, phone: gPhone, address: gAddr });
+        const gAddr = readGuestAddress();
+        setGuestProfile({ name: gName, phone: gPhone, address: gAddr?.address ?? null });
       } catch {}
     }
   }, [isLoggedIn, guestName, guestPhone, guestAddress, setGuestProfile]);
@@ -993,6 +993,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               mode="select"
               addresses={checkoutAddresses}
               selectedAddress={deliveryAddress}
+              singleAddress={!isLoggedIn}
               onClose={closeAddressSheet}
               initialEditingId={checkoutAddresses.length === 0 ? 'new' : null}
               nameSlot={profileNameField}

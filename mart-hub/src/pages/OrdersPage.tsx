@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   ClipboardList, Calendar, ChevronDown, Phone, MapPin,
   Navigation, Package, XCircle, CheckSquare, Square,
@@ -12,6 +12,7 @@ import { useAuthStore } from '../store/authStore';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PageSkeleton from '../components/PageSkeleton';
 
 type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
 type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
@@ -84,7 +85,7 @@ const DATE_TABS: { id: DateRange; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'week',  label: '7 Days' },
   { id: 'month', label: '30 Days' },
-  { id: 'all',   label: 'All Time' },
+  { id: 'all',   label: 'All' },
   { id: 'custom',label: 'Custom' },
 ];
 
@@ -183,6 +184,15 @@ export default function OrdersPage() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('today');
+  // The range to return to when Custom is clicked a second time (the date
+  // range toggles closed instead of staying stuck open).
+  const prevDateRangeRef = useRef<DateRange>('today');
+  const handleDateRangeClick = (id: DateRange) => {
+    if (id !== 'custom') { setDateRange(id); return; }
+    if (dateRange === 'custom') { setDateRange(prevDateRangeRef.current); return; }
+    prevDateRangeRef.current = dateRange;
+    setDateRange('custom');
+  };
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -389,11 +399,7 @@ export default function OrdersPage() {
     );
   }, [allOrders, dateBounds]);
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-3">
@@ -401,7 +407,7 @@ export default function OrdersPage() {
       {/* Date range tabs */}
       <div className="flex items-center gap-2 flex-wrap">
         {DATE_TABS.map(tab => (
-          <button key={tab.id} onClick={() => setDateRange(tab.id)}
+          <button key={tab.id} onClick={() => handleDateRangeClick(tab.id)}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               dateRange === tab.id
                 ? 'bg-emerald-500 text-white shadow-sm'

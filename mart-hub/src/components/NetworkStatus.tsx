@@ -75,25 +75,17 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     };
   }, [retryKey]);
 
-  if (status === 'connected') return children;
+  // A probe that is merely re-checking (a slow response, a cold backend, a
+  // page switch firing a burst of requests) must never blank the hub: the
+  // app only leaves the screen once the outage is confirmed, 10s in.
+  if (status !== 'failed') return children;
 
   const online = typeof navigator === 'undefined' || navigator.onLine;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f6faf7] px-6 text-center text-gray-900 dark:bg-[#18191a] dark:text-white">
       <section className="w-full max-w-sm" role="status" aria-live="polite">
-        {status === 'checking' ? (
-          <>
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              <RefreshCw className="h-9 w-9 animate-spin" aria-hidden="true" />
-            </div>
-            <h1 className="text-lg font-semibold">Getting your connection back</h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
-              {online ? 'Reconnecting to Gokez Hub…' : 'Waiting for your internet connection…'}
-            </p>
-          </>
-        ) : (
-          <>
+        <>
             <div className="relative mx-auto mb-6 flex h-36 w-40 items-center justify-center">
               <div className="flex h-28 w-28 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                 <Store className="h-14 w-14" strokeWidth={1.5} aria-hidden="true" />
@@ -119,8 +111,7 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
               Try again
             </button>
-          </>
-        )}
+        </>
       </section>
     </main>
   );

@@ -250,7 +250,7 @@ export default function AccountGreeting() {
               </div>
 
               <div className="mt-5">
-                <AddressButton address={defaultAddress} heading="Address book" onClick={openAddressSheet} />
+                <AddressButton address={defaultAddress} heading={isLoggedIn ? 'Address book' : 'Delivery address'} onClick={openAddressSheet} />
               </div>
 
               {isLoggedIn && (
@@ -300,6 +300,7 @@ export default function AccountGreeting() {
               mode="manage"
               zClassName="z-[90]"
               addresses={addresses}
+              singleAddress={!isLoggedIn}
               initialEditingId={addressSheetInitial}
               onClose={() => setShowAddressSheet(false)}
               onAddAddress={async (label, address, coordinates) => {

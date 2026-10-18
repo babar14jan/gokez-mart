@@ -4,6 +4,7 @@ import { ordersApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { orderDisplayName } from '../utils/orderName';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
+import PageSkeleton from '../components/PageSkeleton';
 
 const RIDER_STEPS = [
   { status: 'ready_to_pickup',  label: 'Ready to Pickup', emoji: '📦' },
@@ -107,11 +108,7 @@ export default function DeliveryPage() {
   const active = orders.filter(o => ['ready_to_pickup', 'picked_up', 'out_for_delivery'].includes(o.status));
   const done = orders.filter(o => o.status === 'delivered').slice(0, 5);
 
-  if (loading) return (
-    <div className="flex justify-center items-center h-64">
-      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 max-w-lg mx-auto">

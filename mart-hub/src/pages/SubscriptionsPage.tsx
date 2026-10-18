@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BadgeCheck, Loader2, Pencil, Store, X } from 'lucide-react';
 import { subscriptionsApi } from '../services/api';
+import PageSkeleton from '../components/PageSkeleton';
 
 type SubscriptionStatus = 'pending' | 'active' | 'suspended' | 'expired' | 'cancelled';
 
@@ -94,7 +95,7 @@ export default function SubscriptionsPage() {
     }
   };
 
-  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-500" /></div>;
+  if (loading) return <PageSkeleton rows={4} />;
 
   return (
     <div className="max-w-4xl space-y-4">

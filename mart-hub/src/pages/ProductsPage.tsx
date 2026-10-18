@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast, ToastContainer } from '../hooks/useToast';
 import { useHeaderAction } from '../store/headerActionStore';
+import PageSkeleton from '../components/PageSkeleton';
 
 function formatStock(qty: number, unit: string): string {
   if (unit === 'kg' && qty < 1 && qty > 0) return `${Math.round(qty * 1000)} g`;
@@ -412,11 +413,7 @@ export default function ProductsPage() {
     } finally { setHistoryLoading(false); }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   // ── Product Row ───────────────────────────────────────────────────────────
   const ProductRow = ({ p, index }: { p: Product; index: number }) => {
