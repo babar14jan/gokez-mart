@@ -9,6 +9,15 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export async function registerAdminSW(): Promise<void> {
   if (!('serviceWorker' in navigator)) return;
+  // The worker asks the page to reload itself when it takes over from a build
+  // that left this device stuck; navigate() alone is refused by some browsers.
+  // Guarded so it can never reload in a loop within one session.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'GOKEZ_FORCE_RELOAD' && !sessionStorage.getItem('gokez-sw-reloaded')) {
+      sessionStorage.setItem('gokez-sw-reloaded', '1');
+      window.location.reload();
+    }
+  });
   try {
     await navigator.serviceWorker.register('/sw.js');
   } catch (e) {
