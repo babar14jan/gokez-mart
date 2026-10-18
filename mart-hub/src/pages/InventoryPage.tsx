@@ -75,10 +75,10 @@ export default function InventoryPage() {
 
   const storeId = getActiveStoreId();
 
-  const load = async () => {
+  const load = async (fresh = false) => {
     const [inv, sets] = await Promise.all([
-      inventoryApi.getAll(storeId),
-      settingsApi.getAll(storeId),
+      inventoryApi.getAll(storeId, { fresh }),
+      settingsApi.getAll(storeId, { fresh }),
     ]);
     setItems([...(inv.data.data || [])]);
     const settingsArr: { key: string; value: string }[] = sets.data.data || [];
@@ -88,7 +88,7 @@ export default function InventoryPage() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') load(true); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);

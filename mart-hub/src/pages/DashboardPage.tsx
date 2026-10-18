@@ -96,8 +96,8 @@ export default function DashboardPage() {
   const reqId = useRef(0);
   const EMPTY_AGG = { totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] };
 
-  const loadAllOrders = useCallback(() =>
-    ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500 } as any)
+  const loadAllOrders = useCallback((fresh = false) =>
+    ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500 } as any, { fresh })
       .then(o => setAllOrders(o.data.data || []))
       .catch(() => {}), []);
 
@@ -106,16 +106,16 @@ export default function DashboardPage() {
   // request immediately, and a slow reply from the previous params is dropped
   // instead of overwriting the newer figures (which looked like "data not
   // refreshing").
-  const loadSummary = useCallback(() => {
+  const loadSummary = useCallback((fresh = false) => {
     const custom = range === 'custom';
     if (custom && (!customFrom || !customTo)) return;
     const id = ++reqId.current;
     const params = { storeId: getActiveStoreId(), range, from: custom ? customFrom : undefined, to: custom ? customTo : undefined };
-    ordersApi.getSummary(params)
+    ordersApi.getSummary(params, { fresh })
       .then(r => { if (id === reqId.current) setSummary(r.data.data); })
       .catch(() => {});
     if (canSeeCustomers) {
-      customersApi.getAggregates(params)
+      customersApi.getAggregates(params, { fresh })
         .then(r => { if (id === reqId.current) setCustomerAgg(r.data.data || EMPTY_AGG); })
         .catch(() => {});
     }
@@ -124,7 +124,8 @@ export default function DashboardPage() {
   useEffect(() => { loadAllOrders().finally(() => setLoading(false)); }, [loadAllOrders]);
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
-  const refreshLive = useCallback(() => { loadAllOrders(); loadSummary(); }, [loadAllOrders, loadSummary]);
+  // Live refresh hits the server (fresh=true); the initial paint may use cache.
+  const refreshLive = useCallback(() => { loadAllOrders(true); loadSummary(true); }, [loadAllOrders, loadSummary]);
 
   // Live refresh: instant via SSE events plus a polling fallback so cards and
   // the recent-orders list stay current even on a weak/flaky connection.
@@ -231,12 +232,14 @@ export default function DashboardPage() {
           const inner = (
             <div onClick={() => k.href && navigate(k.href)}
               className={`kpi-card group h-full ${!k.href ? 'cursor-default hover:border-gray-200 dark:hover:border-slate-700' : 'cursor-pointer'}`}>
-              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${k.gradient} flex items-center justify-center flex-shrink-0`}>
-                <k.icon className="w-4 h-4 text-white" />
+              <div className="flex items-center gap-3 w-full min-w-0">
+                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${k.gradient} flex items-center justify-center flex-shrink-0`}>
+                  <k.icon className="w-4 h-4 text-white" />
+                </div>
+                <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{k.value}</p>
               </div>
-              <div>
-                <p className="text-xl font-bold text-gray-900 dark:text-white leading-none">{k.value}</p>
-                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1">{k.label}</p>
+              <div className="min-w-0 w-full">
+                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300">{k.label}</p>
                 <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1">{k.sub}</p>
               </div>
             </div>

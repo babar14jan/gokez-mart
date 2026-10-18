@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import SmartImage from './SmartImage';
@@ -33,15 +33,29 @@ function discountLabel(slide: Slide): string {
   return '';
 }
 
+// The whole Home view (and therefore this carousel) is conditionally rendered in
+// App, so every tab switch unmounts and remounts it. These module-level values
+// survive the remount: without them each return to Home refetched the slides and
+// re-rendered at scrollLeft 0 (the prepended last-slide clone), which the browser
+// then snapped to the first slide only after paint — the "fast move / shake /
+// flicker" shoppers saw. Caching the last slides + active index lets a remount
+// paint the exact same frame instantly.
+let cachedSlides: Slide[] | null = null;
+let cachedActive = 0;
+
 export default function HomeCarousel() {
   const { isLoggedIn } = useCustomerAuthStore();
-  const [slides, setSlides] = useState<Slide[]>(FALLBACK);
-  const [active, setActive] = useState(0);
+  const [slides, setSlides] = useState<Slide[]>(() => cachedSlides ?? FALLBACK);
+  const [active, setActive] = useState(() => {
+    const len = (cachedSlides ?? FALLBACK).length;
+    return Math.min(Math.max(cachedActive, 0), Math.max(0, len - 1));
+  });
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const displayIndexRef = useRef(1);
+  const slidesRef = useRef(slides);
+  slidesRef.current = slides;
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const n = slides.length;
@@ -52,15 +66,23 @@ export default function HomeCarousel() {
   // the wrap is invisible and it reads as a continuous cycle.
   const offset = loop ? 1 : 0;
   const displaySlides: Slide[] = loop ? [slides[n - 1], ...slides, slides[0]] : slides;
+  // First paint targets the cached slide (clamped to the set) so a remount lands
+  // on the exact same frame with no post-paint jump.
+  const displayIndexRef = useRef(
+    Math.min((loop ? 1 : 0) + Math.max(cachedActive, 0), loop ? n + 1 : Math.max(0, n - 1)),
+  );
 
   useEffect(() => {
     campaignApi.getCarousel()
       .then(r => {
-        const data = r.data.data || [];
-        if (data.length > 0) {
-          setSlides(data);
-          setActive(0);
-        }
+        const data: Slide[] = r.data.data || [];
+        if (data.length === 0) return;
+        cachedSlides = data;
+        const prev = slidesRef.current;
+        // Identical set (the common remount case): keep the current slide and DOM
+        // as-is so nothing moves. Positioning is handled by the layout effect.
+        if (prev.length === data.length && prev.every((s, i) => s.id === data[i].id)) return;
+        setSlides(data);
       })
       .catch(() => {}); // fallback to static
   }, [isLoggedIn]);
@@ -107,6 +129,7 @@ export default function HomeCarousel() {
     });
     displayIndexRef.current = best;
     const real = ((best - offset) % n + n) % n;
+    cachedActive = real;
     setActive(prev => (prev === real ? prev : real));
 
     // Wait until the scroll settles before hopping off a clone, so momentum and
@@ -128,16 +151,25 @@ export default function HomeCarousel() {
     return () => { stopTimer(); if (settleRef.current) clearTimeout(settleRef.current); };
   }, [startTimer, stopTimer]);
 
-  // Park the strip on the first real slide whenever the slide set changes.
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      scrollToDisplay(offset, 'auto');
-      handleScroll();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [slides, offset, scrollToDisplay, handleScroll]);
+  // Position the strip BEFORE the browser paints so the very first frame is
+  // already the correct slide — no post-paint jump. On a remount it restores the
+  // cached slide; if the slide set changed and that index no longer exists it
+  // falls back to the first slide.
+  const slidesKey = slides.map(s => s.id).join('|');
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track || track.clientWidth === 0) return;
+    let real = Math.max(cachedActive, 0);
+    if (real >= n) real = 0;
+    cachedActive = real;
+    displayIndexRef.current = Math.min((loop ? 1 : 0) + real, loop ? n + 1 : Math.max(0, n - 1));
+    scrollToDisplay(displayIndexRef.current, 'auto');
+    handleScroll();
+    // Keyed on the slide set only: repositions when the set actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slidesKey]);
 
-  const goTo = (i: number) => { setActive(i); scrollToDisplay(i + offset); startTimer(); };
+  const goTo = (i: number) => { cachedActive = i; setActive(i); scrollToDisplay(i + offset); startTimer(); };
 
   const copyCode = (code: string, id: string) => {
     navigator.clipboard.writeText(code);

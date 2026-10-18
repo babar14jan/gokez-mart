@@ -17,18 +17,19 @@ const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, delivered: 0, cance
 
 // Live refresh for tab cards: instant on order events (weak-network friendly)
 // plus a quiet 30s poll so a lost event can never leave stale figures up.
-function useLivePoll(refresh: () => void) {
+// Live refreshes pass fresh=true so they bypass the navigation cache.
+function useLivePoll(refresh: (fresh?: boolean) => void) {
   useEffect(() => {
     let lastRefresh = 0;
     const onEvent = () => {
       const now = Date.now();
       if (now - lastRefresh < 2000) return;
       lastRefresh = now;
-      refresh();
+      refresh(true);
     };
     const offEvent = onOrderEvent(onEvent);
-    const offConnect = onOrderStreamConnect(refresh);
-    const poll = setInterval(refresh, 30000);
+    const offConnect = onOrderStreamConnect(() => refresh(true));
+    const poll = setInterval(() => refresh(true), 30000);
     return () => { offEvent(); offConnect(); clearInterval(poll); };
   }, [refresh]);
 }
@@ -53,9 +54,11 @@ const PAYMENT_ICONS: Record<string, React.ReactNode> = {
 function SummaryCard({ label, value, sub, icon, gradient }: { label: string; value: string | number; sub?: string; icon: React.ReactNode; gradient: string }) {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white mb-3`}>{icon}</div>
-      <p className="text-xl font-bold text-gray-900 dark:text-white leading-none">{value}</p>
-      <p className="text-xs text-gray-500 mt-1">{label}</p>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white flex-shrink-0`}>{icon}</div>
+        <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{value}</p>
+      </div>
+      <p className="text-xs text-gray-500 mt-1.5">{label}</p>
       {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
     </div>
   );
@@ -172,14 +175,14 @@ function RevenueTab({ orders }: { orders: any[] }) {
   const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
   const paramsRef = useLatestParams(range, customFrom, customTo);
 
-  const loadSummary = useCallback(() => {
+  const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
       from: p.customFrom || undefined,
       to: p.customTo || undefined,
-    }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
+    }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
   }, [paramsRef]);
 
@@ -292,14 +295,14 @@ function OrdersTab({ orders }: { orders: any[] }) {
   const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
   const paramsRef = useLatestParams(range, customFrom, customTo);
 
-  const loadSummary = useCallback(() => {
+  const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
       from: p.customFrom || undefined,
       to: p.customTo || undefined,
-    }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
+    }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
   }, [paramsRef]);
 

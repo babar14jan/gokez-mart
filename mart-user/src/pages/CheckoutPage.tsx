@@ -1401,7 +1401,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       </form>
 
       {/* ── Sticky address + Place Order footer ── */}
-      <div className="sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
+      <div className="checkout-sticky-footer sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
           {/* Address row — the same control as the account page, opens the sheet */}
           <div className="px-3 pt-2.5">
