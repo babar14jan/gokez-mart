@@ -4,6 +4,7 @@ import { settingsApi, productsApi, zonesApi, storesApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PageSkeleton from '../components/PageSkeleton';
+import SmartImage from '../components/SmartImage';
 
 interface Setting { key: string; value: string; label: string; }
 
@@ -387,7 +388,12 @@ export default function SettingsPage() {
               <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-2">Store Logo</label>
               <div className="flex items-center gap-3">
                 <div className="w-14 h-14 rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="w-full h-full object-cover" /> : <Store className="w-6 h-6 text-gray-300" />}
+                  <SmartImage
+                    src={branding.logoUrl}
+                    className="h-full w-full"
+                    imgClassName="object-cover"
+                    fallback={<Store className="w-6 h-6 text-gray-300" />}
+                  />
                 </div>
                 <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
                   {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
