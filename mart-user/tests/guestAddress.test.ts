@@ -29,6 +29,7 @@ class MemoryStorage {
 (globalThis as any).window = globalThis;
 
 const { readGuestAddress, writeGuestAddress, clearGuestAddress } = await import('../src/utils/guestAddress');
+const { useGuestAddressStore } = await import('../src/store/guestAddressStore');
 
 beforeEach(() => {
   (globalThis as any).localStorage.clear();
@@ -82,6 +83,31 @@ describe('Guest address persistence', () => {
   });
 
   test('read returns null when nothing is stored', () => {
+    assert.equal(readGuestAddress(), null);
+  });
+});
+
+describe('Guest address store keeps one reactive copy of the persisted address', () => {
+  test('setAddress updates the shared state and persists it', () => {
+    useGuestAddressStore.getState().setAddress('Home', '12, Rose Villa, Kothrud, Pune 411038', { latitude: 17.385, longitude: 78.4867 });
+    const { address } = useGuestAddressStore.getState();
+    assert.equal(address?.address, '12, Rose Villa, Kothrud, Pune 411038');
+    assert.equal(address?.latitude, 17.385);
+    assert.equal(readGuestAddress()?.address, '12, Rose Villa, Kothrud, Pune 411038');
+  });
+
+  test('a save made on one page is visible to the next reader (no stale shadow copy)', () => {
+    useGuestAddressStore.getState().setAddress('Work', '7, FC Road, Pune 411004', null);
+    // The checkout footer and the account page both read this same value, so an
+    // edit updates everywhere at once instead of only on the next launch.
+    assert.equal(useGuestAddressStore.getState().address?.address, '7, FC Road, Pune 411004');
+    assert.equal(useGuestAddressStore.getState().address?.label, 'Work');
+  });
+
+  test('clearAddress drops both the state and the stored keys', () => {
+    useGuestAddressStore.getState().setAddress('Home', '12, Rose Villa, Kothrud, Pune 411038', null);
+    useGuestAddressStore.getState().clearAddress();
+    assert.equal(useGuestAddressStore.getState().address, null);
     assert.equal(readGuestAddress(), null);
   });
 });

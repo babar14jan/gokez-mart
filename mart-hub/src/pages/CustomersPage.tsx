@@ -97,10 +97,10 @@ export default function CustomersPage() {
   const repeatShare = stats.totalCustomers > 0 ? Math.round((stats.repeatCustomers / stats.totalCustomers) * 100) : 0;
 
   const kpis = useMemo(() => ([
-    { label: 'Total Customers', value: stats.totalCustomers.toLocaleString('en-IN'), sub: `${counts.signedIn} signed in · ${counts.guestCheckout} guest`, icon: Users, gradient: 'from-cyan-500 to-cyan-600' },
+    { label: 'Total Customers', value: counts.total.toLocaleString('en-IN'), sub: `${counts.signedIn} signed in · ${counts.guestCheckout} guest`, icon: Users, gradient: 'from-cyan-500 to-cyan-600' },
     { label: 'New Customers', value: stats.newCustomers.toLocaleString('en-IN'), sub: 'last 30 days', icon: UserPlus, gradient: 'from-violet-500 to-violet-600' },
-    { label: 'Returning Customers', value: stats.repeatCustomers.toLocaleString('en-IN'), sub: `${repeatShare}% · all-time repeat buyers`, icon: Repeat, gradient: 'from-amber-500 to-amber-600' },
-    { label: 'Avg Orders', value: stats.avgOrders, sub: 'per customer', icon: ClipboardList, gradient: 'from-blue-500 to-blue-600' },
+    { label: 'Returning Customers', value: stats.repeatCustomers.toLocaleString('en-IN'), sub: `${repeatShare}% of buyers`, icon: Repeat, gradient: 'from-amber-500 to-amber-600' },
+    { label: 'Avg Orders', value: stats.avgOrders, sub: 'per buyer', icon: ClipboardList, gradient: 'from-blue-500 to-blue-600' },
   ]), [stats, repeatShare, counts]);
 
   if (loading) return <PageSkeleton />;
@@ -116,7 +116,7 @@ export default function CustomersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-bold text-gray-900 dark:text-white">Customers <span className="text-sm font-normal text-gray-500 dark:text-slate-400">({counts.total})</span></h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white">Customers</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Separate OTP-signed-in customers from direct guest checkout customers.</p>
       </div>
 

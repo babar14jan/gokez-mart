@@ -506,8 +506,10 @@ describe('H. Guest checkouts persist like logged-in customers', () => {
 
   test('the storefronts keep a guest address instead of dropping it', () => {
     const page = read('mart-user/src/pages/CheckoutPage.tsx');
-    assert.ok(/setGuestAddress\(address\)/.test(page),
+    assert.ok(/commitGuestAddress\(/.test(page),
       'the web checkout drops the guest address on save');
+    assert.ok(/setStoredGuestAddress\(/.test(page),
+      'the guest address is no longer written to the shared address store');
     const mobile = read('mart-mobile/app/checkout.tsx');
     assert.ok(/guestAddressLabel: isGuest \? 'Home' : undefined/.test(mobile),
       'the mobile checkout does not label its guest address for the address book');

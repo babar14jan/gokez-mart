@@ -13,7 +13,7 @@ import AddressButton from '../components/AddressButton';
 import PageHeader from '../components/PageHeader';
 import ProductCard from '../components/ProductCard';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
-import { readGuestAddress, writeGuestAddress } from '../utils/guestAddress';
+import { useGuestAddressStore } from '../store/guestAddressStore';
 
 interface CheckoutPageProps {
   settings: PublicSettings;
@@ -394,35 +394,23 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   // address book when the order lands, so a later login with the same phone
   // finds it again. The full address (label + coordinates) is kept in
   // localStorage so a reload does not silently degrade it to a bare string.
-  const [guestAddress, setGuestAddress] = useState(() => {
-    if (typeof window !== 'undefined' && !isLoggedIn) {
-      return readGuestAddress()?.address || '';
-    }
-    return '';
-  });
-  const [guestAddressLabel, setGuestAddressLabel] = useState(() => {
-    if (typeof window !== 'undefined' && !isLoggedIn) {
-      return readGuestAddress()?.label || 'Home';
-    }
-    return 'Home';
-  });
-  const [guestAddressCoordinates, setGuestAddressCoordinates] = useState<AddressCoordinates | null>(() => {
-    if (typeof window !== 'undefined' && !isLoggedIn) {
-      const saved = readGuestAddress();
-      return saved && saved.latitude != null && saved.longitude != null
-        ? { latitude: saved.latitude, longitude: saved.longitude }
-        : null;
-    }
-    return null;
-  });
+  // The guest's one delivery address lives in a single reactive store (backed
+  // by localStorage) shared with the account page, so a save reflects on the
+  // checkout footer instantly instead of waiting for the next launch.
+  const storedGuestAddress = useGuestAddressStore(s => s.address);
+  const setStoredGuestAddress = useGuestAddressStore(s => s.setAddress);
+  const guestAddress = storedGuestAddress?.address ?? '';
+  const guestAddressLabel = storedGuestAddress?.label ?? 'Home';
+  const guestAddressCoordinates: AddressCoordinates | null =
+    storedGuestAddress?.latitude != null && storedGuestAddress?.longitude != null
+      ? { latitude: storedGuestAddress.latitude, longitude: storedGuestAddress.longitude }
+      : null;
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoggedIn) {
-      writeGuestAddress(guestAddressLabel, guestAddress, guestAddressCoordinates);
-    }
-  }, [guestAddress, guestAddressLabel, guestAddressCoordinates, isLoggedIn]);
-
-  const deliveryAddress = defaultAddr?.address || (isLoggedIn ? authAddress : null) || guestAddress || null;
+  // Logged-in shoppers order to their saved book; a guest orders only to the
+  // address they typed, never to a stale book entry left behind by a login.
+  const deliveryAddress = isLoggedIn
+    ? (defaultAddr?.address || authAddress || null)
+    : (guestAddress || null);
 
   const [guestName, setGuestName] = useState(() => {
     if (typeof window !== 'undefined' && !isLoggedIn) {
@@ -453,8 +441,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       try {
         const gName = localStorage.getItem('guest_name');
         const gPhone = localStorage.getItem('guest_phone');
-        const gAddr = readGuestAddress();
-        setGuestProfile({ name: gName, phone: gPhone, address: gAddr?.address ?? null });
+        setGuestProfile({ name: gName, phone: gPhone, address: guestAddress || null });
       } catch {}
     }
   }, [isLoggedIn, guestName, guestPhone, guestAddress, setGuestProfile]);
@@ -464,6 +451,25 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       localStorage.setItem('guest_phone', guestPhone);
     }
   }, [guestPhone, isLoggedIn]);
+
+  // Persists a guest's address to the shared store (instant UI + localStorage)
+  // and pushes it to the server so the hub reflects the change without waiting
+  // for the next order. Fire-and-forget: the client copy still drives this
+  // checkout if the network call fails.
+  const commitGuestAddress = (label: string, address: string, coordinates: AddressCoordinates | null) => {
+    const normalizedLabel = label.trim() || 'Home';
+    setStoredGuestAddress(normalizedLabel, address, coordinates);
+    const phone = guestPhone.replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(phone) || address.trim().length < 10) return;
+    void storeApi.saveGuestDetails({
+      phone,
+      name: guestName,
+      address,
+      label: normalizedLabel,
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null,
+    }).catch(() => {});
+  };
 
   const checkoutAddresses: SavedAddress[] = isLoggedIn
     ? addresses
@@ -1005,9 +1011,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   const ok = await setDefaultAddress(address.id);
                   if (!ok) throw new Error('Could not select this address. Please try again.');
                 } else {
-                  setGuestAddress(address.address);
-                  setGuestAddressLabel(address.label || 'Home');
-                  setGuestAddressCoordinates(
+                  commitGuestAddress(
+                    address.label || 'Home',
+                    address.address,
                     address.latitude != null && address.longitude != null
                       ? { latitude: address.latitude, longitude: address.longitude }
                       : null,
@@ -1023,11 +1029,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   if (!ok) throw new Error('Could not save your address. Please check your connection and try again.');
                 } else {
                   // Guests have no server address book yet; hold the full address
-                  // for this checkout (persisted) and let the order land it in the
-                  // book server-side.
-                  setGuestAddress(address);
-                  setGuestAddressLabel(label.trim() || 'Home');
-                  setGuestAddressCoordinates(coordinates);
+                  // for this checkout (persisted) and mirror it server-side so the
+                  // hub sees the edit before the order lands.
+                  commitGuestAddress(label.trim() || 'Home', address, coordinates);
                 }
                 setValidationField(null);
                 return true;
@@ -1038,9 +1042,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                   const ok = await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
                   if (!ok) throw new Error('Could not save your address. Please check your connection and try again.');
                 } else {
-                  setGuestAddress(address);
-                  setGuestAddressLabel(label.trim() || 'Home');
-                  setGuestAddressCoordinates(coordinates);
+                  commitGuestAddress(label.trim() || 'Home', address, coordinates);
                 }
                 setValidationField(null);
                 return true;

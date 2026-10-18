@@ -183,7 +183,7 @@ export class OrderService {
          VALUES (gen_random_uuid(), $1, NULLIF($2, 'Customer'), $3, 0, 0)
          ON CONFLICT (phone) DO UPDATE SET
            name = COALESCE(mart_customers.name, EXCLUDED.name),
-           address = COALESCE(EXCLUDED.address, mart_customers.address),
+           address = COALESCE(NULLIF(btrim(EXCLUDED.address), ''), mart_customers.address),
            updated_at = NOW()`,
         [cleanPhone, data.guestName, data.guestAddress]
       );

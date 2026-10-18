@@ -1,14 +1,14 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, Check, Download, Loader2, Pencil, User } from 'lucide-react';
-import { authApi } from '../services/api';
+import { authApi, storeApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useCustomerStore } from '../store/customerStore';
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import AddressButton from './AddressButton';
 import AddressSheet from './AddressSheet';
 import PageHeader from './PageHeader';
-import { readGuestAddress, writeGuestAddress, clearGuestAddress } from '../utils/guestAddress';
+import { useGuestAddressStore } from '../store/guestAddressStore';
 
 // The Account view's top-bar identity: the customer's avatar plus a "Hi, <name>"
 // greeting. Tapping it opens a full-screen profile page where the name can be
@@ -17,6 +17,9 @@ export default function AccountGreeting() {
   const { name, phone, photoUrl, isLoggedIn, isPhoneVerified, updateProfile, logout, setGuestProfile } = useCustomerAuthStore();
   const { setName, addresses, loadAddresses, addAddress, updateAddress, removeAddress, setDefaultAddress, getDefaultAddress } = useCustomerStore();
   const openLogin = useAccountLoginStore((s) => s.openLogin);
+  const guestAddress = useGuestAddressStore((s) => s.address);
+  const setStoredGuestAddress = useGuestAddressStore((s) => s.setAddress);
+  const clearStoredGuestAddress = useGuestAddressStore((s) => s.clearAddress);
 
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
@@ -38,25 +41,35 @@ export default function AccountGreeting() {
     try {
       const gName = localStorage.getItem('guest_name');
       const gPhone = localStorage.getItem('guest_phone');
-      const gAddr = readGuestAddress();
-      if (gName || gPhone || gAddr) {
-        setGuestProfile({ name: gName, phone: gPhone, address: gAddr?.address ?? null });
-        if (gAddr) {
-          const exists = useCustomerStore.getState().addresses.some((a) => (a.address || '').trim() === gAddr.address.trim());
-          if (!exists) {
-            // Guests have no server-side address book — seed it locally so the
-            // saved guest address is visible without logging in.
-            useCustomerStore.setState({ addresses: [gAddr] });
-          }
-        }
+      if (gName || gPhone || guestAddress) {
+        setGuestProfile({ name: gName, phone: gPhone, address: guestAddress?.address ?? null });
       }
     } catch {}
-  }, [isLoggedIn, loadAddresses, setGuestProfile]);
+  }, [isLoggedIn, loadAddresses, setGuestProfile, guestAddress]);
 
-  const defaultAddress = getDefaultAddress();
+  const accountAddresses = isLoggedIn ? addresses : (guestAddress ? [guestAddress] : []);
+  const defaultAddress = isLoggedIn ? getDefaultAddress() : (guestAddress ?? null);
   const openAddressSheet = () => {
-    setAddressSheetInitial(addresses.length === 0 ? 'new' : null);
+    setAddressSheetInitial(accountAddresses.length === 0 ? 'new' : null);
     setShowAddressSheet(true);
+  };
+
+  // Guests keep one address. Save it to the shared store (instant UI + across
+  // page mounts) and mirror it server-side so the hub shows the edit without
+  // waiting for the next order. Fire-and-forget: the local copy still stands.
+  const saveGuestAddress = (label: string, address: string, coordinates: { latitude: number; longitude: number } | null) => {
+    const normalizedLabel = label.trim() || 'Home';
+    setStoredGuestAddress(normalizedLabel, address, coordinates);
+    const cleaned = (phone || '').replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleaned) || address.trim().length < 10) return;
+    void storeApi.saveGuestDetails({
+      phone: cleaned,
+      name: name || undefined,
+      address,
+      label: normalizedLabel,
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null,
+    }).catch(() => {});
   };
 
   const initials = name
@@ -299,15 +312,13 @@ export default function AccountGreeting() {
             <AddressSheet
               mode="manage"
               zClassName="z-[90]"
-              addresses={addresses}
+              addresses={accountAddresses}
               singleAddress={!isLoggedIn}
               initialEditingId={addressSheetInitial}
               onClose={() => setShowAddressSheet(false)}
               onAddAddress={async (label, address, coordinates) => {
                 if (!isLoggedIn) {
-                  writeGuestAddress(label, address, coordinates);
-                  const saved = readGuestAddress();
-                  useCustomerStore.setState({ addresses: saved ? [saved] : [] });
+                  saveGuestAddress(label, address, coordinates);
                   return true;
                 }
                 const ok = await addAddress({ label, address, isDefault: addresses.length === 0, ...coordinates });
@@ -316,9 +327,7 @@ export default function AccountGreeting() {
               }}
               onUpdateAddress={async (id, label, address, coordinates) => {
                 if (!isLoggedIn) {
-                  writeGuestAddress(label, address, coordinates);
-                  const saved = readGuestAddress();
-                  useCustomerStore.setState({ addresses: saved ? [saved] : [] });
+                  saveGuestAddress(label, address, coordinates);
                   return true;
                 }
                 const ok = await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
@@ -327,8 +336,7 @@ export default function AccountGreeting() {
               }}
               onDeleteAddress={async (id) => {
                 if (!isLoggedIn) {
-                  clearGuestAddress();
-                  useCustomerStore.setState({ addresses: [] });
+                  clearStoredGuestAddress();
                   return;
                 }
                 await removeAddress(id);
