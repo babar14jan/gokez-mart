@@ -8,6 +8,7 @@ import { useAccountLoginStore } from '../store/accountLoginStore';
 import AddressButton from './AddressButton';
 import AddressSheet from './AddressSheet';
 import PageHeader from './PageHeader';
+import SmartImage from './SmartImage';
 import { useGuestAddressStore } from '../store/guestAddressStore';
 
 // The Account view's top-bar identity: the customer's avatar plus a "Hi, <name>"
@@ -176,9 +177,13 @@ export default function AccountGreeting() {
         <button type="button" onClick={openProfile} aria-label="Open profile"
           className="flex items-center gap-2 transition-opacity hover:opacity-90">
           <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-white/20">
-            {photoUrl
-              ? <img src={photoUrl} alt="" className="h-full w-full object-cover" />
-              : <span className="text-sm font-bold text-white">{initials}</span>}
+            <SmartImage
+              src={photoUrl}
+              alt=""
+              className="h-full w-full"
+              imgClassName="object-cover"
+              fallback={<span className="text-sm font-bold text-white">{initials}</span>}
+            />
           </span>
           <span className="max-w-[10rem] truncate text-base font-bold leading-tight text-white">Hi, {firstName}</span>
         </button>
@@ -208,9 +213,13 @@ export default function AccountGreeting() {
                 <div className="flex items-center gap-3 pr-8">
                   <div className="relative h-14 w-14 flex-shrink-0">
                     <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30">
-                      {photoUrl
-                        ? <img src={photoUrl} alt="" className="h-full w-full object-cover" />
-                        : <span className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{initials}</span>}
+                      <SmartImage
+                        src={photoUrl}
+                        alt=""
+                        className="h-full w-full"
+                        imgClassName="object-cover"
+                        fallback={<span className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{initials}</span>}
+                      />
                     </span>
                     {isLoggedIn && (
                       <label aria-label="Change profile photo"

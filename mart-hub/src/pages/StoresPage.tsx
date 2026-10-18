@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, X, Loader2, Store, Clock, Upload, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
 import { storesApi, productsApi, usersApi, teamApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
+import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
@@ -181,7 +182,13 @@ export default function StoresPage() {
               {/* Header row */}
               <div className="flex items-center gap-3 px-4 py-3">
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
-                  {s.logoUrl ? <img src={s.logoUrl} alt={s.name} className="w-full h-full object-cover" /> : <Store className="w-5 h-5 text-emerald-600" />}
+                  <SmartImage
+                    src={s.logoUrl}
+                    alt={s.name}
+                    className="h-full w-full"
+                    imgClassName="object-cover"
+                    fallback={<Store className="w-5 h-5 text-emerald-600" />}
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">

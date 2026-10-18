@@ -16,6 +16,7 @@ import {
   isRecentlyDelivered, hasActiveOrder, formatDateTime,
 } from '../components/OrderCards';
 import PageHeader from '../components/PageHeader';
+import SmartImage from '../components/SmartImage';
 function OrderDetailSheet({
   order, onClose, onOrderAgain, nextOpenLabel, whatsappNumber, fallbackName, fallbackPhone,
   canCancel, confirmCancel, cancelling, cancelError, onCancel, onRequestCancel, onDismissConfirm,
@@ -72,10 +73,13 @@ function OrderDetailSheet({
                 <div key={i} className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0">
-                      {item.photoUrl
-                        ? <img src={item.photoUrl} alt={item.productName} className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-lg">🥦</div>
-                      }
+                      <SmartImage
+                        src={item.photoUrl}
+                        alt={item.productName}
+                        className="h-full w-full"
+                        imgClassName="object-cover"
+                        fallback={<div className="w-full h-full flex items-center justify-center text-lg">🥦</div>}
+                      />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">{item.productName}</p>

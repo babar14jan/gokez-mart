@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
+import SmartImage from './SmartImage';
 
 interface Slide {
   id: string;
@@ -169,20 +170,20 @@ export default function HomeCarousel() {
                 style={{ width: '90%', aspectRatio: '16/9', transform: 'scale(0.9)', opacity: 0.55 }}
               >
                 {/* Background — image or gradient */}
-                {s.image_url ? (
-                  <img
-                    src={s.image_url}
-                    alt={s.title || ''}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    loading="eager"
-                    decoding="async"
-                  />
-                ) : (
-                  <div className={`absolute inset-0 bg-gradient-to-br ${s.gradient}`}>
-                    <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white/10 pointer-events-none" />
-                    <div className="absolute right-6 -bottom-10 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
-                  </div>
-                )}
+                <SmartImage
+                  fill
+                  src={s.image_url}
+                  alt={s.title || ''}
+                  imgClassName="object-cover"
+                  loading="eager"
+                  decoding="async"
+                  fallback={
+                    <div className={`absolute inset-0 bg-gradient-to-br ${s.gradient}`}>
+                      <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white/10 pointer-events-none" />
+                      <div className="absolute right-6 -bottom-10 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
+                    </div>
+                  }
+                />
 
                 {/* Uploaded artwork remains unobstructed. */}
                 {isCamp && !s.image_url && <div className="absolute inset-0 bg-black/20" />}
@@ -258,13 +259,17 @@ export default function HomeCarousel() {
                 style={{ width: 'calc(33.333% - 8px)', aspectRatio: '16/9' }}
               >
                 {/* Background */}
-                {s.image_url ? (
-                  <img src={s.image_url} alt={s.title || ''} className="w-full h-full object-cover" loading="lazy" />
-                ) : (
-                  <div className={`w-full h-full bg-gradient-to-br ${s.gradient}`}>
-                    <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
-                  </div>
-                )}
+                <SmartImage
+                  src={s.image_url}
+                  alt={s.title || ''}
+                  className="h-full w-full"
+                  imgClassName="object-cover"
+                  fallback={
+                    <div className={`w-full h-full bg-gradient-to-br ${s.gradient}`}>
+                      <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
+                    </div>
+                  }
+                />
                 {/* Custom campaign artwork is shown without text or dimming. */}
                 {isCamp && !s.image_url && <div className="absolute inset-0 bg-black/20" />}
                 {isCamp && !s.image_url && (

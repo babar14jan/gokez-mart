@@ -12,6 +12,7 @@ import AddressSheet from '../components/AddressSheet';
 import AddressButton from '../components/AddressButton';
 import PageHeader from '../components/PageHeader';
 import ProductCard from '../components/ProductCard';
+import SmartImage from '../components/SmartImage';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 import { useGuestAddressStore } from '../store/guestAddressStore';
 
@@ -19,6 +20,12 @@ interface CheckoutPageProps {
   settings: PublicSettings;
   zoneName?: string;
   storeId?: string;
+  /**
+   * The storefront catalogue App has already loaded. Seeding "You may also like"
+   * from it means the row is present in the very first paint instead of popping
+   * in (and shoving the address + footer down) after a private fetch resolves.
+   */
+  catalog?: Product[];
   onBack: () => void;
   onHome: () => void;
   onSuccess: (orderNumber: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => void;
@@ -354,7 +361,7 @@ function OffersPanel(props: OffersPanelProps) {
   );
 }
 
-export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
+export default function CheckoutPage({ settings, zoneName, storeId, catalog, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
   const finePointer = useFinePointer();
   const orderRequestKey = useRef(crypto.randomUUID());
   const guestNameInput = useRef<HTMLInputElement>(null);
@@ -366,20 +373,39 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
 
-  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  // "You may also like" — picked once when checkout opens and then held steady,
+  // so adding one of them to the cart never makes the row shuffle under the
+  // customer's thumb. Seeded synchronously from the catalogue App already has, so
+  // the row is part of the first paint and never appears late.
+  const [suggestions, setSuggestions] = useState<Product[]>(() => {
+    const cartIds = new Set(items.map(i => i.productId));
+    return (catalog || []).filter(p =>
+      p.availabilityStatus === 'available'
+      && p.isAvailable
+      && Boolean(p.categoryId && p.categoryName)
+      && !cartIds.has(p.id)
+    ).slice(0, 8);
+  });
+
+  // Fallback for the one case the storefront catalogue can't cover — landing on
+  // checkout without it (a shared/deep link). Fetched once; the seeded list above
+  // is left untouched otherwise.
   useEffect(() => {
+    if (catalog && catalog.length > 0) return;
     if (!storeId) return;
+    let cancelled = false;
     storeApi.getProducts(undefined, storeId).then(r => {
-      const cartIds = new Set(items.map(i => i.productId));
-      const all = (r.data.data || []).filter(p =>
+      if (cancelled) return;
+      const cartIds = new Set(useCartStore.getState().items.map(i => i.productId));
+      setSuggestions((r.data.data || []).filter(p =>
         p.availabilityStatus === 'available'
         && p.isAvailable
         && Boolean(p.categoryId && p.categoryName)
         && !cartIds.has(p.id)
-      );
-      setSuggestions(all.slice(0, 8));
+      ).slice(0, 8));
     }).catch(() => {});
-  }, [storeId]);
+    return () => { cancelled = true; };
+  }, [storeId, catalog]);
 
   const visibleSuggestions = suggestions.filter(product =>
     product.availabilityStatus === 'available'
@@ -929,10 +955,13 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             <div className="divide-y divide-gray-50 dark:divide-slate-700">
               {items.map(item => (
                 <div key={`${item.productId}-${item.unit}`} className="flex items-center gap-3 px-4 py-3">
-                  {item.photoUrl
-                    ? <img src={item.photoUrl} alt={item.productName} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-                    : <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0 text-xl">🥦</div>
-                  }
+                  <SmartImage
+                    src={item.photoUrl}
+                    alt={item.productName}
+                    className="w-12 h-12 rounded-xl flex-shrink-0"
+                    imgClassName="object-cover"
+                    fallback={<div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0 text-xl">🥦</div>}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.productName}</p>
                     <p className="text-xs text-gray-500">{item.unit} · ₹{item.price}</p>
