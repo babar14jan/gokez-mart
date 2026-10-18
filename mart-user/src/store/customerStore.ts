@@ -57,10 +57,12 @@ export const useCustomerStore = create<CustomerState>()(
       },
 
       addAddress: async (addr) => {
-        const trimmed = addr.address.trim().toLowerCase();
-        // Same text already cached — treat as a no-op success rather than a
-        // duplicate row. Only reachable with a fresh list, never a stale one.
-        if (get().addresses.some(a => a.address.trim().toLowerCase() === trimmed)) return true;
+        // No client-side duplicate check: the cached list can be stale whenever
+        // a previous loadAddresses failed (it keeps the old rows), and a match
+        // against stale data would report success without ever POSTing — the
+        // "saved" address then silently does not exist. The server is already
+        // idempotent by address (advisory lock + unique index), so every add
+        // goes through and the fresh list is reloaded from the source of truth.
         try {
           await addressApi.add(addr.label, addr.address, addr.isDefault, addr.latitude, addr.longitude);
           await get().loadAddresses();
