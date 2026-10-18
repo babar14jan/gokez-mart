@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, X, Loader2, Tag, ToggleLeft, ToggleRight, Copy, Check, BarChart3 } from 'lucide-react';
 import { campaignsApi, customersApi, productsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import PageSkeleton from '../components/PageSkeleton';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -222,7 +223,7 @@ export default function CampaignsPage() {
     return 'Info only';
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-4">

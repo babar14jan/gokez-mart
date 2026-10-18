@@ -35,6 +35,15 @@ export interface AddressSheetProps {
   onSetDefaultAddress?: (id: string) => Promise<void> | void;
   /** Opens straight into the form. 'new' adds, an id edits, null shows the list. */
   initialEditingId?: string | 'new' | null;
+  /**
+   * Guest mode. A guest has exactly one current delivery address, kept in
+   * localStorage rather than on the server, so the list, "Add new address",
+   * set-as-default and delete affordances would promise a book that does not
+   * exist (a second "added" address silently overwrites the one slot). With
+   * this flag the sheet opens straight into the form for that single address
+   * — or the add form when none is stored — and the back button closes it.
+   */
+  singleAddress?: boolean;
   /** Rendered above the form fields and the list, e.g. the checkout name box. */
   nameSlot?: React.ReactNode;
   requiresName?: boolean;
@@ -46,10 +55,12 @@ export interface AddressSheetProps {
 export default function AddressSheet({
   addresses, mode, onClose, selectedAddress, onSelectAddress,
   onAddAddress, onUpdateAddress, onDeleteAddress, onSetDefaultAddress,
-  initialEditingId = null, nameSlot, requiresName = false, focusFirstField = false,
+  initialEditingId = null, singleAddress = false, nameSlot, requiresName = false, focusFirstField = false,
   zClassName = 'z-[70]',
 }: AddressSheetProps) {
-  const [editingId, setEditingId] = useState<string | 'new' | null>(initialEditingId);
+  const [editingId, setEditingId] = useState<string | 'new' | null>(
+    initialEditingId ?? (singleAddress ? (addresses[0]?.id ?? 'new') : null),
+  );
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -66,7 +77,7 @@ export default function AddressSheet({
     ? addresses.find(address => address.id === editingId) ?? null
     : null;
   const isEditing = editingId !== null;
-  const canReturnToList = isEditing && addresses.length > 0;
+  const canReturnToList = isEditing && addresses.length > 0 && !singleAddress;
   const deletingAddress = pendingDelete ? addresses.find(address => address.id === pendingDelete) ?? null : null;
 
   const handleSave = async (label: string, address: string, coordinates: AddressCoordinates | null) => {
@@ -130,7 +141,7 @@ export default function AddressSheet({
         <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom,0px)]">
           {isEditing ? (
             <div className="px-5 py-4">
-              {mode === 'manage' && editingAddress && (
+              {mode === 'manage' && editingAddress && !singleAddress && (
                 <div className="mb-4 space-y-2">
                   {!editingAddress.isDefault && onSetDefaultAddress && (
                     <button type="button" onClick={() => onSetDefaultAddress(editingAddress.id)}
@@ -156,7 +167,7 @@ export default function AddressSheet({
                 saving={saving}
                 error={saveError}
                 onSave={handleSave}
-                onCancel={() => (addresses.length > 0 ? setEditingId(null) : onClose())}
+                onCancel={() => (singleAddress || addresses.length === 0 ? onClose() : setEditingId(null))}
                 nameSlot={nameSlot}
               />
             </div>

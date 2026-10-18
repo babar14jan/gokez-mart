@@ -105,38 +105,33 @@ export class CustomerAnalyticsService {
           COUNT(*) FILTER (WHERE status = 'delivered')::int AS delivered, COUNT(*) FILTER (WHERE payment_collected_at IS NOT NULL)::int AS paid,
           COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled, COALESCE(SUM(total) FILTER (WHERE status <> 'cancelled'), 0) AS gmv
          FROM mart_orders o WHERE ${orderWhere}`, values),
-      query<{ source: string; medium: string; campaign: string | null; sessions: number; cart_sessions: number; checkout_sessions: number; orders: number }>(
+      query<{ source: string; sessions: number; cart_sessions: number; checkout_sessions: number; orders: number }>(
         `WITH session_flags AS (
            SELECT s.session_id,
              COALESCE(NULLIF(s.source, ''), CASE WHEN s.channel = 'unattributed' THEN 'unattributed' ELSE s.channel END) AS source,
-             COALESCE(NULLIF(s.medium, ''), CASE WHEN s.channel = 'qr' THEN 'qr' WHEN s.channel = 'unattributed' THEN 'unattributed' WHEN s.channel = 'direct' THEN 'none' ELSE 'referral' END) AS medium,
-             NULLIF(s.utm_campaign, '') AS campaign,
              EXISTS (SELECT 1 FROM mart_funnel_events e WHERE e.session_id = s.session_id AND ${eventWhere} AND e.event_name IN ('cart_started', 'cart_added', 'cart_updated', 'cart_removed', 'cart_cleared')) OR EXISTS (SELECT 1 FROM mart_carts c WHERE c.session_id = s.session_id AND c.item_count > 0) AS cart,
              EXISTS (SELECT 1 FROM mart_carts c WHERE c.session_id = s.session_id AND c.reached_checkout) AS checkout
            FROM mart_funnel_sessions s WHERE ${sessionWhere}
          ), session_metrics AS (
-           SELECT source, medium, campaign, COUNT(*)::int AS sessions,
+           SELECT source, COUNT(*)::int AS sessions,
              COUNT(*) FILTER (WHERE cart)::int AS cart_sessions,
              COUNT(*) FILTER (WHERE checkout)::int AS checkout_sessions
-           FROM session_flags GROUP BY source, medium, campaign
+           FROM session_flags GROUP BY source
          ), order_attribution AS (
-           SELECT COALESCE(NULLIF(s.source, ''), CASE WHEN s.channel = 'unattributed' THEN 'unattributed' ELSE s.channel END) AS source,
-             COALESCE(NULLIF(s.medium, ''), CASE WHEN s.channel = 'qr' THEN 'qr' WHEN s.channel = 'unattributed' THEN 'unattributed' WHEN s.channel = 'direct' THEN 'none' ELSE 'referral' END) AS medium,
-             NULLIF(s.utm_campaign, '') AS campaign
+           SELECT COALESCE(NULLIF(s.source, ''), CASE WHEN s.channel = 'unattributed' THEN 'unattributed' ELSE s.channel END) AS source
            FROM mart_orders o
            JOIN mart_funnel_sessions s ON s.session_id = o.funnel_session_id
            WHERE ${orderWhere}
          ), order_metrics AS (
-           SELECT source, medium, campaign, COUNT(*)::int AS orders
+           SELECT source, COUNT(*)::int AS orders
            FROM order_attribution
-           GROUP BY source, medium, campaign
+           GROUP BY source
          )
-         SELECT COALESCE(sm.source, om.source) AS source, COALESCE(sm.medium, om.medium) AS medium,
-           COALESCE(sm.campaign, om.campaign) AS campaign, COALESCE(sm.sessions, 0)::int AS sessions,
+         SELECT COALESCE(sm.source, om.source) AS source, COALESCE(sm.sessions, 0)::int AS sessions,
            COALESCE(sm.cart_sessions, 0)::int AS cart_sessions, COALESCE(sm.checkout_sessions, 0)::int AS checkout_sessions,
            COALESCE(om.orders, 0)::int AS orders
          FROM session_metrics sm FULL OUTER JOIN order_metrics om
-           ON sm.source = om.source AND sm.medium = om.medium AND sm.campaign IS NOT DISTINCT FROM om.campaign
+           ON sm.source = om.source
          ORDER BY sessions DESC, orders DESC`, values),
       query<{ total: number; attributed: number; guest: number }>(
         `WITH scoped AS (SELECT o.id, o.customer_id, o.funnel_session_id FROM mart_orders o WHERE ${orderWhere}), attributed AS (SELECT id FROM scoped WHERE funnel_session_id IS NOT NULL)
@@ -182,7 +177,7 @@ export class CustomerAnalyticsService {
       eventTotals: events.rows.map(row => ({ key: row.event_name, count: row.count })),
       otp: { mobileInteractions: otpFunnel.mobile_interactions, otpRequests: otpFunnel.otp_requests, otpVerified: otpFunnel.otp_verified },
       orders: { placed: o.placed, accepted: o.accepted, preparing: o.preparing, outForDelivery: o.out_for_delivery, delivered: o.delivered, paid: o.paid, cancelled: o.cancelled, gmv: Number(o.gmv) },
-      channels: channels.rows.map(row => ({ source: row.source, medium: row.medium, campaign: row.campaign, sessions: row.sessions, cartSessions: row.cart_sessions, checkoutSessions: row.checkout_sessions, orders: row.orders })),
+      channels: channels.rows.map(row => ({ source: row.source, sessions: row.sessions, cartSessions: row.cart_sessions, checkoutSessions: row.checkout_sessions, orders: row.orders })),
       reconciliation: { orderTableCount: r.total, attributedOrderCount: r.attributed, unattributedOrderCount: r.total - r.attributed, guestOrderCount: r.guest, customerLinkedOrderCount: r.total - r.guest },
     };
   }

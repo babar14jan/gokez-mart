@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, X, Loader2, Users, Eye, EyeOff, Filter } from 'lu
 import { usersApi, storesApi, teamApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PageSkeleton from '../components/PageSkeleton';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -120,7 +121,7 @@ export default function UsersPage() {
 
   const storeName = (id: string | null) => stores.find(s => s.id === id)?.name || '—';
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-4">

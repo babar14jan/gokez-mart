@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Store, CheckCircle, XCircle, Clock, Phone, MapPin, User, MessageSquare, Loader2, ShieldCheck } from 'lucide-react';
 import { storeApplicationsApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PageSkeleton from '../components/PageSkeleton';
 
 interface Application {
   id: string;
@@ -58,11 +59,7 @@ export default function StoreApplicationsPage() {
     rejected: applications.filter(a => a.status === 'rejected').length,
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-4 max-w-3xl">

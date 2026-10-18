@@ -4,6 +4,7 @@ import {
   TrendingUp, Repeat, UserPlus, ClipboardList,
 } from 'lucide-react';
 import { customersApi, type CustomerSort, type CustomerStats } from '../services/api';
+import PageSkeleton from '../components/PageSkeleton';
 
 interface Customer {
   id: string; phone: string; name: string | null; address: string | null;
@@ -102,7 +103,7 @@ export default function CustomersPage() {
     { label: 'Avg Orders', value: stats.avgOrders, sub: 'per customer', icon: ClipboardList, gradient: 'from-blue-500 to-blue-600' },
   ]), [stats, repeatShare, counts]);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <PageSkeleton />;
 
   const tabs = [
     { id: 'all' as const, label: 'All', count: counts.total },
@@ -127,9 +128,9 @@ export default function CustomersPage() {
               <k.icon className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{k.value}</p>
-              <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1 truncate">{k.label}</p>
-              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 truncate">{k.sub}</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white leading-none sm:truncate">{k.value}</p>
+              <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-1 sm:truncate">{k.label}</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 sm:truncate">{k.sub}</p>
             </div>
           </div>
         ))}

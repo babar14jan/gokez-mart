@@ -8,7 +8,7 @@ import {
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { NAV_ALL, BOTTOM_NAV } from '../components/Layout';
 import { useThemeStore } from '../store/themeStore';
-import { api } from '../services/api';
+import { api, authApi } from '../services/api';
 import { subscribeAdminToPush, unsubscribeAdminFromPush } from '../services/push';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
@@ -127,7 +127,13 @@ export default function MorePage() {
   };
 
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = () => {
+    // Revoke this device's session server-side; local sign-out must not wait
+    // on the network, so the request is fired and forgotten.
+    authApi.logout().catch(() => {});
+    logout();
+    navigate('/login');
+  };
 
   const roleInfo = ROLE_LABELS[role || 'staff'] || ROLE_LABELS.staff;
 
@@ -156,39 +162,28 @@ export default function MorePage() {
         const gradient = gradients[role || 'staff'] || gradients.staff;
         return (
           <>
-          <div className={`relative bg-gradient-to-br ${gradient} w-full rounded-2xl overflow-hidden`} style={{ minHeight: '140px' }}>
-            {/* Decorative circles */}
-            <div className="absolute -right-8 -top-8 w-48 h-48 rounded-full bg-white/10 pointer-events-none" />
-            <div className="absolute right-6 -bottom-10 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
-
-            {/* Edit button top-right */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4 flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0`}>
+              <span className="text-lg font-black text-white tracking-tight">{initial}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-base font-bold text-gray-900 dark:text-white truncate">{form.name || displayName}</p>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-600 flex-shrink-0">
+                  {roleInfo.label}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 truncate mt-0.5">
+                @{username}{form.phone ? ` · ${form.phone}` : ''}
+              </p>
+              {form.email && <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{form.email}</p>}
+            </div>
             {!editing && (
               <button onClick={() => setEditing(true)}
-                className="absolute top-3 right-3 p-2 bg-white/20 hover:bg-white/30 text-white rounded-xl border border-white/30 transition-colors z-10">
+                className="p-2 rounded-xl text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors flex-shrink-0">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
             )}
-
-            <div className="relative z-10 p-4 flex items-end gap-4 pb-4 pt-8">
-              {/* Avatar */}
-              <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border-2 border-white/30 flex items-center justify-center shadow-md flex-shrink-0">
-                <span className="text-2xl font-black text-white tracking-tight">{initial}</span>
-              </div>
-              {/* Info */}
-              <div className="flex-1 min-w-0 pb-1">
-                <p className="text-lg font-black text-white drop-shadow truncate">{form.name || displayName}</p>
-                <p className="text-xs text-white/70 font-medium">@{username}</p>
-                {form.phone && <p className="text-xs text-white/80 font-semibold mt-0.5">{form.phone}</p>}
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/30">
-                    {roleInfo.label}
-                  </span>
-                  {form.email && <span className="text-[10px] text-white/70">{form.email}</span>}
-                </div>
-              </div>
-            </div>
-
-            {/* Edit form — outside gradient, below card */}
           </div>
 
           {editing && (
@@ -225,17 +220,6 @@ export default function MorePage() {
         );
       })()}
 
-      {/* Account */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-4 pt-3 pb-1">Account</p>
-        <button onClick={() => navigate('/change-password')}
-          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
-          <KeyRound className="w-4 h-4 text-gray-500 flex-shrink-0" />
-          <span className="text-sm text-gray-700 dark:text-slate-300 flex-1 text-left">Change Password</span>
-          <ChevronRight className="w-4 h-4 text-gray-300" />
-        </button>
-      </div>
-
       {/* Role-specific links */}
       {extraLinks.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
@@ -250,6 +234,17 @@ export default function MorePage() {
           ))}
         </div>
       )}
+
+      {/* Account */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-4 pt-3 pb-1">Account</p>
+        <button onClick={() => navigate('/change-password')}
+          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
+          <KeyRound className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          <span className="text-sm text-gray-700 dark:text-slate-300 flex-1 text-left">Change Password</span>
+          <ChevronRight className="w-4 h-4 text-gray-300" />
+        </button>
+      </div>
 
       {/* Preferences */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">

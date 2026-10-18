@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { inventoryApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
+import PageSkeleton from '../components/PageSkeleton';
 
 interface InventoryItem {
   productId: string;
@@ -148,11 +149,7 @@ export default function InventoryPage() {
 
   const pendingCount = Object.values(editRows).filter(r => r.qty !== '' && !isNaN(parseFloat(r.qty)) && parseFloat(r.qty) !== 0).length;
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <PageSkeleton />;
 
   if (!trackingEnabled) return (
     <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
