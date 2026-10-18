@@ -58,10 +58,10 @@ export default function DeliveryPage() {
   const [paymentOrder, setPaymentOrder] = useState<any | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const load = async (silent = false) => {
+  const load = async (silent = false, fresh = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const r = await ordersApi.getAll({ limit: 50 });
+      const r = await ordersApi.getAll({ limit: 50 }, { fresh });
       const all = r.data.data || [];
       // Only show orders assigned to me
       const mine = all.filter((o: any) => o.deliveryById === myId);
@@ -71,7 +71,7 @@ export default function DeliveryPage() {
 
   useEffect(() => {
     load();
-    pollRef.current = setInterval(() => load(true), 15000);
+    pollRef.current = setInterval(() => load(true, true), 15000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 

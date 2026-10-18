@@ -59,6 +59,18 @@ html, body { overscroll-behavior-y: none; }
   transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 
+/* The checkout footer is a position:sticky child of the scrolling checkout
+   overlay, so it shares the scroller with the cart list above it. When a row is
+   added (suggestion "Add") or removed (last-item trash) the list reflows in the
+   same frame as the "To pay" text changes, and iOS WebKit repaints the sticky
+   layer at a stale offset (WebKit bug 209376, "repaint rect is offset by
+   layoutDelta"), leaving the amount visibly stale until the next scroll.
+   Promoting the footer to its own compositing layer makes it repaint correctly
+   without touching layout. Do not add will-change here (WebKit bug 236876). */
+.checkout-sticky-footer {
+  transform: translateZ(0);
+}
+
 /* While a field owns the screen the bottom nav is hidden. It must leave the
    layout entirely, not just fade: an in-flow bar that is only translated away
    still reserves its height, which showed up as a full-width white strip above

@@ -1,6 +1,16 @@
 import axios from 'axios';
+import { buildCacheKey, getEntry, setEntry, clearHttpCache, CACHE_FRESH_MS, CACHE_MAX_AGE_MS } from './httpCache';
 
 /// <reference types="vite/client" />
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    /** Bypass the in-memory cache read (response is still cached). Live/polling paths use this. */
+    fresh?: boolean;
+  }
+}
+
+export { clearHttpCache };
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3004/api/v1';
 
@@ -12,12 +22,47 @@ export const api = axios.create({
   },
 });
 
-// Cache-busting interceptor for GET requests only
+// Stale-while-revalidate cache: a GET answered recently resolves instantly from
+// memory instead of re-querying the database on every page switch. A stale
+// entry is still served immediately (no skeleton on navigation) while a
+// background refresh updates the cache for the next reader. `fresh: true`
+// skips the cache read — used by live polling paths that must hit the server.
 api.interceptors.request.use(config => {
-  if (config.method === 'get') {
-    config.headers['Cache-Control'] = 'no-store';
+  const method = (config.method || 'get').toLowerCase();
+  if (method !== 'get' || config.fresh) return config;
+  // Only cache JSON GETs (blob exports and the like must always stream).
+  if (config.responseType && config.responseType !== 'json') return config;
+
+  const key = buildCacheKey(config);
+  const entry = getEntry(key);
+  if (!entry) return config;
+
+  const age = Date.now() - entry.cachedAt;
+  if (age >= CACHE_MAX_AGE_MS) return config; // too old to serve — real fetch
+
+  if (age >= CACHE_FRESH_MS && !entry.revalidating) {
+    entry.revalidating = true;
+    api.request({ ...config, fresh: true })
+      .catch(() => { /* keep serving the stale copy */ })
+      .finally(() => {
+        const current = getEntry(key);
+        if (current) current.revalidating = false;
+      });
   }
-  return config;
+
+  // Short-circuit the request; the response error interceptor resolves it as a
+  // success (the standard axios cache-hit pattern).
+  const cacheHit: any = new Error('mart http cache hit');
+  cacheHit.isCacheHit = true;
+  cacheHit.config = config;
+  cacheHit.cachedResponse = {
+    data: entry.response.data,
+    status: entry.response.status,
+    statusText: entry.response.statusText,
+    headers: entry.response.headers,
+    config,
+  };
+  return Promise.reject(cacheHit);
 });
 
 api.interceptors.request.use(config => {
@@ -27,8 +72,29 @@ api.interceptors.request.use(config => {
 });
 
 api.interceptors.response.use(
-  r => r,
+  response => {
+    const method = (response.config.method || 'get').toLowerCase();
+    if (method === 'get') {
+      if (!response.config.responseType || response.config.responseType === 'json') {
+        setEntry(buildCacheKey(response.config), {
+          data: response.data,
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers as Record<string, unknown>,
+        });
+      }
+    } else {
+      // A mutation happened: drop every cached GET so the next read is real.
+      clearHttpCache();
+    }
+    return response;
+  },
   err => {
+    // Cache hits are delivered through the error channel — resolve them before
+    // the failure handling below, or they would look like an outage.
+    if (err?.isCacheHit && err.cachedResponse) {
+      return Promise.resolve(err.cachedResponse);
+    }
     if (err.response?.status === 401) {
       localStorage.removeItem('mart_admin_token');
       window.location.href = '/login';
@@ -66,7 +132,7 @@ export const authApi = {
 
 // ── Products ──────────────────────────────────────────────────────────────────
 export const productsApi = {
-  getAll: (storeId?: string) => api.get('/admin/products', { params: storeId ? { storeId } : {} }),
+  getAll: (storeId?: string, opts?: FetchOpts) => api.get('/admin/products', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),
   create: (data: any) => api.post('/admin/products', data),
   update: (id: string, data: any) => api.put(`/admin/products/${id}`, data),
   delete: (id: string) => api.delete(`/admin/products/${id}`),
@@ -84,7 +150,7 @@ export const productsApi = {
 
 // ── Categories ────────────────────────────────────────────────────────────────
 export const categoriesApi = {
-  getAll: () => api.get('/admin/categories'),
+  getAll: (opts?: FetchOpts) => api.get('/admin/categories', { fresh: opts?.fresh }),
   create: (data: any) => api.post('/admin/categories', data),
   update: (id: string, data: any) => api.put(`/admin/categories/${id}`, data),
   delete: (id: string) => api.delete(`/admin/categories/${id}`),
@@ -106,11 +172,13 @@ export interface OrderSummary {
   couponAmount: number;
 }
 
+export interface FetchOpts { fresh?: boolean }
+
 export const ordersApi = {
-  getAll: (params?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }) =>
-    api.get('/admin/orders', { params }),
-  getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string }) =>
-    api.get('/admin/analytics/summary', { params }),
+  getAll: (params?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
+    api.get('/admin/orders', { params, fresh: opts?.fresh }),
+  getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string }, opts?: FetchOpts) =>
+    api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi') =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
   // Acknowledge an after-hours order for delivery at the next opening hours
@@ -147,8 +215,8 @@ export interface CustomerStats {
 export const customersApi = {
   getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; search?: string; sort?: CustomerSort; limit?: number; offset?: number }) =>
     api.get('/admin/customers', { params }),
-  getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number }) =>
-    api.get('/admin/analytics/customers', { params }),
+  getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number }, opts?: FetchOpts) =>
+    api.get('/admin/analytics/customers', { params, fresh: opts?.fresh }),
 };
 
 export type FunnelRange = 'today' | '7d' | '30d' | 'custom' | 'all';
@@ -209,7 +277,7 @@ export const installAnalyticsApi = {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 export const settingsApi = {
-  getAll: (storeId?: string) => api.get('/admin/settings', { params: storeId ? { storeId } : {} }),
+  getAll: (storeId?: string, opts?: FetchOpts) => api.get('/admin/settings', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),
   update: (settings: Record<string, string>, storeId?: string) =>
     api.put('/admin/settings', settings, { params: storeId ? { storeId } : {} }),
 };
@@ -283,7 +351,7 @@ export const catalogApi = {
 };
 // ── Inventory ────────────────────────────────────────────────────────────────
 export const inventoryApi = {
-  getAll:     (storeId?: string) => api.get('/admin/inventory', { params: storeId ? { storeId } : {} }),
+  getAll:     (storeId?: string, opts?: FetchOpts) => api.get('/admin/inventory', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),
   bulkRestock: (items: Array<{ productId: string; qty: number; stockUnit: string }>, note: string, storeId?: string, idempotencyKey?: string) =>
     api.post('/admin/inventory/bulk-restock', { items, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
   restock:    (productId: string, qty: number, note: string, storeId?: string, stockUnit?: string, idempotencyKey?: string) =>

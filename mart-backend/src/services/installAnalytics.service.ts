@@ -110,9 +110,10 @@ export class InstallAnalyticsService {
         params
       ),
       query(
-        `SELECT platform, COUNT(*) AS unique_visitors
-         FROM mart_install_rollup
-         GROUP BY platform`
+        `SELECT platform, COUNT(DISTINCT COALESCE(visitor_id, session_id)) AS unique_visitors
+         FROM mart_install_events ${where}
+         GROUP BY platform`,
+        params
       ),
     ]);
 
