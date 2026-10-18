@@ -286,4 +286,78 @@ export class CustomerAuthService {
       );
     });
   }
+
+  /**
+   * Records a guest's latest name/address against their customer row.
+   *
+   * A guest has no session, so this is the one write we accept by phone alone.
+   * It is deliberately narrow: it only ever updates an EXISTING customer row
+   * (created when their first order landed) and only while the phone is still
+   * unverified. The moment the number is verified via OTP the lead owns the
+   * profile and edits must come through `authenticateCustomer`, otherwise
+   * anyone knowing a signed-in customer's number could rewrite their address.
+   * The same phone is also kept in the one address-book slot a guest is allowed,
+   * so a later login finds the address they last used.
+   */
+  static async saveGuestDetails(phone: string, data: { name?: string | null; address: string; label?: string | null; latitude?: number | null; longitude?: number | null }): Promise<void> {
+    const cleaned = phone.replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleaned)) throw badRequest('Invalid phone number');
+    const address = data.address.trim();
+    if (address.length < 10 || address.length > 500) throw badRequest('Enter a complete delivery address');
+    const name = (data.name ?? '').trim().replace(/\s+/g, ' ');
+    const label = ((data.label ?? '').trim() || 'Home').slice(0, 24);
+
+    await transaction(async client => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`guest-details:${cleaned}`]);
+
+      const customerRes = await client.query(
+        `SELECT c.id,
+                EXISTS (SELECT 1 FROM mart_customer_leads l
+                         WHERE l.phone = c.phone AND l.verified_at IS NOT NULL) AS verified
+           FROM mart_customers c
+          WHERE c.phone = $1
+          FOR UPDATE`,
+        [cleaned]
+      );
+      const customer = customerRes.rows[0] as { id: string; verified: boolean } | undefined;
+      // No row yet means they have never ordered, so there is nothing for the
+      // hub to show and nothing to update. A verified phone owns its profile.
+      if (!customer || customer.verified) return;
+
+      await client.query(
+        `UPDATE mart_customers
+            SET address = $2,
+                name = COALESCE(NULLIF($3, ''), name),
+                updated_at = NOW()
+          WHERE id = $1`,
+        [customer.id, address, name]
+      );
+
+      const existing = await client.query(
+        `SELECT id FROM mart_customer_addresses
+          WHERE customer_id = $1
+          ORDER BY is_default DESC, created_at ASC
+          LIMIT 1`,
+        [customer.id]
+      );
+      if (existing.rows[0]) {
+        await client.query(
+          `UPDATE mart_customer_addresses
+              SET label = $2, address_line = $3, latitude = $4, longitude = $5, is_default = true, updated_at = NOW()
+            WHERE id = $1`,
+          [existing.rows[0].id, label, address, data.latitude ?? null, data.longitude ?? null]
+        );
+        await client.query(
+          `UPDATE mart_customer_addresses SET is_default = false WHERE customer_id = $1 AND id <> $2`,
+          [customer.id, existing.rows[0].id]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO mart_customer_addresses (customer_id, label, address_line, latitude, longitude, is_default)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [customer.id, label, address, data.latitude ?? null, data.longitude ?? null, true]
+        );
+      }
+    });
+  }
 }

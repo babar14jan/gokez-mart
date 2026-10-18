@@ -1307,6 +1307,27 @@ export const customerUpdateProfile = asyncHandler(async (req: CustomerRequest, r
 
 // ── Customer address book ─────────────────────────────────────────────────────
 
+/**
+ * Public guest save. A guest (no session) keeps their name/phone/address up to
+ * date on the customer row created when a previous order landed, so the hub
+ * shows the address they last used rather than the one frozen into their first
+ * order. Only an unverified phone is touched — see CustomerAuthService for why.
+ */
+export const saveGuestDetails = asyncHandler(async (req: Request, res: Response) => {
+  const phone = typeof req.body.phone === 'string' ? req.body.phone.replace(/\D/g, '') : '';
+  if (!/^[6-9]\d{9}$/.test(phone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  const address = typeof req.body.address === 'string' ? req.body.address.trim() : '';
+  if (address.length < 10 || address.length > 500) { res.status(400).json({ success: false, error: 'Enter a complete delivery address' }); return; }
+  const name = typeof req.body.name === 'string' ? req.body.name.trim().replace(/\s+/g, ' ') : '';
+  if (name && (name.length < 2 || name.length > 80 || !/\p{L}/u.test(name))) {
+    res.status(400).json({ success: false, error: 'Enter a valid name' }); return;
+  }
+  const { label, latitude, longitude } = req.body;
+  if (!hasValidCoordinates(latitude, longitude)) { res.status(400).json({ success: false, error: 'Invalid address coordinates' }); return; }
+  await CustomerAuthService.saveGuestDetails(phone, { name, address, label, latitude, longitude });
+  res.json({ success: true });
+});
+
 export const customerGetAddresses = asyncHandler(async (req: CustomerRequest, res: Response) => {
   const addresses = await CustomerAuthService.getAddresses(req.customer!.id);
   res.json({ success: true, data: addresses });

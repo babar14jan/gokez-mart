@@ -205,6 +205,15 @@ export const storeApi = {
     /** Closes the cart funnel. Optional; the server ignores a malformed value. */
     funnelSessionId?: string;
   }, idempotencyKey: string) => api.post('/orders', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
+  /**
+   * Persists a guest's latest name/phone/address server-side, so the hub shows
+   * an edit made before the next order lands. Only writes for phones that have
+   * not verified via OTP (signed-in customers edit their own profile).
+   */
+  saveGuestDetails: (data: {
+    phone: string; name?: string; address: string; label?: string;
+    latitude?: number | null; longitude?: number | null;
+  }) => api.post('/guest-details', data),
   trackOrdersByTokens: (tokens: string[]) => api.get('/orders/track/tokens', { params: { tokens: tokens.join(',') } }),
   cancelOrderByToken: (orderId: string, trackingToken: string) =>
     api.post(`/orders/track/${orderId}/cancel`, { trackingToken }),

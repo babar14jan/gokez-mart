@@ -36,6 +36,10 @@ self.addEventListener('install', (e) => {
             '/manifest.json',
             '/icons/icon-192.png',
             '/icons/icon-512.png',
+            // The offline / server-unreachable screens render these while the
+            // network is down, so they must already be cached to display.
+            '/offline.webp',
+            '/server_unreachable.webp',
             ...BUILD_ASSETS,
           ]).catch(() => {})
         )
