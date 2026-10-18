@@ -7,9 +7,11 @@ import SmartImage from './SmartImage';
 
 interface ProductCardProps {
   product: Product;
+  /** Freezes the ADD/qty control (used while an order is being placed). */
+  disabled?: boolean;
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, disabled = false }: ProductCardProps) {
   const { items, addItem, updateQty } = useCartStore();
   const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
   const qty = cartItem?.quantity || 0;
@@ -59,6 +61,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               <CartQuantityControl
                 variant="card"
                 quantity={qty}
+                disabled={disabled}
                 onAdd={() => addItem(product, product.unit, discountedPrice)}
                 onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
               />

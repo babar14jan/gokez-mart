@@ -20,14 +20,20 @@ interface SmartImageProps {
 // to a no-op rather than warning.
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
+// Session-lifetime memory of images that have painted at least once. Browsers do
+// not reliably report `img.complete` for an already-cached image (WebKit in
+// particular), so remounting a component would otherwise flash its skeleton even
+// though the pixels are sitting in the HTTP cache — which reads as the whole list
+// flickering every time you navigate. This lets a repeat visit paint instantly.
+const loadedSrcs = new Set<string>();
+
 /**
- * An <img> with a reserved box, a shimmering skeleton and a fade-in, so a photo
- * never "pops" in after a blank frame. The box is sized by `className`, so it
- * occupies its final space from the first paint and nothing below it shifts.
+ * An <img> with a reserved box and a static placeholder, so a photo never "pops"
+ * in after a blank frame and nothing below it shifts. The box is sized by
+ * `className`, so it occupies its final space from the first paint.
  *
- * Cached images are adopted before paint (via their `complete` flag) so a repeat
- * visit — the common case, since these photos were just shown on the home page —
- * never flashes the skeleton at all.
+ * The placeholder never animates (no pulse), and images that have already loaded
+ * in this session skip both the placeholder and the fade entirely.
  */
 export default function SmartImage({
   src,
@@ -41,27 +47,36 @@ export default function SmartImage({
   fill = false,
 }: SmartImageProps) {
   const imgRef = useRef<HTMLImageElement>(null);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => !!src && loadedSrcs.has(src));
   const [failed, setFailed] = useState(false);
 
   useIsoLayoutEffect(() => {
     setFailed(false);
     const img = imgRef.current;
-    if (src && img && img.complete && img.naturalWidth > 0) setReady(true);
-    else setReady(false);
+    if (!src) {
+      setReady(false);
+      return;
+    }
+    if (loadedSrcs.has(src) || (img && img.complete && img.naturalWidth > 0)) {
+      loadedSrcs.add(src);
+      setReady(true);
+    } else {
+      setReady(false);
+    }
   }, [src]);
 
   if (!src || failed) return <>{fallback}</>;
 
   const box = fill ? 'absolute inset-0 block overflow-hidden' : 'relative block overflow-hidden';
+  const known = loadedSrcs.has(src);
 
   return (
     <span className={`${box} ${className}`}>
       <span
         aria-hidden="true"
-        className={`absolute inset-0 block bg-gray-100 transition-opacity duration-300 dark:bg-slate-700 ${ready ? 'opacity-0' : 'animate-pulse opacity-100'}`}
+        className={`absolute inset-0 block bg-gray-100 dark:bg-slate-700 ${ready ? 'opacity-0' : 'opacity-100'}`}
       />
-      <span className={`absolute inset-0 block transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`}>
+      <span className={`absolute inset-0 block ${ready ? 'opacity-100' : 'opacity-0'} ${ready && known ? '' : 'transition-opacity duration-300'}`}>
         <img
           ref={imgRef}
           src={src}
@@ -70,7 +85,10 @@ export default function SmartImage({
           decoding={decoding}
           {...(fetchPriority ? { fetchpriority: fetchPriority } : {})}
           className={`h-full w-full ${imgClassName}`}
-          onLoad={() => setReady(true)}
+          onLoad={() => {
+            loadedSrcs.add(src);
+            setReady(true);
+          }}
           onError={() => setFailed(true)}
         />
       </span>
