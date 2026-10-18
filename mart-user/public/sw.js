@@ -109,26 +109,26 @@ self.addEventListener('fetch', (e) => {
   // Never intercept API calls
   if (e.request.url.includes('/api/')) return;
 
-  // For navigation requests (opening the app) — network first with a timeout,
-  // then the cached shell. Always resolving HTML means the browser never gets a
-  // chance to replace our offline screen with its own native "no internet" page.
+  // For navigation requests (opening the app) — cache first, network only on a
+  // miss. Serving the cached shell is instant and offline-proof: on iOS WebKit a
+  // network-first navigation can sit on a white screen while the request hangs,
+  // and a revalidated shell can end up referencing chunks that are not cached
+  // yet. The shell and its chunks share one cache version and are refreshed
+  // together by the worker update, so they can never fall out of sync.
   if (e.request.mode === 'navigate') {
     e.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached =
+        (await cache.match('/index.html')) ||
+        (await cache.match('/')) ||
+        (await cache.match(e.request, { ignoreSearch: true }));
+      if (cached) return cached;
       try {
         const response = await withTimeout(fetch(e.request), NAVIGATION_TIMEOUT_MS);
-        if (response && response.ok) {
-          // Keep the newest shell keyed at /index.html so the offline fallback
-          // always serves the current build rather than a stale route entry.
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(c => c.put('/index.html', clone)).catch(() => {});
-        }
+        if (response && response.ok) cache.put('/index.html', response.clone()).catch(() => {});
         return response;
       } catch {
-        const cached =
-          (await caches.match('/index.html')) ||
-          (await caches.match('/')) ||
-          (await caches.match(e.request, { ignoreSearch: true }));
-        return cached || offlineDocument();
+        return offlineDocument();
       }
     })());
     return;
