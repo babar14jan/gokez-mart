@@ -39,6 +39,7 @@ const SHELL_URLS = [
   // down, so they must already be cached to display.
   '/offline.webp',
   '/server_unreachable.webp',
+  '/backend_donw.webp',
 ];
 
 function withTimeout(promise, ms) {

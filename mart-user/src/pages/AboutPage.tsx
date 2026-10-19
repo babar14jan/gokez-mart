@@ -1,4 +1,4 @@
-import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from '../constants/brand';
+import { BRAND_DESCRIPTION, BRAND_PROMISE, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from '../constants/brand';
 import PageHeader from '../components/PageHeader';
 
 export default function AboutPage() {
@@ -10,9 +10,7 @@ export default function AboutPage() {
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4">About {BRAND_NAME}</h1>
         <div className="space-y-5 text-sm text-gray-600 dark:text-slate-300 leading-relaxed">
           <p>{BRAND_DESCRIPTION}</p>
-          <p>
-            We bring local stores online — connecting you directly with neighbourhood vendors, no warehouses, no middlemen. Every order supports a real family business and keeps the trust they&apos;ve built in your community over years.
-          </p>
+          <p>{BRAND_PROMISE}</p>
           <p>
             {BRAND_NAME} is a product of{' '}
             <a href={PARENT_COMPANY_URL} className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">

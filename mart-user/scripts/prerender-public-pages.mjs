@@ -7,13 +7,33 @@ const dist = join(root, 'dist');
 const origin = 'https://mart.gokez.com';
 const source = readFileSync(join(dist, 'index.html'), 'utf8');
 
+// Mirrors src/constants/brand.ts. Kept here (plain Node, no TS import) so the
+// JS-less fallback copy matches what the React pages render. `FULL_DESCRIPTION`
+// is the one-liner plus the brand story, used where a page benefits from the
+// longer text.
+const BRAND_DESCRIPTION = 'Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.';
+const BRAND_PROMISE = "We bring local stores online — connecting you directly with neighbourhood vendors, no warehouses, no middlemen. Every order supports a real family business and keeps the trust they've built in your community over years.";
+const FULL_DESCRIPTION = `${BRAND_DESCRIPTION} ${BRAND_PROMISE}`;
+
+// `pages` are the routes that get their own static HTML in dist. The optional
+// `robots` field overrides the index.html default ("index, follow"). The legal
+// pages set it to "noindex, nofollow" so a crawler that reads the raw HTML —
+// before any JavaScript runs — is told not to index them, exactly matching what
+// src/utils/seo.ts applies at runtime.
 const pages = [
   {
     path: '/about/',
     title: 'About Gokez Mart | Shop Local. Support Local.',
     description: 'About Gokez Mart, an online marketplace for ordering everyday essentials from nearby stores.',
     heading: 'About Gokez Mart',
-    content: 'Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.',
+    content: FULL_DESCRIPTION,
+  },
+  {
+    path: '/what-is-gokez-mart/',
+    title: 'What is Gokez Mart? | Shop Local. Support Local.',
+    description: 'Gokez Mart is an online marketplace that connects you with nearby local stores to order everyday essentials and get them delivered.',
+    heading: 'What is Gokez Mart?',
+    content: FULL_DESCRIPTION,
   },
   {
     path: '/privacy/',
@@ -21,6 +41,7 @@ const pages = [
     description: 'How Gokez Mart collects, uses and protects your personal data when you shop with local stores.',
     heading: 'Privacy Policy',
     content: 'Read how Gokez Mart collects, uses and protects personal data for local shopping and delivery.',
+    robots: 'noindex, nofollow',
   },
   {
     path: '/terms/',
@@ -28,6 +49,7 @@ const pages = [
     description: 'The terms that apply when you use Gokez Mart, the platform operated by Gokez Technologies that connects you with local stores.',
     heading: 'Terms of Service',
     content: 'Read the terms that apply when you use Gokez Mart for local shopping and delivery.',
+    robots: 'noindex, nofollow',
   },
   {
     path: '/grievance/',
@@ -52,6 +74,7 @@ for (const page of pages) {
   const document = source
     .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(page.title)}</title>`)
     .replace(/(<meta name="description" content=")[^"]*(" \/>)/, `$1${escapeHtml(page.description)}$2`)
+    .replace(/(<meta name="robots" content=")[^"]*(" \/>)/, `$1${page.robots ?? 'index, follow'}$2`)
     .replace(/(<meta property="og:title" content=")[^"]*(" \/>)/, `$1${escapeHtml(page.title)}$2`)
     .replace(/(<meta property="og:description" content=")[^"]*(" \/>)/, `$1${escapeHtml(page.description)}$2`)
     .replace(/(<meta property="og:url" content=")[^"]*(" \/>)/, `$1${url}$2`)
