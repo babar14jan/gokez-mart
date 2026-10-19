@@ -17,9 +17,9 @@ const FULL_DESCRIPTION = `${BRAND_DESCRIPTION} ${BRAND_PROMISE}`;
 
 // `pages` are the routes that get their own static HTML in dist. The optional
 // `robots` field overrides the index.html default ("index, follow"). The legal
-// pages set it to "noindex, nofollow" so a crawler that reads the raw HTML —
-// before any JavaScript runs — is told not to index them, exactly matching what
-// src/utils/seo.ts applies at runtime.
+// and support pages set it to "noindex, nofollow" so a crawler that reads the
+// raw HTML — before any JavaScript runs — is told not to index them, exactly
+// matching what src/utils/seo.ts applies at runtime.
 const pages = [
   {
     path: '/about/',
@@ -57,6 +57,7 @@ const pages = [
     description: 'Raise a grievance with Gokez Mart about an order, delivery or store, and track the response from the company that operates the platform.',
     heading: 'Grievance Redressal',
     content: 'Raise a grievance with Gokez Mart about an order, delivery, or store.',
+    robots: 'noindex, nofollow',
   },
   {
     path: '/feedback/',
@@ -64,6 +65,7 @@ const pages = [
     description: 'Tell Gokez Mart about your shopping or delivery experience, so the platform connecting you with local stores can be improved.',
     heading: 'Feedback',
     content: 'Share feedback about your Gokez Mart shopping or delivery experience.',
+    robots: 'noindex, nofollow',
   },
 ];
 

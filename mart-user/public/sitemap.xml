@@ -2,14 +2,14 @@
 <!--
   Public, indexable pages of mart.gokez.com only.
 
-  These are the five routes that are real documents: they render without a login
+  These are the three routes that are real documents: they render without a login
   and each has its own title, meta description and canonical (see src/utils/seo.ts,
   which is the source of truth for indexable routes).
 
-  Deliberately absent: /privacy and /terms. They stay reachable and linked (the
-  app stores and DPDP require a public policy URL) but are marked noindex in both
-  the prerendered HTML and the rendered head, so they never appear in search
-  results.
+  Deliberately absent: /privacy, /terms, /grievance and /feedback. They stay
+  reachable and linked (the app stores and DPDP require a public policy and
+  grievance URL) but are marked noindex in both the prerendered HTML and the
+  rendered head, so they never appear in search results.
 
   Also deliberately absent: /account, /orders, /notification-settings,
   /delete-account, /checkout and the in-app cart / categories views. Those are
@@ -34,15 +34,5 @@
     <loc>https://mart.gokez.com/what-is-gokez-mart/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://mart.gokez.com/grievance/</loc>
-    <changefreq>yearly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://mart.gokez.com/feedback/</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.4</priority>
   </url>
 </urlset>
