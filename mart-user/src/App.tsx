@@ -39,15 +39,16 @@ import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { buildWhatsAppLink, normalizeWhatsAppNumber } from './utils/whatsapp';
 import { detectPlatform } from './utils/install';
-import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
+import { BRAND_DESCRIPTION, BRAND_PROMISE, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
-type View = 'home' | 'about' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
+type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
 // Canonical URL for each view. Used to give every tab its own history entry so a
 // sub-page opened from it can return there with the back button.
 const VIEW_PATH: Record<View, string> = {
   home: '/',
   about: '/about',
+  'what-is-gokez-mart': '/what-is-gokez-mart',
   categories: '/categories',
   deals: '/deals',
   orders: '/orders',
@@ -87,6 +88,7 @@ const GrievancePage = lazyWithRetry(() => import('./pages/GrievancePage'));
 const DeleteAccountPage = lazyWithRetry(() => import('./pages/DeleteAccountPage'));
 const FeedbackPage = lazyWithRetry(() => import('./pages/FeedbackPage'));
 const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'));
+const WhatIsGokezMartPage = lazyWithRetry(() => import('./pages/WhatIsGokezMartPage'));
 
 function DeferredPage({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="min-h-[12rem]" />}>{children}</Suspense>;
@@ -110,6 +112,7 @@ export default function App() {
     // prerendered SEO documents still resolve. /delete-account is kept because it
     // is a standalone account-deletion link.
     if (path === '/about') return 'about';
+    if (path === '/what-is-gokez-mart') return 'what-is-gokez-mart';
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
     if (path === '/grievance') return 'grievance';
@@ -176,7 +179,7 @@ export default function App() {
   // Secondary Account/Profile sub-pages render their own green header (see
   // PageHeader), so the browsing Navbar — with its delivery-zone selector —
   // must not stack above it. Embed mode is already handled by `isEmbed`.
-  const accountSubPage = view === 'feedback' || view === 'grievance' || view === 'privacy' || view === 'terms' || view === 'delete-account' || view === 'about';
+  const accountSubPage = view === 'feedback' || view === 'grievance' || view === 'privacy' || view === 'terms' || view === 'delete-account' || view === 'about' || view === 'what-is-gokez-mart';
 
   // Load the customer's address book from the backend on login.
   // (No longer auto-migrates "legacy local" addresses — that path could pick up
@@ -447,6 +450,7 @@ export default function App() {
     const handlePop = () => {
       const path = window.location.pathname.replace(/\/+$/, '') || '/';
       if (path === '/about') setView('about');
+      else if (path === '/what-is-gokez-mart') setView('what-is-gokez-mart');
       else if (path === '/privacy') setView('privacy');
       else if (path === '/terms') setView('terms');
       else if (path === '/grievance') setView('grievance');
@@ -1157,6 +1161,8 @@ export default function App() {
       {/* Pages */}
       {view === 'about' ? (
         <DeferredPage><AboutPage /></DeferredPage>
+      ) : view === 'what-is-gokez-mart' ? (
+        <DeferredPage><WhatIsGokezMartPage /></DeferredPage>
       ) : view === 'categories' ? (
         <div className={productPageBottom}>
           <CategoriesView categories={categories} products={products} />
@@ -1305,7 +1311,7 @@ export default function App() {
               {BRAND_DESCRIPTION}
             </p>
             <p className="mt-3 text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
-              We bring local stores online — connecting you directly with neighbourhood vendors, no warehouses, no middlemen. Every order supports a real family business and keeps the trust they&apos;ve built in your community over years.
+              {BRAND_PROMISE}
             </p>
           </div>
 

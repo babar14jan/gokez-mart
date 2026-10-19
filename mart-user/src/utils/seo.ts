@@ -15,10 +15,12 @@ import { BRAND_DESCRIPTION, BRAND_NAME as BRAND, BRAND_SLOGAN as SLOGAN } from '
 
 const SITE_ORIGIN = 'https://mart.gokez.com';
 
-// Matches the `View` union in App.tsx. Only the five public views are indexable;
-// everything else in this app is an authenticated or transactional surface.
+// Matches the `View` union in App.tsx. Five views are indexable (home, about,
+// what-is-gokez-mart, grievance, feedback). The legal pages (privacy, terms) are
+// public but noindex, and everything else is an authenticated or transactional
+// surface.
 export type SeoView =
-  | 'home' | 'about' | 'categories' | 'deals' | 'grievance' | 'feedback' | 'privacy' | 'terms'
+  | 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'grievance' | 'feedback' | 'privacy' | 'terms'
   | 'notification-settings' | 'delete-account' | 'account' | 'orders' | 'checkout';
 
 interface RouteMeta {
@@ -45,17 +47,28 @@ const ROUTES: Record<SeoView, RouteMeta> = {
     path: '/about/',
     indexable: true,
   },
+  'what-is-gokez-mart': {
+    title: `What is ${BRAND}? | ${SLOGAN}`,
+    description: `${BRAND} is an online marketplace that connects you with nearby local stores to order everyday essentials and get them delivered.`,
+    path: '/what-is-gokez-mart/',
+    indexable: true,
+  },
+  // Legal pages. Reachable and linked (they must stay publicly accessible for
+  // App Store / Play Store and DPDP requirements), but deliberately NOT indexable:
+  // they carry no brand-relevant content and should stay out of search results.
+  // Their `path` is kept so a crawler still sees a self-referential canonical
+  // alongside the noindex, rather than the homepage canonical.
   privacy: {
     title: `Privacy Policy | ${BRAND}`,
     description: `How ${BRAND} collects, uses and protects your personal data when you shop with local stores on ${SITE_ORIGIN.replace('https://', '')}.`,
     path: '/privacy/',
-    indexable: true,
+    indexable: false,
   },
   terms: {
     title: `Terms of Service | ${BRAND}`,
     description: `The terms that apply when you use ${BRAND}, the platform operated by Gokez Technologies Pvt. Ltd. that connects you with local stores.`,
     path: '/terms/',
-    indexable: true,
+    indexable: false,
   },
   grievance: {
     title: `Grievance Redressal | ${BRAND}`,
@@ -194,9 +207,12 @@ export function applySeo(view: SeoView, opts: { checkoutActive?: boolean } = {})
   // private data — this only keeps those pages out of search results.
   setAttr('meta[name="robots"]', 'content', indexable ? 'index, follow' : 'noindex, nofollow');
 
-  // A canonical is only emitted for real, crawlable documents. Inventing one for
-  // /account or /checkout would point a canonical at a page that should not be
-  // indexed at all, so those routes keep the root canonical from index.html.
+  // A canonical is emitted for every route that is a real document of its own.
+  // Routes with a null path (/account, /checkout) are app surfaces with no
+  // document identity, so they fall back to the root canonical. The legal pages
+  // (/privacy, /terms) are non-indexable but keep their own path on purpose: a
+  // self-referential canonical beside `noindex` is cleaner than pointing them at
+  // the homepage.
   const canonical = absoluteUrl(route.path ?? '/');
   setAttr('link[rel="canonical"]', 'href', canonical);
   setAttr('meta[property="og:url"]', 'content', canonical);

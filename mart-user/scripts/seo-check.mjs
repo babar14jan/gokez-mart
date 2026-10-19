@@ -98,8 +98,13 @@ if (!/^<\?xml version="1\.0" encoding="UTF-8"\?>/.test(sitemap)) {
 }
 if (sitemap.charCodeAt(0) === 0xfeff) fail('public/sitemap.xml has a UTF-8 BOM');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
-const expected = ['/', '/about/', '/privacy/', '/terms/', '/grievance/', '/feedback/']
+const expected = ['/', '/about/', '/what-is-gokez-mart/', '/grievance/', '/feedback/']
   .map(p => (p === '/' ? `${ORIGIN}/` : `${ORIGIN}${p}`));
+// Reachable and linked, but deliberately kept out of the sitemap and marked
+// noindex everywhere (prerendered HTML, seo.ts runtime and the build output). A
+// crawler that reads the raw HTML must see "noindex" on these — otherwise they
+// get indexed as thin legal pages, which is the exact thing being prevented.
+const NOINDEX_PATHS = ['/privacy/', '/terms/'];
 if (JSON.stringify(locs) !== JSON.stringify(expected)) {
   fail(`public/sitemap.xml URL set is wrong.\n      expected: ${expected.join(', ')}\n      actual:   ${locs.join(', ')}`);
 } else ok(`sitemap.xml declares exactly the ${expected.length} public URLs`);
@@ -112,6 +117,15 @@ for (const loc of locs) {
   if (seg && PRIVATE.includes(seg)) fail(`public/sitemap.xml contains the private/transactional URL ${loc}`);
 }
 ok('sitemap.xml contains no private/transactional URL');
+
+// A noindex page must never sit in the sitemap: the two directives contradict
+// each other and Google treats the sitemap entry as a request to crawl+index.
+for (const noindexPath of NOINDEX_PATHS) {
+  if (locs.includes(`${ORIGIN}${noindexPath}`)) {
+    fail(`public/sitemap.xml lists ${ORIGIN}${noindexPath} but that page is marked noindex — remove it from the sitemap`);
+  }
+}
+ok('noindex pages (/privacy/, /terms/) are absent from the sitemap');
 
 // ── 4. index.html metadata hygiene ──────────────────────────────────────────
 const html = read(join(ROOT, 'index.html'));
@@ -181,6 +195,16 @@ if (!seo) {
   } else if (homePath === '/') {
     ok(`src/utils/seo.ts: SITE_ORIGIN correct, canonical built from it, all ${routePaths.length} route paths root-absolute (TS import skipped — \`npm run seo:check:full\` executes the real functions)`);
   }
+  // The legal pages must be non-indexable at runtime as well as in the raw HTML.
+  // Read the flag straight from each ROUTES entry (non-greedy up to the entry's
+  // own first `indexable:`).
+  for (const legal of ['privacy', 'terms']) {
+    const flag = (src.match(new RegExp(`${legal}:\\s*\\{[\\s\\S]*?indexable:\\s*(true|false)`)) || [])[1];
+    if (flag !== 'false') {
+      fail(`src/utils/seo.ts does not mark the legal page "${legal}" indexable: false (found "${flag ?? 'nothing'}") — its runtime robots meta would stay index, follow`);
+    }
+  }
+  ok('src/utils/seo.ts keeps /privacy/ and /terms/ non-indexable');
 }
 if (seo) {
   // Assert on every public view resolved through ROUTES, the same way applySeo
@@ -201,6 +225,11 @@ if (seo) {
   if (JSON.stringify(seoPaths) !== JSON.stringify([...expectedPaths].sort())) {
     fail(`seo.ts public path set is ${JSON.stringify(seoPaths)} but the sitemap lists ${JSON.stringify([...expectedPaths].sort())}`);
   } else ok('seo.ts public path set matches the sitemap');
+
+  for (const noindexPath of NOINDEX_PATHS) {
+    if (seoPaths.includes(noindexPath)) fail(`seo.ts still exposes ${noindexPath} as an indexable public path`);
+  }
+  ok('seo.ts keeps /privacy/ and /terms/ out of the indexable public path set');
 }
 
 // ── 6. Structured data ──────────────────────────────────────────────────────
@@ -260,8 +289,9 @@ for (const file of [join(ROOT, 'index.html'), join(PUBLIC, 'manifest.json'), joi
 for (const ref of referenced) {
   if (ref === '/' || ref.startsWith('/assets/') || ref.startsWith('/src/')) continue;
   // Public routes are pages, not files copied from public/. They are served by
-  // the SPA in development and prerendered into dist for production.
-  if (expected.map(url => url.replace(ORIGIN, '')).includes(ref) || ref === '/index.html') continue;
+  // the SPA in development and prerendered into dist for production. The noindex
+  // legal pages are linked from the shell too, so they are skipped here as well.
+  if (expected.map(url => url.replace(ORIGIN, '')).includes(ref) || NOINDEX_PATHS.includes(ref) || ref === '/index.html') continue;
   if (!exists(join(PUBLIC, ref))) fail(`referenced asset ${ref} does not exist in public/`);
 }
 ok('every referenced static asset exists');
@@ -287,6 +317,25 @@ if (exists(DIST)) {
     if (!/<h1>[^<]+<\/h1>/.test(pageHtml)) fail(`prerendered public page ${file} has no fallback H1`);
   }
   ok('dist contains robots.txt, sitemap.xml, manifest.json, sw.js, favicon.ico and an identical sitemap');
+
+  // Legal pages are prerendered too, but must tell a JS-less crawler noindex and
+  // point the canonical at themselves. This is what actually keeps them out of
+  // search results; the runtime noindex only reaches crawlers that execute JS.
+  for (const noindexPath of NOINDEX_PATHS) {
+    const file = join(DIST, noindexPath.slice(1), 'index.html');
+    if (!exists(file)) {
+      fail(`prerendered noindex page is missing: ${file}`);
+      continue;
+    }
+    const pageHtml = read(file);
+    if (!pageHtml.includes('<meta name="robots" content="noindex, nofollow"')) {
+      fail(`prerendered legal page ${file} is not marked noindex — a crawler reading the raw HTML would index it`);
+    }
+    if (!pageHtml.includes(`<link rel="canonical" href="${ORIGIN}${noindexPath}"`)) {
+      fail(`prerendered legal page ${file} has no self-canonical ${ORIGIN}${noindexPath}`);
+    }
+  }
+  ok('legal pages (/privacy/, /terms/) prerendered with noindex and a self-canonical');
 } else {
   ok('dist/ not present — skipped build-output checks (run npm run build first)');
 }
