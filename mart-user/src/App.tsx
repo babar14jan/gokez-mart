@@ -38,6 +38,7 @@ import { useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { buildWhatsAppLink, normalizeWhatsAppNumber } from './utils/whatsapp';
+import { detectPlatform } from './utils/install';
 import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
 type View = 'home' | 'about' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
@@ -429,7 +430,9 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#18191a' : '#ffffff');
+    // iOS keeps the app-bar green (theme-color is only a flash guard there now);
+    // Android/desktop stay white in light mode. See store/themeStore.ts.
+    if (meta) meta.setAttribute('content', isDark ? '#18191a' : detectPlatform() === 'ios' ? '#218044' : '#ffffff');
   }, [isDark, view]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
