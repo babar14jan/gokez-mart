@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { authApi } from '../services/api';
+import { requestErrorMessage } from '../utils/networkError';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import PageHeader from '../components/PageHeader';
 
@@ -28,7 +29,7 @@ export default function DeleteAccountPage() {
       setSubmitted(true);
       setTimeout(() => { logout(); }, 3000);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to submit request.');
+      setError(requestErrorMessage(err, 'Failed to submit request.'));
     } finally { setSubmitting(false); }
   };
 

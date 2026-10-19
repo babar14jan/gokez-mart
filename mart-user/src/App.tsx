@@ -11,6 +11,7 @@ import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
 import ConfirmDialog from './components/ConfirmDialog';
 import BottomNav from './components/BottomNav';
+import AppShell from './components/AppShell';
 import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
@@ -280,18 +281,53 @@ export default function App() {
   // manual refresh updates data in place instead of reloading the document — the
   // current view, scroll position, search text and already-decoded images all
   // survive, and it never shows the skeleton (that is first-load only).
-  const refreshCatalog = useCallback(async (storeId?: string) => {
+  //
+  // Silent refreshes are stamp-gated: the server exposes a tiny /catalog/stamp
+  // fingerprint, and the full four-endpoint download only runs when it actually
+  // changed. A quiet store therefore costs one small aggregate query per poll
+  // instead of the whole catalogue. Pull-to-refresh and reconnects force the
+  // real download.
+  const catalogStampRef = useRef<string | null>(null);
+
+  const fetchCatalogBundle = useCallback(async (storeId?: string, fresh = false, isCancelled?: () => boolean) => {
     const [catRes, prodRes, settingsRes, sectionsRes] = await Promise.all([
-      storeApi.getCategories(),
-      storeApi.getProducts(undefined, storeId),
-      storeApi.getSettings(storeId),
-      storeApi.getHomeSections(storeId),
+      storeApi.getCategories({ fresh }),
+      storeApi.getProducts(undefined, storeId, { fresh }),
+      storeApi.getSettings(storeId, { fresh }),
+      storeApi.getHomeSections(storeId, { fresh }),
     ]);
+    // A store switch (or Try Again) started a newer load while this one was in
+    // flight — discard it, or it would overwrite the new store's catalogue.
+    if (isCancelled?.()) return;
     setCategories([...(catRes.data.data || [])]);
     setProducts([...(prodRes.data.data || [])]);
     setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
     setHomeSections([...(sectionsRes.data.data || [])]);
+    // The bundle is on screen, so any previous load error is resolved. This is
+    // what clears the banner after a silent refresh/reconnect recovers from a
+    // failed cold load.
+    setCatalogError(null);
   }, []);
+
+  const refreshCatalog = useCallback(async (storeId?: string, opts?: { force?: boolean }) => {
+    // The stamp is always read BEFORE the body, forced or not: a stamp stored
+    // after the body could be newer than it and would silently swallow one
+    // change until the following one. Reading first means a mid-flight change
+    // only costs one redundant refresh next cycle.
+    let stamp: string | null = null;
+    try {
+      const r = await storeApi.getCatalogStamp(storeId);
+      stamp = r.data.data?.stamp ?? null;
+      // Nothing changed since the last full load — skip the heavy download.
+      if (!opts?.force && stamp !== null && stamp === catalogStampRef.current) return;
+    } catch {
+      // Stamp unavailable (older backend, offline blip): fall through to a
+      // real refresh rather than leaving the catalogue stuck.
+      stamp = null;
+    }
+    await fetchCatalogBundle(storeId, true);
+    catalogStampRef.current = stamp;
+  }, [fetchCatalogBundle]);
 
   // Keeps .page-shell equal to the visible height; see the hook for why one
   // mechanism covers both iOS and Android.
@@ -353,7 +389,7 @@ export default function App() {
       pullDistance.current = 0;
       setPullDistanceVisible(0);
       const startedAt = Date.now();
-      refreshCatalog(activeStoreId)
+      refreshCatalog(activeStoreId, { force: true })
         .then(() => setRefreshNotice(null))
         .catch(() => setRefreshNotice(
           navigator.onLine
@@ -503,46 +539,63 @@ export default function App() {
     let cancelled = false;
     setLoading(true);
     setCatalogError(null);
-    Promise.all([
-      storeApi.getCategories(),
-      storeApi.getProducts(undefined, activeStoreId),
-      storeApi.getSettings(activeStoreId),
-      storeApi.getHomeSections(activeStoreId),
-    ]).then(([catRes, prodRes, settingsRes, sectionsRes]) => {
-      if (cancelled) return;
-      setCategories(catRes.data.data || []);
-      setProducts(prodRes.data.data || []);
-      setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
-      setHomeSections(sectionsRes.data.data || []);
-      setCatalogError(null);
+    // A cold load (or a zone switch) always downloads for real; the stamp only
+    // gates the silent poll, never the first paint or an explicit store change.
+    // A zone switch must also drop the previous store's stamp, or the first
+    // poll would compare against the wrong store and skip a needed download.
+    catalogStampRef.current = null;
+    // Stamp and body run in parallel so first paint never waits on the stamp;
+    // the stamp is stored only if it arrived BEFORE the body settled — a stamp
+    // read after the body could be newer than it and would silently swallow one
+    // change. Losing that race just costs one redundant full download at the
+    // first poll.
+    let bodyDone = false;
+    const stampPromise = storeApi.getCatalogStamp(activeStoreId)
+      .then(r => {
+        if (!cancelled && !bodyDone) catalogStampRef.current = r.data.data?.stamp ?? null;
+      })
+      .catch(() => {});
+    const bodyPromise = fetchCatalogBundle(activeStoreId, true, () => cancelled).then(() => {
+      bodyDone = true;
     }).catch(() => {
-      if (!cancelled) setCatalogError('Shapoorji store is temporarily unavailable. Check your connection and try again.');
-    }).finally(() => {
+      bodyDone = true;
+      if (!cancelled) setCatalogError(
+        typeof navigator !== 'undefined' && !navigator.onLine
+          ? 'You\u2019re offline. Check your internet connection and try again.'
+          : 'We could not load the store right now. Please try again shortly.',
+      );
+    });
+    // Keep the loading skeleton up until both settle — the stamp is one small
+    // query, and dropping it early makes the first silent poll do a full
+    // download it could have skipped.
+    Promise.allSettled([stampPromise, bodyPromise]).then(() => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [activeStoreId, catalogRequest]);
+  }, [activeStoreId, catalogRequest, fetchCatalogBundle]);
 
-  // Silent refresh — products + settings for current store every 3 mins, and on
+  // Silent refresh — a stamp check for the current store every 3 mins, and on
   // resume/focus. Installed PWAs freeze timers while backgrounded and iOS
   // standalone doesn't reliably fire visibilitychange when recalled from the app
   // switcher, so pageshow/focus are needed too or the catalogue stays stale until
   // a full close + reopen. A short dedupe window collapses the burst of events
-  // that fire together (focus + pageshow + visibilitychange) into one fetch.
+  // that fire together (focus + pageshow + visibilitychange) into one check.
+  // refreshCatalog compares /catalog/stamp first, so a quiet store skips the
+  // full download; only a real change (or a forced reconnect) pays for it.
   useEffect(() => {
     let lastRefresh = Date.now();
     const refresh = async (force = false) => {
       const now = Date.now();
       if (!force && now - lastRefresh < 15_000) return;
       lastRefresh = now;
-      try { await refreshCatalog(selectedZone?.storeId); } catch {}
+      try { await refreshCatalog(selectedZone?.storeId, { force }); } catch {}
     };
     const onResume = () => { if (document.visibilityState === 'visible') refresh(); };
     // Reconnect is a hard signal that the catalogue may be stale: refresh at once
     // and skip the dedupe window, so the store repopulates the moment the network
     // is usable again without ever clearing what is on screen.
     const onReconnect = () => refresh(true);
-    const interval = setInterval(() => refresh(true), 3 * 60 * 1000);
+    const interval = setInterval(() => refresh(), 3 * 60 * 1000);
     document.addEventListener('visibilitychange', onResume);
     window.addEventListener('focus', onResume);
     window.addEventListener('pageshow', onResume);
@@ -569,8 +622,11 @@ export default function App() {
     if (!Number.isFinite(delay) || delay <= 0 || delay > 24 * 60 * 60 * 1000) return;
     const timer = setTimeout(async () => {
       try {
-        const srRes = await storeApi.getSettings(activeStoreId);
+        // fresh: the open/closed flip has no DB write, so the cache may hold the
+        // pre-boundary settings; this must reach the server.
+        const srRes = await storeApi.getSettings(activeStoreId, { fresh: true });
         setSettings(srRes.data.data || DEFAULT_SETTINGS);
+        catalogStampRef.current = null; // stamp is pre-boundary; re-adopt on next poll
       } catch {}
     }, delay);
     return () => clearTimeout(timer);
@@ -904,8 +960,15 @@ export default function App() {
   }
 
   return (
-    <div className={`app-shell relative ${view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'} dark:bg-slate-900 font-sans`}>
-
+    <AppShell
+      className={view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'}
+      scrollRef={scrollRef}
+      onTouchStart={handlePullTouchStart}
+      onTouchMove={handlePullTouchMove}
+      onTouchEnd={finishPullGesture}
+      onTouchCancel={cancelPullGesture}
+      overlay={
+        <>
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNavigateLegal={(path) => {
         // Reading Terms/Privacy leaves the login behind: close the overlay so the
         // page is not hidden under it, but keep the in-progress OTP flow so
@@ -962,19 +1025,10 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Single scroll area. The bottom nav below is a flex sibling of this
-          scroller, so it is structurally pinned and cannot drift the way a
-          position: fixed bar does on iOS Safari/standalone PWA. */}
-      <div
-        className="app-scroll"
-        ref={scrollRef}
-        onTouchStart={handlePullTouchStart}
-        onTouchMove={handlePullTouchMove}
-        onTouchEnd={finishPullGesture}
-        onTouchCancel={cancelPullGesture}
-      >
-
+        </>
+      }
+      header={
+        <>
       {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
         <Navbar
           onUseMyLocation={useMyLocation}
@@ -988,10 +1042,25 @@ export default function App() {
 
       {/* Closed-store notice: below the header, on every page, never blocking. */}
       {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
+        </>
+      }
+      floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
+      bottomNav={!checkoutActive ? (
+        <div className="sm:hidden shrink-0">
+          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => openCatalogSearch(false)} />
+        </div>
+      ) : null}
+    >
 
       {/* One dialog for both checkout mounts. Resolved explicitly in both
-          directions so CheckoutPage is never left awaiting a dead promise. */}
-      {closedPrompt && (
+          directions so CheckoutPage is never left awaiting a dead promise.
+
+          Portalled to <body> on purpose: .app-shell is position:fixed, which
+          makes it a stacking context, so a dialog left inside it would be
+          trapped below the checkout overlay (which is also portalled to <body>,
+          at z-[55]). At the document level this dialog's z-[60] sits above it,
+          which is what lets the customer confirm a closed-store order. */}
+      {closedPrompt && createPortal(
         <ConfirmDialog
           title="We're closed right now"
           message={openState?.nextOpenLabel
@@ -1002,16 +1071,16 @@ export default function App() {
           danger={false}
           onConfirm={() => settlePrompt(true)}
           onCancel={() => settlePrompt(false)}
-        />
+        />,
+        document.body,
       )}
 
       {/* Checkout — overlay on both mobile and desktop (above the search sheet so
           the search results stay mounted underneath and return on back).
-          Rendered through a portal to <body>: while it lived inside .app-scroll
-          (an overflow-y scroller whose height is calc(100dvh - var(--kb))), iOS
-          sized the fixed overlay to that scroller, so the checkout footer rose
-          to sit above the keyboard instead of staying pinned to the screen
-          bottom. At the document level it is anchored to the viewport again. */}
+          Rendered through a portal to <body>: a fixed overlay anchored at the
+          document level is sized to the viewport, so the checkout footer stays
+          pinned to the screen bottom instead of being sized to an ancestor
+          scroll container. */}
       {checkoutActive && createPortal(
         <div className="fixed inset-0 z-[55]">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
@@ -1146,7 +1215,7 @@ export default function App() {
             </div>
           ) : catalogError ? (
             <div className="max-w-md mx-auto text-center py-16 px-5">
-              <p className="text-base font-semibold text-gray-900 dark:text-white mb-2">Store temporarily unavailable</p>
+              <p className="text-base font-semibold text-gray-900 dark:text-white mb-2">Couldn&apos;t load the store</p>
               <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">{catalogError}</p>
               <button onClick={() => setCatalogRequest(request => request + 1)}
                 className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors">
@@ -1252,28 +1321,6 @@ export default function App() {
           </footer>
         </main>
       )}
-
-      </div>
-
-      {/* Floating cart bar — mobile only. Hidden in checkout, and on the account
-          page while signed out so it never competes with the login/OTP screens;
-          it reappears once the customer is signed in. */}
-      <FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />
-
-      {/* Bottom nav — mobile only. In-flow (not fixed) so it stays pinned.
-          Hidden while checkout is open: in iOS standalone the 100lvh shell is
-          taller than the fixed checkout overlay's viewport (the safe-area strip),
-          so this in-flow nav peeked out below the overlay and covered the
-          address / Place order footer. Checkout is a full-screen overlay, so the
-          nav has nothing to do there — same as the floating cart above.
-
-          Scoped to checkout on purpose: the nav's pinned behaviour everywhere else
-          is what the recent fix delivered, so do not gate it on other sheets. */}
-      {!checkoutActive && (
-        <div className="sm:hidden shrink-0">
-          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => openCatalogSearch(false)} />
-        </div>
-      )}
-    </div>
+    </AppShell>
   );
 }

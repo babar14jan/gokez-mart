@@ -215,7 +215,7 @@ export function evaluateStoreOpen(
     // An overnight window still open past its own close minute (22:00-02:00 at
     // 23:00) closes TOMORROW; one still inside the pre-close spill (at 01:00)
     // closes today.
-    const closesAt = isOvernight && nowMinutes >= today.close
+    const closesAt = isOvernight(today) && nowMinutes >= today.close
       ? istInstant(now, 1, today.close)
       : istInstant(now, 0, today.close);
     return {

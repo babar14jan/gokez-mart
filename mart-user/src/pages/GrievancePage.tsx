@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { authApi } from '../services/api';
+import { requestErrorMessage } from '../utils/networkError';
 import PageHeader from '../components/PageHeader';
 
 const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400';
@@ -37,7 +38,7 @@ export default function GrievancePage() {
       const r = await authApi.getGrievances();
       setGrievances(r.data.data || []);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Failed to submit. Please try again.');
+      setError(requestErrorMessage(err, 'Failed to submit. Please try again.'));
     } finally { setSubmitting(false); }
   };
 

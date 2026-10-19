@@ -15,6 +15,7 @@ import ProductCard from '../components/ProductCard';
 import SmartImage from '../components/SmartImage';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
+import { requestErrorMessage, isTransportFailure } from '../utils/networkError';
 import { useGuestAddressStore } from '../store/guestAddressStore';
 
 interface CheckoutPageProps {
@@ -542,7 +543,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       setValidationField(null);
       return true;
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'We could not save your name. Please try again.');
+      setError(requestErrorMessage(err, 'We could not save your name. Please try again.'));
       return false;
     }
   };
@@ -627,6 +628,13 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             }
           } catch (e: any) {
             if (cancelled) return;
+            if (isTransportFailure(e)) {
+              // Couldn't reach the server — the coupon may still be perfectly
+              // valid. Removing it over a network blip would silently drop the
+              // customer's discount, and blaming "your cart changed" would lie.
+              setOfferNotice('Couldn\u2019t re-check your coupon right now. It stays applied for now.');
+              return;
+            }
             removeCampaign();
             const message = e?.response?.data?.error || 'Your cart changed, so the coupon was removed.';
             const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
@@ -666,7 +674,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
           applyCampaign(campaign, target.coupon_code);
         } catch (e: any) {
           if (cancelled) return;
-          setOfferNotice(e?.response?.data?.error || 'This offer could not be applied.');
+          setOfferNotice(requestErrorMessage(e, 'This offer could not be applied.'));
         }
       } else {
         applyCampaign(target);
@@ -720,7 +728,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
         ? `${campaign.coupon_code || 'Welcome offer'} applied. This is your one welcome-offer redemption.`
         : 'Coupon applied');
     } catch (e: any) {
-      const message = e?.response?.data?.error || 'Invalid coupon';
+      const message = requestErrorMessage(e, 'Invalid coupon');
       const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
       setCouponSuccess('');
       if (minimumMatch) {
@@ -902,7 +910,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       } else {
         if (responseError === 'This combo is no longer available') {
           try {
-            const liveCatalog = await storeApi.getProducts(undefined, storeId);
+            // fresh: this runs after the server rejected the order, so the
+            // cache may hold the very catalog that caused the rejection.
+            const liveCatalog = await storeApi.getProducts(undefined, storeId, { fresh: true });
             const liveProductIds = new Set((liveCatalog.data.data || []).map(product => product.id));
             const staleItems = items.filter(item => !liveProductIds.has(item.productId));
             if (staleItems.length > 0) {

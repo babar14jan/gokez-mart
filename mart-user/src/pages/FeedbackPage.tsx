@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Loader2, Star } from 'lucide-react';
 import { feedbackApi } from '../services/api';
+import { requestErrorMessage } from '../utils/networkError';
 import PageHeader from '../components/PageHeader';
 
 const CATEGORIES = [
@@ -34,7 +35,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
       await feedbackApi.submit({ rating, category, message: message.trim() || undefined, storeId, orderId }, requestKey.current);
       setDone(true);
     } catch (e: any) {
-      setError(e?.response?.data?.error || 'Failed to submit. Please try again.');
+      setError(requestErrorMessage(e, 'Failed to submit. Please try again.'));
     } finally { setSubmitting(false); }
   };
 
