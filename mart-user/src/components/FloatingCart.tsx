@@ -12,7 +12,7 @@ export default function FloatingCart({ onOpen, hidden }: FloatingCartProps) {
   if (totalItems === 0 || hidden) return null;
 
   return (
-    <div className="sm:hidden fixed left-1/2 -translate-x-1/2 z-40" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px) + 8px)' }}>
+    <div className="sm:hidden absolute left-1/2 -translate-x-1/2 z-40" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px) + 8px)' }}>
       <button
         onClick={onOpen}
         className="relative flex items-center justify-center gap-2.5 rounded-full border border-emerald-900/25 bg-gradient-to-b from-[#2e8b57] to-[#218044] px-5 py-2 text-white shadow-lg shadow-emerald-900/40 ring-1 ring-inset ring-white/15 transition-all hover:from-[#35a06a] hover:to-[#256e49] hover:shadow-emerald-900/50 active:scale-95 active:from-[#218044] active:to-[#175c34] dark:border-emerald-400/25 dark:from-[#2e8b57] dark:to-[#1c7040] dark:shadow-emerald-950/50 whitespace-nowrap"
