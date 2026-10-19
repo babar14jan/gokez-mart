@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
@@ -6,6 +6,7 @@ import ProductCard from './ProductCard';
 import SmartImage from './SmartImage';
 import PageHeader from './PageHeader';
 import { useCartStore } from '../store/cartStore';
+import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 interface CatalogSearchSheetProps {
@@ -70,6 +71,22 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
+
+  // Record a search once the shopper pauses on a query, and flag the ones that
+  // returned nothing so the catalogue's real gaps are visible. The typed text is
+  // never sent -- only the result count -- so a phone number typed in the box
+  // can never reach the analytics table.
+  const lastTrackedQuery = useRef('');
+  useEffect(() => {
+    if (query.length < 2) return;
+    const timer = setTimeout(() => {
+      if (lastTrackedQuery.current === query) return;
+      lastTrackedQuery.current = query;
+      track('product_search', { itemCount: results.length });
+      if (results.length === 0) track('search_zero_results');
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [query, results.length]);
 
   const selectCategory = (id: string) => {
     setCategoryId(current => current === id ? null : id);

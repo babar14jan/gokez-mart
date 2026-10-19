@@ -378,6 +378,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const guestNameInput = useRef<HTMLInputElement>(null);
   const guestPhoneInput = useRef<HTMLInputElement>(null);
   const profileNameInput = useRef<HTMLInputElement>(null);
+  // Armed by the missing-details dialog when it sends a customer off to fill in
+  // their name and mobile. It lets the address step follow automatically, so the
+  // sheet only ever opens on its own as a continuation of that dialog.
+  const awaitingAddress = useRef(false);
   const { items, updateQty, removeItem, subtotal, clearCart } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress, updateAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile, setGuestProfile } = useCustomerAuthStore();
@@ -771,22 +775,34 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const nameComplete = isLoggedIn ? (Boolean(authName) || isValidGuestName(profileNameDraft)) : isValidGuestName(guestName);
   const checkoutName = isLoggedIn ? (authName || profileNameDraft.trim() || 'Customer') : guestName;
   const checkoutPhone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
+  const phoneComplete = isValidIndianMobile(checkoutPhone);
+  const addressComplete = isValidDeliveryAddress(resolvedAddress);
   const incompleteCheckoutDetails = [
     !nameComplete && 'name',
-    !isValidIndianMobile(checkoutPhone) && 'mobile number',
-    !isValidDeliveryAddress(resolvedAddress) && 'delivery address',
+    !phoneComplete && 'mobile number',
+    !addressComplete && 'delivery address',
   ].filter(Boolean) as string[];
 
   // Everything a delivery needs, named in one line, in the order it appears on
   // the page. Null the moment the order is ready to place.
   const missingFirstField: CheckoutValidationField =
     !nameComplete ? 'name'
-    : !isValidIndianMobile(checkoutPhone) ? 'phone'
-    : !isValidDeliveryAddress(resolvedAddress) ? 'address'
+    : !phoneComplete ? 'phone'
+    : !addressComplete ? 'address'
     : null;
-  const missingDetailsMessage = incompleteCheckoutDetails.length
-    ? `Please add your ${joinList(incompleteCheckoutDetails)} before placing the order.`
-    : '';
+
+  // Name/mobile and address are asked for in separate voices — the first is how
+  // we reach the customer, the second is where we take the order — and identity
+  // is always checked first, so the dialog only ever asks for one thing at a
+  // time instead of one sentence that lists everything at once.
+  const missingIdentity = !nameComplete || !phoneComplete;
+  const missingDetailsTitle = missingIdentity ? 'Name & mobile number' : 'Delivery address';
+  const missingDetailsAction = missingIdentity ? 'Add name & mobile' : 'Add delivery address';
+  const missingDetailsMessage = missingIdentity
+    ? (addressComplete
+        ? 'Please share your name and mobile number. We need them to deliver this order and keep you updated.'
+        : 'Please share your name and mobile number, then add a delivery address. We need them to complete this order.')
+    : 'Please add a complete delivery address so we know where to deliver this order.';
   // Sends the customer to the top-most missing field, opening the address sheet
   // when that is what is left to fill in.
   const focusFirstMissingField = () => {
@@ -799,9 +815,23 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       }
       return;
     }
-    if (!isValidIndianMobile(checkoutPhone)) { guestPhoneInput.current?.focus(); return; }
-    if (!isValidDeliveryAddress(resolvedAddress)) openAddressSheet();
+    if (!phoneComplete) { guestPhoneInput.current?.focus(); return; }
+    if (!addressComplete) openAddressSheet();
   };
+
+  // Carry the customer straight on to the address once the name and mobile the
+  // dialog asked for are in, instead of making them tap Place order a second
+  // time just to be told the same thing about the address. Address is the one
+  // step that cannot be done inline — it needs the map and the saved-address
+  // sheet — so it is worth a hand-off, but never an uninvited one: the flag is
+  // only set by that dialog.
+  useEffect(() => {
+    if (!awaitingAddress.current) return;
+    if (!nameComplete || !phoneComplete) return;
+    awaitingAddress.current = false;
+    if (!addressComplete) openAddressSheet();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameComplete, phoneComplete, addressComplete]);
 
   const selectedAddress = addresses.find(a => a.address === deliveryAddress);
   const selectedLabel = selectedAddress?.label ?? (guestAddress ? guestAddressLabel : 'Address');
@@ -836,9 +866,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
     if (couponLoading) return;
     let name = checkoutName;
     const phone = checkoutPhone;
-    // Gate the whole order on every delivery detail at once and explain the
-    // full shortfall in a single dialog, rather than bouncing the customer
-    // field by field. Nothing is sent until name, mobile and address are in.
+    // Nothing is sent until name, mobile and address are all in. The dialog
+    // leads with whichever is missing first on the page — name, then mobile,
+    // then address — so the customer is never bounced field by field.
     if (missingFirstField) {
       setError('');
       setValidationField(missingFirstField);
@@ -886,7 +916,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       }, orderRequestKey.current);
       const confirmedCampaignDiscount = Number(res.data.data.campaignDiscount) || 0;
       track('order_placed', { orderNumber: res.data.data.orderNumber, itemCount: lockedItems.length, value: res.data.data.total });
-      track('order_completed', { orderNumber: res.data.data.orderNumber, itemCount: lockedItems.length, value: res.data.data.total });
       const orderData = {
         orderNumber: res.data.data.orderNumber,
         trackingToken: res.data.data.trackingToken,
@@ -992,7 +1021,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       {/* Header */}
       <PageHeader title="My Cart" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
 
-      <form id="checkout-form" onSubmit={handleSubmit}>
+      {/* noValidate: the required-field guidance is our own dialog, which knows
+          about the whole order, not the browser's per-field bubble. Without it
+          the native bubble fires on submit and the dialog never gets a chance.
+          The inputs keep required/aria-required for assistive tech. */}
+      <form id="checkout-form" onSubmit={handleSubmit} noValidate>
         <div className="max-w-lg mx-auto px-4 py-4 pb-8 space-y-3">
 
           {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-2xl">{error}</div>}
@@ -1136,16 +1169,23 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             />
           )}
 
-          {/* One dialog for whatever a delivery still needs — name, mobile
-              number or address. Place order is never sent while it is open. */}
+          {/* One dialog for whatever a delivery still needs, asked in the order
+              it appears on the page: name and mobile first, then address. Place
+              order is never sent while it is open. */}
           {showMissingDetails && (
             <ConfirmDialog
-              title="Add your details"
+              title={missingDetailsTitle}
               message={missingDetailsMessage}
-              confirmLabel="Add details"
+              confirmLabel={missingDetailsAction}
               cancelLabel="Not now"
               danger={false}
-              onConfirm={() => { setShowMissingDetails(false); focusFirstMissingField(); }}
+              onConfirm={() => {
+                setShowMissingDetails(false);
+                // If name/mobile is what is being fixed and the address is still
+                // missing, the sheet follows as soon as they are filled in.
+                awaitingAddress.current = missingIdentity && !addressComplete;
+                focusFirstMissingField();
+              }}
               onCancel={() => setShowMissingDetails(false)}
             />
           )}
@@ -1171,6 +1211,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                     Name <span className="text-emerald-600" aria-hidden="true">*</span>
                   </label>
                   <input ref={guestNameInput} type="text" value={guestName} onChange={e => { setGuestName(e.target.value); if (validationField === 'name') setValidationField(null); }}
+                    onBlur={() => { if (guestName.trim() && !isValidGuestName(guestName)) setValidationField('name'); }}
                     placeholder="Enter your name" autoComplete="name" className={`${inp} h-11 px-3 py-2.5 ${validationField === 'name' ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`} required aria-required="true" aria-invalid={validationField === 'name'} aria-describedby={validationField === 'name' ? 'guest-name-error' : undefined} />
                   {validationField === 'name' && <p id="guest-name-error" className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">Enter your name using at least 2 characters.</p>}
                 </div>
@@ -1180,6 +1221,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                   </label>
                   <input ref={guestPhoneInput} type="tel" inputMode="numeric" value={guestPhone}
                     onChange={e => { setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); if (validationField === 'phone') setValidationField(null); }}
+                    onBlur={() => { if (guestPhone && !isValidIndianMobile(guestPhone)) setValidationField('phone'); }}
                     placeholder="10-digit mobile number" autoComplete="tel" className={`${inp} h-11 px-3 py-2.5 ${validationField === 'phone' ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}`} required aria-required="true" aria-invalid={validationField === 'phone'} aria-describedby={validationField === 'phone' ? 'guest-phone-error' : undefined} />
                   {validationField === 'phone' && <p id="guest-phone-error" className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">Enter a valid 10-digit Indian mobile number.</p>}
                 </div>
@@ -1428,11 +1470,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       <div className="checkout-sticky-footer sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
           {/* Address row — the same control as the account page, opens the sheet */}
-          <div className="px-3 pt-2.5">
+          <div className="px-3 pt-2">
             <AddressButton
               address={checkoutAddress}
               error={validationField === 'address'}
-              emptyLabel="Add a complete delivery address"
+              emptyLabel="No delivery address yet"
               onClick={() => { track('checkout_address_started'); openAddressSheet(); }}
             />
           </div>
@@ -1444,7 +1486,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
             {canCheckout && showMissingDetails && incompleteCheckoutDetails.length > 0 && (
               <p className="mb-2 text-center text-xs font-medium text-amber-700 dark:text-amber-400" role="status">
-                Still needed: {incompleteCheckoutDetails.join(', ')}
+                Still needed: {joinList(incompleteCheckoutDetails)}
               </p>
             )}
 

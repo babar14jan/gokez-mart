@@ -1,13 +1,19 @@
-import { MapPin, ChevronRight } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import type { SavedAddress } from '../store/customerStore';
 
 /**
  * The single, shared entry point into the address book.
  *
- * A pure-white pill showing the delivery address currently in use (label plus
- * line) or a prompt to add one. Tapping it opens AddressSheet, which owns the
- * whole flow from there — the list of saved addresses with "Add new address",
- * or the form directly when the book is empty.
+ * A compact row showing the delivery address currently in use — or a prompt to
+ * add one — with an action pill on the right reading "Add" or "Update", so the
+ * next tap is never a guess. Tapping anywhere opens AddressSheet, which owns the
+ * whole flow from there: the list of saved addresses with "Add new address", or
+ * the form directly when the book is empty.
+ *
+ * Deliberately low-profile. This sits in the checkout's sticky footer, where
+ * every pixel it takes is a pixel the basket loses, so it is a slim row rather
+ * than a tall card. The heading is a flat "Deliver to" and never
+ * "Deliver to Home": no home/office label is ever collected from the customer.
  *
  * Kept presentational and dumb on purpose: it reports the tap and shows whatever
  * address it is handed. Each host decides which address is "current" and what to
@@ -17,38 +23,40 @@ interface AddressButtonProps {
   /** The address currently in use; null/undefined shows the empty prompt. */
   address?: SavedAddress | null;
   onClick: () => void;
-  /** Context-specific heading above the address line. */
+  /** Overrides the "Deliver to" heading, e.g. the account page's address book. */
   heading?: string;
-  /** Empty-state label, e.g. a guest prompt. */
+  /** Empty-state line, e.g. a guest prompt. */
   emptyLabel?: string;
-  /** Highlights the button when the address still needs the shopper's attention. */
+  /** Highlights the row when the address still needs the shopper's attention. */
   error?: boolean;
   className?: string;
 }
 
 export default function AddressButton({ address, onClick, heading, emptyLabel = 'Add your delivery address', error = false, className = '' }: AddressButtonProps) {
   const surface = error
-    ? 'bg-red-50 ring-2 ring-red-300 dark:bg-red-950/20 dark:ring-red-900'
+    ? 'bg-red-50 ring-1 ring-red-300 dark:bg-red-950/20 dark:ring-red-900'
     : 'bg-white ring-1 ring-[#e9edf2] hover:bg-gray-50 active:bg-gray-100 dark:bg-slate-800 dark:ring-slate-700 dark:hover:bg-slate-700/60';
   return (
     <button
       type="button"
       onClick={onClick}
       aria-invalid={error || undefined}
-      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left shadow-[0_2px_10px_rgba(23,32,51,0.05)] transition-colors ${surface} ${className}`}
+      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${surface} ${className}`}
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/20">
-        <MapPin className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-      </span>
+      <MapPin className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[11px] font-bold uppercase tracking-[0.04em] text-[#687386] dark:text-slate-400">
-          {heading || (address ? `Deliver to ${address.label}` : 'Delivery address')}
+        <span className="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#687386] dark:text-slate-400">
+          {heading || 'Deliver to'}
         </span>
-        <span className="mt-0.5 block truncate text-sm font-semibold text-[#172033] dark:text-white">
+        <span className={`mt-0.5 block truncate text-[13px] ${address ? 'font-semibold text-[#172033] dark:text-white' : 'font-medium text-[#687386] dark:text-slate-400'}`}>
           {address ? address.address : emptyLabel}
         </span>
       </span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+      {/* A span, not a button: the whole row is already the control, so a nested
+          button would be invalid markup and a second, confusing tab stop. */}
+      <span className="shrink-0 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-400">
+        {address ? 'Update' : 'Add'}
+      </span>
     </button>
   );
 }
