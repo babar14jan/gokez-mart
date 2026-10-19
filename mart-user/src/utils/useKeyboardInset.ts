@@ -27,8 +27,12 @@ function isTextField(el: Element | null): boolean {
  *      onFocus/onBlur and the behaviour cannot drift between screens.
  *
  *   2. `--kb` and `.kb-open` — how much of the layout viewport the keyboard is
- *      covering, from the VisualViewport API. Pair `--kb` with `.page-shell`
- *      in index.css.
+ *      covering, from the VisualViewport API. `.kb-open` is what the keyboard
+ *      CSS in index.css keys off. `--kb` is still published as a px value, but
+ *      the fixed `.app-shell` / `.page-shell` no longer consume it: a fixed
+ *      frame must keep a stable height while the keyboard animates, and the
+ *      browser's own scroll-into-view handles the focused field. Treat `--kb`
+ *      as available for future opt-in rules, not as a shell input.
  *
  * Why both are needed:
  *

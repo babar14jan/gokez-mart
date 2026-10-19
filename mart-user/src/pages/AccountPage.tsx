@@ -585,7 +585,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </section>
 
         <section className="pt-1 text-center">
-          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.0.2</p>
+          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: V.0.1.2</p>
           {footer}
         </section>
       </div>
