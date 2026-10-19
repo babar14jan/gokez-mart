@@ -15,10 +15,10 @@ import { BRAND_DESCRIPTION, BRAND_NAME as BRAND, BRAND_SLOGAN as SLOGAN } from '
 
 const SITE_ORIGIN = 'https://mart.gokez.com';
 
-// Matches the `View` union in App.tsx. Five views are indexable (home, about,
-// what-is-gokez-mart, grievance, feedback). The legal pages (privacy, terms) are
-// public but noindex, and everything else is an authenticated or transactional
-// surface.
+// Matches the `View` union in App.tsx. Three views are indexable (home, about,
+// what-is-gokez-mart). The legal and support pages (privacy, terms, grievance,
+// feedback) are public but noindex, and everything else is an authenticated or
+// transactional surface.
 export type SeoView =
   | 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'grievance' | 'feedback' | 'privacy' | 'terms'
   | 'notification-settings' | 'delete-account' | 'account' | 'orders' | 'checkout';
@@ -53,11 +53,12 @@ const ROUTES: Record<SeoView, RouteMeta> = {
     path: '/what-is-gokez-mart/',
     indexable: true,
   },
-  // Legal pages. Reachable and linked (they must stay publicly accessible for
-  // App Store / Play Store and DPDP requirements), but deliberately NOT indexable:
-  // they carry no brand-relevant content and should stay out of search results.
-  // Their `path` is kept so a crawler still sees a self-referential canonical
-  // alongside the noindex, rather than the homepage canonical.
+  // Legal and support pages. Reachable and linked (privacy/terms must stay
+  // publicly accessible for App Store / Play Store and DPDP requirements), but
+  // deliberately NOT indexable: they carry no brand-relevant content and should
+  // stay out of search results. Their `path` is kept so a crawler still sees a
+  // self-referential canonical alongside the noindex, rather than the homepage
+  // canonical.
   privacy: {
     title: `Privacy Policy | ${BRAND}`,
     description: `How ${BRAND} collects, uses and protects your personal data when you shop with local stores on ${SITE_ORIGIN.replace('https://', '')}.`,
@@ -74,13 +75,13 @@ const ROUTES: Record<SeoView, RouteMeta> = {
     title: `Grievance Redressal | ${BRAND}`,
     description: `Raise a grievance with ${BRAND} about an order, delivery or store, and track the response from the company that operates the platform.`,
     path: '/grievance/',
-    indexable: true,
+    indexable: false,
   },
   feedback: {
     title: `Feedback | ${BRAND}`,
     description: `Tell ${BRAND} about your shopping or delivery experience, so the platform connecting you with local stores can be improved.`,
     path: '/feedback/',
-    indexable: true,
+    indexable: false,
   },
 
   // ── Not indexable ────────────────────────────────────────────────────────────

@@ -98,13 +98,15 @@ if (!/^<\?xml version="1\.0" encoding="UTF-8"\?>/.test(sitemap)) {
 }
 if (sitemap.charCodeAt(0) === 0xfeff) fail('public/sitemap.xml has a UTF-8 BOM');
 const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
-const expected = ['/', '/about/', '/what-is-gokez-mart/', '/grievance/', '/feedback/']
+const expected = ['/', '/about/', '/what-is-gokez-mart/']
   .map(p => (p === '/' ? `${ORIGIN}/` : `${ORIGIN}${p}`));
 // Reachable and linked, but deliberately kept out of the sitemap and marked
 // noindex everywhere (prerendered HTML, seo.ts runtime and the build output). A
 // crawler that reads the raw HTML must see "noindex" on these — otherwise they
-// get indexed as thin legal pages, which is the exact thing being prevented.
-const NOINDEX_PATHS = ['/privacy/', '/terms/'];
+// get indexed as thin legal/support pages, which is the exact thing being
+// prevented.
+const NOINDEX_PATHS = ['/privacy/', '/terms/', '/grievance/', '/feedback/'];
+const NOINDEX_LABEL = NOINDEX_PATHS.join(', ');
 if (JSON.stringify(locs) !== JSON.stringify(expected)) {
   fail(`public/sitemap.xml URL set is wrong.\n      expected: ${expected.join(', ')}\n      actual:   ${locs.join(', ')}`);
 } else ok(`sitemap.xml declares exactly the ${expected.length} public URLs`);
@@ -125,7 +127,7 @@ for (const noindexPath of NOINDEX_PATHS) {
     fail(`public/sitemap.xml lists ${ORIGIN}${noindexPath} but that page is marked noindex — remove it from the sitemap`);
   }
 }
-ok('noindex pages (/privacy/, /terms/) are absent from the sitemap');
+ok(`noindex pages (${NOINDEX_LABEL}) are absent from the sitemap`);
 
 // ── 4. index.html metadata hygiene ──────────────────────────────────────────
 const html = read(join(ROOT, 'index.html'));
@@ -198,13 +200,13 @@ if (!seo) {
   // The legal pages must be non-indexable at runtime as well as in the raw HTML.
   // Read the flag straight from each ROUTES entry (non-greedy up to the entry's
   // own first `indexable:`).
-  for (const legal of ['privacy', 'terms']) {
+  for (const legal of ['privacy', 'terms', 'grievance', 'feedback']) {
     const flag = (src.match(new RegExp(`${legal}:\\s*\\{[\\s\\S]*?indexable:\\s*(true|false)`)) || [])[1];
     if (flag !== 'false') {
-      fail(`src/utils/seo.ts does not mark the legal page "${legal}" indexable: false (found "${flag ?? 'nothing'}") — its runtime robots meta would stay index, follow`);
+      fail(`src/utils/seo.ts does not mark the legal/support page "${legal}" indexable: false (found "${flag ?? 'nothing'}") — its runtime robots meta would stay index, follow`);
     }
   }
-  ok('src/utils/seo.ts keeps /privacy/ and /terms/ non-indexable');
+  ok(`src/utils/seo.ts keeps ${NOINDEX_LABEL} non-indexable`);
 }
 if (seo) {
   // Assert on every public view resolved through ROUTES, the same way applySeo
@@ -229,7 +231,7 @@ if (seo) {
   for (const noindexPath of NOINDEX_PATHS) {
     if (seoPaths.includes(noindexPath)) fail(`seo.ts still exposes ${noindexPath} as an indexable public path`);
   }
-  ok('seo.ts keeps /privacy/ and /terms/ out of the indexable public path set');
+  ok(`seo.ts keeps ${NOINDEX_LABEL} out of the indexable public path set`);
 }
 
 // ── 6. Structured data ──────────────────────────────────────────────────────
@@ -335,7 +337,7 @@ if (exists(DIST)) {
       fail(`prerendered legal page ${file} has no self-canonical ${ORIGIN}${noindexPath}`);
     }
   }
-  ok('legal pages (/privacy/, /terms/) prerendered with noindex and a self-canonical');
+  ok(`legal/support pages (${NOINDEX_LABEL}) prerendered with noindex and a self-canonical`);
 } else {
   ok('dist/ not present — skipped build-output checks (run npm run build first)');
 }
