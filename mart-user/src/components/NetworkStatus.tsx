@@ -3,31 +3,56 @@ import { RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 import { BACKEND_NOTICE } from '../constants/backendNotice';
 
-const HEALTH_TIMEOUT_MS = 3500;
+// Generous on purpose. A dead backend rejects the connection instantly (or
+// answers with a 5xx), so a long ceiling costs nothing there; what it buys is
+// that a slow 3G phone is not blanked with an outage screen for being slow.
+const HEALTH_TIMEOUT_MS = 8000;
+// Same reasoning for the tie-breaker below: a device with no internet fails
+// this in milliseconds, only a slow link approaches the ceiling.
+const CONNECTIVITY_TIMEOUT_MS = 8000;
 const RETRY_INTERVAL_MS = 2500;
 const HEALTH_CHECK_INTERVAL_MS = 15000;
+// How often to re-check while an outage screen is already up, waiting for the
+// second confirmation that lets it come down.
+const RECHECK_INTERVAL_MS = 2000;
+// A screen that is already up needs this many consecutive successes to come
+// down, so one lucky response on a flaky link cannot blink the store.
+const RECOVER_SUCCESSES = 2;
 
 // A transport failure only tells us that *something* is unreachable, and the
 // browser reports "customer has no wifi" and "our backend's DNS is gone" as the
 // exact same error. This same-origin URL is the tie-breaker: it is a tiny static
 // file served by Cloudflare Pages and never by the API, so if it loads the
-// customer's connection is fine and the problem is our backend — and if it does
-// not, the customer is genuinely offline.
+// customer's connection is fine and the problem is our backend.
 const CONNECTIVITY_PROBE_URL = '/version.json';
-const CONNECTIVITY_TIMEOUT_MS = 3000;
 
-async function hasUsableNetwork(): Promise<boolean> {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
+type Connectivity = 'online' | 'offline' | 'slow';
+
+// Note the middle outcome. An aborted fetch means "this took too long", not
+// "there is no internet" — conflating the two is what tells a shopper on a slow
+// connection to check a wifi that is working fine.
+async function probeConnectivity(): Promise<Connectivity> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CONNECTIVITY_TIMEOUT_MS);
   try {
     await fetch(CONNECTIVITY_PROBE_URL, { cache: 'no-store', signal: controller.signal });
-    return true;
-  } catch {
-    return false;
+    return 'online';
+  } catch (err: any) {
+    return err?.name === 'AbortError' ? 'slow' : 'offline';
   } finally {
     clearTimeout(timer);
   }
+}
+
+// A burst of failing requests (a page of catalogue tiles on a dead backend)
+// would otherwise fire one probe each. Share a single in-flight probe instead.
+let inFlightConnectivity: Promise<Connectivity> | null = null;
+function probeConnectivityOnce(): Promise<Connectivity> {
+  if (!inFlightConnectivity) {
+    inFlightConnectivity = probeConnectivity().finally(() => { inFlightConnectivity = null; });
+  }
+  return inFlightConnectivity;
 }
 
 type Status = 'checking' | 'connected' | 'failed';
@@ -107,11 +132,18 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
   useEffect(() => {
     let disposed = false;
     let probeTimer: ReturnType<typeof setTimeout> | undefined;
+    // Local, not state: these only steer the loop below and must never trigger
+    // a re-render. `showingFailure` mirrors that an outage screen is up so the
+    // dismissal rules can be applied without reading stale state.
+    let showingFailure = false;
+    let consecutiveSuccesses = 0;
 
     // Both screens come up the moment they are known — there is no confirmation
     // delay, so an outage is never a silent stall.
     const showFailure = (nextMode: Mode) => {
       if (disposed) return;
+      showingFailure = true;
+      consecutiveSuccesses = 0;
       setMode(nextMode);
       setStatus('failed');
       setChecking(false);
@@ -133,15 +165,33 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
       try {
         await api.get('/health', { timeout: HEALTH_TIMEOUT_MS });
         if (disposed) return;
-        setStatus('connected');
-        setChecking(false);
-        scheduleProbe(HEALTH_CHECK_INTERVAL_MS);
+        consecutiveSuccesses += 1;
+        if (!showingFailure || consecutiveSuccesses >= RECOVER_SUCCESSES) {
+          showingFailure = false;
+          consecutiveSuccesses = 0;
+          setStatus('connected');
+          setChecking(false);
+          scheduleProbe(HEALTH_CHECK_INTERVAL_MS);
+        } else {
+          scheduleProbe(RECHECK_INTERVAL_MS);
+        }
       } catch (err: any) {
         if (disposed) return;
         // An HTTP response proves the connection works, so the backend itself is
         // unhealthy. No response (or a timeout) is ambiguous — ask the network.
         const answered = Boolean(err?.response);
-        showFailure(answered || (await hasUsableNetwork()) ? 'server' : 'offline');
+        if (!answered) {
+          const connectivity = await probeConnectivityOnce();
+          if (disposed) return;
+          if (connectivity === 'offline') { showFailure('offline'); scheduleProbe(RETRY_INTERVAL_MS); return; }
+          if (connectivity === 'online') { showFailure('server'); scheduleProbe(RETRY_INTERVAL_MS); return; }
+          // Reachable but slow: honest about it rather than blaming the wifi,
+          // and the notice still offers a way to re-check.
+          showFailure('timeout');
+          scheduleProbe(RETRY_INTERVAL_MS);
+          return;
+        }
+        showFailure('server');
         scheduleProbe(RETRY_INTERVAL_MS);
       }
     };
@@ -151,14 +201,18 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     const onApiFailed = (event: Event) => {
       const detail = (event as CustomEvent<ApiFailedDetail>).detail || {};
       void (async () => {
+        if (disposed) return;
         if (detail.server) {
           // An HTTP 5xx: the backend answered, so the customer's connection is fine.
           showFailure('server');
           return;
         }
         if (!detail.offline && !detail.timeout) return;
+        const connectivity = await probeConnectivityOnce();
         if (disposed) return;
-        showFailure((await hasUsableNetwork()) ? 'server' : 'offline');
+        if (connectivity === 'offline') showFailure('offline');
+        else if (connectivity === 'online') showFailure('server');
+        else showFailure('timeout');
       })();
     };
 
@@ -170,6 +224,8 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
       // Coming back online: drop the overlay right away so the store reappears,
       // then confirm with a probe (the app also refreshes its catalogue on
       // 'online', so recovery never clears what is already rendered).
+      showingFailure = false;
+      consecutiveSuccesses = 0;
       setChecking(false);
       setStatus('checking');
       scheduleProbe(0);
