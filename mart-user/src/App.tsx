@@ -1082,7 +1082,7 @@ export default function App() {
           pinned to the screen bottom instead of being sized to an ancestor
           scroll container. */}
       {checkoutActive && createPortal(
-        <div className="fixed inset-0 z-[55]">
+        <div className="app-viewport-overlay fixed inset-0 z-[55]">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
             onClick={handleCheckoutClose} />
           {/* Mobile — full screen slide up */}

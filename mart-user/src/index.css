@@ -129,22 +129,24 @@ html, body { overscroll-behavior-y: none; }
     overflow: hidden;
   }
 
-  /* iOS WebKit sizes the layout viewport (the containing block of a
-     position:fixed element) as the screen MINUS the safe area / dynamic UI, so
-     `inset: 0` leaves an unpainted strip below the in-flow bottom nav — an empty
-     gap under the nav buttons. The large viewport height (100lvh) is the true
-     screen on iOS, so pin the shell to it there; top:0 from inset:0 wins and the
-     explicit height makes bottom:0 a no-op.
+  /* Every full-viewport fixed surface the app puts bottom-anchored chrome on
+     must reach the PHYSICAL screen edge, not the layout viewport edge.
 
-     Guarded with @supports(-webkit-touch-callout): that property is implemented
-     only by Safari/WebKit on iOS (caniuse: Android Chrome, Samsung, Firefox all
-     unsupported). Android must keep the plain `inset: 0` — 100lvh there is the
-     URL-bar-retracted height, which would push the nav below the fold while the
-     bar is visible. */
-  @supports (-webkit-touch-callout: none) {
-    .app-shell {
-      height: 100lvh;
-    }
+     On iOS the containing block of a `position: fixed` element stops at the
+     safe-area inset, so a plain `inset: 0` frame is ~34px short of the screen
+     bottom (the home indicator): the in-flow bottom nav floats up over an
+     unpainted strip, the floating cart and the checkout's `sticky bottom-0`
+     footer leave the same gap. Extending only the BOTTOM edge by the inset
+     closes exactly that strip. Do not use `height: 100lvh` for this: lvh is the
+     toolbars-RETRACTED height, so it overshoots when the URL bar is visible and
+     shoves the nav below the fold / behind a stray white band.
+
+     env(safe-area-inset-bottom) is 0px on Android/desktop, so `bottom` stays 0
+     there and nothing changes. Applied to the shell and to any portalled
+     full-screen surface that owns bottom chrome (e.g. the checkout overlay). */
+  .app-shell,
+  .app-viewport-overlay {
+    bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
   }
 
   .app-scroll {
