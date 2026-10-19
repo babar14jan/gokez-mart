@@ -107,6 +107,16 @@ export function useKeyboardInset(): void {
         open = open ? covered > CLOSE_AT : covered > OPEN_AT;
         const root = document.documentElement;
         root.style.setProperty('--kb', `${open ? Math.round(covered) : 0}px`);
+        // --vv-bottom: how far the LAYOUT viewport bottom sits below the VISIBLE
+        // bottom. The fixed `.app-shell` is `inset: 0`, i.e. sized to the layout
+        // viewport, so in an iOS Safari tab it ends behind the bottom toolbar and
+        // the in-flow nav rides under that chrome. A `position: fixed; bottom: 0`
+        // element (what mart-hub's nav uses) instead tracks the visual viewport,
+        // which is why the hub has no gap. Publishing the strip lets the shell
+        // shrink its bottom edge to the visible bottom, so the in-flow nav lands
+        // exactly where the hub's fixed nav does. Zero while the keyboard is up so
+        // the frame never collapses with it.
+        root.style.setProperty('--vv-bottom', `${open ? 0 : Math.round(covered)}px`);
         // A class as well as the variable: some adjustments (the bottom-nav
         // reservation, the login hero cap) are only sensible while the keyboard
         // is actually up, and keying them off one flag keeps them in CSS.
@@ -122,6 +132,7 @@ export function useKeyboardInset(): void {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
       document.documentElement.style.removeProperty('--kb');
+      document.documentElement.style.removeProperty('--vv-bottom');
       document.documentElement.classList.remove('kb-open');
     };
   }, []);

@@ -429,7 +429,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#18191a' : '#218044');
+    if (meta) meta.setAttribute('content', isDark ? '#18191a' : '#ffffff');
   }, [isDark, view]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
