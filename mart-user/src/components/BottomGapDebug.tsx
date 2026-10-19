@@ -34,7 +34,14 @@ export default function BottomGapDebug() {
         /* ignore */
       }
     }
-    if (!flagged) return;
+    // TEMP DIAGNOSTIC: the installed PWA has its own storage partition and opens
+    // at the manifest start_url ("/"), so the Safari flag/query never reaches it.
+    // Show the readout for any installed/standalone run. REMOVE before merging to
+    // main. (Safari/Android/desktop users still need ?debuggap.)
+    const standalone =
+      document.documentElement.classList.contains('installed-pwa') ||
+      matchMedia('(display-mode: standalone)').matches;
+    if (!flagged && !standalone) return;
 
     const el = document.createElement('div');
     el.style.cssText =
