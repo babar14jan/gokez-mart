@@ -174,7 +174,7 @@ html, body { overscroll-behavior-y: none; }
   @supports (-webkit-touch-callout: none) {
     .app-shell,
     .app-viewport-overlay {
-      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 5px);
+      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
     }
   }
 
@@ -230,7 +230,7 @@ html, body { overscroll-behavior-y: none; }
   }
 
   .dark .app-tint-bottom {
-    background-color: #0f172a;
+    background-color: #18191a;
   }
 
   .app-scroll {
