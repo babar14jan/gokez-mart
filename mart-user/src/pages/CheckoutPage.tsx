@@ -757,6 +757,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
     ? 0
     : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
   const total = Math.max(0, sub + actualDelivery - displayedCampaignDiscount);
+  // The figure the sticky footer paints. Kept as its own value so the footer can
+  // key the amount node on it (see .checkout-sticky-footer in index.css): iOS
+  // WebKit leaves the composited sticky layer showing a stale string unless the
+  // text node is actually replaced, and a keyed node guarantees that.
+  const payAmount = loading && submittedTotal != null ? submittedTotal : total;
   const canCheckout = sub >= minOrder && items.length > 0;
 
   const resolvedAddress = deliveryAddress;
@@ -1446,7 +1451,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             <div className="flex items-center gap-3">
               <div className="w-16 flex-shrink-0 text-center">
                 <p className="text-[10px] text-gray-500 dark:text-slate-400">To pay</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">₹{(loading && submittedTotal != null ? submittedTotal : total).toFixed(0)}</p>
+                {/* Keyed on the value so React replaces the node whenever the
+                    amount changes; without this iOS WebKit keeps painting the
+                    old string in the sticky layer (WebKit bug 209376). */}
+                <p key={payAmount} className="text-lg font-bold text-gray-900 dark:text-white">₹{payAmount.toFixed(0)}</p>
               </div>
               <button type="submit" form="checkout-form" disabled={loading || couponLoading}
                 className="flex-1 h-14 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-[#15803d] dark:text-white dark:hover:bg-[#166534]">

@@ -1088,8 +1088,12 @@ export default function App() {
         <div className="app-viewport-overlay fixed inset-0 z-[55]">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
             onClick={handleCheckoutClose} />
-          {/* Mobile — full screen slide up */}
-          <div className="sm:hidden absolute inset-0 bg-white dark:bg-slate-900 overflow-y-auto">
+          {/* Mobile — full screen slide up. `isolate` makes this scroller its own
+              stacking context: iOS WebKit fails to repaint a position:sticky
+              child of an overflow scroller that also has positioned siblings
+              (the "To pay" footer behind the cart list), and isolating the
+              scroll container is the documented fix. */}
+          <div className="sm:hidden isolate absolute inset-0 bg-white dark:bg-slate-900 overflow-y-auto">
             <CheckoutPage
               settings={settings}
               zoneName={selectedZone?.name}
@@ -1102,8 +1106,9 @@ export default function App() {
               onSuccess={(num: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => { setCatalogSearchOpen(false); setCheckoutActive(false); setSuccessData({ num, preference, storeName, savedAmount, trackingToken: orderData?.trackingToken, items: orderData?.items, total: orderData?.total, guestAddress: orderData?.guestAddress, guestName: orderData?.guestName, guestPhone: orderData?.guestPhone, createdAt: orderData?.createdAt, status: orderData?.status, scheduledLabel: orderData?.scheduledLabel }); }}
             />
           </div>
-          {/* Desktop — right side drawer */}
-          <div className="hidden sm:block absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
+          {/* Desktop — right side drawer (same `isolate` reasoning as the mobile
+              scroller above). */}
+          <div className="hidden sm:block isolate absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
             <CheckoutPage
               settings={settings}
               zoneName={selectedZone?.name}

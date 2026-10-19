@@ -60,13 +60,21 @@ html, body { overscroll-behavior-y: none; }
 }
 
 /* The checkout footer is a position:sticky child of the scrolling checkout
-   overlay, so it shares the scroller with the cart list above it. When a row is
-   added (suggestion "Add") or removed (last-item trash) the list reflows in the
-   same frame as the "To pay" text changes, and iOS WebKit repaints the sticky
-   layer at a stale offset (WebKit bug 209376, "repaint rect is offset by
-   layoutDelta"), leaving the amount visibly stale until the next scroll.
-   Promoting the footer to its own compositing layer makes it repaint correctly
-   without touching layout. Do not add will-change here (WebKit bug 236876). */
+   overlay, so it shares the scroller with the cart list above it. Whenever the
+   cart changes in the same frame as the "To pay" text changes, iOS WebKit
+   repaints the sticky layer at a stale offset (WebKit bug 209376, "repaint rect
+   is offset by layoutDelta" / "Text content not getting updated in sticky
+   element"), leaving the amount visibly stale until the next scroll.
+
+   Two complementary defences, because the bug shows in two shapes:
+   1. The layer promotion below (translateZ(0)) fixes the reflow case (a row is
+      added via a suggestion "Add" or removed via the last-item trash, so the
+      list height changes). Do not add will-change here (WebKit bug 236876).
+   2. That still leaves a text-only +/- on an existing row stale, because WebKit
+      re-uses the cached raster of the composited layer. So the amount node in
+      CheckoutPage is `key`ed on its value: React replaces the node, the layer's
+      contents are invalidated, and it must repaint. Keep both — one is not
+      enough on its own. */
 .checkout-sticky-footer {
   transform: translateZ(0);
 }
@@ -174,7 +182,7 @@ html, body { overscroll-behavior-y: none; }
   @supports (-webkit-touch-callout: none) {
     .app-shell,
     .app-viewport-overlay {
-      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
+      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 12px);
     }
   }
 
