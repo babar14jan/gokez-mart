@@ -16,6 +16,7 @@ import SmartImage from '../components/SmartImage';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 import { requestErrorMessage, isTransportFailure } from '../utils/networkError';
+import { isIOSDevice } from '../utils/isIOSDevice';
 import { useGuestAddressStore } from '../store/guestAddressStore';
 
 interface CheckoutPageProps {
@@ -1045,7 +1046,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
           </div>
 
           {/* ── You may also like ── */}
-          {visibleSuggestions.length > 0 && (
+          {/* Hidden on iOS: WebKit fails to repaint the sticky "To pay" bar after
+              an ADD tap here — the cart updates but the painted total stays stale
+              until the next touch, so iOS users see a wrong amount. Android and
+              desktop are unaffected. Never show a total we can't trust. */}
+          {!isIOSDevice() && visibleSuggestions.length > 0 && (
             <div>
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">You may also like</p>
               {/* No scroll-snap here: iOS Safari swallows taps on buttons inside a
