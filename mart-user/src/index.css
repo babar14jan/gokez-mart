@@ -130,23 +130,26 @@ html, body { overscroll-behavior-y: none; }
   }
 
   /* Every full-viewport fixed surface the app puts bottom-anchored chrome on
-     must reach the PHYSICAL screen edge, not the layout viewport edge.
+     must reach the bottom of the VISIBLE viewport, not the layout viewport.
 
-     On iOS the containing block of a `position: fixed` element stops at the
-     safe-area inset, so a plain `inset: 0` frame is ~34px short of the screen
-     bottom (the home indicator): the in-flow bottom nav floats up over an
-     unpainted strip, the floating cart and the checkout's `sticky bottom-0`
-     footer leave the same gap. Extending only the BOTTOM edge by the inset
-     closes exactly that strip. Do not use `height: 100lvh` for this: lvh is the
-     toolbars-RETRACTED height, so it overshoots when the URL bar is visible and
-     shoves the nav below the fold / behind a stray white band.
+     A `position: fixed; inset: 0` frame is sized to the layout viewport, so in
+     an iOS Safari tab it ends behind the bottom toolbar and the in-flow nav
+     rides under that chrome. `--vv-bottom` (published by useKeyboardInset) is
+     the measured strip the toolbar/chrome hides, so subtracting it pulls the
+     frame's bottom edge up to the visible bottom -- exactly where a
+     `position: fixed; bottom: 0` bar (what mart-hub uses) sits. In standalone
+     the toolbar is gone (strip 0), and `env(safe-area-inset-bottom)` extends the
+     frame down over the home indicator so nothing unpainted shows there.
+     Do not use `height: 100lvh` for this: lvh is the toolbars-RETRACTED height,
+     so it overshoots when the URL bar is visible and shoves the nav below the
+     fold / behind a stray white band.
 
-     env(safe-area-inset-bottom) is 0px on Android/desktop, so `bottom` stays 0
-     there and nothing changes. Applied to the shell and to any portalled
+     env(safe-area-inset-bottom) is 0px on Android/desktop, so the second term
+     stays 0 there and nothing changes. Applied to the shell and to any portalled
      full-screen surface that owns bottom chrome (e.g. the checkout overlay). */
   .app-shell,
   .app-viewport-overlay {
-    bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px));
   }
 
   .app-scroll {
