@@ -48,6 +48,7 @@ const pg = require('pg');
 const { FunnelEventService, FUNNEL_EVENTS, normaliseChannel } = require('../src/services/funnelEvent.service');
 const { FunnelCartService } = require('../src/services/funnelCart.service');
 const { FunnelService } = require('../src/services/funnel.service');
+const { CustomerAnalyticsService } = require('../src/services/customerAnalytics.service');
 
 /** Reads a repo file by workspace-relative path. */
 const read = (p: string) => require('fs').readFileSync(require('path').resolve(__dirname, '../..', p), 'utf8');
@@ -573,7 +574,19 @@ describe('J. Canonical engagement and attribution definitions remain separate', 
     assert.ok(/'category_viewed', 'product_search', 'product_viewed'/.test(src), 'category, search, and product interactions no longer qualify engagement');
     assert.ok(/'cart_started', 'cart_added'/.test(src), 'cart actions no longer qualify engagement');
     assert.ok(/'checkout_started', 'checkout_address_started'/.test(src), 'checkout actions no longer qualify engagement');
-    assert.equal(/pwa|install/i.test(src), false, 'PWA installation is incorrectly treated as funnel engagement');
+    // PWA is now a device dimension, so the word appears in the file. The
+    // invariant is narrower: installing the app must never itself qualify a
+    // session as engaged, so the engagement expression must not mention it.
+    const engaged = src.slice(src.indexOf('AS engaged_event'), src.indexOf('AS discovery'));
+    assert.equal(/pwa|install/i.test(engaged), false, 'PWA installation is incorrectly treated as funnel engagement');
+  });
+
+  test('the device breakdown is reported and unknown devices are labelled, not dropped', () => {
+    const src = read('mart-backend/src/services/customerAnalytics.service.ts');
+    assert.ok(/COALESCE\(NULLIF\(s\.platform, ''\), 'unknown'\)/.test(src),
+      'sessions with no device are dropped, so the platform rows cannot sum to the session total');
+    assert.ok(/pwaSessions: appVsBrowser\.pwa_sessions/.test(src),
+      'the installed-app versus browser split is not reported');
   });
 
   test('discovery preserves unique-session and raw-event measures separately', () => {
@@ -635,5 +648,122 @@ describe('L. First-order campaign redemption is single-use under retries', () =>
     const migration = read('mart-backend/src/database/migrations/045_idempotency_guards.sql');
     assert.ok(/UNIQUE INDEX IF NOT EXISTS uq_campaign_uses_order ON mart_campaign_uses\(order_id\)/.test(migration),
       'one order can now create more than one campaign redemption record');
+  });
+});
+
+describe('M. The device dimension is captured on the session, allow-listed server-side', () => {
+  test('the session insert persists the device columns', () => {
+    const src = read('mart-backend/src/services/funnelEvent.service.ts');
+    assert.ok(/device_category, browser, is_pwa/.test(src),
+      'device columns are not written when the session is first seen');
+  });
+
+  test('an allow-listed device is stored, a hostile value is dropped to NULL', async () => {
+    await FunnelEventService.recordEvent({
+      sessionId: 'sess-a', eventName: 'session_start',
+      platform: 'ios', deviceCategory: 'mobile', browser: 'safari', isPwa: true,
+    });
+    const good = calls.find(c => /INSERT INTO mart_funnel_sessions/.test(c.text))!;
+    assert.deepEqual(good.params.slice(13), ['ios', 'mobile', 'safari', true]);
+
+    calls.length = 0;
+    await FunnelEventService.recordEvent({
+      sessionId: 'sess-b', eventName: 'session_start',
+      platform: "'; DROP TABLE--", deviceCategory: 'watch', browser: 'netscape', isPwa: 'yes' as any,
+    });
+    const bad = calls.find(c => /INSERT INTO mart_funnel_sessions/.test(c.text))!;
+    assert.deepEqual(bad.params.slice(13), [null, null, null, false],
+      'an unrecognised platform/category/browser must not be persisted');
+  });
+
+  test('the storefront actually sends the device facts', () => {
+    const src = read('mart-user/src/utils/track.ts');
+    assert.ok(/getDeviceInfo\(\)/.test(src), 'track() no longer reads device info');
+    assert.ok(/platform: device\.platform/.test(src), 'the device platform is not sent with events');
+    const device = read('mart-user/src/utils/install.ts');
+    assert.ok(/export function getDeviceInfo/.test(device), 'the device helper was removed');
+  });
+});
+
+describe('N. Search and order events carry honest signal', () => {
+  test('the storefront emits product_search and flags zero-result searches', () => {
+    const src = read('mart-user/src/components/CatalogSearchSheet.tsx');
+    assert.ok(/track\('product_search'/.test(src),
+      'product_search is declared but never emitted, so discovery metrics are always zero');
+    assert.ok(/track\('search_zero_results'\)/.test(src),
+      'a search that matched nothing is not recorded');
+  });
+
+  test('a placed order no longer masquerades as completed in the same tick', () => {
+    const src = read('mart-user/src/pages/CheckoutPage.tsx');
+    assert.equal(/track\('order_completed'/.test(src), false,
+      'order_completed is still fired at order placement, so it means nothing');
+  });
+
+  test('the event funnel reports "Order placed" from the event that actually fires', () => {
+    const src = read('mart-backend/src/services/funnel.service.ts');
+    assert.ok(/\{ key: 'order_placed', label: 'Order placed' \}/.test(src),
+      'the final funnel stage still points at an event nothing emits');
+  });
+});
+
+describe('O. The journey stop-points and dwell timing are reported', () => {
+  test('getReport returns a stable journey shape on an empty database', async () => {
+    const report = await CustomerAnalyticsService.getReport('all');
+    assert.deepEqual(
+      report.journey.stopPoints.map((s: { key: string }) => s.key),
+      ['sessions', 'engaged', 'productDiscovery', 'cart', 'checkout', 'ordersPlaced'],
+      'the stop ladder drifted from the canonical funnel order',
+    );
+    assert.ok(report.journey.stopPoints.every((s: { sessions: number }) => s.sessions === 0));
+    assert.equal(report.journey.timing.sessions, 0);
+    assert.equal(report.journey.timing.medianSecondsToOrder, null);
+  });
+
+  test('dwell is measured from the session window and to the first milestone', () => {
+    const src = read('mart-backend/src/services/customerAnalytics.service.ts');
+    assert.ok(/last_seen_at - sc\.first_seen_at/.test(src),
+      'session duration is not measured from first to last seen');
+    assert.ok(/percentile_cont\(0\.5\)/.test(src), 'medians are not computed');
+    assert.ok(/MIN\(e\.created_at\)/.test(src), 'time-to-milestone does not use the first occurrence');
+  });
+});
+
+describe('P. Abandoned carts are item-level and defined by idleness, not deletion', () => {
+  test('the canonical report exposes abandoned carts with an item breakdown', async () => {
+    const report = await CustomerAnalyticsService.getReport('all');
+    assert.ok(report.abandonedCarts, 'abandonedCarts is missing from the report');
+    assert.equal(report.abandonedCarts.carts, 0);
+    assert.deepEqual(report.abandonedCarts.topItems, []);
+  });
+
+  test('abandonment is read from the cart mirror for idle, unconverted, non-empty carts', () => {
+    const src = read('mart-backend/src/services/customerAnalytics.service.ts');
+    assert.ok(
+      /c\.converted_at IS NULL\s+AND c\.item_count > 0\s+AND c\.last_active_at < NOW\(\) - INTERVAL '2 hours'/.test(src),
+      'the abandoned-cart definition does not require idle, unconverted, non-empty carts',
+    );
+    assert.ok(/jsonb_array_elements\(c\.items\)/.test(src),
+      'abandoned items are not unpacked per product');
+  });
+});
+
+describe('Q. Retention cohorts are weekly and measured from first contact', () => {
+  test('the canonical report exposes a retention shape that tolerates an empty database', async () => {
+    const report = await CustomerAnalyticsService.getReport('all');
+    assert.equal(report.retention.granularity, 'week');
+    assert.deepEqual(report.retention.cohorts, []);
+  });
+
+  test('a cohort is keyed on first-ever session and counts later weeks', () => {
+    const src = read('mart-backend/src/services/customerAnalytics.service.ts');
+    assert.ok(/MIN\(s\.first_seen_at\) AS first_seen/.test(src),
+      'cohorts are not anchored on the visitor\'s first session');
+    assert.ok(/a\.activity_week >= c\.cohort_week/.test(src),
+      'return weeks are not restricted to on-or-after the cohort week');
+    assert.ok(/\(\(a\.activity_week - c\.cohort_week\) \/ 7\)::int/.test(src),
+      'cohort week distance must be integer days divided by 7');
+    assert.ok(!/EXTRACT\(EPOCH FROM \(a\.activity_week/.test(src),
+      'date subtraction yields days, not an interval; EXTRACT(EPOCH ...) is invalid');
   });
 });

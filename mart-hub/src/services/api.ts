@@ -262,6 +262,33 @@ export interface FunnelSummary {
     orders: { placed: number; accepted: number; preparing: number; outForDelivery: number; delivered: number; paid: number; cancelled: number; gmv: number };
     channels: { source: string; sessions: number; cartSessions: number; checkoutSessions: number; orders: number }[];
     reconciliation: { orderTableCount: number; attributedOrderCount: number; unattributedOrderCount: number; guestOrderCount: number; customerLinkedOrderCount: number };
+    devices: {
+      platforms: { platform: string; sessions: number; cartSessions: number; checkoutSessions: number; orders: number }[];
+      browsers: { browser: string; sessions: number }[];
+      installed: { pwaSessions: number; browserSessions: number };
+    };
+    journey: {
+      stopPoints: { key: string; label: string; sessions: number }[];
+      timing: {
+        sessions: number;
+        avgDurationSeconds: number;
+        medianDurationSeconds: number;
+        medianSecondsToCart: number | null;
+        medianSecondsToCheckout: number | null;
+        medianSecondsToOrder: number | null;
+      };
+    };
+    abandonedCarts: {
+      carts: number;
+      checkoutStage: number;
+      cartStage: number;
+      value: number;
+      topItems: { productId: string; productName: string; unit: string; carts: number; quantity: number; value: number }[];
+    };
+    retention: {
+      granularity: 'week';
+      cohorts: { cohort: string; size: number; weeks: { week: number; visitors: number; percent: number }[] }[];
+    };
   };
 }
 
