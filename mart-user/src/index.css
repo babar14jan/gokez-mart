@@ -129,6 +129,24 @@ html, body { overscroll-behavior-y: none; }
     overflow: hidden;
   }
 
+  /* iOS WebKit sizes the layout viewport (the containing block of a
+     position:fixed element) as the screen MINUS the safe area / dynamic UI, so
+     `inset: 0` leaves an unpainted strip below the in-flow bottom nav — an empty
+     gap under the nav buttons. The large viewport height (100lvh) is the true
+     screen on iOS, so pin the shell to it there; top:0 from inset:0 wins and the
+     explicit height makes bottom:0 a no-op.
+
+     Guarded with @supports(-webkit-touch-callout): that property is implemented
+     only by Safari/WebKit on iOS (caniuse: Android Chrome, Samsung, Firefox all
+     unsupported). Android must keep the plain `inset: 0` — 100lvh there is the
+     URL-bar-retracted height, which would push the nav below the fold while the
+     bar is visible. */
+  @supports (-webkit-touch-callout: none) {
+    .app-shell {
+      height: 100lvh;
+    }
+  }
+
   .app-scroll {
     flex: 1 1 auto;
     min-height: 0;
