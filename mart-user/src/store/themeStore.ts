@@ -1,5 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { detectPlatform } from '../utils/install';
+
+// iOS <=18 still reads theme-color for the Safari status bar. Android paints its
+// address bar from it too. iOS 26 dropped support entirely (it samples the page
+// edges instead — see .app-tint-top/.app-tint-bottom in index.css), but the tag
+// is harmless there. Keep the top edge green on iOS so an exiting/reloading PWA
+// does not flash white over the green app bar; everyone else stays white.
+function lightThemeColor(): string {
+  return detectPlatform() === 'ios' ? '#218044' : '#ffffff';
+}
 
 interface ThemeState {
   isDark: boolean;
@@ -27,7 +37,7 @@ if (stored) {
     const { state } = JSON.parse(stored);
     const isDark = state?.isDark === true;
     document.documentElement.classList.toggle('dark', isDark);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#18191a' : '#ffffff');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#18191a' : lightThemeColor());
   } catch { document.documentElement.classList.remove('dark'); }
 } else {
   document.documentElement.classList.remove('dark');
