@@ -152,6 +152,32 @@ html, body { overscroll-behavior-y: none; }
     bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px));
   }
 
+  /* Installed PWA has no browser toolbar, so the `--vv-bottom` strip that lifts
+     the frame in a Safari tab must not apply there. iOS still reports a covered
+     strip in standalone (the status-bar / home-indicator areas), which was
+     lifting the shell and leaving a gap above the nav that neither the browser
+     tab nor mart-hub's plain `bottom: 0` nav has. In standalone the frame only
+     has to reach the physical screen bottom, which is the pre-toolbar value:
+     minus the bottom safe-area. `.installed-pwa` is set on <html> before first
+     paint (index.html), so this is the same signal the splash swap uses.
+     env(safe-area-inset-bottom) is 0 on Android, so `bottom` stays 0 there and
+     the tab/Android geometry is untouched. */
+  .installed-pwa .app-shell,
+  .installed-pwa .app-viewport-overlay {
+    bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+  }
+
+  /* iOS Safari tab only: drop the frame a further 5px so the in-flow nav sits a
+     touch closer to the bottom toolbar. Guarded to iOS and outranked by the
+     `.installed-pwa` rule above (higher specificity), so the PWA, Android and
+     desktop geometry are all untouched. */
+  @supports (-webkit-touch-callout: none) {
+    .app-shell,
+    .app-viewport-overlay {
+      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 5px);
+    }
+  }
+
   /* iOS 26 browser-bar tint. iOS 26 Safari ignores <meta name="theme-color"> and
      instead derives the top and bottom bar tints from the background-color of a
      fixed/sticky element sitting within a few pixels of that edge (roughly >=80%
