@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle, WifiOff } from 'lucide-react';
 import { authApi, storeApi } from '../services/api';
+import { requestErrorMessage } from '../utils/networkError';
 import { readTrackingTokens } from '../utils/guestTracking';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { useCartStore } from '../store/cartStore';
@@ -278,10 +279,27 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   const { name: customerName, phone: customerPhone, isLoggedIn } = useCustomerAuthStore();
   const { ref: searchInputRef, onKeyDown: handleSearchKeyDown, onSurfaceClick: handleSearchSurfaceClick } = useKeyboardDismiss();
 
+  // Silent mode must bypass the HTTP cache: order status changes on the server
+  // (hub actions, delivery updates) with no write from this client, so a cached
+  // response would freeze the 10s poll on a stale status. Manual loads and the
+  // first mount stay cached so revisiting the page paints instantly.
+  //
+  // A failed load is remembered instead of being swallowed: without this the
+  // page showed "No orders yet" after a network failure — which is simply
+  // false, and stayed false after the connection came back because nothing
+  // refetched. Silent poll failures never touch loadError (the list on screen
+  // is still the truth as of the last successful load).
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const fetchOrders = async (silent = false) => {
     if (!silent) setRefreshing(true);
-    try { const r = await authApi.getOrders(); setOrders(r.data.data || []); }
-    catch {} finally { setRefreshing(false); setLoading(false); }
+    try {
+      const r = await authApi.getOrders({ fresh: silent });
+      setOrders(r.data.data || []);
+      setLoadError(null);
+    } catch (e: any) {
+      if (!silent) setLoadError(requestErrorMessage(e, 'We could not load your orders. Please try again.'));
+    } finally { setRefreshing(false); setLoading(false); }
   };
 
   // Guests have no session, so authApi.getOrders() can only ever 401 here.
@@ -289,10 +307,18 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     if (!silent) setGuestLoading(true);
     try {
       const tokens = readTrackingTokens();
-      if (!tokens.length) { setOrders([]); return; }
-      const r = await storeApi.trackOrdersByTokens(tokens);
+      if (!tokens.length) { setOrders([]); setLoadError(null); return; }
+      const r = await storeApi.trackOrdersByTokens(tokens, { fresh: silent });
       setOrders(r.data.data || []);
-    } catch { /* a token can be pruned server-side; keep whatever we have */ }
+      setLoadError(null);
+    } catch (e: any) {
+      // A token can be pruned server-side (a real 4xx) — keep whatever we have
+      // rather than blaming the network. Only a genuine load failure with
+      // nothing to show earns the error state.
+      if (!silent && orders.length === 0) {
+        setLoadError(requestErrorMessage(e, 'We could not load your orders. Please try again.'));
+      }
+    }
     finally { if (!silent) setGuestLoading(false); setLoading(false); }
   };
 
@@ -351,6 +377,20 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn]);
 
+  // Come back online → retry a failed load automatically, so the honest error
+  // state replaces itself the moment the connection returns instead of waiting
+  // for the customer to notice the button.
+  useEffect(() => {
+    const onOnline = () => {
+      if (!loadError) return;
+      if (isLoggedIn) fetchOrders(true);
+      else fetchGuestOrders(true);
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, loadError]);
+
   // Live updates for both audiences, but only while something is actually open.
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -400,6 +440,25 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   if (loading) return (
     <div className="flex justify-center items-center py-24">
       <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  // The load itself failed and there is nothing on screen to fall back on.
+  // Saying "no orders" here would be a lie; say what happened and offer a way
+  // back. Also retried automatically when the connection returns (effect above).
+  if (loadError && orders.length === 0) return (
+    <div className="mx-auto max-w-lg px-5 py-16 text-center">
+      <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800">
+        <WifiOff className="h-9 w-9 text-gray-300 dark:text-slate-500" />
+      </div>
+      <h2 className="mb-2 text-lg font-bold text-gray-900 dark:text-white">Couldn&apos;t load your orders</h2>
+      <p className="mx-auto mb-7 max-w-xs text-sm leading-relaxed text-gray-500 dark:text-slate-400">{loadError}</p>
+      <button
+        onClick={() => { setLoadError(null); setLoading(true); if (isLoggedIn) fetchOrders(); else fetchGuestOrders(); }}
+        className="flex min-h-12 mx-auto items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
+      >
+        <RefreshCw className="h-4 w-4" /> Try Again
+      </button>
     </div>
   );
 

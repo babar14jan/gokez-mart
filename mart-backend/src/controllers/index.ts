@@ -29,6 +29,7 @@ import { emitOrderEvent, orderEventBus, type OrderLiveEvent } from '../services/
 import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.service';
 import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
+import { CatalogService } from '../services/catalog.service';
 import { evaluateStoreOpen } from '../utils/storeHours';
 import { config } from '../config';
 
@@ -115,6 +116,29 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   // guessing a window. Null when the store posts no hours.
   res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: { ...settings, openState, openingHours: store?.openingHours ?? null } });
+});
+
+/**
+ * One tiny fingerprint of the whole public catalog. The storefront polls this
+ * every few minutes and only re-downloads products/categories/settings/sections
+ * when the stamp actually changed — so a quiet store costs a few indexed
+ * aggregates instead of four full payload queries per client per poll.
+ *
+ * The open/closed flip is wall-clock, not database, so the current state and
+ * the next boundary instant (closing when open, opening when closed) are folded
+ * in too; otherwise the stamp would sit still across an opening-hours edge.
+ */
+export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) => {
+  const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
+  const [dbStamp, settings, store] = await Promise.all([
+    CatalogService.getStamp(storeId),
+    SettingsService.getPublic(storeId),
+    StoreService.findById(storeId),
+  ]);
+  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
+  const boundary = openState.isOpen ? openState.closesAt : openState.nextOpenAt;
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, data: { stamp: `${dbStamp}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}` } });
 });
 
 export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {

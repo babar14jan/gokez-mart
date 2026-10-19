@@ -83,40 +83,47 @@ html, body { overscroll-behavior-y: none; }
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
   /* Height of the on-screen keyboard over the layout viewport, published by
-     useKeyboardInset(). Defaults to 0 so the shell is a plain full-height page
-     until a keyboard actually opens. */
+     useKeyboardInset(). Not consumed by the shell any more (the fixed frame
+     keeps a stable height; .kb-open drives the keyboard-specific rules); kept
+     as a 0 default so opt-in rules degrade to a plain full-height page. */
   :root { --kb: 0px; }
 
-  /* Full-height page shell.
-
-     Every page used min-h-screen, which is 100vh -- a height chosen without the
-     keyboard in mind, so with the keyboard up the shell stayed taller than
-     anything visible and the customer could scroll a long way past their own
-     form. 100dvh tracks the real viewport, and subtracting --kb keeps the shell
-     exactly as tall as what is still on screen.
+  /* Full-height page shell for pages rendered inside .app-scroll and inside the
+     full-screen fixed overlays (checkout, order details, legal pages).
 
      This replaces min-h-screen rather than sitting alongside it on purpose.
      min-h-screen is a Tailwind utility; keeping it on the element as well would
      put two competing min-height values on one node and re-introduce exactly the
      kind of cascade surprise documented in LoginFlow. Delete the class when this
-     one is applied, do not add it. */
+     one is applied, do not add it.
+
+     100vh, not 100dvh: it is the STABLE viewport. It does not change as the
+     mobile URL bar shows/hides, so a page can never resize mid-scroll and drag
+     the in-flow bottom nav with it. The browser-tab vs full-screen difference is
+     absorbed by the fixed frame (.app-shell), never by content height. */
   .page-shell {
-    min-height: calc(100dvh - var(--kb, 0px));
+    min-height: 100vh;
   }
 
-  /* App shell: exactly one dynamic viewport tall, with a single inner scroll
-     area (.app-scroll) and the bottom nav as a normal flex child.
+  /* App shell: a frame pinned to the viewport box.
 
-     iOS Safari/standalone PWA mis-anchors position: fixed bottom bars during
-     scroll (WebKit bug 297779), letting them drift up and cover content. A
-     bottom bar that is a flex sibling of the scroller is structurally pinned
-     through normal layout, so it cannot drift. Keep only .app-scroll scrollable
-     and do not put a transform on .app-shell or .app-scroll: fixed overlays
-     (checkout, sheets, dialogs) rely on escaping to the viewport. */
+     position:fixed + inset:0 makes the frame exactly the visible viewport and
+     takes it out of the document flow, so the document can never grow taller
+     than the screen and scroll. That is what previously let the whole shell
+     (and the in-flow bottom nav) drift: any shell height bigger than the visible
+     viewport -- e.g. 100lvh in an iOS browser tab, or a 100dvh that briefly
+     exceeded the layout viewport during a toolbar transition -- made the
+     document scroll, and a relative shell was carried up with it.
+
+     The nav is a normal flex child at the bottom of this frame, so it is
+     structurally pinned through normal layout and cannot drift the way a
+     position:fixed bottom bar does on iOS Safari/standalone PWA (WebKit bug
+     297779). Keep only .app-scroll scrollable and do not put a transform on
+     .app-shell or .app-scroll: fixed overlays (checkout, sheets, dialogs) rely
+     on escaping to the viewport. */
   .app-shell {
-    height: 100vh;
-    height: 100dvh;
-    height: calc(100dvh - var(--kb, 0px));
+    position: fixed;
+    inset: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -137,30 +144,6 @@ html, body { overscroll-behavior-y: none; }
        combo, deals, search) were painted *below* the in-flow bottom nav — the
        Place order footer ended up under the nav buttons in iOS standalone.
        Modern iOS scrolls with momentum without it. */
-  }
-
-  /* Installed iOS PWA (Add to Home Screen) with apple-mobile-web-app-status-bar-
-     style: black-translucent + viewport-fit=cover.
-
-     WebKit reports 100dvh / 100svh / visualViewport.height / -webkit-fill-
-     available as the screen MINUS the safe-area in standalone (bugs 297779 and
-     255852), so a 100dvh shell ends ~34px above the bottom of the screen and the
-     nav floats up over an unpainted strip. A standalone web app has no
-     collapsing URL/toolbar bars, so the large viewport (100lvh == 100vh, which
-     does include the safe area here) is the true screen.
-
-     Scoped to standalone on purpose: in a browser TAB, lvh is the
-     toolbars-retracted height, i.e. taller than what is on screen, so using it
-     there would push the nav below the fold while the URL bar is visible. */
-  @media all and (display-mode: standalone) {
-    .app-shell {
-      height: 100vh;
-      height: 100lvh;
-      height: calc(100lvh - var(--kb, 0px));
-    }
-    .page-shell {
-      min-height: calc(100lvh - var(--kb, 0px));
-    }
   }
 
   /* ---- While the on-screen keyboard is up ------------------------------
@@ -197,38 +180,15 @@ html, body { overscroll-behavior-y: none; }
   }
 
   /* Category split view: a fixed-height pane that reserves room for the in-flow
-     bottom nav. */
+     bottom nav. 100vh keeps its height stable while the page scrolls, so the
+     pane (and everything below it) does not resize mid-scroll. */
   .categories-pane {
-    height: calc(100dvh - var(--kb, 0px) - 8rem);
+    height: calc(100vh - 8rem);
   }
 
   /* While a field is focused the bottom nav leaves the layout, so stop
      reserving its room -- otherwise the pane ends a nav's height short and
      leaves a blank strip above the keyboard. */
   .input-focused .categories-pane {
-    height: calc(100dvh - var(--kb, 0px));
-  }
-
-  /* iOS 26 Safari bug: 100dvh leaves a gap below the bottom nav in browser tab.
-     Use 100lvh for iOS WebKit. Standalone also uses lvh. */
-  html.ios-webkit .app-shell {
-    height: calc(100lvh - var(--kb, 0px));
-  }
-  html.ios-webkit .page-shell {
-    min-height: calc(100lvh - var(--kb, 0px));
-  }
-  html.ios-webkit .categories-pane {
-    height: calc(100lvh - var(--kb, 0px) - 8rem);
-  }
-  html.ios-webkit .input-focused .categories-pane {
-    height: calc(100lvh - var(--kb, 0px));
-  }
-
-  @media all and (display-mode: standalone) {
-    .categories-pane {
-      height: calc(100lvh - var(--kb, 0px) - 8rem);
-    }
-    .input-focused .categories-pane {
-      height: calc(100lvh - var(--kb, 0px));
-    }
+    height: 100vh;
   }

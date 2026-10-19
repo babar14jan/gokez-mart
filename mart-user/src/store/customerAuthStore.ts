@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useCustomerStore } from './customerStore';
+import { clearHttpCache } from '../services/httpCache';
 
 interface CustomerAuthState {
   token: string | null;
@@ -34,6 +35,9 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
       login: (token, customer) => {
         // Reset any previously-loaded address book — a different customer is now signed in.
         useCustomerStore.setState({ addresses: [], addressesLoaded: false });
+        // The HTTP cache is auth-blind (keys are method+url+params only), so the
+        // previous session's authenticated responses must not outlive it.
+        clearHttpCache();
         set({
           token,
           customerId: customer.id,
@@ -64,6 +68,8 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
 
       logout: () => {
         useCustomerStore.setState({ addresses: [], addressesLoaded: false });
+        // Same as login: nothing authenticated may stay cached after sign-out.
+        clearHttpCache();
         set({
           token: null, customerId: null, phone: null,
           name: null, address: null, photoUrl: null, isLoggedIn: false,

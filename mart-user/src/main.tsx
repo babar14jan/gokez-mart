@@ -13,20 +13,6 @@ import { registerServiceWorker } from './services/push';
 // second <h1>. Done before render() so it is never in the DOM alongside the app.
 document.getElementById('seo-static')?.remove();
 
-// Detect iOS 26+ (Safari/WebKit) which has a dvh viewport height bug causing
-// empty gap below the bottom nav on iOS Safari browser. Add a class so CSS can
-// use 100lvh for the shell there.
-try {
-  const ua = navigator.userAgent || '';
-  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && (navigator as any).maxTouchPoints > 1);
-  if (isIOS) {
-    // iOS 26 Safari shows the gap; applying lvh for iOS WebKit helps. For
-    // older iOS this could push nav under toolbar when visible, but the app
-    // is a PWA primarily; browser-tab usage is affected by the iOS 26 bug.
-    document.documentElement.classList.add('ios-webkit');
-  }
-} catch {}
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
