@@ -432,7 +432,7 @@ export default function App() {
     const meta = document.querySelector('meta[name="theme-color"]');
     // iOS keeps the app-bar green (theme-color is only a flash guard there now);
     // Android/desktop stay white in light mode. See store/themeStore.ts.
-    if (meta) meta.setAttribute('content', isDark ? '#18191a' : detectPlatform() === 'ios' ? '#218044' : '#ffffff');
+    if (meta) meta.setAttribute('content', isDark ? '#18191a' : (detectPlatform() === 'ios' || detectPlatform() === 'android') ? '#218044' : '#ffffff');
   }, [isDark, view]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
