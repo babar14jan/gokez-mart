@@ -1,5 +1,4 @@
 import type { ReactNode, Ref, TouchEventHandler } from 'react';
-import BottomGapDebug from './BottomGapDebug';
 
 interface AppShellProps {
   /** Extra classes for the frame — page background colour varies by view. */
@@ -87,8 +86,6 @@ export default function AppShell({
           desktop are untouched. aria-hidden + pointer-events:none: pure paint. */}
       <div className="app-tint-top" aria-hidden="true" />
       <div className="app-tint-bottom" aria-hidden="true" />
-
-      <BottomGapDebug />
     </div>
   );
 }
