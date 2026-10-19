@@ -1048,13 +1048,17 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
           {visibleSuggestions.length > 0 && (
             <div>
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">You may also like</p>
-              <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+              {/* No scroll-snap here: iOS Safari swallows taps on buttons inside a
+                  snap-mandatory horizontal scroller (the ADD tap never becomes a
+                  click, so the cart and "To Pay" silently never update). The home
+                  carousels already work without snap on the same devices. */}
+              <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
                 {visibleSuggestions.map(product => (
-                  <div key={product.id} className="w-32 shrink-0 snap-start">
+                  <div key={product.id} className="w-32 shrink-0">
                     <ProductCard product={product} disabled={loading} />
                   </div>
                 ))}
-                <div className="flex w-32 shrink-0 snap-start">
+                <div className="flex w-32 shrink-0">
                   <button type="button" onClick={onHome} disabled={loading}
                     className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40 disabled:opacity-40">
                     <ChevronRight className="h-6 w-6" />

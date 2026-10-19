@@ -152,6 +152,61 @@ html, body { overscroll-behavior-y: none; }
     bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px));
   }
 
+  /* iOS 26 browser-bar tint. iOS 26 Safari ignores <meta name="theme-color"> and
+     instead derives the top and bottom bar tints from the background-color of a
+     fixed/sticky element sitting within a few pixels of that edge (roughly >=80%
+     wide, >=3px tall, solid background). The shell qualifies but only has one
+     colour, so both bars took it. These strips give each edge a deterministic
+     colour: green on top (matching the sticky Navbar / PageHeader) and the nav's
+     white/dark on the bottom (instead of the launched green splash). They are
+     `display:none` except on iOS, so Android, which already paints its bars from
+     theme-color, and desktop never render them.      pointer-events:none keeps them
+     from eating taps yet Safari still samples them; aria-hidden in the markup.
+     Do NOT hide them with opacity/visibility/z-index: Safari rejects those and
+     falls back to the body colour — that is why the guard is `display` only. */
+  .app-tint-top,
+  .app-tint-bottom {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 45;
+    pointer-events: none;
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    .app-tint-top,
+    .app-tint-bottom {
+      display: block;
+    }
+  }
+
+  /* 12px tall, not tied to the safe-area insets: Safari only needs the strip to
+     cover the point it hit-tests (4px from the top, 3px from the bottom) and to
+     clear the ~10px "thin border" floor below which it samples painted pixels
+     instead of the declared colour. Keeping it short means it never overlays
+     more than the first few px of the Navbar/Nav, whose own background already
+     matches, so the strip stays invisible. */
+  .app-tint-top {
+    top: 0;
+    height: 12px;
+    background-color: #218044;
+  }
+
+  .app-tint-bottom {
+    bottom: 0;
+    height: 12px;
+    background-color: #ffffff;
+  }
+
+  .dark .app-tint-top {
+    background-color: #18191a;
+  }
+
+  .dark .app-tint-bottom {
+    background-color: #0f172a;
+  }
+
   .app-scroll {
     flex: 1 1 auto;
     min-height: 0;
