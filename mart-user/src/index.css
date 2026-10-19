@@ -175,22 +175,12 @@ html, body { overscroll-behavior-y: none; }
     bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
   }
 
-  /* iOS only: drop the frame lower so the in-flow nav sits closer to the bottom
-     edge. 8px in the Safari tab (to the bottom toolbar) and 12px in the installed
-     PWA (into the ~34px home-indicator strip). Guarded to iOS so Android/desktop
-     are untouched; the `.installed-pwa` selector inside is more specific than the
-     tab rule and the override above, so it wins in standalone. */
-  @supports (-webkit-touch-callout: none) {
-    .app-shell,
-    .app-viewport-overlay {
-      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 8px);
-    }
-
-    .installed-pwa .app-shell,
-    .installed-pwa .app-viewport-overlay {
-      bottom: calc(-1 * env(safe-area-inset-bottom, 0px) - 12px);
-    }
-  }
+  /* NOTE: the frame's bottom is the toolbar's top (tab) / the physical bottom
+     (PWA) — i.e. the in-flow nav lands flush against the iOS chrome with no gap
+     and no overlap. Do NOT subtract from `bottom` to "push the nav down": that
+     only slides it under the toolbar / into the home-indicator strip, and the
+     shortest combined nav+chrome height is already achieved when the two are
+     flush. */
 
   /* iOS 26 browser-bar tint. iOS 26 Safari ignores <meta name="theme-color"> and
      instead derives the top and bottom bar tints from the background-color of a
