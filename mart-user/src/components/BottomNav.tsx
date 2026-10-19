@@ -33,7 +33,7 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
                   aria-label="Vegetables"
                   className="flex-none flex items-center justify-center px-1 transition-transform duration-200 active:scale-95"
                 >
-                  <img src="/fresh-veg.webp" alt="Vegetables" width={48} height={48} {...{ fetchpriority: 'high' }} decoding="async" className="h-12 w-12 object-contain" />
+                  <img src="/fresh-veg.webp" alt="Vegetables" width={60} height={60} {...{ fetchpriority: 'high' }} decoding="async" className="h-[60px] w-[60px] object-contain" />
                 </button>
               )}
               <button
