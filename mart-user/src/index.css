@@ -175,14 +175,20 @@ html, body { overscroll-behavior-y: none; }
     bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
   }
 
-  /* iOS Safari tab only: drop the frame a further 5px so the in-flow nav sits a
-     touch closer to the bottom toolbar. Guarded to iOS and outranked by the
-     `.installed-pwa` rule above (higher specificity), so the PWA, Android and
-     desktop geometry are all untouched. */
+  /* iOS only: drop the frame lower so the in-flow nav sits closer to the bottom
+     edge. 8px in the Safari tab (to the bottom toolbar) and 12px in the installed
+     PWA (into the ~34px home-indicator strip). Guarded to iOS so Android/desktop
+     are untouched; the `.installed-pwa` selector inside is more specific than the
+     tab rule and the override above, so it wins in standalone. */
   @supports (-webkit-touch-callout: none) {
     .app-shell,
     .app-viewport-overlay {
-      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 12px);
+      bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px) - 8px);
+    }
+
+    .installed-pwa .app-shell,
+    .installed-pwa .app-viewport-overlay {
+      bottom: calc(-1 * env(safe-area-inset-bottom, 0px) - 12px);
     }
   }
 
