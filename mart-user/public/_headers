@@ -7,6 +7,20 @@
   Content-Type: application/manifest+json
   Cache-Control: no-cache
 
+# The HTML entry carries the theme-color, the preload hints, and the asset URLs
+# for the current build, so it must never be pinned at the edge or in a browser.
+# Pages already serves HTML as "public, max-age=0, must-revalidate" (verified
+# live), so this is belt-and-braces for proxies that treat max-age=0 as reusable.
+#
+# Scoped to the entry only. Cloudflare *joins* duplicate Cache-Control values
+# with commas when several rules match, so a "/*" rule here would be appended to
+# the /assets/* immutable rule and poison the content-hashed asset cache.
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
 # The update check must always see the deploy the edge is actually serving.
 # Each build rewrites these with a fresh id; a cached copy would hide the update
 # from useAppUpdate and from the service worker's install/activate handlers.
