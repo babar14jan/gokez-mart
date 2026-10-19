@@ -152,9 +152,11 @@ api.interceptors.response.use(
     // Feed the global offline/server screen with real request outcomes, so it
     // reacts the moment a call actually fails instead of waiting for its own
     // /health probe to time out. A transport-level failure (no HTTP response at
-    // all) means the backend is unreachable — almost always no usable network —
-    // while an HTTP 5xx means it answered but is unhealthy. 4xx is left alone:
-    // that is a request problem, not a connectivity one.
+    // all) is reported as `offline`; NetworkStatus resolves it against
+    // navigator.onLine, so a dead backend behind an otherwise healthy connection
+    // (DNS gone, connection refused) still gets the backend notice rather than
+    // "You're offline". An HTTP 5xx means the backend answered but is unhealthy.
+    // 4xx is left alone: that is a request problem, not a connectivity one.
     if (typeof window !== 'undefined') {
       try {
         if (!error?.response) {
