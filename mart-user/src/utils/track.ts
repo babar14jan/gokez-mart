@@ -18,6 +18,7 @@
  */
 
 import { API_URL, isApiConfigured } from '../services/api';
+import { getDeviceInfo } from './install';
 
 const isDevelopment = Boolean((import.meta as any).env?.DEV);
 
@@ -186,6 +187,7 @@ export function track(event: FunnelEvent, props?: Record<string, unknown>): void
   try {
     if (!isApiConfigured && isDevelopment) return;
     const urlParams = new URLSearchParams(window.location.search);
+    const device = getDeviceInfo();
     post('/funnel/event', {
       sessionId: getFunnelSessionId(),
       visitorId: getFunnelVisitorId(),
@@ -196,6 +198,10 @@ export function track(event: FunnelEvent, props?: Record<string, unknown>): void
       utmSource: urlParams.get('utm_source') || undefined,
       utmMedium: urlParams.get('utm_medium') || undefined,
       utmCampaign: urlParams.get('utm_campaign') || undefined,
+      platform: device.platform,
+      deviceCategory: device.deviceCategory,
+      browser: device.browser,
+      isPwa: device.isPwa,
       ...attributionFromLocation(),
       props: props ?? {},
     });

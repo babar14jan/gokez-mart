@@ -1246,14 +1246,14 @@ export const customerVerifyOtp = asyncHandler(async (req: Request, res: Response
 
 export const postFunnelEvent = asyncHandler(async (req: Request, res: Response) => {
   const { sessionId, visitorId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign,
-    source, medium, content, term, qrCodeId } = req.body ?? {};
+    source, medium, content, term, qrCodeId, platform, deviceCategory, browser, isPwa } = req.body ?? {};
   if (!sessionId || !eventName) {
     res.status(400).json({ success: false, error: 'sessionId and eventName required' });
     return;
   }
   const recorded = await FunnelEventService.recordEvent({
     sessionId, visitorId, eventName, path, props, channel, referrer, utmSource, utmMedium, utmCampaign,
-    source, medium, content, term, qrCodeId,
+    source, medium, content, term, qrCodeId, platform, deviceCategory, browser, isPwa,
   });
   res.json({ success: true, data: { recorded } });
 });

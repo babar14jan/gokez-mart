@@ -324,7 +324,7 @@ const EVENT_STAGE_DEFS: Array<{ key: FunnelEventName; label: string }> = [
   { key: 'product_viewed', label: 'Product viewed' },
   { key: 'cart_added', label: 'Added to cart' },
   { key: 'checkout_started', label: 'Checkout started' },
-  { key: 'order_completed', label: 'Order completed' },
+  { key: 'order_placed', label: 'Order placed' },
 ];
 
 const RANGE_WHERE = (column: string, range: FunnelRange, from?: string, to?: string): string => {

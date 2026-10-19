@@ -37,6 +37,46 @@ export function isStandalone(): boolean {
   return iosStandalone || standalone || minimalUi;
 }
 
+export type DevicePlatform = 'ios' | 'android' | 'desktop' | 'other';
+export type DeviceCategory = 'mobile' | 'tablet' | 'desktop';
+
+export interface DeviceInfo {
+  platform: DevicePlatform;
+  deviceCategory: DeviceCategory;
+  browser: string;
+  isPwa: boolean;
+}
+
+/** Coarse browser family from the user agent. Not a version, by design. */
+function detectBrowser(ua: string): string {
+  if (/edg\//i.test(ua)) return 'edge';
+  if (/opr\/|opera/i.test(ua)) return 'opera';
+  if (/chrome|crios/i.test(ua)) return 'chrome';
+  if (/firefox|fxios/i.test(ua)) return 'firefox';
+  if (/safari/i.test(ua)) return 'safari';
+  return 'other';
+}
+
+/**
+ * Device facts attached to every funnel event so the journey can be sliced by
+ * OS / device class / browser / installed-app without any third-party script.
+ * Deliberately coarse and non-identifying: no model, no version, no fingerprint.
+ */
+export function getDeviceInfo(): DeviceInfo {
+  if (typeof navigator === 'undefined') {
+    return { platform: 'other', deviceCategory: 'desktop', browser: 'other', isPwa: false };
+  }
+  const ua = navigator.userAgent || '';
+  const iPadOs = /macintosh/i.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1;
+  const isIos = /iphone|ipod|ipad/i.test(ua) || iPadOs;
+  const isAndroid = /android/i.test(ua);
+  const platform: DevicePlatform = isAndroid ? 'android' : isIos ? 'ios'
+    : /windows|macintosh|linux|cros/i.test(ua) ? 'desktop' : 'other';
+  const deviceCategory: DeviceCategory = (/ipad|tablet/i.test(ua) || iPadOs) ? 'tablet'
+    : /mobile|iphone|ipod|android/i.test(ua) ? 'mobile' : 'desktop';
+  return { platform, deviceCategory, browser: detectBrowser(ua), isPwa: isStandalone() };
+}
+
 export function isAppInstalled(): boolean {
   if (isStandalone()) return true;
   try {

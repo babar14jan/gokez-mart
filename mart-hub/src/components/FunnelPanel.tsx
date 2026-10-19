@@ -13,6 +13,15 @@ const RANGES: Array<{ id: FunnelRange; label: string }> = [
 
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 
+/** Seconds to a compact "3m 20s" label; null when the milestone was never reached. */
+const fmtDur = (seconds: number | null | undefined) => {
+  if (seconds == null) return '—';
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+};
+
 interface FunnelPanelProps {
   range?: FunnelRange;
   from?: string;
@@ -74,6 +83,7 @@ export default function FunnelPanel({ range: controlledRange, from: controlledFr
 // leads on any given day, do not flatten the other two into invisibility.
 const peak = Math.max(1, ...(summary?.daily ?? []).flatMap(d => [d.visits, d.requested, d.ordered]));
 const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions));
+const stopMax = Math.max(1, ...(canonical?.journey?.stopPoints ?? []).map(s => s.sessions));
 
   // The empty state must consider every signal the panel renders, not just the
   // first stage. "Number entered" counts OTP requests, so a day with visits,
@@ -227,6 +237,30 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
             })}
           </div>
 
+          {canonical?.journey && canonical.journey.stopPoints.some(s => s.sessions > 0) && (
+            <div className="mt-5">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Where sessions stopped · furthest step reached</p>
+              <div className="space-y-1">
+                {canonical.journey.stopPoints.map(stop => (
+                  <div key={stop.key} className="flex items-center gap-2">
+                    <span className="w-40 shrink-0 truncate text-xs text-gray-600 dark:text-slate-300">{stop.label}</span>
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-sm bg-gray-100 dark:bg-slate-700/60">
+                      <div className="h-full rounded-sm bg-amber-500"
+                        style={{ width: `${Math.round((stop.sessions / stopMax) * 100)}%` }} />
+                    </div>
+                    <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800 dark:text-slate-200">{stop.sessions}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
+                Median session {fmtDur(canonical.journey.timing.medianDurationSeconds)} ·
+                time to cart {fmtDur(canonical.journey.timing.medianSecondsToCart)} ·
+                to checkout {fmtDur(canonical.journey.timing.medianSecondsToCheckout)} ·
+                to order {fmtDur(canonical.journey.timing.medianSecondsToOrder)}.
+              </p>
+            </div>
+          )}
+
           {canonical && canonical.reconciliation.unattributedOrderCount > 0 && (
             <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/25 dark:text-amber-200">
               {canonical.reconciliation.unattributedOrderCount} of {canonical.reconciliation.orderTableCount} orders cannot be linked to a session. They are retained in order totals but excluded from channel conversion until attribution is available.
@@ -252,6 +286,42 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                   ))}
                 </div>
               </div>
+              {(canonical.devices?.platforms?.length ?? 0) > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Devices · unique sessions</p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
+                    <table className="min-w-[520px] w-full text-left text-xs">
+                      <thead className="bg-gray-50 text-[11px] uppercase text-gray-500 dark:bg-slate-900/40 dark:text-slate-400">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold">Platform</th>
+                          <th className="px-3 py-2 text-right font-semibold">Visits</th>
+                          <th className="px-3 py-2 text-right font-semibold">Carts</th>
+                          <th className="px-3 py-2 text-right font-semibold">Checkout</th>
+                          <th className="px-3 py-2 text-right font-semibold">Ordered</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                        {canonical.devices.platforms.map(row => (
+                          <tr key={row.platform}>
+                            <td className="px-3 py-2 font-medium capitalize text-gray-800 dark:text-slate-200">
+                              {row.platform === 'ios' ? 'iOS' : row.platform}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.sessions}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.cartSessions}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.checkoutSessions}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{row.orders}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
+                    {canonical.devices.installed.pwaSessions} sessions on the installed app, {canonical.devices.installed.browserSessions} in a browser.
+                    {canonical.devices.browsers.length > 0 && ` Top browser: ${canonical.devices.browsers[0].browser} (${canonical.devices.browsers[0].sessions}).`}
+                    {' '}Device is read from the user agent; no fingerprint is stored.
+                  </p>
+                </div>
+              )}
               <div className="mt-5">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">OTP funnel</p>
                 <div className="grid grid-cols-3 gap-2">
@@ -288,6 +358,87 @@ const eventMax = Math.max(1, ...(summary?.eventStages ?? []).map(s => s.sessions
                   ))}
                 </div>
               </div>
+
+              {canonical.abandonedCarts && canonical.abandonedCarts.carts > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Abandoned carts · items left behind</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      { label: 'Abandoned carts', value: canonical.abandonedCarts.carts, definition: 'Carts still holding items, never ordered, and idle for two hours or more within the selected period.' },
+                      { label: 'Left at checkout', value: canonical.abandonedCarts.checkoutStage, definition: 'Abandoned carts that had reached the checkout step.' },
+                      { label: 'Left at cart', value: canonical.abandonedCarts.cartStage, definition: 'Abandoned carts that never reached checkout.' },
+                      { label: 'Value left', value: `₹${canonical.abandonedCarts.value.toFixed(0)}`, definition: 'Combined subtotal of the abandoned carts.' },
+                    ].map(card => (
+                      <div key={card.label} title={card.definition} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900/40">
+                        <p className="text-lg font-bold tabular-nums text-gray-900 dark:text-white">{card.value}</p>
+                        <p className="text-[10px] leading-tight text-gray-500 dark:text-slate-400">{card.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {canonical.abandonedCarts.topItems.length > 0 && (
+                    <div className="mt-3 overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
+                      <table className="min-w-[520px] w-full text-left text-xs">
+                        <thead className="bg-gray-50 text-[11px] uppercase text-gray-500 dark:bg-slate-900/40 dark:text-slate-400">
+                          <tr>
+                            <th className="px-3 py-2 font-semibold">Most abandoned product</th>
+                            <th className="px-3 py-2 text-right font-semibold">Carts</th>
+                            <th className="px-3 py-2 text-right font-semibold">Qty</th>
+                            <th className="px-3 py-2 text-right font-semibold">Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                          {canonical.abandonedCarts.topItems.map(item => (
+                            <tr key={item.productId}>
+                              <td className="px-3 py-2 font-medium text-gray-800 dark:text-slate-200">
+                                {item.productName}{item.unit ? <span className="text-gray-400"> · {item.unit}</span> : null}
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{item.carts}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{item.quantity}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">₹{item.value.toFixed(0)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {canonical.retention && canonical.retention.cohorts.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Visitor retention · share of a cohort that returned, by first-visit week</p>
+                  <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700">
+                    <table className="min-w-[520px] w-full text-left text-xs">
+                      <thead className="bg-gray-50 text-[11px] uppercase text-gray-500 dark:bg-slate-900/40 dark:text-slate-400">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold">Cohort week</th>
+                          <th className="px-3 py-2 text-right font-semibold">New</th>
+                          {Array.from({ length: Math.max(...canonical.retention.cohorts.map(c => c.weeks.length)) }, (_, week) => (
+                            <th key={week} className="px-3 py-2 text-right font-semibold">W{week}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                        {canonical.retention.cohorts.map(cohort => (
+                          <tr key={cohort.cohort}>
+                            <td className="px-3 py-2 font-medium text-gray-800 dark:text-slate-200">{cohort.cohort}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-gray-600 dark:text-slate-300">{cohort.size}</td>
+                            {Array.from({ length: Math.max(...canonical.retention.cohorts.map(c => c.weeks.length)) }, (_, week) => {
+                              const cell = cohort.weeks.find(w => w.week === week);
+                              const shade = !cell ? '' : cell.percent >= 50 ? 'bg-emerald-100 dark:bg-emerald-900/30' : cell.percent >= 20 ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-900/30';
+                              return (
+                                <td key={week} className={`px-3 py-2 text-right tabular-nums ${shade} ${cell ? 'text-gray-700 dark:text-slate-200' : 'text-gray-300 dark:text-slate-600'}`}>
+                                  {cell ? `${cell.percent}%` : '·'}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </>
           )}
 

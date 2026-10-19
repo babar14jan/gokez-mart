@@ -65,6 +65,13 @@ export const MAX_SESSION_ID_LENGTH = 64;
 const MAX_PATH_LENGTH = 300;
 const VALID_CHANNEL = /^[a-z0-9_-]{1,32}$/i;
 
+// Device facts are allow-listed like every other controlled field: the client
+// names one of a fixed set, and anything else is dropped to NULL rather than
+// persisted, so a spoofed or future value cannot widen the column's meaning.
+const VALID_PLATFORMS = new Set(['ios', 'android', 'desktop', 'other']);
+const VALID_DEVICE_CATEGORIES = new Set(['mobile', 'tablet', 'desktop']);
+const VALID_BROWSERS = new Set(['edge', 'opera', 'chrome', 'firefox', 'safari', 'other']);
+
 const isFunnelEvent = (value: unknown): value is FunnelEventName =>
   typeof value === 'string' && (FUNNEL_EVENTS as readonly string[]).includes(value);
 
@@ -73,6 +80,12 @@ function sanitiseString(value: unknown, maxLength: number): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, maxLength);
+}
+
+function sanitiseEnum(value: unknown, allowed: Set<string>): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  return allowed.has(trimmed) ? trimmed : null;
 }
 
 function sanitiseProps(input: unknown): Record<string, unknown> {
@@ -156,14 +169,18 @@ export class FunnelEventService {
     content?: string;
     term?: string;
     qrCodeId?: string;
+    platform?: string;
+    deviceCategory?: string;
+    browser?: string;
+    isPwa?: boolean;
   }): Promise<void> {
     const sessionId = sanitiseString(params.sessionId, MAX_SESSION_ID_LENGTH);
     if (!sessionId) return;
     await query(
       `INSERT INTO mart_funnel_sessions
          (session_id, visitor_id, channel, landing_path, referrer, utm_source, utm_medium, utm_campaign,
-          source, medium, content, term, qr_code_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          source, medium, content, term, qr_code_id, platform, device_category, browser, is_pwa)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        ON CONFLICT (session_id) DO UPDATE SET last_seen_at = NOW()`,
       [
         sessionId,
@@ -179,6 +196,10 @@ export class FunnelEventService {
         sanitiseString(params.content, 120),
         sanitiseString(params.term, 120),
         sanitiseString(params.qrCodeId, 120),
+        sanitiseEnum(params.platform, VALID_PLATFORMS),
+        sanitiseEnum(params.deviceCategory, VALID_DEVICE_CATEGORIES),
+        sanitiseEnum(params.browser, VALID_BROWSERS),
+        params.isPwa === true,
       ]
     );
 
@@ -219,6 +240,10 @@ export class FunnelEventService {
     content?: string;
     term?: string;
     qrCodeId?: string;
+    platform?: string;
+    deviceCategory?: string;
+    browser?: string;
+    isPwa?: boolean;
   }): Promise<boolean> {
     const sessionId = sanitiseString(params.sessionId, MAX_SESSION_ID_LENGTH);
     if (!sessionId) return false;
@@ -240,6 +265,10 @@ export class FunnelEventService {
       content: params.content,
       term: params.term,
       qrCodeId: params.qrCodeId,
+      platform: params.platform,
+      deviceCategory: params.deviceCategory,
+      browser: params.browser,
+      isPwa: params.isPwa,
     });
     const props = sanitiseProps(params.props);
     const otpChannel = props.otpChannel === 'phone_call' || props.otpChannel === 'sms'

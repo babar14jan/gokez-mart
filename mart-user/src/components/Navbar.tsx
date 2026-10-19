@@ -136,7 +136,7 @@ const navItems = [
             return (
               <button key={id} onClick={() => onNavChange(id)}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
-                  isActive ? 'text-black bg-black/10 dark:text-white dark:bg-white/20' : 'text-black/75 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10'
+                  isActive ? 'text-white bg-white/20' : 'text-white/80 hover:bg-white/10'
                 }`}>
                 <Icon className="w-4 h-4" />
                 {label}
@@ -145,7 +145,7 @@ const navItems = [
           })}
           {/* Cart in center */}
           <button onClick={onCheckout}
-            className="relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-black/75 hover:bg-black/5 dark:text-white/75 dark:hover:bg-white/10 transition-colors">
+            className="relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white/80 hover:bg-white/10 transition-colors">
             <ShoppingCart className="w-4 h-4" />
             Cart
             {totalItems > 0 && (
