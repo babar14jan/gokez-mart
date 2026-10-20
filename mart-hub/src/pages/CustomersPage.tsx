@@ -115,10 +115,7 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-bold text-gray-900 dark:text-white">Customers</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Separate OTP-signed-in customers from direct guest checkout customers.</p>
-      </div>
+      <p className="text-sm text-gray-500 dark:text-slate-400">Separate OTP-signed-in customers from direct guest checkout customers.</p>
 
       {/* Analytics KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">

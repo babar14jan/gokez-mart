@@ -28,7 +28,7 @@ type TabId = 'store' | 'hours' | 'zones' | 'payments';
 /** Headings used inside a tab. Every tab key must appear here or in a bespoke
  *  card, or the field would render nowhere while still being saved. */
 const GROUP_TITLES = [
-  { title: 'Store', keys: ['store_name', 'store_address', 'delivery_area', 'estimated_delivery'] },
+  { title: 'Store', keys: ['delivery_area', 'estimated_delivery'] },
   { title: 'Customer Support', keys: ['whatsapp_number', 'support_name', 'support_phone'] },
   { title: 'Delivery & Pricing', keys: ['delivery_charge', 'free_delivery_above', 'min_order_amount'] },
   { title: 'Payment Methods', keys: ['cod_enabled', 'upi_enabled', 'upi_id', 'upi_phone', 'upi_qr_enabled', 'phonepay_enabled', 'phonepay_qr_url'] },
@@ -36,7 +36,7 @@ const GROUP_TITLES = [
 
 const TABS: { id: TabId; label: string; keys: string[]; store?: boolean }[] = [
   { id: 'store', label: 'Store', store: true,
-    keys: ['store_name', 'store_address', 'delivery_area', 'estimated_delivery',
+    keys: ['delivery_area', 'estimated_delivery',
            'whatsapp_number', 'support_name', 'support_phone'] },
   { id: 'hours', label: 'Hours & Delivery', store: true,
     keys: ['store_open', 'delivery_charge', 'free_delivery_above', 'min_order_amount'] },
@@ -50,8 +50,6 @@ const TABS: { id: TabId; label: string; keys: string[]; store?: boolean }[] = [
 
 // Hardcoded labels and placeholders — never rely on DB labels
 const FIELD_META: Record<string, { label: string; placeholder?: string; hint?: string }> = {
-  store_name:          { label: 'Store Name',                        placeholder: 'e.g. Gokez Mart' },
-  store_address:       { label: 'Store Address',                     placeholder: 'Full store address' },
   delivery_area:       { label: 'Delivery Area',                     placeholder: 'e.g. Shapoorji, Kolkata', hint: 'Shown to customers on the app' },
   estimated_delivery:  { label: 'Estimated Delivery Time',           placeholder: 'e.g. 10-15 mins' },
   store_open:          { label: 'Store is Open' },
@@ -376,42 +374,68 @@ export default function SettingsPage() {
 
       {/* Store tab */}
       {activeTab === 'store' && storeData && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700 flex items-center justify-between">
-            <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <Store className="w-3.5 h-3.5" /> Store Branding
-            </h2>
+        <>
+          {/* Store name and address are owned by the Stores page (mart_stores).
+              Shown here read-only so it is clear where the value comes from and
+              staff do not expect to edit it on this tab. */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
+              <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <Store className="w-3.5 h-3.5" /> Store Identity
+              </h2>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Store Name</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{storeData.name || '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Store Address</p>
+                <p className="mt-1 text-sm text-gray-700 dark:text-slate-300">{storeData.address || '—'}</p>
+              </div>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-lg px-2.5 py-2">
+                If you want to change the store name and address, contact the super admin.
+              </p>
+            </div>
           </div>
-          <div className="p-4 space-y-4">
-            {/* Logo */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-2">Store Logo</label>
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                  <SmartImage
-                    src={branding.logoUrl}
-                    className="h-full w-full"
-                    imgClassName="object-cover"
-                    fallback={<Store className="w-6 h-6 text-gray-300" />}
-                  />
+
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700 flex items-center justify-between">
+              <h2 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                <Store className="w-3.5 h-3.5" /> Store Branding
+              </h2>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Logo */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-2">Store Logo</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <SmartImage
+                      src={branding.logoUrl}
+                      className="h-full w-full"
+                      imgClassName="object-cover"
+                      fallback={<Store className="w-6 h-6 text-gray-300" />}
+                    />
+                  </div>
+                  <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
+                    {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                    {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
+                  </label>
                 </div>
-                <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
-                  {uploadingLogo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                  {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
-                </label>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Owner Name</label>
+                <input type="text" value={branding.ownerName} onChange={e => setBranding(b => ({ ...b, ownerName: e.target.value }))} className={inp} placeholder="Store owner's name" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Store Support Phone</label>
+                <input type="tel" value={branding.supportPhone} onChange={e => setBranding(b => ({ ...b, supportPhone: e.target.value }))} className={inp} placeholder="+91 XXXXX XXXXX" />
               </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Owner Name</label>
-              <input type="text" value={branding.ownerName} onChange={e => setBranding(b => ({ ...b, ownerName: e.target.value }))} className={inp} placeholder="Store owner's name" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Store Support Phone</label>
-              <input type="tel" value={branding.supportPhone} onChange={e => setBranding(b => ({ ...b, supportPhone: e.target.value }))} className={inp} placeholder="+91 XXXXX XXXXX" />
-            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Hours tab: the schedule, plus the manual override that sits with it. */}
