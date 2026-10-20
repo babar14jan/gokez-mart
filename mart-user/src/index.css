@@ -185,16 +185,17 @@ html, body { overscroll-behavior-y: none; }
   /* iOS 26 browser-bar tint. iOS 26 Safari ignores <meta name="theme-color"> and
      instead derives the top and bottom bar tints from the background-color of a
      fixed/sticky element sitting within a few pixels of that edge (roughly >=80%
-     wide, >=3px tall, solid background). The shell qualifies but only has one
-     colour, so both bars took it. These strips give each edge a deterministic
-     colour: green on top (matching the sticky Navbar / PageHeader) and the nav's
-     white/dark on the bottom (instead of the launched green splash). They are
-     `display:none` except on iOS, so Android, which already paints its bars from
-     theme-color, and desktop never render them.      pointer-events:none keeps them
-     from eating taps yet Safari still samples them; aria-hidden in the markup.
-     Do NOT hide them with opacity/visibility/z-index: Safari rejects those and
+     wide, >=3px tall, solid background). The TOP edge is covered by the sticky
+     Navbar/PageHeader, whose green background paints through its safe-area
+     padding at top:0 — so Safari samples the header itself and the bar matches
+     with no seam. The BOTTOM edge has no in-flow header to sample from, so a
+     decorative strip pins it to the nav colour (white / dark) instead of the
+     launched green splash. `display:none` except on iOS, so Android, which
+     already paints its bars from theme-color, and desktop never render it.
+     pointer-events:none keeps it from eating taps yet Safari still samples it;
+     aria-hidden in the markup.
+     Do NOT hide it with opacity/visibility/z-index: Safari rejects those and
      falls back to the body colour — that is why the guard is `display` only. */
-  .app-tint-top,
   .app-tint-bottom {
     display: none;
     position: fixed;
@@ -205,32 +206,21 @@ html, body { overscroll-behavior-y: none; }
   }
 
   @supports (-webkit-touch-callout: none) {
-    .app-tint-top,
     .app-tint-bottom {
       display: block;
     }
   }
 
   /* 12px tall, not tied to the safe-area insets: Safari only needs the strip to
-     cover the point it hit-tests (4px from the top, 3px from the bottom) and to
-     clear the ~10px "thin border" floor below which it samples painted pixels
-     instead of the declared colour. Keeping it short means it never overlays
-     more than the first few px of the Navbar/Nav, whose own background already
-     matches, so the strip stays invisible. */
-  .app-tint-top {
-    top: 0;
-    height: 12px;
-    background-color: #218044;
-  }
-
+     cover the point it hit-tests (3px from the bottom) and to clear the ~10px
+     "thin border" floor below which it samples painted pixels instead of the
+     declared colour. The top edge has no strip — the sticky Navbar/PageHeader
+     already paints green through its safe-area padding at top:0, so Safari
+     samples the header itself and the status-bar tint matches with no seam. */
   .app-tint-bottom {
     bottom: 0;
     height: 12px;
     background-color: #ffffff;
-  }
-
-  .dark .app-tint-top {
-    background-color: #18191a;
   }
 
   .dark .app-tint-bottom {

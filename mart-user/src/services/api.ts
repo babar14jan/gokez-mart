@@ -19,7 +19,7 @@ declare module 'axios' {
 
 export { clearHttpCache };
 
-export const api = axios.create({ baseURL: API_URL });
+export const api = axios.create({ baseURL: API_URL, timeout: 10000 });
 
 // Stale-while-revalidate cache: a GET answered recently resolves instantly from
 // memory instead of re-querying the backend on every tab switch or remount. A
