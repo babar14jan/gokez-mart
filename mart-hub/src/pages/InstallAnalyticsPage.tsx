@@ -104,7 +104,6 @@ export default function InstallAnalyticsPage() {
   const iosShown = getEvent('install_prompt_shown', 'ios');
   const iosGuideOpened = getEvent('install_guide_opened', 'ios');
   const iosGuideDismissed = getEvent('install_guide_dismissed', 'ios');
-  const iosInstalled = getEvent('app_installed', 'ios');
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -197,10 +196,8 @@ export default function InstallAnalyticsPage() {
               <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Guide Dismissed</span>
               <span className="text-sm font-bold text-red-500">{iosGuideDismissed}</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Installed</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white">{iosInstalled}</span>
-            </div>
+            {/* No "Installed" row for iOS: Safari exposes no home-screen install
+                event, so it can never be anything but 0. */}
           </div>
         </div>
       </div>
