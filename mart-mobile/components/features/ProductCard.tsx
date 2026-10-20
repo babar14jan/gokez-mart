@@ -21,6 +21,10 @@ export default function ProductCard({ product, width = CARD_W_HOME }: Props) {
   const { items, addItem, updateQty } = useCartStore();
   const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
   const qty      = cartItem?.quantity ?? 0;
+  // The local (Hindi) name, shown in brackets only when it adds information.
+  const localName = product.localName?.trim() && product.localName.trim() !== product.name?.trim()
+    ? product.localName.trim()
+    : '';
 
   return (
     <TouchableOpacity
@@ -74,14 +78,15 @@ export default function ProductCard({ product, width = CARD_W_HOME }: Props) {
       {/* Info */}
       <View style={{ padding: 8 }}>
         <Text style={{ fontSize: 10, color: colors.gray400, fontFamily: 'Inter-Regular', marginBottom: 2 }}>{product.unit}</Text>
-        <Text style={{ fontSize: 12, color: colors.gray900, fontFamily: 'Inter-Medium', lineHeight: 16 }} numberOfLines={2}>
+        {/* Three lines, matching the web card: the label carries the Hindi
+            name too, and two lines cut it off for most products. */}
+        <Text style={{ fontSize: 12, color: colors.gray900, fontFamily: 'Inter-Medium', lineHeight: 16 }} numberOfLines={3}>
           {product.name}
+          {/* Local (Hindi) name in brackets, at the same size and weight as the
+              main name, so it reads as an alternate label for the same product
+              instead of a muted subtitle. */}
+          {localName ? <Text>{` (${localName})`}</Text> : null}
         </Text>
-        {product.localName ? (
-          <Text style={{ fontSize: 10, color: colors.gray400, fontFamily: 'Inter-Regular', marginTop: 1 }} numberOfLines={1}>
-            {product.localName}
-          </Text>
-        ) : null}
         <Text style={{ fontSize: 13, color: colors.primary, fontFamily: 'Inter-Bold', marginTop: 4 }}>₹{product.price}</Text>
       </View>
     </TouchableOpacity>

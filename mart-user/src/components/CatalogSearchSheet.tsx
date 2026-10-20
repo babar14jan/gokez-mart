@@ -132,6 +132,9 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
               <div className="max-h-56 space-y-1 overflow-y-auto" onScroll={dismissKeyboard}>
                 {suggestions.map(product => {
                   const category = categoryById.get(product.categoryId);
+                  const localName = product.localName?.trim() && product.localName.trim() !== product.name.trim()
+                    ? product.localName.trim()
+                    : '';
                   return (
                     <button type="button" key={product.id} onClick={() => { setSearch(product.name); dismissKeyboard(); }}
                       className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
@@ -145,10 +148,13 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{product.name}</p>
-                        {product.localName && product.localName.trim() && product.localName.trim() !== product.name.trim() && (
-                          <p className="truncate text-xs text-gray-500 dark:text-slate-400">{product.localName.trim()}</p>
-                        )}
+                        {/* Two lines rather than one: the label carries the
+                            Hindi name as well, and a single truncated line cut
+                            it off for most products. */}
+                        <p className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">
+                          {product.name}
+                          {localName && <span> ({localName})</span>}
+                        </p>
                       </div>
                     </button>
                   );

@@ -124,6 +124,8 @@ export default function CheckoutScreen() {
   const minOrder       = parseFloat(settings?.min_order_amount ?? '0');
   const actualDelivery = appliedCamp?.discount_type === 'free_delivery' ? 0 : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
   const total          = Math.max(0, sub + actualDelivery - campDiscount);
+  // Store charges no delivery fee at all: free for everyone, not a threshold perk.
+  const deliveryIsAlwaysFree = deliveryCharge <= 0;
   const cartProductIds = new Set(items.map(i => i.productId));
 
   useEffect(() => {
@@ -641,6 +643,12 @@ export default function CheckoutScreen() {
           {sub < minOrder && sub > 0 && (
             <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, textAlign: 'center', marginBottom: 8 }}>
               Add ₹{Math.ceil(minOrder - sub)} more to reach the ₹{minOrder} minimum order
+            </Text>
+          )}
+          {/* Store charges no delivery fee: free on every order, not a threshold perk. */}
+          {deliveryIsAlwaysFree && (
+            <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.primary, textAlign: 'center', marginBottom: 8 }}>
+              🛵 Delivery is free on every order
             </Text>
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
