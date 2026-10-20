@@ -64,7 +64,8 @@ export type FunnelEvent =
   | 'order_placed'
   | 'order_cancelled'
   | 'order_completed'
-  | 'suggest_product_submitted';
+  | 'suggest_product_submitted'
+  | 'share_app_clicked';
 
 const CHANNEL_ALLOW = /^[a-z0-9_-]{1,32}$/i;
 

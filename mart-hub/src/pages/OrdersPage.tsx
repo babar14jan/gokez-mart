@@ -555,7 +555,7 @@ export default function OrdersPage() {
             return (
               <div key={order.id}
                 className={`bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden shadow-sm transition-all ${
-                  staleMin ? 'border-amber-200 dark:border-amber-800' : 'border-gray-100 dark:border-slate-700'
+                  staleMin ? 'border-amber-200 dark:border-amber-800' : 'border-gray-200 dark:border-slate-700'
                 }`}>
 
                 {/* Stale warning banner */}

@@ -86,8 +86,29 @@ export function isAppInstalled(): boolean {
   }
 }
 
+// Set when the shopper dismisses the "Get the app" card. The card stays hidden
+// for a cooling period so it stops nagging on every visit, then may show once
+// more. 7 days matches the order-notification prompt's cooldown.
+const DISMISSED_KEY = 'mart_install_guide_dismissed_at';
+const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isCoolingDown(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    const at = Number(localStorage.getItem(DISMISSED_KEY) || 0);
+    return Boolean(at) && Date.now() - at < COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
+/** Hide the card for the cooling period. Called when the shopper closes it. */
+export function dismissInstallGuide(): void {
+  try { localStorage.setItem(DISMISSED_KEY, String(Date.now())); } catch { /* noop */ }
+}
+
 export interface InstallGuide {
-  /** Show the card while the app is not installed. */
+  /** Show the card while the app is not installed and not cooling down. */
   visible: boolean;
   /** 'ios'/'android' on a phone, null on desktop. */
   platform: MobilePlatform | null;
@@ -97,7 +118,7 @@ export interface InstallGuide {
 function compute(): InstallGuide {
   const platform = detectPlatform();
   return {
-    visible: !isAppInstalled(),
+    visible: !isAppInstalled() && !isCoolingDown(),
     platform,
     guideSrc: platform === 'ios' ? '/iphone.webp' : '/android.webp',
   };

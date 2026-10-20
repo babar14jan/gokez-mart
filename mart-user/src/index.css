@@ -45,6 +45,18 @@ html, body { overscroll-behavior-y: none; }
   animation: search-prompt-enter 280ms ease-out both;
 }
 
+/* Full-screen sheets (install guide, etc.) fade in and lift slightly, so the
+   overlay does not pop in abruptly on a tap. Neutralised by the reduced-motion
+   rule below like every other animation. */
+@keyframes sheet-enter {
+  from { opacity: 0; transform: translateY(1.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sheet-enter {
+  animation: sheet-enter 240ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
