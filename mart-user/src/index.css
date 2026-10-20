@@ -74,6 +74,7 @@ html, body { overscroll-behavior-y: none; }
   .nav-veg-icon {
     height: 54px;
     width: 54px;
+    transform: translateY(-6px);
   }
 }
 
