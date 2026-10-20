@@ -117,14 +117,18 @@ export class InstallAnalyticsService {
       ),
       // Share App clicks live in the funnel events table (share_app_clicked),
       // not the install table, because sharing is a growth action anyone can
-      // take, installed or not. Counted by the device platform the client sent.
+      // take, installed or not. Platform is not stored on the event itself --
+      // it lives on the session row -- so join back to mart_funnel_sessions to
+      // split taps by device. A session with no platform (older rows) is
+      // reported as 'unknown' rather than dropped, so the total still adds up.
       query(
-        `SELECT platform, COUNT(*) AS count
-         FROM mart_funnel_events
-         WHERE event_name = 'share_app_clicked'
-           AND ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
-           AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)
-         GROUP BY platform`,
+        `SELECT COALESCE(s.platform, 'unknown') AS platform, COUNT(*) AS count
+         FROM mart_funnel_events e
+         LEFT JOIN mart_funnel_sessions s ON s.session_id = e.session_id
+         WHERE e.event_name = 'share_app_clicked'
+           AND ($1::timestamptz IS NULL OR e.created_at >= $1::timestamptz)
+           AND ($2::timestamptz IS NULL OR e.created_at <= $2::timestamptz)
+         GROUP BY COALESCE(s.platform, 'unknown')`,
         [from ?? null, to ?? null]
       ),
     ]);
