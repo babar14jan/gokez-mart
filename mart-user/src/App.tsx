@@ -27,6 +27,7 @@ import DealsPage from './pages/DealsPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
+import { useUpdateStore } from './store/updateStore';
 import { hideSplash, splashRevealMs, MIN_SPLASH_MS } from './utils/splash';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
@@ -534,11 +535,24 @@ export default function App() {
   // slower than the window, and then the splash simply stays up until the
   // data is really there — the customer never sees a half-built screen.
   //
+  // It also waits for the version check to resolve, and stays up while a build
+  // swap is in flight. That is what makes a forced deploy work in an installed
+  // PWA: the splash covers the swap, so the customer sees one continuous
+  // launch that ends on the new build, instead of the stale app, then the
+  // splash, then the new app.
+  //
   // The hand-off is a short dissolve (.is-leaving) so the overlay does not
   // snap away. main.tsx and the inline timeouts in index.html remain as
   // safety nets for a failed boot.
+  const updateChecked = useUpdateStore((s) => s.checked);
+  const updateSwapPending = useUpdateStore((s) => s.swapPending);
   useEffect(() => {
     if (loading) return;
+    // Until the version check has resolved we do not know whether this is the
+    // build the server is serving, so the splash stays up.
+    if (!updateChecked) return;
+    // A forced swap is under way: the splash is the cover for it.
+    if (updateSwapPending) return;
     if (!document.getElementById('app-splash')) return;
     const start = (window as unknown as { __splashStart?: number }).__splashStart ?? Date.now();
     // The entrance animation has to finish too, or the logo would be cut
@@ -547,7 +561,7 @@ export default function App() {
     const wait = Math.max(0, floor - (Date.now() - start));
     const timer = window.setTimeout(hideSplash, wait);
     return () => window.clearTimeout(timer);
-  }, [loading]);
+  }, [loading, updateChecked, updateSwapPending]);
 
   // Catalog + settings for the active delivery zone. Refires whenever the zone
   // changes (navbar picker, "Use my location", Account toggle, GPS prefill) or

@@ -13,9 +13,12 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
     <!-- iOS launch images. Without these an installed PWA flashes a blank white
          frame while it boots; these paint the branded splash immediately and work
-         offline because iOS caches them at install time. Regenerate with
+         offline because iOS caches them natively at install time. Regenerate with
          scripts/gen-ios-splash.mjs when the logo or brand colour changes, and keep
-         this list in sync with that script's DEVICES table. -->
+         this list in sync with that script's DEVICES table.
+         The build id is added to the file names at build time (write-version.mjs),
+         so every deploy has a URL the OS cache cannot already hold and a new
+         splash actually reaches an installed PWA. -->
     <link rel="apple-touch-startup-image" href="/splash/apple-splash-1290-2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
     <link rel="apple-touch-startup-image" href="/splash/apple-splash-1320-2868.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
     <link rel="apple-touch-startup-image" href="/splash/apple-splash-1206-2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
@@ -177,12 +180,19 @@
          comes down on its own. -->
     <script>
       document.documentElement.classList.add('js');
+      // The page canvas is painted the brand green while the splash is up, so
+      // the strip below the iOS home indicator is green rather than white. The
+      // class is removed with the splash itself.
+      document.documentElement.classList.add('splash-active');
       var skipLaunchSplash = false;
       try {
         skipLaunchSplash = sessionStorage.getItem('mart-pull-refresh') === '1';
         if (skipLaunchSplash) sessionStorage.removeItem('mart-pull-refresh');
       } catch {}
-      if (skipLaunchSplash) document.documentElement.classList.add('skip-launch-splash');
+      if (skipLaunchSplash) {
+        document.documentElement.classList.add('skip-launch-splash');
+        document.documentElement.classList.remove('splash-active');
+      }
       var standaloneLaunch = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
         || navigator.standalone === true;
       if (standaloneLaunch) document.documentElement.classList.add('installed-pwa');
@@ -208,9 +218,13 @@
           var splash = document.getElementById('app-splash');
           if (!splash) return;
           // Same dissolve the app uses, so this last-resort path does not
-          // differ visually from the normal one.
+          // differ visually from the normal one. The canvas goes back to the
+          // app's own colours with it.
           splash.classList.add('is-leaving');
-          window.setTimeout(function () { splash.remove(); }, 260);
+          window.setTimeout(function () {
+            splash.remove();
+            document.documentElement.classList.remove('splash-active');
+          }, 260);
         }, 8000);
       }
     </script>
@@ -223,6 +237,14 @@
       html { background-color: #ffffff; }
       @media (prefers-color-scheme: dark) { html { background-color: #18191a; } }
       html.dark { background-color: #18191a; }
+      /* While the launch splash is on screen the page canvas is the brand
+         green too. The splash overlay itself does not reach the strip below
+         the iOS home indicator, so without this that strip showed the white
+         canvas and the splash looked like it was cut off. The class is removed
+         as soon as the splash is, so the loaded page keeps its own colours
+         (white in light mode, near-black in dark) exactly as before. */
+      html.splash-active { background-color: #218044; }
+      html.dark.splash-active { background-color: #218044; }
       /* Styling for the no-JavaScript SEO block only. Nothing here affects the
          React app, which renders its own layout into #root. */
       .seo-static { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; }
@@ -248,7 +270,17 @@
          without a visible change. */
       #app-splash {
         position: fixed;
-        inset: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        /* The visual viewport, so the overlay reaches the safe areas iOS adds
+           around the screen. `inset: 0` alone is sized to the layout viewport,
+           which on iOS can stop short of the strip below the home indicator.
+           The vh fallback is for browsers without dvh. */
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
         z-index: 2147483000;
         display: none;
         background-color: #218044;
