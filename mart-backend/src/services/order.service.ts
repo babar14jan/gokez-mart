@@ -585,7 +585,7 @@ export class OrderService {
           guestAddress: data.guestAddress,
           items: resolvedItems, subtotal, deliveryCharge: actualDelivery,
           total, paymentMethod: data.paymentMethod || null,
-          storeName: settings.store_name || 'Gokez Mart',
+          storeName: data.storeName || 'Gokez Mart',
           upiPhone: settings.upi_phone || '',
           upiId: settings.upi_id || '',
         }),

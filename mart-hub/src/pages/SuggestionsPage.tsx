@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lightbulb, MapPin, Repeat, Sparkles, UserPlus } from 'lucide-react';
+import { Lightbulb, MapPin, MessageCircle, Repeat, Sparkles, UserPlus } from 'lucide-react';
 import { suggestionsApi, type ProductSuggestion, type SuggestionStatus, type BuyerTypeFilter, type SuggestionInsights, type FunnelRange } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 
@@ -137,11 +137,11 @@ export default function SuggestionsPage() {
       )}
 
       {insights && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={<Sparkles className="h-4 w-4" />} label="Total asks" value={insights.counts.total} />
-          <StatCard icon={<UserPlus className="h-4 w-4" />} label="New buyers" value={insights.counts.newBuyers} />
-          <StatCard icon={<Repeat className="h-4 w-4" />} label="Repeat buyers" value={insights.counts.repeatBuyers} />
-          <StatCard icon={<MapPin className="h-4 w-4" />} label="Zones asking" value={insights.topZones.length} />
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 items-stretch">
+          <StatCard icon={<Sparkles className="h-4 w-4" />} label="Total asks" value={insights.counts.total} sub="in this period" gradient="from-emerald-500 to-emerald-600" />
+          <StatCard icon={<UserPlus className="h-4 w-4" />} label="New buyers" value={insights.counts.newBuyers} sub="first-time askers" gradient="from-violet-500 to-violet-600" />
+          <StatCard icon={<Repeat className="h-4 w-4" />} label="Repeat buyers" value={insights.counts.repeatBuyers} sub="already ordered" gradient="from-amber-500 to-amber-600" />
+          <StatCard icon={<MapPin className="h-4 w-4" />} label="Zones asking" value={insights.topZones.length} sub="distinct areas" gradient="from-blue-500 to-blue-600" />
         </div>
       )}
 
@@ -202,14 +202,19 @@ export default function SuggestionsPage() {
   );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function StatCard({ icon, label, value, sub, gradient }: { icon: React.ReactNode; label: string; value: number; sub: string; gradient: string }) {
   return (
-    <div className="rounded-lg border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex items-center gap-2 text-gray-500 dark:text-slate-400">
-        {icon}
-        <p className="text-xs font-medium">{label}</p>
+    <div className="kpi-card h-full cursor-default">
+      <div className="flex items-center gap-3 w-full min-w-0">
+        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0`}>
+          <span className="text-white">{icon}</span>
+        </div>
+        <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{value}</p>
       </div>
-      <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+      <div className="min-w-0 w-full">
+        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 truncate">{label}</p>
+        <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 truncate">{sub}</p>
+      </div>
     </div>
   );
 }
@@ -241,6 +246,37 @@ function BuyerBadge({ suggestion }: { suggestion: ProductSuggestion }) {
   );
 }
 
+/**
+ * Name plus a one-tap WhatsApp action, shown only when the customer opted in
+ * ("Contact me if this product is added"). Without consent no number and no
+ * button are shown, so staff can never initiate outreach with someone who
+ * declined. Guests have no name, so the number is the only way back to them.
+ */
+function ContactLine({ suggestion }: { suggestion: ProductSuggestion }) {
+  const digits = (suggestion.phone || '').replace(/\D/g, '');
+  const waNumber = digits.length === 10 ? `91${digits}` : digits;
+  const consented = Boolean(suggestion.contactConsent);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-1.5">
+      <span>{consented ? (suggestion.name ? `${suggestion.name} · ${suggestion.phone}` : suggestion.phone || 'Guest') : suggestion.name || 'Guest'}</span>
+      {consented && waNumber && (
+        <a
+          href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Hi! "${suggestion.suggestedProduct}" is now available at Gokez Mart — order it on the app. Thanks for suggesting it!`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
+          aria-label={`WhatsApp ${suggestion.phone || waNumber}`}
+        >
+          <MessageCircle className="h-3 w-3" aria-hidden="true" />WhatsApp
+        </a>
+      )}
+      {consented && (
+        <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">consented</span>
+      )}
+    </span>
+  );
+}
+
 function SuggestionCard({ suggestion, onStatusChange }: { suggestion: ProductSuggestion; onStatusChange: (id: string, next: SuggestionStatus) => void }) {
   return (
     <div className="space-y-2 p-4" role="listitem">
@@ -260,7 +296,7 @@ function SuggestionCard({ suggestion, onStatusChange }: { suggestion: ProductSug
         )}
       </div>
       <p className="text-[11px] text-gray-400 dark:text-slate-500">
-        {suggestion.name || suggestion.phone || 'Guest'} · {formatDate(suggestion.createdAt)}
+        <ContactLine suggestion={suggestion} /> · {formatDate(suggestion.createdAt)}
       </p>
     </div>
   );
@@ -275,7 +311,7 @@ function SuggestionRow({ suggestion, onStatusChange }: { suggestion: ProductSugg
       </td>
       <td className="px-4 py-3">
         <BuyerBadge suggestion={suggestion} />
-        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{suggestion.name || suggestion.phone || 'Guest'}</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400"><ContactLine suggestion={suggestion} /></p>
       </td>
       <td className="px-4 py-3 text-gray-600 dark:text-slate-300">
         <p>{suggestion.zoneName || '-'}</p>

@@ -112,11 +112,20 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   // nextOpenAt to pick up the change instead of re-deriving it locally.
   const store = await StoreService.findById(storeId);
   const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
+  // Store name and address have a single source of truth: mart_stores (edited on
+  // the hub Stores page). They used to live in mart_settings too, which let the
+  // storefront show a different name/address from receipts. Overlay the store
+  // record so the storefront, receipts and tracking all read the same values.
+  const merged = {
+    ...settings,
+    store_name: store?.name ?? settings.store_name ?? '',
+    store_address: store?.address ?? settings.store_address ?? '',
+  };
   // The raw schedule rides along so the storefront can offer scheduled delivery
   // slots that run open→close on the store's own clock (IST), rather than
   // guessing a window. Null when the store posts no hours.
   res.set('Cache-Control', 'no-store');
-  res.json({ success: true, data: { ...settings, openState, openingHours: store?.openingHours ?? null } });
+  res.json({ success: true, data: { ...merged, openState, openingHours: store?.openingHours ?? null } });
 });
 
 /**

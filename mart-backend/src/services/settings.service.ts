@@ -14,6 +14,12 @@ const PUBLIC_KEYS = [
   'inventory_tracking', 'auto_out_of_stock', 'low_stock_threshold',
 ];
 
+// Store name and address live only on mart_stores (hub Stores page). They used
+// to be editable as settings too, which let the storefront and receipts show
+// different values for the same store. Ignore any attempt to write them here so
+// a stale client or a direct API call cannot resurrect the duplicate copy.
+const PROTECTED_KEYS = new Set(['store_name', 'store_address']);
+
 export class SettingsService {
   static async getAll(storeId: string): Promise<MartSetting[]> {
     const result = await query<MartSetting>(
@@ -48,6 +54,7 @@ export class SettingsService {
 
   static async updateMany(storeId: string, settings: Record<string, string>): Promise<void> {
     for (const [key, value] of Object.entries(settings)) {
+      if (PROTECTED_KEYS.has(key)) continue;
       await this.update(storeId, key, value);
     }
   }
