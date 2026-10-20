@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Smartphone, MonitorSmartphone, CheckCircle, XCircle, HelpCircle, Trash2, Users } from 'lucide-react';
+import { Smartphone, MonitorSmartphone, CheckCircle, XCircle, HelpCircle, Trash2, Users, Share2 } from 'lucide-react';
 import { installAnalyticsApi } from '../services/api';
 
 type DateRange = 'today' | '7d' | '30d' | 'all' | 'custom';
@@ -42,6 +42,7 @@ interface InstallSummary {
   byEvent: { event_name: string; platform: string; count: string }[];
   totals: { total_events: string; total_sessions: string };
   uniqueVisitors: { platform: string; unique_visitors: string }[];
+  shareClicks: { platform: string; count: string }[];
 }
 
 const EMPTY: InstallSummary = {
@@ -49,17 +50,20 @@ const EMPTY: InstallSummary = {
   byEvent: [],
   totals: { total_events: '0', total_sessions: '0' },
   uniqueVisitors: [],
+  shareClicks: [],
 };
 
-function StatCard({ label, value, sub, icon }: { label: string; value: string | number; sub?: string; icon: React.ReactNode }) {
+function StatCard({ label, value, sub, icon, gradient = 'from-emerald-400 to-emerald-600' }: { label: string; value: string | number; sub?: string; icon: React.ReactNode; gradient?: string }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white flex-shrink-0">{icon}</div>
+    <div className="kpi-card h-full cursor-default">
+      <div className="flex items-center gap-3 w-full min-w-0">
+        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white flex-shrink-0`}>{icon}</div>
         <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{value}</p>
       </div>
-      <p className="text-xs text-gray-500 mt-1.5">{label}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+      <div className="min-w-0 w-full">
+        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 truncate">{label}</p>
+        {sub && <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 truncate">{sub}</p>}
+      </div>
     </div>
   );
 }
@@ -105,8 +109,19 @@ export default function InstallAnalyticsPage() {
   const iosGuideOpened = getEvent('install_guide_opened', 'ios');
   const iosGuideDismissed = getEvent('install_guide_dismissed', 'ios');
 
+  const getShare = (platform: string) =>
+    Number(data.shareClicks.find(s => s.platform === platform)?.count ?? 0);
+  const shareAndroid = getShare('android');
+  const shareIos = getShare('ios');
+  const shareDesktop = getShare('desktop');
+  const shareTotal = data.shareClicks.reduce((sum, s) => sum + Number(s.count), 0);
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500 dark:text-slate-400">
+        How shoppers add Gokez Mart to their home screen, and how often they share the app. Times are India time.
+      </p>
+
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-1.5">
           {RANGES.map(r => (
@@ -147,60 +162,87 @@ export default function InstallAnalyticsPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Android Visitors" value={androidVisitors} icon={<Smartphone className="w-4 h-4" />} />
-        <StatCard label="iOS Visitors" value={iosVisitors} icon={<MonitorSmartphone className="w-4 h-4" />} />
-        <StatCard label="Total Events" value={data.totals.total_events} icon={<Users className="w-4 h-4" />} />
-        <StatCard label="Total Sessions" value={data.totals.total_sessions} icon={<Users className="w-4 h-4" />} />
-      </div>
+      {/* Section 1 — Install funnel */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Install funnel</h2>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">From seeing the “Get the app” card to installing it. Guests and members are counted the same.</p>
+        </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-emerald-500" /> Android
-          </h2>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><HelpCircle className="w-3.5 h-3.5" /> Prompt Shown</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white">{androidShown}</span>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-stretch">
+          <StatCard label="Android Visitors" value={androidVisitors} icon={<Smartphone className="w-4 h-4" />} />
+          <StatCard label="iOS Visitors" value={iosVisitors} icon={<MonitorSmartphone className="w-4 h-4" />} />
+          <StatCard label="Total Events" value={data.totals.total_events} icon={<Users className="w-4 h-4" />} />
+          <StatCard label="Total Sessions" value={data.totals.total_sessions} icon={<Users className="w-4 h-4" />} />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="page-card p-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-emerald-500" /> Android
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5"><HelpCircle className="w-3.5 h-3.5" /> Prompt Shown</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{androidShown}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Guide Opened</span>
+                <span className="text-sm font-bold text-emerald-600">{androidGuideOpened}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Guide Dismissed</span>
+                <span className="text-sm font-bold text-red-500">{androidGuideDismissed}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Installed</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{androidInstalled}</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Guide Opened</span>
-              <span className="text-sm font-bold text-emerald-600">{androidGuideOpened}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Guide Dismissed</span>
-              <span className="text-sm font-bold text-red-500">{androidGuideDismissed}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Installed</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white">{androidInstalled}</span>
+          </div>
+
+          <div className="page-card p-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <MonitorSmartphone className="w-4 h-4 text-blue-500" /> iOS
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5"><HelpCircle className="w-3.5 h-3.5" /> Prompt Shown</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{iosShown}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Guide Opened</span>
+                <span className="text-sm font-bold text-emerald-600">{iosGuideOpened}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Guide Dismissed</span>
+                <span className="text-sm font-bold text-red-500">{iosGuideDismissed}</span>
+              </div>
+              {/* No "Installed" row for iOS: Safari exposes no home-screen install
+                  event, so it can never be anything but 0. */}
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <MonitorSmartphone className="w-4 h-4 text-blue-500" /> iOS
-          </h2>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><HelpCircle className="w-3.5 h-3.5" /> Prompt Shown</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white">{iosShown}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Guide Opened</span>
-              <span className="text-sm font-bold text-emerald-600">{iosGuideOpened}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Guide Dismissed</span>
-              <span className="text-sm font-bold text-red-500">{iosGuideDismissed}</span>
-            </div>
-            {/* No "Installed" row for iOS: Safari exposes no home-screen install
-                event, so it can never be anything but 0. */}
+      {/* Section 2 — Sharing */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Sharing</h2>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Taps on “Share App”, counted whether or not the app is installed.</p>
+        </div>
+        <div className="page-card p-4">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Share2 className="w-4 h-4 text-emerald-500" /> Share App clicks
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">
+            <StatCard label="Total" value={shareTotal} icon={<Share2 className="w-4 h-4" />} />
+            <StatCard label="Android" value={shareAndroid} icon={<Smartphone className="w-4 h-4" />} />
+            <StatCard label="iOS" value={shareIos} icon={<MonitorSmartphone className="w-4 h-4" />} />
+            <StatCard label="Desktop" value={shareDesktop} icon={<Users className="w-4 h-4" />} />
           </div>
         </div>
-      </div>
+      </section>
 
       {loading && <p className="text-xs text-gray-400 text-center">Loading...</p>}
     </div>

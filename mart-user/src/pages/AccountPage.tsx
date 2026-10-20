@@ -11,7 +11,7 @@ import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
 import PageHeader from '../components/PageHeader';
 import { track, trackInstall } from '../utils/track';
-import { useInstallGuide } from '../utils/install';
+import { useInstallGuide, dismissInstallGuide } from '../utils/install';
 import { BRAND_SLOGAN } from '../constants/brand';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildWhatsAppLink } from '../utils/whatsapp';
@@ -59,6 +59,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // The install guide opens in an in-app viewer (not a raw browser tab) so the
   // page can offer an explicit "Done" button under the image.
   const [installGuideOpen, setInstallGuideOpen] = useState(false);
+  // Hides the card for the cooling period the moment it is dismissed, without
+  // waiting for a remount to re-read the stored timestamp.
+  const [installCardHidden, setInstallCardHidden] = useState(false);
 
   // Count the guide as "shown" once per session, the moment the card becomes
   // visible. There is no native Android accept/decline prompt in this app: the
@@ -66,15 +69,23 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // as "Prompt Shown".
   const installShownRef = useRef(false);
   useEffect(() => {
-    if (!installGuide.visible || installShownRef.current) return;
+    if (!installGuide.visible || installCardHidden || installShownRef.current) return;
     installShownRef.current = true;
     trackInstall('install_prompt_shown', installGuide.platform ?? 'android');
-  }, [installGuide.visible, installGuide.platform]);
+  }, [installGuide.visible, installCardHidden, installGuide.platform]);
 
   // Closing the viewer without installing is a "dismissed" guide.
   const closeInstallGuide = useCallback(() => {
     if (installGuide.platform) trackInstall('install_guide_dismissed', installGuide.platform);
     setInstallGuideOpen(false);
+  }, [installGuide.platform]);
+
+  // Declining the card starts the cooling period so it stops reappearing on
+  // every visit. Treated as a decline in the install funnel.
+  const declineInstallCard = useCallback(() => {
+    dismissInstallGuide();
+    setInstallCardHidden(true);
+    if (installGuide.platform) trackInstall('install_prompt_declined', installGuide.platform);
   }, [installGuide.platform]);
 
   // "Suggest products" — a lightweight demand form opened in a sheet. Kept local
@@ -245,6 +256,10 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   };
 
   const handleShareApp = async () => {
+    // Count the intent to share regardless of whether the OS share sheet is then
+    // completed or cancelled. The funnel event carries device/platform, so the
+    // hub can slice share clicks by phone type.
+    track('share_app_clicked');
     const base = window.location.origin;
     const url = `${base}/`;
     const shareText = 'Shop local. Support local. Order everyday essentials from nearby stores.';
@@ -494,7 +509,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           {shareNotice && <p className="mt-2 text-center text-[11px] font-medium text-emerald-600 dark:text-emerald-400" role="status">{shareNotice}</p>}
         </section>
 
-        {installGuide.visible && (
+        {installGuide.visible && !installCardHidden && (
         <section>
           <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Get the app</p>
           {/* The guide is a phone screenshot anyone can follow. It opens in an
@@ -511,6 +526,16 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               aria-label="Add Gokez Mart to your home screen — view install steps"
               className="absolute inset-0 z-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             />
+            {/* Dismiss starts the cooling period. Sits above the stretched card
+                button so its tap is not swallowed by the "view steps" action. */}
+            <button
+              type="button"
+              onClick={declineInstallCard}
+              aria-label="Dismiss install suggestion"
+              className="absolute right-2 top-2 z-20 rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+            >
+              <X className="h-4 w-4" />
+            </button>
             <div className="pointer-events-none relative z-10 flex items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold leading-snug text-[#172033] dark:text-white">Add Gokez Mart to your home screen</p>
@@ -572,7 +597,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 </div>
               </div>
               {(supportPhone || whatsappNumber) && (
-                <div className="mt-4 flex gap-2 border-t border-[#e9edf2] pt-3 dark:border-slate-700">
+                <div className="mt-4 flex gap-2 border-t border-[#d5dbe4] pt-3 dark:border-slate-700">
                   {supportPhone && (
                     <a href={`tel:${supportPhone}`}
                       className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-blue-500/60">
@@ -594,7 +619,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
         <section>
         <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Preferences</p>
-        <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800 divide-y divide-[#e9edf2] dark:divide-slate-700">
+        <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800 divide-y divide-[#d5dbe4] dark:divide-slate-700">
           <div className="flex min-h-[64px] items-center gap-3 px-4">
             {isDark
               ? <Sun className="w-4 h-4 text-amber-500 flex-shrink-0" />
@@ -677,12 +702,12 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Submit a grievance</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
           </button>
-          <button onClick={() => navigate('/privacy/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#e9edf2] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+          <button onClick={() => navigate('/privacy/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#d5dbe4] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
             <ShieldCheck className="h-4 w-4 text-gray-500 dark:text-slate-400" />
             <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Privacy policy</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
           </button>
-          <button onClick={() => navigate('/terms/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#e9edf2] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+          <button onClick={() => navigate('/terms/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#d5dbe4] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
             <FileText className="h-4 w-4 text-gray-500 dark:text-slate-400" />
             <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Terms of service</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -806,8 +831,20 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           image view (a new tab) has nowhere to put that button. Portalled so it
           escapes the page scroll container and covers the whole viewport. */}
       {installGuideOpen && createPortal(
-        <div className="fixed inset-0 z-[90] flex flex-col bg-slate-900/95 backdrop-blur-sm">
+        <div className="sheet-enter fixed inset-0 z-[90] flex flex-col bg-slate-900/95 backdrop-blur-sm">
           <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-[max(2.5rem,env(safe-area-inset-top))]">
+            {/* Plain, honest copy. The point is to remove any "is this a scam?"
+                doubt: it is the same Gokez Mart site as a home-screen shortcut,
+                nothing is downloaded, and it can be removed anytime. */}
+            <div className="mx-auto mb-4 max-w-md rounded-2xl bg-white/95 px-4 py-3 dark:bg-slate-800/95">
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Add a Gokez Mart shortcut</p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+                This puts a Gokez Mart icon on your home screen so you can open and order in one tap. It is the same site you are using now — nothing is downloaded, and no extra permission is asked.
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+                You can remove it anytime, just like any other app icon.
+              </p>
+            </div>
             <img
               src={installGuide.guideSrc}
               alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}

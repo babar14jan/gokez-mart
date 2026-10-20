@@ -680,7 +680,7 @@ export default function ProductsPage() {
             <p className="text-sm">No products yet. Add your first product.</p>
           </div>
         ) : reorderMode ? (
-          <div className="divide-y divide-gray-50 dark:divide-slate-700">
+          <div className="divide-y divide-gray-100 dark:divide-slate-700">
             {reorderList.map((p, i) => <ProductRow key={p.id} p={p} index={i} />)}
           </div>
         ) : displayProducts.length === 0 ? (
@@ -689,7 +689,7 @@ export default function ProductsPage() {
             <p className="text-sm">No products match this filter.</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50 dark:divide-slate-700">
+          <div className="divide-y divide-gray-100 dark:divide-slate-700">
             {displayProducts.map((p, i) => <ProductRow key={p.id} p={p} index={i} />)}
           </div>
         )}

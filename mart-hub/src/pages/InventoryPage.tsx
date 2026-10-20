@@ -251,14 +251,14 @@ export default function InventoryPage() {
       )}
 
       {/* Inventory table */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
         {sorted.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No products found.</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50 dark:divide-slate-700">
+          <div className="divide-y divide-gray-100 dark:divide-slate-700">
             {sorted.map(item => {
               const s = stockStatus(item);
               const stockColor = s === 'out' ? 'text-red-600 dark:text-red-400'
