@@ -29,49 +29,83 @@ export function printReceipt(order: any) {
 
   const receiptHtml = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:420px;margin:0 auto;padding:24px 20px;color:#111;background:#fff;">
-      <div style="text-align:center;margin-bottom:20px;">
-        <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" style="height:48px;object-fit:contain;display:block;margin:0 auto;" onerror="this.style.display='none'" />
-        <div style="font-size:13px;font-weight:700;color:#555;margin-top:6px;letter-spacing:0.3px;">Shop local. Support local.</div>
-        <div style="font-size:12px;color:#666;margin-top:4px;font-weight:500;">A product of Gokez Technologies Pvt. Ltd.</div>
+
+      <!-- Fulfillment + order info, side by side -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:12px;">
+        <div style="flex:1;min-width:0;">
+          ${order.fulfilledBy ? `
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Fulfilled by</div>
+          <div style="font-size:16px;font-weight:800;color:#111;letter-spacing:-0.3px;line-height:1.25;">${order.fulfilledBy}</div>
+          ${order.storeAddress ? `<div style="font-size:12px;color:#666;margin-top:3px;font-weight:500;line-height:1.4;">${order.storeAddress}</div>` : ''}
+          ` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:13px;font-weight:800;color:#111;letter-spacing:-0.2px;">Order #${order.orderNumber}</div>
+          <div style="font-size:13px;color:#555;margin-top:4px;font-weight:500;">${date}</div>
+        </div>
       </div>
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
-      <div style="margin-bottom:8px;">
-        <div style="font-size:18px;font-weight:800;color:#111;">Order #${order.orderNumber}</div>
-        <div style="font-size:13px;color:#555;margin-top:4px;font-weight:500;">${date}</div>
-        ${order.fulfilledBy ? `<div style="font-size:13px;color:#555;margin-top:3px;font-weight:500;">🏪 ${order.fulfilledBy}</div>` : ''}
-      </div>
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
-      <div style="margin-bottom:8px;">
+
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
+
+      <!-- Deliver to -->
+      <div style="margin-bottom:12px;">
         <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Deliver to</div>
         <div style="font-size:15px;font-weight:700;color:#111;">${orderDisplayName(order)}</div>
         <div style="font-size:13px;color:#444;font-weight:500;margin-top:2px;line-height:1.4;">${order.guestAddress}</div>
       </div>
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
+
+      <!-- Items -->
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Items Ordered</div>
       <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr>
-            <th style="font-size:10px;color:#888;text-align:left;padding-bottom:6px;border-bottom:1px solid #ddd;text-transform:uppercase;">Item</th>
-            <th style="font-size:10px;color:#888;text-align:right;padding-bottom:6px;border-bottom:1px solid #ddd;text-transform:uppercase;">Amount</th>
-          </tr>
-        </thead>
         <tbody>${itemRows}</tbody>
       </table>
+
       <div style="border-top:2px solid #111;margin:16px 0;"></div>
-      ${totalSavings > 0 ? `<div style="background:linear-gradient(to right,#fbbf24,#eab308);border-radius:10px;padding:8px 12px;text-align:center;margin-bottom:12px;"><span style="font-size:14px;font-weight:800;color:#451a03;">🎉 Customer saved ₹${totalSavings.toFixed(0)}</span></div>` : ''}
+
+      <!-- Bill -->
+      ${totalSavings > 0 ? `
+      <div style="background:linear-gradient(to right,#fbbf24,#eab308);border-radius:10px;padding:8px 12px;text-align:center;margin-bottom:12px;">
+        <span style="font-size:14px;font-weight:800;color:#451a03;">🎉 Customer saved ₹${totalSavings.toFixed(0)}</span>
+      </div>` : ''}
       <table style="width:100%;border-collapse:collapse;">
-        <tr><td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Subtotal</td><td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${itemTotalStrike}₹${order.subtotal}</td></tr>
-        <tr><td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Delivery</td><td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${deliveryStrike}${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td></tr>
-        ${campaignDiscount > 0 ? `<tr><td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">${order.couponCodeUsed ? `Coupon: ${order.couponCodeUsed}` : 'Offer discount'}</td><td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${order.campaignDiscount}</td></tr>` : ''}
-        <tr><td style="font-size:17px;font-weight:800;color:#111;padding-top:10px;border-top:1px solid #e5e7eb;">TOTAL PAID</td><td style="font-size:17px;font-weight:800;color:#111;text-align:right;padding-top:10px;border-top:1px solid #e5e7eb;">₹${order.total}</td></tr>
+        <tr>
+          <td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Subtotal</td>
+          <td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${itemTotalStrike}₹${order.subtotal}</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Delivery</td>
+          <td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${deliveryStrike}${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td>
+        </tr>
+        ${campaignDiscount > 0 ? `
+        <tr>
+          <td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">${order.couponCodeUsed ? `Coupon: ${order.couponCodeUsed}` : 'Offer discount'}</td>
+          <td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${order.campaignDiscount}</td>
+        </tr>` : ''}
+        <tr>
+          <td style="font-size:17px;font-weight:800;color:#111;padding-top:10px;border-top:1px solid #e5e7eb;">TOTAL PAID</td>
+          <td style="font-size:17px;font-weight:800;color:#111;text-align:right;padding-top:10px;border-top:1px solid #e5e7eb;">₹${order.total}</td>
+        </tr>
       </table>
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
+
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
+
+      <!-- Payment -->
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:11px;color:#888;">Payment</span>
-        <span style="font-size:13px;font-weight:bold;">${paymentLabel[order.paymentMethod] || (order.paymentMethod || '').toUpperCase()}</span>
+        <span style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Payment Method</span>
+        <span style="font-size:14px;font-weight:700;color:#111;">${paymentLabel[order.paymentMethod] || (order.paymentMethod || '').toUpperCase()}</span>
       </div>
-      <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>
-      <div style="text-align:center;font-size:14px;font-weight:600;color:#333;">Thank you for ordering from Gokez Mart! 🛒</div>
-      <div style="text-align:center;font-size:11px;color:#999;margin-top:8px;font-weight:500;">This is a purchase receipt, not a GST invoice.</div>
+
+      <div style="border-top:1px dashed #ccc;margin:16px 0;"></div>
+
+      <!-- Footer -->
+      <div style="text-align:center;font-size:14px;font-weight:600;color:#333;">
+        Thank you for ordering from Gokez Mart! 🛒
+      </div>
+      <div style="text-align:center;font-size:11px;color:#999;margin-top:8px;font-weight:500;">
+        This is a purchase receipt, not a GST invoice.
+      </div>
     </div>
   `;
 
