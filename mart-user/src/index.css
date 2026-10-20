@@ -59,6 +59,24 @@ html, body { overscroll-behavior-y: none; }
   transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 
+/* The centre vegetable icon is intentionally larger than the labelled tabs.
+   iOS reserves the home-indicator strip under the nav, so the full 58px asset
+   sat low enough in the 64px row to look bottom-cropped. iOS-only (`@supports`
+   -webkit-touch-callout is the same iOS test used for the tint strip): the icon
+   is trimmed to 54px so it clears the strip without moving the other tabs.
+   Android/desktop keep the full size. */
+.nav-veg-icon {
+  height: 58px;
+  width: 58px;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .nav-veg-icon {
+    height: 54px;
+    width: 54px;
+  }
+}
+
 /* The checkout footer is a position:sticky child of the scrolling checkout
    overlay, so it shares the scroller with the cart list above it. Whenever the
    cart changes in the same frame as the "To pay" text changes, iOS WebKit
