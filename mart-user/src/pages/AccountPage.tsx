@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight, X, Sparkles } from 'lucide-react';
 import { authApi, suggestionApi } from '../services/api';
@@ -60,6 +60,23 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // page can offer an explicit "Done" button under the image.
   const [installGuideOpen, setInstallGuideOpen] = useState(false);
 
+  // Count the guide as "shown" once per session, the moment the card becomes
+  // visible. There is no native Android accept/decline prompt in this app: the
+  // guide card is the prompt, so its appearance is what the hub's funnel reads
+  // as "Prompt Shown".
+  const installShownRef = useRef(false);
+  useEffect(() => {
+    if (!installGuide.visible || installShownRef.current) return;
+    installShownRef.current = true;
+    trackInstall('install_prompt_shown', installGuide.platform ?? 'android');
+  }, [installGuide.visible, installGuide.platform]);
+
+  // Closing the viewer without installing is a "dismissed" guide.
+  const closeInstallGuide = useCallback(() => {
+    if (installGuide.platform) trackInstall('install_guide_dismissed', installGuide.platform);
+    setInstallGuideOpen(false);
+  }, [installGuide.platform]);
+
   // "Suggest products" — a lightweight demand form opened in a sheet. Kept local
   // to this page; the ask itself is what matters, not where it was captured.
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -113,7 +130,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // is up (same behaviour the shared dialogs use).
   useEffect(() => {
     if (!installGuideOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setInstallGuideOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeInstallGuide(); };
     document.addEventListener('keydown', onKey);
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -121,7 +138,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previous;
     };
-  }, [installGuideOpen]);
+  }, [installGuideOpen, closeInstallGuide]);
 
   // Suggestion sheet: same Escape + scroll-lock contract as the install viewer.
   useEffect(() => {
@@ -800,7 +817,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           <div className="px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <button
               type="button"
-              onClick={() => setInstallGuideOpen(false)}
+              onClick={() => closeInstallGuide()}
               className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
             >
               Got it
