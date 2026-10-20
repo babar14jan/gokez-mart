@@ -97,18 +97,14 @@ export default function InstallAnalyticsPage() {
     Number(data.byEvent.find(e => e.event_name === name && e.platform === platform)?.count ?? 0);
 
   const androidShown = getEvent('install_prompt_shown', 'android');
-  const androidAccepted = getEvent('install_prompt_accepted', 'android');
-  const androidDeclined = getEvent('install_prompt_declined', 'android');
+  const androidGuideOpened = getEvent('install_guide_opened', 'android');
+  const androidGuideDismissed = getEvent('install_guide_dismissed', 'android');
   const androidInstalled = getEvent('app_installed', 'android');
 
   const iosShown = getEvent('install_prompt_shown', 'ios');
   const iosGuideOpened = getEvent('install_guide_opened', 'ios');
   const iosGuideDismissed = getEvent('install_guide_dismissed', 'ios');
-  const iosDeclined = getEvent('install_prompt_declined', 'ios');
   const iosInstalled = getEvent('app_installed', 'ios');
-
-  const acceptRate = androidShown > 0 ? Math.round((androidAccepted / androidShown) * 100) : 0;
-  const declineRate = androidShown > 0 ? Math.round((androidDeclined / androidShown) * 100) : 0;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -170,26 +166,16 @@ export default function InstallAnalyticsPage() {
               <span className="text-sm font-bold text-gray-900 dark:text-white">{androidShown}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Accepted</span>
-              <span className="text-sm font-bold text-emerald-600">{androidAccepted}</span>
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Guide Opened</span>
+              <span className="text-sm font-bold text-emerald-600">{androidGuideOpened}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Declined (Not now)</span>
-              <span className="text-sm font-bold text-red-500">{androidDeclined}</span>
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Guide Dismissed</span>
+              <span className="text-sm font-bold text-red-500">{androidGuideDismissed}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Installed</span>
               <span className="text-sm font-bold text-gray-900 dark:text-white">{androidInstalled}</span>
-            </div>
-            <div className="border-t border-gray-100 dark:border-slate-700 pt-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">Accept Rate</span>
-                <span className="font-bold text-emerald-600">{acceptRate}%</span>
-              </div>
-              <div className="flex items-center justify-between text-xs mt-1">
-                <span className="text-gray-500">Decline Rate</span>
-                <span className="font-bold text-red-500">{declineRate}%</span>
-              </div>
             </div>
           </div>
         </div>
@@ -210,10 +196,6 @@ export default function InstallAnalyticsPage() {
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-500" /> Guide Dismissed</span>
               <span className="text-sm font-bold text-red-500">{iosGuideDismissed}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-red-400" /> Declined (Not now)</span>
-              <span className="text-sm font-bold text-red-400">{iosDeclined}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 flex items-center gap-1.5"><Trash2 className="w-3.5 h-3.5" /> Installed</span>
