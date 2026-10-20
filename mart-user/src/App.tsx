@@ -6,7 +6,7 @@ import type { Category, Product, PublicSettings, HomeSection } from './services/
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
 import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore';
-import { getNotificationPermission, requestNotificationPermission, subscribeToPush } from './services/push';
+import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported, hasActivePushSubscription } from './services/push';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
 import ConfirmDialog from './components/ConfirmDialog';
@@ -37,7 +37,6 @@ import { useLoginFlowStore } from './store/loginFlowStore';
 import { useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
-import { buildWhatsAppLink, normalizeWhatsAppNumber } from './utils/whatsapp';
 import { detectPlatform } from './utils/install';
 import { BRAND_DESCRIPTION, BRAND_PROMISE, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
@@ -717,6 +716,13 @@ export default function App() {
     const token = successData?.trackingToken;
     if (!token) return;
     saveTrackingToken(token);
+    // If this guest already granted notification permission (e.g. a previous
+    // order), register the new tracking token so the device keeps receiving
+    // order pushes. subscribeToPush reads the tokens itself; it is a no-op when
+    // permission is not granted or the device is signed in.
+    if (getNotificationPermission() === 'granted') {
+      subscribeToPush().catch(() => {});
+    }
   }, [successData?.trackingToken]);
 
   useEffect(() => {
@@ -725,9 +731,29 @@ export default function App() {
   }, [successData]);
 
   useEffect(() => {
-    if (!isLoggedIn || !successData || getNotificationPermission() !== 'default' || !isPermissionPromptDue(ORDER_NOTIFICATION_PROMPT_KEY)) return;
-    setPermissionPrompt('order-notifications');
-    setOrderNotificationError('');
+    // Offer order updates after a successful order, to guests as well as
+    // members. Show it while push is supported and only when the device is not
+    // already set up for order pushes:
+    //   • permission undecided ('default')            → ask
+    //   • permission granted but no live subscription  → ask (e.g. new install)
+    //   • permission blocked ('denied') or unsupported → never (can't be undone
+    //     in-app; a dead-end popup is worse than none)
+    // No cooling period on the first show; "Not now" is what starts it.
+    if (!successData || !isPushSupported()) return;
+    const permission = getNotificationPermission();
+    if (permission !== 'default' && permission !== 'granted') return;
+    if (!isPermissionPromptDue(ORDER_NOTIFICATION_PROMPT_KEY)) return;
+
+    let cancelled = false;
+    (async () => {
+      // Already subscribed: nothing to ask. If granted but not subscribed, fall
+      // through and prompt so the device can be re-registered.
+      if (permission === 'granted' && await hasActivePushSubscription()) return;
+      if (cancelled) return;
+      setPermissionPrompt('order-notifications');
+      setOrderNotificationError('');
+    })();
+    return () => { cancelled = true; };
   }, [isLoggedIn, successData]);
 
   useEffect(() => {
@@ -754,10 +780,15 @@ export default function App() {
     setEnablingOrderNotifications(true);
     setOrderNotificationError('');
     try {
-      const permission = await requestNotificationPermission();
-      if (permission !== 'granted') {
-        dismissPermissionPrompt();
-        return;
+      // Permission already granted (e.g. re-enabling after a fresh install):
+      // skip the native prompt, which would resolve instantly anyway, and go
+      // straight to subscribing this device.
+      if (getNotificationPermission() !== 'granted') {
+        const permission = await requestNotificationPermission();
+        if (permission !== 'granted') {
+          dismissPermissionPrompt();
+          return;
+        }
       }
       if (await subscribeToPush()) {
         dismissPermissionPrompt();
@@ -835,7 +866,7 @@ export default function App() {
                   <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">Allow order updates for preparation and delivery. Promotional messages stay off.</p>
                   {orderNotificationError && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{orderNotificationError}</p>}
                   <div className="mt-3 flex gap-2">
-                    <button onClick={enableOrderNotifications} disabled={enablingOrderNotifications} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">{enablingOrderNotifications ? 'Turning on...' : 'Allow updates'}</button>
+                    <button onClick={enableOrderNotifications} disabled={enablingOrderNotifications} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">{enablingOrderNotifications ? 'Turning on...' : 'Enable'}</button>
                     <button onClick={dismissPermissionPrompt} disabled={enablingOrderNotifications} className="rounded-xl px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-emerald-900/40">Not now</button>
                   </div>
                 </div>
@@ -922,16 +953,10 @@ export default function App() {
             className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-2xl transition-colors border border-gray-200 dark:border-slate-700">
             Continue Shopping
           </button>
-          {normalizeWhatsAppNumber(settings.whatsapp_number) && (
-            <a href={buildWhatsAppLink(settings.whatsapp_number)} target="_blank" rel="noopener noreferrer"
-              className="block text-center text-xs text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-              Need help? Chat on WhatsApp →
-            </a>
-          )}
           {!isLoggedIn && !signInPromptDismissed && (
             <div className="pt-2">
-              <div className="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-2xl p-3 text-center">
-                <p className="text-[11px] text-violet-700 dark:text-violet-300 mb-2">
+              <div className="rounded-2xl p-3 text-center">
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-1.5">
                   💡 Sign in to see all your past orders and track them easily
                 </p>
                 <div className="flex items-center justify-center gap-2">
@@ -943,17 +968,17 @@ export default function App() {
                       setSuccessData(null);
                       setShowLoginModal(true);
                     }}
-                    className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline"
+                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
                   >
                     Sign in
                   </button>
-                  <span className="text-violet-300 dark:text-violet-600">·</span>
+                  <span className="text-gray-300 dark:text-slate-600">·</span>
                   <button
                     onClick={() => {
                       sessionStorage.setItem('guest_signin_dismissed', '1');
                       setSignInPromptDismissed(true);
                     }}
-                    className="text-[11px] text-gray-500 hover:text-gray-600"
+                    className="text-[11px] text-gray-500 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300"
                   >
                     Not now
                   </button>

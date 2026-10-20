@@ -16,6 +16,17 @@ export function printReceipt(order: any) {
       <td style="padding:8px 0;font-size:14px;text-align:right;font-weight:700;color:#111;border-bottom:1px solid #e5e7eb;">₹${item.total}</td>
     </tr>`).join('');
 
+  const itemSavings = Number(order.itemSavings) || 0;
+  const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
+  const campaignDiscount = Number(order.campaignDiscount) || 0;
+  const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
+  const itemTotalStrike = itemSavings > 0
+    ? `<span style="text-decoration:line-through;color:#999;font-weight:500;margin-right:6px;">₹${(Number(order.subtotal) + itemSavings).toFixed(0)}</span>`
+    : '';
+  const deliveryStrike = freeDeliverySaving > 0
+    ? `<span style="text-decoration:line-through;color:#999;font-weight:500;margin-right:6px;">₹${freeDeliverySaving.toFixed(0)}</span>`
+    : '';
+
   const receiptHtml = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:420px;margin:0 auto;padding:24px 20px;color:#111;background:#fff;">
       <div style="text-align:center;margin-bottom:20px;">
@@ -46,10 +57,11 @@ export function printReceipt(order: any) {
         <tbody>${itemRows}</tbody>
       </table>
       <div style="border-top:2px solid #111;margin:16px 0;"></div>
+      ${totalSavings > 0 ? `<div style="background:linear-gradient(to right,#fbbf24,#eab308);border-radius:10px;padding:8px 12px;text-align:center;margin-bottom:12px;"><span style="font-size:14px;font-weight:800;color:#451a03;">🎉 Customer saved ₹${totalSavings.toFixed(0)}</span></div>` : ''}
       <table style="width:100%;border-collapse:collapse;">
-        <tr><td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Subtotal</td><td style="font-size:13px;text-align:right;color:#555;font-weight:500;">₹${order.subtotal}</td></tr>
-        <tr><td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Delivery</td><td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td></tr>
-        ${Number(order.campaignDiscount) > 0 ? `<tr><td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">${order.couponCodeUsed ? `Coupon: ${order.couponCodeUsed}` : 'Offer discount'}</td><td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${order.campaignDiscount}</td></tr>` : ''}
+        <tr><td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Subtotal</td><td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${itemTotalStrike}₹${order.subtotal}</td></tr>
+        <tr><td style="font-size:13px;padding:4px 0;color:#555;font-weight:500;">Delivery</td><td style="font-size:13px;text-align:right;color:#555;font-weight:500;">${deliveryStrike}${order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}</td></tr>
+        ${campaignDiscount > 0 ? `<tr><td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">${order.couponCodeUsed ? `Coupon: ${order.couponCodeUsed}` : 'Offer discount'}</td><td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${order.campaignDiscount}</td></tr>` : ''}
         <tr><td style="font-size:17px;font-weight:800;color:#111;padding-top:10px;border-top:1px solid #e5e7eb;">TOTAL PAID</td><td style="font-size:17px;font-weight:800;color:#111;text-align:right;padding-top:10px;border-top:1px solid #e5e7eb;">₹${order.total}</td></tr>
       </table>
       <div style="border-top:1px dashed #ccc;margin:12px 0;"></div>

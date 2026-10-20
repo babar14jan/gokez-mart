@@ -36,6 +36,40 @@ const STATUS_LABELS: Record<string, string> = {
 
 const CLOSED = ['cancelled', 'failed_delivery', 'terminated', 'delivered'];
 
+// Customer-facing cancel reasons, matching CUSTOMER_CANCEL_REASONS on the
+// server. A reason must be chosen before cancelling so a stray tap cannot
+// silently cancel an order. Kept in sync with mart-user's copy by the
+// cancelReasons backend test, which asserts both client lists match the server.
+const CANCEL_REASONS: Array<{ value: string; label: string }> = [
+  { value: 'ordered_by_mistake', label: 'Ordered by mistake' },
+  { value: 'changed_my_mind', label: 'Changed my mind' },
+  { value: 'wrong_address', label: 'Wrong address or delivery details' },
+  { value: 'duplicate_order', label: 'Duplicate order' },
+  { value: 'found_better_price', label: 'Found a better price elsewhere' },
+  { value: 'delivery_too_slow', label: 'Delivery is taking too long' },
+  { value: 'other', label: 'Other' },
+];
+
+// Customer-facing explanation for a closed order, mirroring TERMINATION_MESSAGES
+// and CANCELLATION_MESSAGES in mart-user. Cancelled orders carry the customer's
+// own self-service reason; terminated/failed orders carry the staff reason.
+const CANCELLATION_REASON_LABELS: Record<string, string> = {
+  customer_request: 'Cancelled as requested.',
+  ordered_by_mistake: 'Cancelled — it looked like the order was placed by mistake.',
+  changed_my_mind: 'Cancelled as requested.',
+  wrong_address: 'The delivery address was incorrect. You will not be charged.',
+  found_better_price: 'Cancelled as requested.',
+  delivery_too_slow: 'Cancelled as requested.',
+  duplicate_order: 'Cancelled — this appeared to be a duplicate order.',
+  out_of_stock: 'Sorry — some items became unavailable. You will not be charged.',
+  store_closed: 'Sorry — the store had to close unexpectedly. You will not be charged.',
+  outside_area: "Sorry — your address is outside our delivery area right now. We're expanding soon and will be in your area! 🌱",
+  incorrect_address: 'The delivery address was incorrect. You will not be charged.',
+  rider_unavailable: 'Sorry — no delivery partner was available. You will not be charged.',
+  technical_issue: 'Your order was cancelled due to a technical issue. You will not be charged.',
+  other: 'Your order was cancelled. You will not be charged.',
+};
+
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     + ' at ' + new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -198,6 +232,7 @@ export default function OrdersScreen() {
   const [refreshing,    setRefreshing]    = useState(false);
   const [tab,           setTab]           = useState<'current' | 'past'>('current');
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
+  const [cancelReason,  setCancelReason]  = useState('');
   const [cancelling,    setCancelling]    = useState<string | null>(null);
   const [guestPhone,    setGuestPhone]    = useState('');
   const [guestOrders,   setGuestOrders]   = useState<Order[]>([]);
@@ -232,9 +267,9 @@ export default function OrdersScreen() {
 
   const handleCancel = async (id: string) => {
     setCancelling(id);
-    try { await authApi.cancelOrder(id); await fetchOrders(true); }
+    try { await authApi.cancelOrder(id, cancelReason || undefined); await fetchOrders(true); }
     catch { /* silent */ }
-    finally { setCancelling(null); setConfirmCancel(null); }
+    finally { setCancelling(null); setConfirmCancel(null); setCancelReason(''); }
   };
 
   const handleOrderAgain = (order: Order) => {
@@ -369,19 +404,34 @@ export default function OrdersScreen() {
         {canCancel && (
           <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
             {confirmCancel === order.id ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef2f2', borderRadius: 12, padding: 10, gap: 8 }}>
-                <Text style={{ flex: 1, fontSize: 12, fontFamily: 'Inter-Regular', color: colors.red500 }}>Cancel this order?</Text>
-                <TouchableOpacity onPress={() => handleCancel(order.id)} disabled={cancelling === order.id}
-                  style={{ backgroundColor: colors.red500, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                  <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter-Bold' }}>{cancelling === order.id ? '...' : 'Yes'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setConfirmCancel(null)}
-                  style={{ backgroundColor: colors.gray100, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.gray700 }}>No</Text>
-                </TouchableOpacity>
+              <View style={{ backgroundColor: '#fef2f2', borderRadius: 12, padding: 12 }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.red500, marginBottom: 8 }}>Why are you cancelling this order?</Text>
+                <View style={{ gap: 6, marginBottom: 10 }}>
+                  {CANCEL_REASONS.map(reason => {
+                    const selected = cancelReason === reason.value;
+                    return (
+                      <TouchableOpacity key={reason.value}
+                        onPress={(e) => { e.stopPropagation(); setCancelReason(reason.value); }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, borderWidth: 1, borderColor: selected ? colors.red500 : colors.gray200, backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 8 }}>
+                        <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={16} color={selected ? colors.red500 : colors.gray400} />
+                        <Text style={{ flex: 1, fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray700 }}>{reason.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity onPress={() => handleCancel(order.id)} disabled={!cancelReason || cancelling === order.id}
+                    style={{ flex: 1, backgroundColor: colors.red500, paddingVertical: 8, borderRadius: 8, alignItems: 'center', opacity: (!cancelReason || cancelling === order.id) ? 0.5 : 1 }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter-Bold' }}>{cancelling === order.id ? 'Cancelling...' : 'Cancel order'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setCancelReason(''); setConfirmCancel(null); }}
+                    style={{ backgroundColor: colors.gray100, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.gray700 }}>Keep order</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
-              <TouchableOpacity onPress={(e) => { e.stopPropagation(); setConfirmCancel(order.id); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <TouchableOpacity onPress={(e) => { e.stopPropagation(); setCancelReason(''); setConfirmCancel(order.id); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Ionicons name="close-circle-outline" size={14} color={colors.red500} />
                 <Text style={{ fontSize: 12, fontFamily: 'Inter-Medium', color: colors.red500 }}>Cancel Order</Text>
               </TouchableOpacity>
@@ -403,6 +453,11 @@ export default function OrdersScreen() {
             <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }}>
               {formatDate(order.createdAt)}
             </Text>
+            {order.status !== 'delivered' && (order.cancellationReason ? CANCELLATION_REASON_LABELS[order.cancellationReason] : undefined) && (
+              <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 4, lineHeight: 15 }}>
+                {CANCELLATION_REASON_LABELS[order.cancellationReason as string]}
+              </Text>
+            )}
           </View>
           <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900 }}>₹{order.total}</Text>
         </View>

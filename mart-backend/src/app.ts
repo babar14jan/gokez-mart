@@ -155,6 +155,17 @@ app.use('/api/v1/orders/track/tokens', rateLimit({
   skip: (req) => req.method !== 'GET',
 }));
 
+// 6b. Guest push subscribe — public (credential is the order tracking token),
+// and it writes a row, so give it its own modest budget rather than sharing the
+// order-placement limiter.
+app.use('/api/v1/push/subscribe/guest', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 30 : 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many attempts. Please try again later.' },
+}));
+
 // 5. Order placement — 10 orders / 5 min per IP (prevent order spam)
 app.use('/api/v1/orders', rateLimit({
   windowMs: 5 * 60 * 1000,

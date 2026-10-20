@@ -302,6 +302,44 @@ export const installAnalyticsApi = {
   getSummary: (from?: string, to?: string) => api.get('/admin/install-analytics', { params: { from, to } }),
 };
 
+// ── Product suggestions ("Suggest products") ────────────────────────────────────
+export type SuggestionStatus = 'new' | 'reviewing' | 'added' | 'declined';
+export type BuyerTypeFilter = 'new' | 'repeat';
+
+export interface ProductSuggestion {
+  id: string;
+  customerId: string | null;
+  phone: string | null;
+  name: string | null;
+  suggestedProduct: string;
+  detail: string | null;
+  zoneId: string | null;
+  zoneName: string | null;
+  storeId: string | null;
+  storeName: string | null;
+  buyerType: BuyerTypeFilter;
+  orderCount: number;
+  contactConsent: boolean;
+  status: SuggestionStatus;
+  createdAt: string;
+}
+
+export interface SuggestionInsights {
+  counts: { total: number; newBuyers: number; repeatBuyers: number; consented: number };
+  topProducts: { product: string; count: number }[];
+  topZones: { zoneId: string | null; zoneName: string | null; count: number }[];
+  byStatus: { status: string; count: number }[];
+}
+
+export const suggestionsApi = {
+  getAll: (filters: { status?: SuggestionStatus | 'all'; buyerType?: BuyerTypeFilter | 'all'; zoneId?: string }, range: FunnelRange, from?: string, to?: string) =>
+    api.get('/admin/suggestions', { params: { ...filters, range, from, to } }),
+  getInsights: (range: FunnelRange, from?: string, to?: string) =>
+    api.get('/admin/suggestions/insights', { params: { range, from, to } }),
+  updateStatus: (id: string, status: SuggestionStatus) =>
+    api.put(`/admin/suggestions/${id}/status`, { status }),
+};
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 export const settingsApi = {
   getAll: (storeId?: string, opts?: FetchOpts) => api.get('/admin/settings', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),

@@ -53,6 +53,27 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
+
+// Human labels for mart_orders.cancellation_reason. Covers both the customer's
+// self-service reasons (CUSTOMER_CANCEL_REASONS on the API) and the reasons
+// staff pick when they stop an order, so a cancelled order always explains why.
+const CANCELLATION_REASON_LABELS: Record<string, string> = {
+  customer_request: 'Customer cancelled',
+  ordered_by_mistake: 'Customer: ordered by mistake',
+  changed_my_mind: 'Customer: changed their mind',
+  wrong_address: 'Customer: wrong address or delivery details',
+  found_better_price: 'Customer: found a better price elsewhere',
+  delivery_too_slow: 'Customer: delivery taking too long',
+  duplicate_order: 'Duplicate order',
+  out_of_stock: 'Out of stock',
+  store_closed: 'Store closed',
+  outside_area: 'Outside delivery area',
+  incorrect_address: 'Incorrect delivery address',
+  rider_unavailable: 'Rider unavailable',
+  technical_issue: 'Technical issue',
+  other: 'Other',
+};
+
 const PAYMENT_COLORS: Record<string, string> = {
   cod: 'text-emerald-600 dark:text-emerald-400',
   upi: 'text-blue-600 dark:text-blue-400',
@@ -378,11 +399,13 @@ export default function OrdersPage() {
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         // Match what the row actually shows (real name, or the phone fallback for
-        // placeholder names), plus the phone and order identifiers.
-        const matchesName  = orderDisplayName(o).toLowerCase().includes(q);
-        const matchesPhone = String(o.guestPhone || '').toLowerCase().includes(q);
-        const matchesOrder = String(o.orderNumber || '').toLowerCase().includes(q) || String(o.id || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesPhone && !matchesOrder) return false;
+        // placeholder names), plus the phone, order identifiers, and any part of
+        // the delivery address.
+        const matchesName    = orderDisplayName(o).toLowerCase().includes(q);
+        const matchesPhone   = String(o.guestPhone || '').toLowerCase().includes(q);
+        const matchesOrder   = String(o.orderNumber || '').toLowerCase().includes(q) || String(o.id || '').toLowerCase().includes(q);
+        const matchesAddress = String(o.guestAddress || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesPhone && !matchesOrder && !matchesAddress) return false;
       }
       return true;
     });
@@ -477,14 +500,14 @@ export default function OrdersPage() {
         )}
         </div>
 
-        {/* Search box — by customer name or order id */}
+        {/* Search box — by customer name, phone, address or order id */}
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name or order id"
+            placeholder="Search by name, phone, address or order id"
             className="w-full pl-9 pr-8 py-2 text-xs bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
@@ -556,6 +579,17 @@ export default function OrdersPage() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
                         {STATUS_LABELS[order.status] || order.status}
                       </span>
+                      {/* Customer-cancelled orders carry the reason the customer
+                          chose, so staff do not have to open the order (or call)
+                          to find out why it stopped. */}
+                      {order.status === 'cancelled' && order.cancellationReason && (
+                        <span
+                          title={CANCELLATION_REASON_LABELS[order.cancellationReason] || order.cancellationReason}
+                          className="text-[10px] font-semibold bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-full"
+                        >
+                          {CANCELLATION_REASON_LABELS[order.cancellationReason] || order.cancellationReason}
+                        </span>
+                      )}
                         {/* Express ETA is meaningless on an after-hours order,
                             and the scheduled window has its own badge below. */}
                         {order.deliveryPreference && order.deliveryPreference !== 'scheduled' && !order.placedOutsideHours && (
@@ -662,6 +696,16 @@ export default function OrdersPage() {
                         <div className="flex items-start gap-1.5 bg-blue-50 dark:bg-blue-900/10 rounded-xl px-3 py-2">
                           <span className="text-sm flex-shrink-0">💬</span>
                           <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed">{order.notes}</p>
+                        </div>
+                      )}
+                      {/* Why the order stopped — the customer's own reason for a
+                          self-service cancel, or the staff reason otherwise. */}
+                      {['cancelled', 'terminated'].includes(order.status) && order.cancellationReason && (
+                        <div className="flex items-start gap-1.5 bg-red-50 dark:bg-red-900/10 rounded-xl px-3 py-2">
+                          <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
+                            {CANCELLATION_REASON_LABELS[order.cancellationReason] || order.cancellationReason}
+                          </p>
                         </div>
                       )}
                     </>
@@ -912,21 +956,49 @@ export default function OrdersPage() {
                       </div>
                     ))}
                     <div className="pt-2 border-t border-gray-100 dark:border-slate-600 space-y-1">
-                      <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
-                        <span>Subtotal</span><span>₹{order.subtotal}</span>
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
-                        <span>Delivery</span><span>₹{order.deliveryCharge}</span>
-                      </div>
-                      {Number(order.campaignDiscount) > 0 && (
-                        <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
-                          <span>{order.couponCodeUsed ? `Coupon ${order.couponCodeUsed}` : 'Offer discount'}</span>
-                          <span>-₹{order.campaignDiscount}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">
-                        <span>Total</span><span>₹{order.total}</span>
-                      </div>
+                      {(() => {
+                        const itemSavings = Number(order.itemSavings) || 0;
+                        const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
+                        const campaignDiscount = Number(order.campaignDiscount) || 0;
+                        const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
+                        return (
+                          <>
+                            {totalSavings > 0 && (
+                              <div className="flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-1.5 text-amber-950">
+                                <span className="text-xs" aria-hidden="true">🎉</span>
+                                <span className="text-xs font-extrabold">Customer saved ₹{totalSavings.toFixed(0)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
+                              <span>Subtotal</span>
+                              <span className="flex items-center gap-1.5">
+                                {itemSavings > 0 && (
+                                  <span className="text-gray-400 line-through dark:text-slate-500">₹{(Number(order.subtotal) + itemSavings).toFixed(0)}</span>
+                                )}
+                                <span className="text-gray-900 dark:text-white">₹{order.subtotal}</span>
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
+                              <span>Delivery</span>
+                              <span className="flex items-center gap-1.5">
+                                {freeDeliverySaving > 0 && (
+                                  <span className="text-gray-400 line-through dark:text-slate-500">₹{freeDeliverySaving.toFixed(0)}</span>
+                                )}
+                                <span>{order.deliveryCharge === 0 ? <span className="font-semibold text-emerald-600 dark:text-emerald-400">FREE</span> : `₹${order.deliveryCharge}`}</span>
+                              </span>
+                            </div>
+                            {campaignDiscount > 0 && (
+                              <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                                <span>{order.couponCodeUsed ? `Coupon ${order.couponCodeUsed}` : 'Offer discount'}</span>
+                                <span>-₹{order.campaignDiscount}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">
+                              <span>Total</span><span>₹{order.total}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}

@@ -6,6 +6,8 @@ import { useFinePointer } from '../utils/useFinePointer';
 import { useCustomerStore } from '../store/customerStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../utils/track';
+import { readTrackingTokens } from '../utils/guestTracking';
+import { subscribeToPush } from '../services/push';
 
 export interface LoginFlowProps {
   /** Optional: the page host has no overlay to dismiss. */
@@ -149,11 +151,17 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     setLoading(true); setError('');
     try {
       track('otp_entered', { otpChannel: 'phone_call' });
-      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp, getFunnelSessionId());
+      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp, getFunnelSessionId(), readTrackingTokens());
       track('login_verified');
       const { token, customer } = res.data.data;
       loginFlow.clear();
       savePhone(customer.phone);
+      // The server already moved this device's guest push rows onto the customer
+      // id (via trackingTokens above). Re-subscribe against the account so the
+      // browser's current endpoint also lands on the member row. Best-effort.
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        subscribeToPush().catch(() => {});
+      }
       // Returning customer (already has a name) — commit straight away.
       if (customer.name) {
         login(token, customer);

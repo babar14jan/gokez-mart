@@ -44,6 +44,42 @@ export class PushService {
     );
   }
 
+  /**
+   * Save a subscription for a guest, keyed on the order tracking token the
+   * device already holds. The caller must have validated that the token maps to
+   * a real order before calling this — otherwise anyone could register a junk
+   * token. Re-registering the same endpoint moves it off any prior owner
+   * (member, admin or a different guest token) so one device has exactly one
+   * subscription row.
+   */
+  static async saveGuestSubscription(trackingToken: string, sub: {
+    endpoint: string; keys: { p256dh: string; auth: string };
+  }): Promise<void> {
+    await query(
+      `INSERT INTO mart_push_subscriptions (tracking_token, endpoint, p256dh, auth)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (endpoint) DO UPDATE
+         SET tracking_token = $1, customer_id = NULL, admin_id = NULL, p256dh = $3, auth = $4`,
+      [trackingToken, sub.endpoint, sub.keys.p256dh, sub.keys.auth]
+    );
+  }
+
+  /**
+   * Re-point a device's guest subscriptions to a customer id after OTP login.
+   * Without this, a device that subscribed as a guest and then logged in would
+   * receive both the guest push (matched by tracking token) and the member push
+   * (matched by customer id) for the same order.
+   */
+  static async rekeyGuestSubscriptions(customerId: string, trackingTokens: string[]): Promise<void> {
+    if (!trackingTokens.length) return;
+    await query(
+      `UPDATE mart_push_subscriptions
+         SET customer_id = $1, tracking_token = NULL
+       WHERE tracking_token = ANY($2)`,
+      [customerId, trackingTokens]
+    );
+  }
+
   // Send to a specific customer
   static async notifyCustomer(customerId: string, payload: PushPayload): Promise<void> {
     const result = await query<{ endpoint: string; p256dh: string; auth: string }>(
@@ -51,6 +87,36 @@ export class PushService {
       [customerId]
     );
     await this.sendToSubscriptions(result.rows, payload);
+  }
+
+  // Send to every device subscribed to a guest tracking token.
+  static async notifyGuest(trackingToken: string, payload: PushPayload): Promise<void> {
+    const result = await query<{ endpoint: string; p256dh: string; auth: string }>(
+      `SELECT endpoint, p256dh, auth FROM mart_push_subscriptions WHERE tracking_token = $1`,
+      [trackingToken]
+    );
+    await this.sendToSubscriptions(result.rows, payload);
+  }
+
+  /**
+   * Notify whoever placed an order, whether member or guest. Members are matched
+   * by customer id; guests by the order's tracking token. Guests previously
+   * received nothing, so every order-update call site should use this instead of
+   * notifyCustomer directly. Silent no-op if the order has no owner or no
+   * subscription — push must never break the order flow.
+   */
+  static async notifyOrderRecipient(orderId: string, payload: PushPayload): Promise<void> {
+    const result = await query<{ customer_id: string | null; tracking_token: string | null }>(
+      `SELECT customer_id, tracking_token FROM mart_orders WHERE id = $1`,
+      [orderId]
+    );
+    const row = result.rows[0];
+    if (!row) return;
+    if (row.customer_id) {
+      await this.notifyCustomer(row.customer_id, payload);
+    } else if (row.tracking_token) {
+      await this.notifyGuest(row.tracking_token, payload);
+    }
   }
 
   static async notifyAdmin(adminId: string, payload: PushPayload): Promise<void> {
