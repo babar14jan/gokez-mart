@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight, X } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
@@ -56,10 +57,27 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const [shareNotice, setShareNotice] = useState('');
   // Offered on phones until the app is actually installed to the home screen.
   const installGuide = useInstallGuide();
+  // The install guide opens in an in-app viewer (not a raw browser tab) so the
+  // page can offer an explicit "Done" button under the image.
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
 
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
   }, []);
+
+  // Install-guide viewer: Escape to dismiss and lock the page behind it while it
+  // is up (same behaviour the shared dialogs use).
+  useEffect(() => {
+    if (!installGuideOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setInstallGuideOpen(false); };
+    document.addEventListener('keydown', onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [installGuideOpen]);
 
   useEffect(() => {
     const refreshNotificationPermission = () => setNotificationPermission(getNotificationPermission());
@@ -408,16 +426,18 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         {installGuide.visible && (
         <section>
           <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Get the app</p>
-          {/* The guide is a phone screenshot anyone can follow, and opening the
-              raw image is the "steps" — no modal, the browser's own image view is
-              the viewer. The whole card is one stretched link. */}
+          {/* The guide is a phone screenshot anyone can follow. It opens in an
+              in-app viewer rather than the browser's raw image view (a new tab
+              the app cannot add a "Done" button to), so the whole card is one
+              stretched button. */}
           <div className="group relative overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800">
-            <a
-              href={installGuide.guideSrc}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => {
+                if (installGuide.platform) trackInstall('install_guide_opened', installGuide.platform);
+                setInstallGuideOpen(true);
+              }}
               aria-label="Add Gokez Mart to your home screen — view install steps"
-              onClick={() => { if (installGuide.platform) trackInstall('install_guide_opened', installGuide.platform); }}
               className="absolute inset-0 z-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             />
             <div className="pointer-events-none relative z-10 flex items-center gap-4 p-4">
@@ -589,6 +609,43 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           {footer}
         </section>
       </div>
+
+      {/* Install-guide viewer. The guide is a tall phone screenshot, so it scrolls
+          inside a full-screen sheet with a pinned "Done" bar — the browser's own
+          image view (a new tab) has nowhere to put that button. Portalled so it
+          escapes the page scroll container and covers the whole viewport. */}
+      {installGuideOpen && createPortal(
+        <div className="fixed inset-0 z-[90] flex flex-col bg-slate-900/95 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+            <p className="text-sm font-semibold text-white">Add Gokez Mart to your home screen</p>
+            <button
+              type="button"
+              onClick={() => setInstallGuideOpen(false)}
+              aria-label="Close install steps"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4">
+            <img
+              src={installGuide.guideSrc}
+              alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
+              className="mx-auto h-auto w-full max-w-md rounded-2xl"
+            />
+          </div>
+          <div className="px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <button
+              type="button"
+              onClick={() => setInstallGuideOpen(false)}
+              className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+            >
+              Done
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
