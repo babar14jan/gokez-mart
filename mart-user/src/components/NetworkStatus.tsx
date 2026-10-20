@@ -10,6 +10,10 @@ const HEALTH_TIMEOUT_MS = 8000;
 // Same reasoning for the tie-breaker below: a device with no internet fails
 // this in milliseconds, only a slow link approaches the ceiling.
 const CONNECTIVITY_TIMEOUT_MS = 8000;
+// A second, shorter probe after the first timed out. A genuinely slow-but-alive
+// link almost always completes this one (the file is tiny), which is what earns
+// the `slow` verdict; a dead data path times out again and is called offline.
+const CONNECTIVITY_RETRY_TIMEOUT_MS = 5000;
 const RETRY_INTERVAL_MS = 2500;
 const HEALTH_CHECK_INTERVAL_MS = 15000;
 // How often to re-check while an outage screen is already up, waiting for the
@@ -28,18 +32,52 @@ const CONNECTIVITY_PROBE_URL = '/version.json';
 
 type Connectivity = 'online' | 'offline' | 'slow';
 
-// Note the middle outcome. An aborted fetch means "this took too long", not
-// "there is no internet" — conflating the two is what tells a shopper on a slow
-// connection to check a wifi that is working fine.
+// One same-origin fetch to the static probe. Returns the raw outcome so the
+// caller can decide what a timeout means:
+//   'ok'      — the file loaded; the connection carries data.
+//   'failed'  — the fetch threw a network error (DNS, refused, no route). This
+//               is the classic "device has no working data path".
+//   'timeout' — the request neither succeeded nor failed within the ceiling.
+async function fetchProbe(signal: AbortSignal): Promise<'ok' | 'failed' | 'timeout'> {
+  try {
+    await fetch(CONNECTIVITY_PROBE_URL, { cache: 'no-store', signal });
+    return 'ok';
+  } catch (err: any) {
+    return err?.name === 'AbortError' ? 'timeout' : 'failed';
+  }
+}
+
+// Tell "the customer has no usable connection" apart from "our backend is down".
+// They are reported identically by the browser, so this same-origin static file
+// (served by Cloudflare Pages, never by the API) is the tie-breaker.
+//
+// The hard case is a phone whose radio is ON but whose data is dead — no plan,
+// no credit, a captive portal. navigator.onLine is true throughout, and on iOS
+// the request frequently HANGS rather than failing fast. A single timed-out
+// probe therefore cannot be read as "slow network": a functioning-but-slow link
+// still answers a file this small well within the ceiling. So a timeout is
+// retried with a short ceiling; if the retry also cannot complete, the data path
+// is dead and this is `offline`, not `slow`. Only a link that measurably
+// completes — just late — is called slow.
 async function probeConnectivity(): Promise<Connectivity> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return 'offline';
+
+  const first = await timedProbe(CONNECTIVITY_TIMEOUT_MS);
+  if (first === 'ok') return 'online';
+  if (first === 'failed') return 'offline';
+
+  // Timed out. Give a slow-but-working link one short chance to prove itself.
+  const second = await timedProbe(CONNECTIVITY_RETRY_TIMEOUT_MS);
+  if (second === 'ok') return 'slow';
+  return 'offline';
+}
+
+// Run one probe under its own abort timer.
+async function timedProbe(ceilingMs: number): Promise<'ok' | 'failed' | 'timeout'> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CONNECTIVITY_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), ceilingMs);
   try {
-    await fetch(CONNECTIVITY_PROBE_URL, { cache: 'no-store', signal: controller.signal });
-    return 'online';
-  } catch (err: any) {
-    return err?.name === 'AbortError' ? 'slow' : 'offline';
+    return await fetchProbe(controller.signal);
   } finally {
     clearTimeout(timer);
   }

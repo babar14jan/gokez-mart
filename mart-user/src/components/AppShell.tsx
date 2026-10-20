@@ -75,16 +75,16 @@ export default function AppShell({
       {floatingCart}
       {bottomNav}
 
-      {/* iOS 26 Safari derives the top/bottom browser-bar tint from the
+      {/* iOS 26 Safari derives the bottom browser-bar tint from the
           background-color of a fixed element that touches that edge — the
-          theme-color meta is ignored. The shell is one such element but has a
-          single, content-driven colour, so both bars would take it. These two
-          decorative strips pin each edge to the colour it should be: the green
-          sticky Navbar already covers the top, and the bottom strip matches the
-          nav (white / dark) instead of the launched green splash. index.css
-          shows them only on iOS (display:none elsewhere), so Android and
+          theme-color meta is ignored. The bottom strip pins that edge to the
+          nav colour (white / dark) instead of the launched green splash. The
+          TOP edge needs no strip: the sticky Navbar/PageHeader already sits at
+          top:0 with a green background that covers the safe-area inset, so
+          Safari samples the header itself and the status bar matches exactly —
+          no seam, and nothing overlays the header content. index.css shows the
+          remaining strip only on iOS (display:none elsewhere), so Android and
           desktop are untouched. aria-hidden + pointer-events:none: pure paint. */}
-      <div className="app-tint-top" aria-hidden="true" />
       <div className="app-tint-bottom" aria-hidden="true" />
     </div>
   );
