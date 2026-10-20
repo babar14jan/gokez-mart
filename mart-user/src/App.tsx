@@ -27,6 +27,7 @@ import DealsPage from './pages/DealsPage';
 import { useCustomerAuthStore } from './store/customerAuthStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
+import { hideSplash, splashRevealMs, MIN_SPLASH_MS } from './utils/splash';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
@@ -523,16 +524,28 @@ export default function App() {
   }, [catalogRequest]);
 
   // Remove the browser-tab launch splash (index.html) once the app is ready.
-  // Installed PWAs hide this overlay and show their loading UI beneath the
-  // platform splash instead.
-  // main.tsx and the inline timeout in index.html remain as safety nets.
+  //
+  // The splash is a deliberate brand moment, not a loading hack. The app is
+  // live and interactive behind it: the catalogue, settings and home sections
+  // are fetched as the app mounts, and the stamp-based poll keeps them warm
+  // afterwards without re-downloading everything on every visit. So the splash
+  // gets a minimum window (MIN_SPLASH_MS) to play, and comes down as soon as
+  // BOTH the app is ready and that window has passed. A slow connection is
+  // slower than the window, and then the splash simply stays up until the
+  // data is really there — the customer never sees a half-built screen.
+  //
+  // The hand-off is a short dissolve (.is-leaving) so the overlay does not
+  // snap away. main.tsx and the inline timeouts in index.html remain as
+  // safety nets for a failed boot.
   useEffect(() => {
     if (loading) return;
-    const splash = document.getElementById('app-splash');
-    if (!splash) return;
+    if (!document.getElementById('app-splash')) return;
     const start = (window as unknown as { __splashStart?: number }).__splashStart ?? Date.now();
-    const wait = Math.max(0, 1200 - (Date.now() - start));
-    const timer = window.setTimeout(() => splash.remove(), wait);
+    // The entrance animation has to finish too, or the logo would be cut
+    // off mid-fade.
+    const floor = Math.max(MIN_SPLASH_MS, splashRevealMs());
+    const wait = Math.max(0, floor - (Date.now() - start));
+    const timer = window.setTimeout(hideSplash, wait);
     return () => window.clearTimeout(timer);
   }, [loading]);
 

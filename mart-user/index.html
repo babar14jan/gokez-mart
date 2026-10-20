@@ -35,6 +35,10 @@
     <link rel="apple-touch-startup-image" href="/splash/apple-splash-1536-2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="preload" as="image" href="/mart_brand_new.webp" type="image/webp" />
+    <!-- Splash artwork. It is on screen in the very first paint, so it is
+         preloaded the same way the splash logo is: fetching it later would
+         show an empty gap in the middle of the splash. -->
+    <link rel="preload" as="image" href="/splash2.webp" type="image/webp" />
     <!-- Bottom nav's centre "Vegetables" button. This is the only image the app
          shell renders on first paint, and it lives in public/ (not a Vite-hashed
          bundle asset), so nothing else kicks off its download until React mounts
@@ -182,11 +186,31 @@
       var standaloneLaunch = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
         || navigator.standalone === true;
       if (standaloneLaunch) document.documentElement.classList.add('installed-pwa');
+      // The status bar colour during the cold start. The app sets this again at
+      // runtime (App.tsx), but that happens after the first paint -- on Android
+      // the OS splash is already on screen by then, and a white status bar over
+      // the green splash is a visible seam. Set it here, before first paint.
+      // Desktop keeps the white bar the app uses there.
+      var mobileUA = /android/i.test(navigator.userAgent)
+        || /iphone|ipad|ipod/i.test(navigator.userAgent)
+        || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+      if (mobileUA) {
+        var themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute('content', '#218044');
+      }
       window.__splashStart = Date.now();
-      if (!skipLaunchSplash && !standaloneLaunch) {
+      // Last-resort fallback: the splash is shown in every context now
+      // (browser tab and installed PWA alike), so this has to cover standalone
+      // launches too — otherwise a failed boot in an installed PWA would leave
+      // the splash on screen forever. Pull-to-refresh still skips it.
+      if (!skipLaunchSplash) {
         window.setTimeout(function () {
           var splash = document.getElementById('app-splash');
-          if (splash) splash.remove();
+          if (!splash) return;
+          // Same dissolve the app uses, so this last-resort path does not
+          // differ visually from the normal one.
+          splash.classList.add('is-leaving');
+          window.setTimeout(function () { splash.remove(); }, 260);
         }, 8000);
       }
     </script>
@@ -208,18 +232,40 @@
       .seo-static nav { margin-top: 1.25rem; font-size: 0.875rem; display: flex; gap: 1rem; flex-wrap: wrap; }
       .js .seo-static { display: none; }
 
-      /* Browser-tab launch splash. Installed PWAs use the platform splash and
-        reveal the app's loading UI directly, avoiding a second splash layer. */
+      /* How long the splash's entrance animation takes to finish (the last
+         staggered element, the loading line, lands at ~780ms). App.tsx reads
+         this so the earliest possible removal waits for the animation to
+         complete — cutting it short would freeze the logo mid-fade — while
+         the splash still comes down as soon as the app is ready after that.
+         One source of truth, so the CSS and the JS cannot drift apart. */
+      :root { --app-splash-reveal: 800ms; }
+
+      /* Launch splash. Painted from static markup in <body>, so it is on screen
+         before the React bundle is even parsed — there is no empty or white
+         frame between the browser's first paint and the app's first render.
+         The platform splash (iOS launch images, Android manifest splash) uses
+         this same design, so an installed PWA hands over from one to the other
+         without a visible change. */
       #app-splash {
         position: fixed;
         inset: 0;
         z-index: 2147483000;
         display: none;
         background-color: #218044;
+        /* A barely-there lift at the top so the flat brand green reads as a
+           lit surface rather than a solid fill. */
+        background-image: radial-gradient(120% 80% at 50% 12%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 62%);
       }
       .js #app-splash { display: block; }
       .skip-launch-splash #app-splash { display: none !important; }
-      .installed-pwa #app-splash { display: none !important; }
+      /* Hand-off to the live app: the app adds .is-leaving when it is ready and
+         the overlay dissolves. The element is removed right after, so the fade
+         is a visual transition, not a hold — the splash is never kept up for a
+         fixed time. Taps are only let through once it is fading: while the
+         splash is still painted it must keep blocking, or a tap would land on
+         an app the customer cannot see. */
+      #app-splash.is-leaving { opacity: 0; transition: opacity 220ms ease-out; pointer-events: none; }
+
       #app-splash .app-splash-content {
         position: absolute;
         inset: 0;
@@ -227,72 +273,116 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 0 1rem;
+        padding: 1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+        text-align: center;
       }
-      /* Logo + tagline ride together and are lifted ~35px as a unit. The offset
-         lives on this wrapper (not the logo) because the logo's float animation
-         already owns `transform`, so a transform here would be overwritten. The
-         headline sits outside the wrapper, so it does not move. */
-      #app-splash .app-splash-brand {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        transform: translateY(-35px);
-      }
+      /* The logo fades in and scales up. One-shot: the splash is a transition
+         into the app, not a looping animation. */
       #app-splash .app-splash-logo {
-        width: min(44vw, 175px);
+        width: min(42vw, 170px);
         height: auto;
         display: block;
-        animation: app-splash-float 2.4s ease-in-out infinite;
+        animation: app-splash-logo-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       #app-splash .app-splash-tagline {
-        position: relative;
-        width: 100%;
-        max-width: 32rem;
-        height: 2rem;
-        margin: 0.75rem 0 0;
-      }
-      #app-splash .app-splash-tagline span {
-        position: absolute;
-        inset: 0;
-        text-align: center;
-        color: rgba(255, 255, 255, 0.92);
+        margin: 0.9rem 0 0;
+        color: rgba(255, 255, 255, 0.95);
         font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-        font-weight: 600;
-        font-size: clamp(0.95rem, 3.9vw, 1.25rem);
-        line-height: 1.2;
-        opacity: 1;
-        animation: app-splash-tagline 2.2s ease-in-out infinite;
+        font-weight: 700;
+        font-size: clamp(0.9rem, 3.6vw, 1.1rem);
+        line-height: 1.25;
+        letter-spacing: 0.01em;
+        animation: app-splash-fade-in 480ms ease-out 90ms both;
       }
-      /* Static one-line headline under the rotating tagline. Warm gold gives it
-         the strongest pop against the splash green (white stays on the logo and
-         tagline); the clamp keeps it on one line from a 320px phone up. */
+      /* The grocery-bag artwork. The white-background source (splash2.jpg) is
+         keyed to transparency once at build time into splash2.webp, so it sits
+         on the green instead of showing as a white box. */
+      #app-splash .app-splash-art {
+        height: clamp(132px, 40vw, 205px);
+        width: auto;
+        display: block;
+        margin: 1rem 0 0;
+        animation: app-splash-art-in 600ms cubic-bezier(0.22, 1, 0.36, 1) 150ms both;
+      }
+      /* Warm gold for the strongest pop against the splash green; white stays
+         on the logo and the tagline. The extra space above it gives the
+         artwork room to breathe instead of crowding the words.
+         The weight is 700, not 800: Inter is only loaded up to 700, and a
+         heavier weight would be synthesised by the browser -- a fake bold
+         that is wider than the real thing and would wrap the line
+         differently from the iOS launch image, which is drawn with the real
+         Inter Bold. */
       #app-splash .app-splash-headline {
-        width: 100%;
-        max-width: 32rem;
-        margin: 0.6rem 0 0;
-        text-align: center;
+        margin: 1.6rem 0 0;
+        max-width: 23rem;
         color: #fcd34d;
         font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-        font-weight: 900;
-        font-size: clamp(0.78rem, 3.9vw, 1.5rem);
-        line-height: 1.15;
+        font-weight: 700;
+        font-size: clamp(0.95rem, 4vw, 1.3rem);
+        line-height: 1.25;
         letter-spacing: -0.02em;
+        text-align: center;
+        animation: app-splash-fade-in 480ms ease-out 220ms both;
+      }
+      /* Three dots on their own line, between the slogan and the status line.
+         They pulse in sequence, so the eye reads one travelling motion rather
+         than three separate blinks. */
+      #app-splash .app-splash-dots {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        margin: 0.85rem 0 0;
+        animation: app-splash-fade-in 480ms ease-out 260ms both;
+      }
+      #app-splash .app-splash-dots span {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: #fcd34d;
+        animation: app-splash-dot 1.2s ease-in-out infinite;
+      }
+      #app-splash .app-splash-dots span:nth-child(2) { animation-delay: 0.18s; }
+      #app-splash .app-splash-dots span:nth-child(3) { animation-delay: 0.36s; }
+      #app-splash .app-splash-loading {
+        margin: 0.6rem 0 0;
+        color: rgba(255, 255, 255, 0.82);
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-weight: 500;
+        font-size: clamp(0.72rem, 3vw, 0.85rem);
+        line-height: 1.3;
+        text-align: center;
+        animation: app-splash-fade-in 480ms ease-out 300ms both;
       }
 
-      @keyframes app-splash-float {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-8px); }
+      @keyframes app-splash-logo-in {
+        from { opacity: 0; transform: scale(0.9); }
+        to { opacity: 1; transform: scale(1); }
       }
-      @keyframes app-splash-tagline {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-6px); }
+      @keyframes app-splash-art-in {
+        from { opacity: 0; transform: translateY(10px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
       }
+      @keyframes app-splash-fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes app-splash-dot {
+        0%, 80%, 100% { opacity: 0.28; transform: scale(0.8); }
+        40% { opacity: 1; transform: scale(1); }
+      }
+      /* Reduced motion: everything is shown in its final state immediately.
+         The dots keep a static, fully-opaque look so the row still reads as a
+         loading indicator without anything moving. */
       @media (prefers-reduced-motion: reduce) {
         #app-splash .app-splash-logo,
-        #app-splash .app-splash-tagline span { animation: none; }
-        #app-splash .app-splash-tagline span:first-child { transform: none; }
+        #app-splash .app-splash-tagline,
+        #app-splash .app-splash-art,
+        #app-splash .app-splash-headline,
+        #app-splash .app-splash-loading,
+        #app-splash .app-splash-dots,
+        #app-splash .app-splash-dots span { animation: none; }
+        #app-splash.is-leaving { transition: none; }
       }
     </style>
   </head>
@@ -318,15 +408,20 @@
       </nav>
       <p>Gokez Mart is a product of <a href="https://gokez.com/" rel="noopener">Gokez Technologies</a>.</p>
     </div>
+    <!-- The launch splash. Static markup, so it paints with the document and
+         needs no JavaScript to be on screen. The app removes it once it is
+         ready (see App.tsx); main.tsx and the inline timeouts above are
+         safety nets so it can never outlive a failed boot. -->
     <div id="app-splash" aria-hidden="true">
       <div class="app-splash-content">
-        <div class="app-splash-brand">
-          <img class="app-splash-logo" src="/Gokez_mart_brand_transparent.webp" alt="Gokez Mart" width="1554" height="603" fetchpriority="high" />
-          <p class="app-splash-tagline">
-            <span>Shop Local &bull; Support Local</span>
-          </p>
-        </div>
-        <p class="app-splash-headline">From your Neighbourhood Store to your door</p>
+        <img class="app-splash-logo" src="/Gokez_mart_brand_transparent.webp" alt="Gokez Mart" width="1554" height="603" fetchpriority="high" />
+        <p class="app-splash-tagline">Shop Local &bull; Support Local</p>
+        <!-- Transparent-background derivative of splash2.jpg. If it ever fails
+             to load the row is simply absent rather than a broken-image box. -->
+        <img class="app-splash-art" src="/splash2.webp" alt="" width="431" height="642" decoding="async" onerror="this.style.visibility='hidden'" />
+        <p class="app-splash-headline">From your neighbourhood store to your doors</p>
+        <div class="app-splash-dots"><span></span><span></span><span></span></div>
+        <p class="app-splash-loading">Getting things ready for you&hellip;</p>
       </div>
     </div>
     <div id="root"></div>

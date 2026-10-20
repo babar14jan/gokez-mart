@@ -880,8 +880,8 @@ export default function ProductsPage() {
                     </button>
                   )}
                 </div>
-                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" maxLength={26} />
-                <p className="mt-0.5 text-[10px] text-gray-400 dark:text-slate-500">Fits one line on a phone card. Put extra names in Search aliases (hidden from customers).</p>
+                <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" maxLength={40} />
+                <p className="mt-0.5 text-[10px] text-gray-400 dark:text-slate-500">Shown with the Hindi name in brackets. Put extra names in Search aliases (hidden from customers).</p>
               </div>
 
               <div>
@@ -889,9 +889,9 @@ export default function ProductsPage() {
                   <label className="text-xs font-medium text-gray-700 dark:text-slate-300">
                     Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
                   </label>
-                  <span className={`text-[10px] font-semibold ${form.localName.length >= 20 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.localName.length}/20</span>
+                  <span className={`text-[10px] font-semibold ${form.localName.length >= 30 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.localName.length}/30</span>
                 </div>
-                <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo, Pyaaz" maxLength={20} />
+                <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo, Pyaaz" maxLength={30} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
@@ -1002,8 +1002,8 @@ export default function ProductsPage() {
                 </label>
                 <p className="text-[11px] text-gray-500 dark:text-slate-400">Add a separate combo image.</p>
               </div>
-              <input value={comboName} onChange={event => setComboName(event.target.value)} className={inp} placeholder="Combo name" />
-              <input value={comboLocalName} onChange={event => setComboLocalName(event.target.value)} className={inp} placeholder="Hindi / local subtitle (optional)" />
+              <input value={comboName} onChange={event => setComboName(event.target.value)} className={inp} placeholder="Combo name" maxLength={40} />
+              <input value={comboLocalName} onChange={event => setComboLocalName(event.target.value)} className={inp} placeholder="Hindi / local name (optional)" maxLength={30} />
               <select value={comboCategoryId} onChange={event => setComboCategoryId(event.target.value)} className={inp}><option value="">Choose a category</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
               <div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.5" value={comboPrice} onChange={event => setComboPrice(event.target.value)} className={inp} placeholder="Selling price (₹)" /><input value={comboUnit} onChange={event => setComboUnit(event.target.value)} className={inp} placeholder="Quantity, e.g. 1 combo" /></div>
               <div className="space-y-2">
