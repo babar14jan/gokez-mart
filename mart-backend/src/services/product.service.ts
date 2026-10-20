@@ -62,6 +62,41 @@ export function normalizeSearchAliases(value: unknown): string[] {
   return aliases;
 }
 
+/**
+ * Name limits.
+ *
+ * The storefront renders the main name and the local (Hindi) name together as
+ * one bracketed label, so the limits are sized for that combined string: a
+ * 40-character name plus a 30-character local name still fits a phone card
+ * over the three lines the card allows. The hub inputs enforce the same
+ * numbers.
+ */
+export const MAX_PRODUCT_NAME_LENGTH = 40;
+export const MAX_LOCAL_NAME_LENGTH = 30;
+
+/** Trims a product name and rejects one that is empty or over the limit. */
+export function normalizeProductName(value: unknown, label = 'Product name'): string {
+  if (typeof value !== 'string') throw badRequest(`${label} is required`);
+  const name = value.trim().replace(/\s+/g, ' ');
+  if (!name) throw badRequest(`${label} is required`);
+  if (name.length > MAX_PRODUCT_NAME_LENGTH) {
+    throw badRequest(`${label} must be ${MAX_PRODUCT_NAME_LENGTH} characters or fewer`);
+  }
+  return name;
+}
+
+/** Trims the optional local (Hindi) name and rejects one that is over the limit. */
+export function normalizeLocalName(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') throw badRequest('Hindi name must be text');
+  const localName = value.trim().replace(/\s+/g, ' ');
+  if (!localName) return null;
+  if (localName.length > MAX_LOCAL_NAME_LENGTH) {
+    throw badRequest(`Hindi name must be ${MAX_LOCAL_NAME_LENGTH} characters or fewer`);
+  }
+  return localName;
+}
+
 export class ProductService {
   static async findAll(filters?: {
     storeId?: string;
@@ -144,10 +179,12 @@ export class ProductService {
   static async create(data: Partial<MartProduct> & { storeId: string; isCatalog?: boolean }): Promise<MartProduct> {
     const id = uuidv4();
     const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
+    const name = normalizeProductName(data.name);
+    const localName = normalizeLocalName(data.localName);
     await query(
       `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, weight_options, is_catalog)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [id, data.categoryId || null, data.name, data.localName || null, searchAliases,
+      [id, data.categoryId || null, name, localName, searchAliases,
        data.description || null, data.photoUrl || null, data.weightOptions ? JSON.stringify(data.weightOptions) : null,
        data.isCatalog === true]
     );
@@ -169,9 +206,12 @@ export class ProductService {
     storeId: string;
     components: Array<{ productId: string; quantity: number; unit: string }>;
   }): Promise<MartProduct> {
-    const name = data.name?.trim();
+    const name = normalizeProductName(data.name, 'Combo name');
+    // Validated before the transaction opens: a rejected name must not take a
+    // connection and a rollback to fail.
+    const localName = normalizeLocalName(data.localName);
     const unit = data.unit?.trim();
-    if (!name || !data.categoryId) throw badRequest('A combo name and category are required');
+    if (!data.categoryId) throw badRequest('A combo category is required');
     if (!Number.isFinite(Number(data.price)) || Number(data.price) < 0 || !unit) {
       throw badRequest('Enter a valid combo price and quantity');
     }
@@ -207,7 +247,7 @@ export class ProductService {
       await client.query(
         `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, is_bundle)
          VALUES ($1,$2,$3,$4,$5,$6,true)`,
-        [id, data.categoryId, name, data.localName || null, data.description || null, data.photoUrl || null]
+        [id, data.categoryId, name, localName, data.description || null, data.photoUrl || null]
       );
       await client.query(
         `INSERT INTO mart_store_products
@@ -233,8 +273,8 @@ export class ProductService {
     const globalParams: unknown[] = [];
     let gi = 1;
     if (data.categoryId !== undefined) { globalFields.push(`category_id = $${gi++}`); globalParams.push(data.categoryId); }
-    if (data.name !== undefined)       { globalFields.push(`name = $${gi++}`);        globalParams.push(data.name); }
-    if (data.localName !== undefined)  { globalFields.push(`local_name = $${gi++}`);  globalParams.push(data.localName); }
+    if (data.name !== undefined)       { globalFields.push(`name = $${gi++}`);        globalParams.push(normalizeProductName(data.name)); }
+    if (data.localName !== undefined)  { globalFields.push(`local_name = $${gi++}`);  globalParams.push(normalizeLocalName(data.localName)); }
     if (data.searchAliases !== undefined) { globalFields.push(`search_aliases = $${gi++}`); globalParams.push(normalizeSearchAliases(data.searchAliases)); }
     if (data.description !== undefined){ globalFields.push(`description = $${gi++}`); globalParams.push(data.description); }
     if (data.photoUrl !== undefined)   { globalFields.push(`photo_url = $${gi++}`);   globalParams.push(data.photoUrl); }
@@ -321,11 +361,13 @@ export class ProductService {
   }): Promise<{ id: string; name: string }> {
     const id = uuidv4();
     const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
+    const name = normalizeProductName(data.name);
+    const localName = normalizeLocalName(data.localName);
     const result = await query<{ id: string; name: string }>(
       `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, is_catalog)
        VALUES ($1,$2,$3,$4,$5,$6,$7,true)
        RETURNING id, name`,
-      [id, data.categoryId || null, data.name, data.localName || null, searchAliases,
+      [id, data.categoryId || null, name, localName, searchAliases,
        data.description || null, data.photoUrl || null]
     );
     return result.rows[0];

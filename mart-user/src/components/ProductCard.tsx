@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
+import { productLabelParts } from '../utils/productLabel';
 import ProductDetailSheet from './ProductDetailSheet';
 import CartQuantityControl from './CartQuantityControl';
 import SmartImage from './SmartImage';
@@ -24,6 +25,7 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
   const savings = product.discountPercent > 0
     ? Math.round(product.price - discountedPrice)
     : 0;
+  const { primary: primaryName, secondary: secondaryName } = productLabelParts(product);
 
   return (
     <>
@@ -72,10 +74,18 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
         {/* Info — fixed height name so all cards align */}
         <div className="px-2 pt-1.5 pb-2 flex flex-col">
           <div className="mb-1 leading-tight" style={{ minHeight: '2.2em' }}>
-            <p className="text-[12px] font-semibold text-gray-900 dark:text-white">{product.name?.trim() || product.localName?.trim()}</p>
-            {product.name?.trim() && product.localName?.trim() && product.localName.trim() !== product.name?.trim() && (
-              <p className="truncate text-[11px] font-medium text-gray-500 dark:text-slate-400">{product.localName.trim()}</p>
-            )}
+            {/* Three lines, not two. The card is ~113px wide on a 390px phone,
+                which leaves ~97px of text — at 12px that is about 15 characters
+                a line, so "Fresh Yellow Capsicum (Peeli Shimla Mirch)" needs
+                three. Clamping at two cut the Hindi name off every real
+                product, which defeats the point of showing it. */}
+            <p className="line-clamp-3 text-[12px] font-semibold text-gray-900 dark:text-white">
+              {primaryName}
+              {/* The local (Hindi) name in brackets, at the same size and weight
+                  as the main name, so it reads as an alternate label for the
+                  same product instead of a muted subtitle. */}
+              {secondaryName && <span> ({secondaryName})</span>}
+            </p>
           </div>
           <p className="text-[11px] font-semibold text-gray-600 dark:text-slate-300 leading-none">{product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}</p>
           <div className="mt-auto flex flex-wrap items-baseline gap-x-1 pt-1.5">

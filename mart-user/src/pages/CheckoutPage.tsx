@@ -772,11 +772,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const freeDeliverySaving = actualDelivery === 0 && deliveryCharge > 0 ? deliveryCharge : 0;
   const totalSavings = itemLevelSavings + freeDeliverySaving + displayedCampaignDiscount;
 
-  // Free-delivery progress (0-1). Only meaningful when a threshold is set and
-  // delivery is still chargeable for this cart.
-  const freeDeliveryUnlocked = freeAbove > 0 && actualDelivery === 0;
+  // Free-delivery progress (0-1). Only meaningful when a threshold is set,
+  // there is a fee to unlock, and delivery is still chargeable for this cart.
+  const freeDeliveryUnlocked = freeAbove > 0 && deliveryCharge > 0 && actualDelivery === 0;
   const freeDeliveryRemaining = freeAbove > 0 ? Math.max(0, freeAbove - sub) : 0;
   const freeDeliveryProgress = freeAbove > 0 ? Math.min(1, sub / freeAbove) : 0;
+  // The store is not charging delivery at all (hub set no fee). Distinct from a
+  // fee that was waived by crossing a threshold: there is nothing to "unlock",
+  // delivery is simply free, and we say so plainly instead of implying a perk.
+  const deliveryIsAlwaysFree = deliveryCharge <= 0;
 
   const resolvedAddress = deliveryAddress;
   // A verified customer with no saved name must supply one (captured in the
@@ -1077,8 +1081,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             </div>
             {/* Free delivery progress. Shown whenever a threshold exists, even
                 below the minimum order, so the nudge is never hidden from a
-                shopper who is early in their cart. */}
-            {freeAbove > 0 && (
+                shopper who is early in their cart.
+
+                Only when there is a delivery fee to unlock. If the store
+                charges nothing, delivery is already free and there is nothing
+                to work towards -- the strip would claim "You've unlocked FREE
+                delivery!" for a discount that never applied, and contradict
+                the "free on every order" line below the total. */}
+            {freeAbove > 0 && deliveryCharge > 0 && (
               <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 border-t border-emerald-100 dark:border-emerald-900">
                 {freeDeliveryUnlocked ? (
                   <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
@@ -1527,7 +1537,16 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
           <div className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
             {!canCheckout && sub < minOrder && (
-              <p className="text-xs text-gray-500 dark:text-slate-400 text-center mb-2">Add ₹{(minOrder - sub).toFixed(0)} more to reach the ₹{minOrder} minimum order.</p>
+              <p className="text-xs font-medium text-red-600 dark:text-red-400 text-center mb-2" role="status">Add ₹{(minOrder - sub).toFixed(0)} more to reach the ₹{minOrder} minimum order.</p>
+            )}
+
+            {/* The store charges no delivery fee. Saying so here, next to the
+                total, stops a "FREE" delivery row from reading as a temporary
+                perk -- delivery is simply free on every order. */}
+            {deliveryIsAlwaysFree && (
+              <p className="flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-center mb-2">
+                <span aria-hidden="true">🛵</span> Delivery is free on every order
+              </p>
             )}
 
             {canCheckout && showMissingDetails && incompleteCheckoutDetails.length > 0 && (
@@ -1544,7 +1563,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                     old string in the sticky layer (WebKit bug 209376). */}
                 <p key={payAmount} className="text-lg font-bold text-gray-900 dark:text-white">₹{payAmount.toFixed(0)}</p>
               </div>
-              <button type="submit" form="checkout-form" disabled={loading || couponLoading}
+              <button type="submit" form="checkout-form" disabled={loading || couponLoading || !canCheckout}
                 className="flex-1 h-14 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-[#15803d] dark:text-white dark:hover:bg-[#166534]">
                 {loading || couponLoading ? (
                   <>

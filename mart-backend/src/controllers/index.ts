@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
-import { ProductService, normalizeSearchAliases } from '../services/product.service';
+import { ProductService, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
 import { OrderService } from '../services/order.service';
 import { SettingsService } from '../services/settings.service';
@@ -525,8 +525,8 @@ export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, 
   const fields: string[] = [];
   const params: unknown[] = [];
   let i = 1;
-  if (name !== undefined)        { fields.push(`name = $${i++}`);        params.push(name); }
-  if (localName !== undefined)   { fields.push(`local_name = $${i++}`);  params.push(localName); }
+  if (name !== undefined)        { fields.push(`name = $${i++}`);        params.push(normalizeProductName(name)); }
+  if (localName !== undefined)   { fields.push(`local_name = $${i++}`);  params.push(normalizeLocalName(localName)); }
   if (searchAliases !== undefined) { fields.push(`search_aliases = $${i++}`); params.push(normalizeSearchAliases(searchAliases)); }
   if (description !== undefined) { fields.push(`description = $${i++}`); params.push(description); }
   if (photoUrl !== undefined)    { fields.push(`photo_url = $${i++}`);   params.push(photoUrl); }

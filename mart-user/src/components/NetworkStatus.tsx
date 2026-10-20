@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 import { BACKEND_NOTICE } from '../constants/backendNotice';
+import { hideSplash } from '../utils/splash';
 
 // Generous on purpose. A dead backend rejects the connection instantly (or
 // answers with a 5xx), so a long ceiling costs nothing there; what it buys is
@@ -286,7 +287,7 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
   // Clear the launch splash ourselves: on a cold launch the app's own splash
   // dismissal may not have run yet, and the offline overlay must not sit behind it.
   useEffect(() => {
-    if (status === 'failed') document.getElementById('app-splash')?.remove();
+    if (status === 'failed') hideSplash();
   }, [status]);
 
   const retry = () => {
