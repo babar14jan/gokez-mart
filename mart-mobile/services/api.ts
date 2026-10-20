@@ -56,7 +56,7 @@ export interface Order {
   subtotal: number; deliveryCharge: number; total: number;
   campaignDiscount?: number; couponCodeUsed?: string | null;
   paymentMethod: string; createdAt: string; updatedAt?: string;
-  storeName?: string; fulfilledBy?: string;
+  storeName?: string; storeAddress?: string; fulfilledBy?: string;
   deliveryByName?: string; deliveryByPhone?: string;
   deliveryPreference?: string; cancellationReason?: string;
   items: Array<{
@@ -104,7 +104,7 @@ export const authApi = {
   updateProfile: (data: { name?: string; address?: string; address2?: string }) =>
     api.put('/auth/profile', data),
   getOrders:  () => api.get<{ success: boolean; data: Order[] }>('/auth/orders'),
-  cancelOrder: (orderId: string) => api.put(`/auth/orders/${orderId}/cancel`),
+  cancelOrder: (orderId: string, reason?: string) => api.put(`/auth/orders/${orderId}/cancel`, { reason }),
   requestDeletion: (reason?: string) => api.post('/compliance/deletion', { reason }),
   submitGrievance: (subject: string, description: string) =>
     api.post('/compliance/grievances', { subject, description }),

@@ -382,7 +382,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   // their name and mobile. It lets the address step follow automatically, so the
   // sheet only ever opens on its own as a continuation of that dialog.
   const awaitingAddress = useRef(false);
-  const { items, updateQty, removeItem, subtotal, clearCart } = useCartStore();
+  const { items, updateQty, removeItem, subtotal, clearCart, itemSavings } = useCartStore();
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress, updateAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile, setGuestProfile } = useCustomerAuthStore();
 
@@ -642,7 +642,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             }
             removeCampaign();
             const message = e?.response?.data?.error || 'Your cart changed, so the coupon was removed.';
-            const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
+            const minimumMatch = message.match(/minimum order ₹([\d.]+)/i);
             setOfferNotice(minimumMatch
               ? `Add ₹${Math.max(0, Number(minimumMatch[1]) - cartSubtotal).toFixed(0)} more to unlock this offer (minimum order ₹${minimumMatch[1]}).`
               : message);
@@ -734,7 +734,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
         : 'Coupon applied');
     } catch (e: any) {
       const message = requestErrorMessage(e, 'Invalid coupon');
-      const minimumMatch = message.match(/Minimum order ₹([\d.]+) required/);
+      const minimumMatch = message.match(/minimum order ₹([\d.]+)/i);
       setCouponSuccess('');
       if (minimumMatch) {
         const minimumOrder = Number(minimumMatch[1]);
@@ -761,12 +761,22 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
     ? 0
     : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
   const total = Math.max(0, sub + actualDelivery - displayedCampaignDiscount);
-  // The figure the sticky footer paints. Kept as its own value so the footer can
-  // key the amount node on it (see .checkout-sticky-footer in index.css): iOS
-  // WebKit leaves the composited sticky layer showing a stale string unless the
-  // text node is actually replaced, and a keyed node guarantees that.
   const payAmount = loading && submittedTotal != null ? submittedTotal : total;
   const canCheckout = sub >= minOrder && items.length > 0;
+
+  // Total the customer is saving on this order: item-level price cuts (MRP vs
+  // sale price) + the delivery fee waived for crossing the free-delivery
+  // threshold + any applied coupon. Recomputed off the live cart so it tracks
+  // every +/- and coupon change.
+  const itemLevelSavings = itemSavings();
+  const freeDeliverySaving = actualDelivery === 0 && deliveryCharge > 0 ? deliveryCharge : 0;
+  const totalSavings = itemLevelSavings + freeDeliverySaving + displayedCampaignDiscount;
+
+  // Free-delivery progress (0-1). Only meaningful when a threshold is set and
+  // delivery is still chargeable for this cart.
+  const freeDeliveryUnlocked = freeAbove > 0 && actualDelivery === 0;
+  const freeDeliveryRemaining = freeAbove > 0 ? Math.max(0, freeAbove - sub) : 0;
+  const freeDeliveryProgress = freeAbove > 0 ? Math.min(1, sub / freeAbove) : 0;
 
   const resolvedAddress = deliveryAddress;
   // A verified customer with no saved name must supply one (captured in the
@@ -1065,12 +1075,31 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 </div>
               ))}
             </div>
-            {/* Free delivery nudge */}
-            {canCheckout && freeAbove > 0 && actualDelivery > 0 && (
+            {/* Free delivery progress. Shown whenever a threshold exists, even
+                below the minimum order, so the nudge is never hidden from a
+                shopper who is early in their cart. */}
+            {freeAbove > 0 && (
               <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 border-t border-emerald-100 dark:border-emerald-900">
-                <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium text-center">
-                  🎉 Add ₹{(freeAbove - sub).toFixed(0)} more in items for free delivery at ₹{freeAbove.toFixed(0)}
-                </p>
+                {freeDeliveryUnlocked ? (
+                  <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                    <span aria-hidden="true">🛵</span> You've unlocked FREE delivery!
+                  </p>
+                ) : (
+                  <>
+                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                      <span className="flex items-center gap-1">
+                        <span aria-hidden="true">🛵</span> Free delivery at ₹{freeAbove.toFixed(0)}
+                      </span>
+                      <span>₹{freeDeliveryRemaining.toFixed(0)} away</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/40" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(freeDeliveryProgress * 100)} aria-label="Progress toward free delivery">
+                      <div
+                        className="h-full rounded-full bg-emerald-500 transition-[width] duration-300 ease-out"
+                        style={{ width: `${Math.max(6, freeDeliveryProgress * 100)}%` }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
             {/* Missed something */}
@@ -1439,15 +1468,32 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
               </div>
             )}
             <div className={`px-4 py-3 space-y-2 ${billExpanded ? 'border-t border-gray-100 dark:border-slate-700' : ''}`}>
+              {totalSavings > 0 && (
+                <div className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-2 text-amber-950 shadow-sm">
+                  <span className="text-sm" aria-hidden="true">🎉</span>
+                  <span className="text-sm font-extrabold">You saved ₹{totalSavings.toFixed(0)}</span>
+                  <span className="text-xs font-semibold text-amber-900/80">on this order</span>
+                </div>
+              )}
               {billExpanded && <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500">Charges</p>}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600 dark:text-slate-400">Subtotal</span>
-                <span className="font-medium text-gray-900 dark:text-white">₹{sub.toFixed(0)}</span>
+                <span className="text-gray-600 dark:text-slate-400">Item total</span>
+                <span className="flex items-center gap-1.5">
+                  {itemLevelSavings > 0 && (
+                    <span className="text-xs font-medium text-gray-400 line-through dark:text-slate-500">₹{(sub + itemLevelSavings).toFixed(0)}</span>
+                  )}
+                  <span className="font-medium text-gray-900 dark:text-white">₹{sub.toFixed(0)}</span>
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600 dark:text-slate-400">Delivery charge</span>
-                <span className={actualDelivery === 0 ? 'text-emerald-600 font-semibold' : 'text-gray-900 dark:text-white'}>
-                  {actualDelivery === 0 ? 'FREE' : `₹${actualDelivery}`}
+                <span className="flex items-center gap-1.5">
+                  {actualDelivery === 0 && deliveryCharge > 0 && (
+                    <span className="text-xs font-medium text-gray-400 line-through dark:text-slate-500">₹{deliveryCharge.toFixed(0)}</span>
+                  )}
+                  <span className={actualDelivery === 0 ? 'text-emerald-600 font-semibold' : 'text-gray-900 dark:text-white'}>
+                    {actualDelivery === 0 ? 'FREE' : `₹${actualDelivery}`}
+                  </span>
                 </span>
               </div>
               {displayedCampaignDiscount > 0 && (

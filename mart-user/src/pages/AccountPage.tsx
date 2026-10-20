@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight, X } from 'lucide-react';
-import { authApi } from '../services/api';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight, X, Sparkles } from 'lucide-react';
+import { authApi, suggestionApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
-import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush } from '../services/push';
+import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription } from '../services/push';
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
@@ -16,7 +16,6 @@ import { BRAND_SLOGAN } from '../constants/brand';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 
-const GUEST_ORDER_NOTIFICATIONS_KEY = 'mart_guest_order_notifications';
 const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
 
 interface AccountPageProps {
@@ -61,6 +60,51 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // page can offer an explicit "Done" button under the image.
   const [installGuideOpen, setInstallGuideOpen] = useState(false);
 
+  // "Suggest products" — a lightweight demand form opened in a sheet. Kept local
+  // to this page; the ask itself is what matters, not where it was captured.
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestText, setSuggestText] = useState('');
+  const [suggestDetail, setSuggestDetail] = useState('');
+  const [suggestConsent, setSuggestConsent] = useState(true);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
+  const [suggestDone, setSuggestDone] = useState(false);
+
+  const handleSuggestSubmit = async () => {
+    const product = suggestText.trim();
+    if (!product) { setSuggestError('Please tell us what you would like us to stock.'); return; }
+    setSuggestBusy(true);
+    setSuggestError('');
+    try {
+      await suggestionApi.submit({
+        suggestedProduct: product,
+        detail: suggestDetail.trim() || undefined,
+        zoneId: selectedZone?.id ?? null,
+        zoneName: selectedZone?.name ?? null,
+        storeId: selectedZone?.storeId ?? null,
+        storeName: storeName ?? null,
+        contactConsent: suggestConsent,
+      });
+      setSuggestDone(true);
+      track('suggest_product_submitted');
+    } catch (err: unknown) {
+      setSuggestError(
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+          || 'Could not send your suggestion. Please try again.'
+      );
+    } finally {
+      setSuggestBusy(false);
+    }
+  };
+
+  const closeSuggest = () => {
+    setSuggestOpen(false);
+    setSuggestDone(false);
+    setSuggestText('');
+    setSuggestDetail('');
+    setSuggestError('');
+  };
+
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
   }, []);
@@ -78,6 +122,19 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
       document.body.style.overflow = previous;
     };
   }, [installGuideOpen]);
+
+  // Suggestion sheet: same Escape + scroll-lock contract as the install viewer.
+  useEffect(() => {
+    if (!suggestOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeSuggest(); };
+    document.addEventListener('keydown', onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [suggestOpen]);
 
   useEffect(() => {
     const refreshNotificationPermission = () => setNotificationPermission(getNotificationPermission());
@@ -97,11 +154,13 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     if (!isLoggedIn) {
       try {
         setMarketingConsent(localStorage.getItem(GUEST_MARKETING_CONSENT_KEY) === 'true');
-        setNotificationSubscribed(localStorage.getItem(GUEST_ORDER_NOTIFICATIONS_KEY) === 'true');
       } catch {
         setMarketingConsent(false);
-        setNotificationSubscribed(false);
       }
+      // Guests now use the same real push subscription as members, so derive the
+      // toggle from the browser's actual subscription rather than a localStorage
+      // flag (which could show "On" with nothing registered, or vice versa).
+      hasActivePushSubscription().then(setNotificationSubscribed).catch(() => setNotificationSubscribed(false));
       return;
     }
 
@@ -151,13 +210,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   };
 
   const handleOrderNotifications = async () => {
-    if (!isLoggedIn) {
-      const next = !notificationSubscribed;
-      try { localStorage.setItem(GUEST_ORDER_NOTIFICATIONS_KEY, String(next)); }
-      catch { return; }
-      setNotificationSubscribed(next);
-      return;
-    }
+    // Tapping the toggle is the "direct enable" path: request permission (or
+    // skip the prompt if already granted) and subscribe this device. Guests and
+    // members both register for real; subscribeToPush picks the right endpoint.
     if (notificationPermission === 'granted') {
       if (notificationSubscribed) {
         await unsubscribeFromPush();
@@ -398,8 +453,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         {!isLoggedIn && (
         <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-[#e9edf2] bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
           <div className="min-w-0">
-              <p className="text-lg font-bold leading-tight text-[#172033] dark:text-white">Your account</p>
-              <p className="mt-2 text-xs text-[#687386] dark:text-slate-400">Log in or sign up to access complete account.</p>
+              <p className="text-sm font-semibold text-center text-[#687386] dark:text-slate-400">Log in or sign up to access your complete account.</p>
               <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-[#172033] px-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-[#172033] dark:hover:bg-slate-200">Continue login</button>
           </div>
         </div>
@@ -440,18 +494,20 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               aria-label="Add Gokez Mart to your home screen — view install steps"
               className="absolute inset-0 z-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
             />
-            <div className="pointer-events-none relative z-10 flex items-center gap-4 p-4">
+            <div className="pointer-events-none relative z-10 flex items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-bold leading-snug text-[#172033] dark:text-white">Add Gokez Mart to your home screen</p>
-                <p className="mt-1 text-xs text-[#687386] dark:text-slate-400">Install the app for one-tap ordering and live order updates.</p>
-                <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 transition-colors group-hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:group-hover:bg-emerald-900/50">
-                  <Smartphone className="h-3.5 w-3.5" aria-hidden="true" /> View install steps
-                  <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                <p className="text-sm font-bold leading-snug text-[#172033] dark:text-white">Add Gokez Mart to your home screen</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-[#687386] dark:text-slate-400">Install for one-tap ordering and live order updates.</p>
+                <span className="mt-3 inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 shadow-sm transition-colors group-hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/30 dark:text-emerald-300 dark:group-hover:bg-emerald-900/50">
+                  <Smartphone className="h-3 w-3" aria-hidden="true" /> View install steps
+                  <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                 </span>
               </div>
               {/* 2:3 portrait frame matches the 1024x1536 guide so object-cover
-                  shows it whole instead of cropping it. */}
-              <div className="h-36 w-24 flex-shrink-0 overflow-hidden rounded-xl border border-[#e9edf2] bg-[#f7f8fa] dark:border-slate-700 dark:bg-slate-900">
+                  shows it whole instead of cropping it. Sized to roughly match
+                  the text column so the card height follows the copy, not the
+                  image. */}
+              <div className="h-28 w-[74px] flex-shrink-0 overflow-hidden rounded-lg border border-[#e9edf2] bg-[#f7f8fa] dark:border-slate-700 dark:bg-slate-900">
                 <img
                   src={installGuide.guideSrc}
                   alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
@@ -464,6 +520,23 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           </div>
         </section>
         )}
+
+        <section>
+          <button
+            type="button"
+            onClick={() => setSuggestOpen(true)}
+            className="flex w-full items-center gap-4 rounded-[18px] border border-[#e9edf2] bg-white p-4 text-left shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-emerald-500/60"
+          >
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
+              <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-bold leading-snug text-[#172033] dark:text-white">Suggest a product</p>
+              <p className="mt-1 text-xs text-[#687386] dark:text-slate-400">Tell us what you would like us to stock.</p>
+            </div>
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-[#687386] dark:text-slate-400" aria-hidden="true" />
+          </button>
+        </section>
 
         {(storeName || storeAddress || supportPhone || whatsappNumber) && (
           <section>
@@ -548,22 +621,18 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             <div className="flex-1 min-w-0">
               <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Order notifications</span>
               <p className="text-[12px] text-[#687386] dark:text-slate-400">
-                {!isLoggedIn ? 'Preference saved on this device' : notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
+                {notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
                  notificationPermission === 'denied' ? 'Blocked - enable in browser settings' :
                  notificationPermission === 'unsupported' ? 'Not supported on this browser' :
                  'Get delivery and order status alerts'}
               </p>
             </div>
-            {!isLoggedIn ? (
-              <button onClick={handleOrderNotifications} role="switch" aria-checked={notificationSubscribed} aria-label="Toggle order notifications" className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notificationSubscribed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
-                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${notificationSubscribed ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            ) : notificationPermission === 'denied' ? (
+            {notificationPermission === 'denied' ? (
               <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">Blocked</span>
             ) : notificationPermission === 'unsupported' ? (
               <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
             ) : (
-              <button onClick={handleOrderNotifications} role="switch" aria-checked={notificationSubscribed}
+              <button onClick={handleOrderNotifications} role="switch" aria-checked={notificationSubscribed} aria-label="Toggle order notifications"
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notificationSubscribed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${notificationSubscribed ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
@@ -610,24 +679,118 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </section>
       </div>
 
+      {/* "Suggest products" sheet. A bottom sheet on phones, centred on larger
+          screens. Portalled so it escapes the page scroll container. */}
+      {suggestOpen && createPortal(
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:items-center" onClick={closeSuggest}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Suggest a product"
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-md rounded-t-2xl bg-white p-5 shadow-xl dark:bg-slate-800 sm:rounded-2xl"
+          >
+            {suggestDone ? (
+              <div className="py-4 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/30">
+                  <Sparkles className="h-6 w-6 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                </div>
+                <p className="mt-3 text-base font-bold text-[#172033] dark:text-white">Thanks for the suggestion!</p>
+                <p className="mt-1 text-sm text-[#687386] dark:text-slate-400">We share every request with our team. If we add it, you may see it in the catalog soon.</p>
+                <button
+                  type="button"
+                  onClick={closeSuggest}
+                  className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-[#172033] dark:text-white">Suggest a product</p>
+                    <p className="mt-1 text-xs text-[#687386] dark:text-slate-400">Tell us what you would like us to stock.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeSuggest}
+                    aria-label="Close"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[#687386] transition-colors hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <label htmlFor="suggest-product" className="mb-1 block text-xs font-medium text-[#687386] dark:text-slate-400">Product name</label>
+                    <input
+                      id="suggest-product"
+                      type="text"
+                      value={suggestText}
+                      maxLength={200}
+                      onChange={e => setSuggestText(e.target.value)}
+                      placeholder="e.g. Amul butter, Maggi, Dettol soap"
+                      autoFocus
+                      className="w-full rounded-xl border border-[#e9edf2] bg-white px-3 py-2.5 text-sm text-[#172033] outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="suggest-detail" className="mb-1 block text-xs font-medium text-[#687386] dark:text-slate-400">Any details? <span className="font-normal">(optional)</span></label>
+                    <textarea
+                      id="suggest-detail"
+                      value={suggestDetail}
+                      maxLength={500}
+                      rows={2}
+                      onChange={e => setSuggestDetail(e.target.value)}
+                      placeholder="Brand, size, or anything else that helps…"
+                      className="w-full resize-none rounded-xl border border-[#e9edf2] bg-white px-3 py-2.5 text-sm text-[#172033] outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <label className="flex items-start gap-2 text-xs text-[#687386] dark:text-slate-400">
+                    <input
+                      type="checkbox"
+                      checked={suggestConsent}
+                      onChange={e => setSuggestConsent(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Contact me if this product is added.</span>
+                  </label>
+                  {suggestError && <p className="text-xs font-medium text-red-500" role="alert">{suggestError}</p>}
+                </div>
+
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={closeSuggest}
+                    className="flex-1 rounded-xl border border-[#e9edf2] px-4 py-3 text-sm font-semibold text-[#172033] transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSuggestSubmit}
+                    disabled={suggestBusy}
+                    className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {suggestBusy ? 'Sending…' : 'Submit'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Install-guide viewer. The guide is a tall phone screenshot, so it scrolls
           inside a full-screen sheet with a pinned "Done" bar — the browser's own
           image view (a new tab) has nowhere to put that button. Portalled so it
           escapes the page scroll container and covers the whole viewport. */}
       {installGuideOpen && createPortal(
         <div className="fixed inset-0 z-[90] flex flex-col bg-slate-900/95 backdrop-blur-sm">
-          <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
-            <p className="text-sm font-semibold text-white">Add Gokez Mart to your home screen</p>
-            <button
-              type="button"
-              onClick={() => setInstallGuideOpen(false)}
-              aria-label="Close install steps"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-[max(2.5rem,env(safe-area-inset-top))]">
             <img
               src={installGuide.guideSrc}
               alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
@@ -640,7 +803,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               onClick={() => setInstallGuideOpen(false)}
               className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
             >
-              Done
+              Got it
             </button>
           </div>
         </div>,

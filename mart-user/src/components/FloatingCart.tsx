@@ -8,6 +8,7 @@ interface FloatingCartProps {
 
 export default function FloatingCart({ onOpen, hidden }: FloatingCartProps) {
   const totalItems = useCartStore(s => s.totalItems());
+  const itemSavings = useCartStore(s => s.itemSavings());
 
   if (totalItems === 0 || hidden) return null;
 
@@ -22,7 +23,9 @@ export default function FloatingCart({ onOpen, hidden }: FloatingCartProps) {
         <div className="flex flex-col items-center leading-tight">
           <span className="text-sm font-bold">View Cart</span>
           <span className="text-xs font-semibold text-white/85">
-            {totalItems} {totalItems === 1 ? 'item' : 'items'}
+            {itemSavings > 0
+              ? `You saved ₹${itemSavings.toFixed(0)}`
+              : `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`}
           </span>
         </div>
 

@@ -6,11 +6,29 @@ import { InventoryService } from './inventory.service';
 import { evaluateStoreOpen, formatIstDateTime } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
 
+// Reasons a customer may give for cancelling, chosen from the order screen. The
+// keys are what is stored in mart_orders.cancellation_reason; only these values
+// are accepted so the field stays a controlled vocabulary the hub can report on.
+export const CUSTOMER_CANCEL_REASONS = {
+  ordered_by_mistake: 'Ordered by mistake',
+  changed_my_mind: 'Changed my mind',
+  wrong_address: 'Wrong address or delivery details',
+  found_better_price: 'Found a better price elsewhere',
+  delivery_too_slow: 'Delivery is taking too long',
+  duplicate_order: 'Duplicate order',
+  other: 'Other',
+} as const;
+export type CustomerCancelReason = keyof typeof CUSTOMER_CANCEL_REASONS;
+
 export interface OrderItem {
   productId: string;
   productName: string;
   unit: string;
   price: number;
+  /** List price before the item's discount, captured server-side at order time.
+   *  Used only to compute and persist the order's item-level savings; never
+   *  trusted from the client. */
+  mrp?: number;
   quantity: number;
 }
 
@@ -56,6 +74,8 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               o.campaign_id as "campaignId",
               o.campaign_discount::float as "campaignDiscount",
               o.coupon_code_used as "couponCodeUsed",
+              o.item_savings::float as "itemSavings",
+              o.free_delivery_saving::float as "freeDeliverySaving",
               o.delivery_by_name as "deliveryByName",
               o.delivery_by_phone as "deliveryByPhone",
               o.delivery_by as "deliveryById",
@@ -64,6 +84,8 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               o.delivery_sequence as "deliverySequence",
               o.batch_id as "batchId",
               COALESCE((SELECT s.name FROM mart_stores s WHERE s.id = o.store_id), o.fulfilled_by) as "fulfilledBy",
+              (SELECT s.name FROM mart_stores s WHERE s.id = o.store_id) as "storeName",
+              (SELECT s.address FROM mart_stores s WHERE s.id = o.store_id) as "storeAddress",
               -- Closure fields: staff need to know an order was taken after
               -- hours so it is held for the next opening rather than treated as
               -- a late order, and so a manual closure is not mistaken for a
@@ -160,7 +182,9 @@ export class OrderService {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`customer-order:${cleanPhone}`]);
       const prior = await client.query(
         `SELECT id, order_number as "orderNumber", subtotal::float, delivery_charge::float as "deliveryCharge",
-                campaign_discount::float as "campaignDiscount", total::float, tracking_token as "trackingToken"
+                campaign_discount::float as "campaignDiscount",
+                item_savings::float as "itemSavings", free_delivery_saving::float as "freeDeliverySaving",
+                total::float, tracking_token as "trackingToken"
          FROM mart_orders WHERE idempotency_key = $1`,
         [data.idempotencyKey]
       );
@@ -302,10 +326,18 @@ export class OrderService {
           productName: catalogItem.name,
           unit: catalogItem.unit,
           price: effectivePrice,
+          mrp: catalogItem.price,
           quantity: item.quantity,
         });
       }
       const subtotal = resolvedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      // Item-level discount = list price minus the effective price the customer
+      // paid, summed across lines. Only counts lines where the list price is
+      // genuinely higher, so an undiscounted item contributes zero.
+      const itemSavings = resolvedItems.reduce(
+        (sum, item) => sum + Math.max(0, (item.mrp ?? item.price) - item.price) * item.quantity,
+        0
+      );
 
       // The store's minimum order (set by the store admin in Settings) is
       // enforced here so it cannot be bypassed with a direct API call. The
@@ -392,6 +424,10 @@ export class OrderService {
       // waive delivery for every order.
       const actualDelivery = campaign?.discount_type === 'free_delivery' || (freeAbove > 0 && subtotal >= freeAbove) ? 0 : deliveryCharge;
       const total = Math.max(0, subtotal + actualDelivery - campaignDiscount);
+      // Delivery fee the customer avoided (either through the free-delivery
+      // threshold or a free-delivery offer). Stored so the receipt can show the
+      // full "you saved" figure without needing the store's live settings.
+      const freeDeliverySaving = actualDelivery === 0 && deliveryCharge > 0 ? deliveryCharge : 0;
 
       // Whether the store is trading is decided here, on the server, inside the
       // same transaction as the insert. The storefront already shows the customer
@@ -432,11 +468,12 @@ export class OrderService {
             subtotal, delivery_charge, total, payment_method, notes,
             delivery_preference, delivery_note, fulfilled_by,
             campaign_id, campaign_discount, coupon_code_used, idempotency_key,
+            item_savings, free_delivery_saving,
             placed_outside_hours, closed_reason, scheduled_for, tracking_token,
             funnel_session_id, funnel_visitor_id, attribution_source, attribution_medium, attribution_campaign, attribution_qr_code_id,
             first_touch_source, first_touch_medium, first_touch_campaign, first_touch_qr_code_id,
             last_touch_source, last_touch_medium, last_touch_campaign, last_touch_qr_code_id)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)`,
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
 [orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
           data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod || null, data.notes || null,
@@ -444,6 +481,7 @@ export class OrderService {
          data.deliveryNote || 'Ring the bell',
          data.storeName || null,
         campaign?.id || null, campaignDiscount, campaign?.coupon_code || null, data.idempotencyKey,
+        itemSavings, freeDeliverySaving,
         openState.isOpen ? false : true,
         openState.closedReason,
         // A manual closure has no reopening time to promise, so it stays null
@@ -538,6 +576,8 @@ export class OrderService {
         subtotal,
         deliveryCharge: actualDelivery,
         campaignDiscount,
+        itemSavings,
+        freeDeliverySaving,
         total,
         whatsappMessage: this.buildWhatsAppMessage({
           orderNumber, guestName: data.guestName,
@@ -1013,11 +1053,19 @@ export class OrderService {
    */
   static async cancelByCaller(
     orderId: string,
-    scope: { customerId: string } | { trackingToken: string }
+    scope: { customerId: string } | { trackingToken: string },
+    reason?: string | null
   ) {
     const isGuest = 'trackingToken' in scope;
     const credential = isGuest ? scope.trackingToken : scope.customerId;
     const matchColumn = isGuest ? 'o.tracking_token' : 'o.customer_id';
+    // The customer picks a reason from a fixed list so cancels are explained and
+    // accidental cancels require a deliberate choice. Anything unrecognised (a
+    // stale client, a crafted body) falls back to the generic label rather than
+    // being stored verbatim.
+    const cancellationReason = CUSTOMER_CANCEL_REASONS[reason as CustomerCancelReason]
+      ? (reason as string)
+      : 'customer_request';
 
     const order = await transaction(async (client) => {
       const current = await client.query(
@@ -1038,10 +1086,10 @@ export class OrderService {
       await client.query(
         `UPDATE mart_orders
             SET status = 'cancelled',
-                cancellation_reason = 'customer_request',
+                cancellation_reason = $2,
                 updated_at = NOW()
           WHERE id = $1`,
-        [orderId]
+        [orderId, cancellationReason]
       );
       await this.reverseCampaignRedemption(orderId, 'cancelled', client);
       await client.query(

@@ -19,6 +19,25 @@ const STATUS_COLOR: Record<string, string> = {
   failed_delivery: staticColors.red500, terminated: staticColors.red500,
 };
 
+// Customer-facing explanation for a closed order, mirroring the labels in the
+// orders list and mart-user's TERMINATION_MESSAGES/CANCELLATION_MESSAGES.
+const CANCELLATION_REASON_LABELS: Record<string, string> = {
+  customer_request: 'This order was cancelled as requested.',
+  ordered_by_mistake: 'This order was cancelled because it looked like it was placed by mistake.',
+  changed_my_mind: 'This order was cancelled as requested.',
+  wrong_address: 'This order was cancelled because the delivery details were wrong.',
+  found_better_price: 'This order was cancelled as requested.',
+  delivery_too_slow: 'This order was cancelled as requested.',
+  duplicate_order: 'This order was cancelled because it appeared to be a duplicate.',
+  out_of_stock: 'This order was cancelled because some items became unavailable. You will not be charged.',
+  store_closed: 'This order was cancelled because the store had to close unexpectedly. You will not be charged.',
+  outside_area: "This order was cancelled because your address is outside our delivery area right now. We're expanding soon and will be in your area! 🌱",
+  incorrect_address: 'This order was cancelled because the delivery address was incorrect. You will not be charged.',
+  rider_unavailable: 'This order was cancelled because no delivery partner was available. You will not be charged.',
+  technical_issue: 'This order was cancelled due to a technical issue. You will not be charged.',
+  other: 'This order was cancelled. You will not be charged.',
+};
+
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
     + ' · ' + new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -110,20 +129,33 @@ export default function OrderDetailScreen() {
 
         {/* Status banner */}
         <Card>
-          <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View>
-              <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: statusColor }}>{STATUS_LABELS[order.status]}</Text>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 3 }}>{formatDate(order.createdAt)}</Text>
-            </View>
-            <View style={{ backgroundColor: statusColor + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter-Bold', color: statusColor }}>#{order.orderNumber}</Text>
+          <View style={{ padding: 16, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            {(order.storeName ?? order.fulfilledBy) ? (
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray400, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fulfilled by</Text>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: colors.gray900, marginTop: 2 }}>{order.storeName ?? order.fulfilledBy}</Text>
+                {order.storeAddress ? (
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2, lineHeight: 15 }}>{order.storeAddress}</Text>
+                ) : null}
+              </View>
+            ) : (
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: statusColor }}>{STATUS_LABELS[order.status]}</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 3 }}>{formatDate(order.createdAt)}</Text>
+              </View>
+            )}
+            <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+              <View style={{ backgroundColor: statusColor + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+                <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', color: statusColor }}>#{order.orderNumber}</Text>
+              </View>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 6 }}>{formatDate(order.createdAt)}</Text>
             </View>
           </View>
-          {(order.storeName ?? order.fulfilledBy) && (
-            <View style={{ paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="storefront-outline" size={13} color={colors.gray400} />
-              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500 }}>
-                Fulfilled by <Text style={{ fontFamily: 'Inter-SemiBold', color: colors.gray700 }}>{order.storeName ?? order.fulfilledBy}</Text>
+          {order.status !== 'delivered' && order.cancellationReason && (
+            <View style={{ marginHorizontal: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: '#fef2f2', borderRadius: 8, padding: 10 }}>
+              <Ionicons name="close-circle-outline" size={14} color={staticColors.red500} style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontSize: 12, fontFamily: 'Inter-Regular', color: staticColors.red500, lineHeight: 16 }}>
+                {CANCELLATION_REASON_LABELS[order.cancellationReason] || 'This order was cancelled. You will not be charged.'}
               </Text>
             </View>
           )}
@@ -197,7 +229,19 @@ export default function OrderDetailScreen() {
             <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <Ionicons name="home-outline" size={17} color={colors.primary} />
             </View>
-            <Text style={{ flex: 1, fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray700, lineHeight: 20, paddingTop: 8 }}>{order.guestAddress}</Text>
+            <View style={{ flex: 1 }}>
+              {(order.guestName || order.guestPhone) ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  {order.guestName ? (
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter-SemiBold', color: colors.gray900, flexShrink: 1 }} numberOfLines={1}>{order.guestName}</Text>
+                  ) : <View />}
+                  {order.guestPhone ? (
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, flexShrink: 0 }}>{order.guestPhone}</Text>
+                  ) : null}
+                </View>
+              ) : null}
+              <Text style={{ fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray700, lineHeight: 20, marginTop: (order.guestName || order.guestPhone) ? 4 : 0 }}>{order.guestAddress}</Text>
+            </View>
           </View>
         </Card>
 
@@ -206,17 +250,9 @@ export default function OrderDetailScreen() {
           <Card>
             <CardHeader title="Receipt" icon="document-text-outline" />
             <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginBottom: 12, lineHeight: 18 }}>
-                This is a purchase receipt for your order. Not a GST invoice.{'\n'}
-                Powered by Gokez Technologies Pvt. Ltd.
+              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, lineHeight: 18 }}>
+                This is a purchase receipt for your order. Not a GST invoice.
               </Text>
-              <TouchableOpacity
-                style={{ height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.primaryLight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                onPress={() => {}}
-              >
-                <Ionicons name="download-outline" size={18} color={colors.primary} />
-                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.primary }}>Download Receipt (PDF)</Text>
-              </TouchableOpacity>
             </View>
           </Card>
         )}

@@ -255,9 +255,15 @@ export const authApi = {
   sendOtp: (phone: string) => api.post('/auth/send-otp', { phone }),
   // `funnelSessionId` is optional and additive: the backend uses it to link the
   // anonymous session to the customer for attribution and ignores it if absent,
-  // so authentication behaviour is unchanged either way.
-  verifyOtp: (phone: string, otp: string, funnelSessionId?: string) =>
-    api.post('/auth/verify-otp', { phone, otp, ...(funnelSessionId ? { funnelSessionId } : {}) }),
+  // so authentication behaviour is unchanged either way. `trackingTokens` lets
+  // the server move this device's guest push subscriptions onto the new customer
+  // id, so a guest-then-login device gets one push per order, not two.
+  verifyOtp: (phone: string, otp: string, funnelSessionId?: string, trackingTokens?: string[]) =>
+    api.post('/auth/verify-otp', {
+      phone, otp,
+      ...(funnelSessionId ? { funnelSessionId } : {}),
+      ...(trackingTokens && trackingTokens.length ? { trackingTokens } : {}),
+    }),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
   // `token` is supplied only by the new-customer name capture, which runs before
@@ -280,7 +286,7 @@ export const authApi = {
     form.append('photo', file);
     return api.post('/auth/upload/photo', form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  cancelOrder: (orderId: string) => api.put(`/auth/orders/${orderId}/cancel`),
+  cancelOrder: (orderId: string, reason?: string) => api.put(`/auth/orders/${orderId}/cancel`, { reason }),
   requestDeletion: (reason?: string) => api.post('/compliance/deletion', { reason }),
   getDeletionStatus: () => api.get('/compliance/deletion'),
   submitGrievance: (subject: string, description: string, idempotencyKey: string) => api.post('/compliance/grievances', { subject, description }, { headers: { 'Idempotency-Key': idempotencyKey } }),
@@ -359,14 +365,30 @@ export const storeApi = {
   }) => api.post('/guest-details', data),
   trackOrdersByTokens: (tokens: string[], opts?: FetchOpts) =>
     api.get('/orders/track/tokens', { params: { tokens: tokens.join(',') }, fresh: opts?.fresh }),
-  cancelOrderByToken: (orderId: string, trackingToken: string) =>
-    api.post(`/orders/track/${orderId}/cancel`, { trackingToken }),
+  cancelOrderByToken: (orderId: string, trackingToken: string, reason?: string) =>
+    api.post(`/orders/track/${orderId}/cancel`, { trackingToken, reason }),
 };
 
 // ── Feedback ────────────────────────────────────────────────────────────────────────────────
 export const feedbackApi = {
   submit: (data: { rating: number; category: string; message?: string; storeId?: string; orderId?: string }, idempotencyKey: string) =>
     api.post('/feedback', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
+};
+
+// ── Product suggestions ("Suggest products") ────────────────────────────────────────────────
+// Guests and signed-in customers can both submit; identity is picked up from the
+// auth token when present. Zone/store are captured at submit so the hub can see
+// demand by area and buyer type.
+export const suggestionApi = {
+  submit: (data: {
+    suggestedProduct: string;
+    detail?: string;
+    zoneId?: string | null;
+    zoneName?: string | null;
+    storeId?: string | null;
+    storeName?: string | null;
+    contactConsent?: boolean;
+  }) => api.post<{ success: boolean; data: { id: string } }>('/suggestions', data),
 };
 
 // ── Campaigns (public) ────────────────────────────────────────────────────────────────────────────────
