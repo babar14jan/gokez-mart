@@ -120,6 +120,7 @@ router.put('/admin/settings',          authenticate, ctrl.adminUpdateSettings);
 // ── Push notifications ────────────────────────────────────────────────────────────────
 router.get('/push/vapid-public-key',    ctrl.getVapidPublicKey);
 router.post('/push/subscribe/customer', authenticateCustomer, ctrl.customerSavePushSub);
+router.post('/push/subscribe/guest',    ctrl.guestSavePushSub);
 router.post('/push/subscribe/admin',    authenticate, ctrl.adminSavePushSub);
 
 // ── DPDP Compliance ──────────────────────────────────────────────────────────
@@ -144,6 +145,13 @@ router.get('/compliance/marketing-consent',    authenticateCustomer, ctrl.custom
 // ── Feedback ────────────────────────────────────────────────────────────────────────────────
 router.post('/feedback',                       authenticateCustomer, ctrl.customerSubmitFeedback);
 router.get('/admin/feedback',                  authenticate, ctrl.adminGetFeedback);
+
+// ── Product suggestions ("Suggest products") ────────────────────────────────────────────────
+// Public submit: guests and signed-in customers alike (identity is optional).
+router.post('/suggestions',                    authenticateCustomerIfPresent, ctrl.submitProductSuggestion);
+router.get('/admin/suggestions',               authenticate, requireSuperAdmin, ctrl.adminGetSuggestions);
+router.get('/admin/suggestions/insights',      authenticate, requireSuperAdmin, ctrl.adminGetSuggestionInsights);
+router.put('/admin/suggestions/:id/status',    authenticate, requireSuperAdmin, ctrl.adminUpdateSuggestionStatus);
 
 // ── Campaigns ────────────────────────────────────────────────────────────────────────────────
 router.get('/admin/campaigns',                 authenticate, ctrl.adminGetCampaigns);

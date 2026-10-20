@@ -44,6 +44,7 @@ export const FUNNEL_EVENTS = [
   'order_placed',
   'order_cancelled',
   'order_completed',
+  'suggest_product_submitted',
 ] as const;
 
 export type FunnelEventName = typeof FUNNEL_EVENTS[number];

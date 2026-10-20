@@ -18,6 +18,19 @@ import {
 } from '../components/OrderCards';
 import PageHeader from '../components/PageHeader';
 import SmartImage from '../components/SmartImage';
+
+// Customer-facing cancel reasons, matching CUSTOMER_CANCEL_REASONS on the
+// server. The value is what is stored; the label is what the customer reads.
+const CANCEL_REASONS: Array<{ value: string; label: string }> = [
+  { value: 'ordered_by_mistake', label: 'Ordered by mistake' },
+  { value: 'changed_my_mind', label: 'Changed my mind' },
+  { value: 'wrong_address', label: 'Wrong address or delivery details' },
+  { value: 'duplicate_order', label: 'Duplicate order' },
+  { value: 'found_better_price', label: 'Found a better price elsewhere' },
+  { value: 'delivery_too_slow', label: 'Delivery is taking too long' },
+  { value: 'other', label: 'Other' },
+];
+
 function OrderDetailSheet({
   order, onClose, onOrderAgain, nextOpenLabel, whatsappNumber, fallbackName, fallbackPhone,
   canCancel, confirmCancel, cancelling, cancelError, onCancel, onRequestCancel, onDismissConfirm,
@@ -33,12 +46,15 @@ function OrderDetailSheet({
   confirmCancel: string | null;
   cancelling: string | null;
   cancelError: string;
-  onCancel: (order: any) => void;
+  onCancel: (order: any, reason: string) => void;
   onRequestCancel: (order: any) => void;
   onDismissConfirm: () => void;
 }) {
   const nextOpenWhen = nextOpenLabel || order.scheduledForLabel || null;
   const showOrderSupport = !ALL_CLOSED.includes(order.status) && (canCancel || whatsappNumber || cancelError);
+  // Require an explicit reason before the destructive confirm is reachable; this
+  // is what stops a stray tap from cancelling an order.
+  const [cancelReason, setCancelReason] = useState('');
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -55,13 +71,26 @@ function OrderDetailSheet({
         <div className="mx-auto max-w-lg space-y-4 px-4 py-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
           <div className="rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-800">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Placed {formatDateTime(order.createdAt)}</p>
+              <div className="min-w-0">
+                {order.fulfilledBy ? (
+                  <>
+                    <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Fulfilled by</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{order.fulfilledBy}</p>
+                    {order.storeAddress && (
+                      <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400">{order.storeAddress}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
+                )}
               </div>
-              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
-                order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300'
-              }`}>{STATUS_LABELS[order.status]}</span>
+              <div className="shrink-0 text-right">
+                <p className="text-xs font-bold text-gray-900 dark:text-white">Order #{order.orderNumber}</p>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{formatDateTime(order.createdAt)}</p>
+                <span className={`mt-1 inline-block rounded-full px-2.5 py-1 text-xs font-bold ${
+                  order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300'
+                }`}>{STATUS_LABELS[order.status]}</span>
+              </div>
             </div>
           </div>
 
@@ -96,22 +125,50 @@ function OrderDetailSheet({
           {/* Bill */}
           <div className="bg-gray-50 dark:bg-slate-700/50 rounded-2xl p-4 space-y-2">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Bill Details</p>
-            <div className="flex justify-between text-sm text-gray-600 dark:text-slate-400">
-              <span>Item total</span><span>₹{order.subtotal}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-600 dark:text-slate-400">
-              <span>Delivery</span>
-              <span>{order.deliveryCharge === 0 ? <span className="text-emerald-600 font-semibold">FREE</span> : `₹${order.deliveryCharge}`}</span>
-            </div>
-            {order.campaignDiscount > 0 && (
-              <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
-                <span>🎉 {order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
-                <span className="font-semibold">-₹{order.campaignDiscount}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-slate-600">
-              <span>Total Paid</span><span>₹{order.total}</span>
-            </div>
+            {(() => {
+              const itemSavings = Number(order.itemSavings) || 0;
+              const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
+              const campaignDiscount = Number(order.campaignDiscount) || 0;
+              const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
+              return (
+                <>
+                  {totalSavings > 0 && (
+                    <div className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-2 text-amber-950 shadow-sm">
+                      <span className="text-sm" aria-hidden="true">🎉</span>
+                      <span className="text-sm font-extrabold">You saved ₹{totalSavings.toFixed(0)}</span>
+                      <span className="text-xs font-semibold text-amber-900/80">on this order</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-sm text-gray-600 dark:text-slate-400">
+                    <span>Item total</span>
+                    <span className="flex items-center gap-1.5">
+                      {itemSavings > 0 && (
+                        <span className="text-xs font-medium text-gray-400 line-through dark:text-slate-500">₹{(Number(order.subtotal) + itemSavings).toFixed(0)}</span>
+                      )}
+                      <span className="font-medium text-gray-900 dark:text-white">₹{order.subtotal}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-gray-600 dark:text-slate-400">
+                    <span>Delivery</span>
+                    <span className="flex items-center gap-1.5">
+                      {freeDeliverySaving > 0 && (
+                        <span className="text-xs font-medium text-gray-400 line-through dark:text-slate-500">₹{freeDeliverySaving.toFixed(0)}</span>
+                      )}
+                      <span>{order.deliveryCharge === 0 ? <span className="text-emerald-600 font-semibold">FREE</span> : `₹${order.deliveryCharge}`}</span>
+                    </span>
+                  </div>
+                  {campaignDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                      <span>🎉 {order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
+                      <span className="font-semibold">-₹{order.campaignDiscount}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-slate-600">
+                    <span>Total Paid</span><span>₹{order.total}</span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* Scheduled delivery window chosen by the customer */}
@@ -129,26 +186,25 @@ function OrderDetailSheet({
             </div>
           )}
 
-          {/* Closed store indicator */}
+          {/* Closed store indicator — plain text, no card chrome, so it does not
+              compete with the primary order information. */}
           {order.placedOutsideHours && (
-            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl p-3">
-              <div className="flex items-start gap-2">
-                <span className="text-amber-600 dark:text-amber-400">🕘</span>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                    {order.closedReason === 'manual' ? 'Store was manually closed' : 'Ordered outside store hours'}
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 dark:text-amber-400">🕘</span>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                  {order.closedReason === 'manual' ? 'Store was manually closed' : 'Ordered outside store hours'}
+                </p>
+                {!order.confirmedNextOpen && (nextOpenWhen || order.scheduledForLabel) && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                    Will be prepared at {nextOpenWhen || order.scheduledForLabel}
                   </p>
-                  {!order.confirmedNextOpen && (nextOpenWhen || order.scheduledForLabel) && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                      Will be prepared at {nextOpenWhen || order.scheduledForLabel}
-                    </p>
-                  )}
-                  {order.confirmedNextOpen && (order.status === 'pending' || order.status === 'confirmed') && (
-                    <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mt-1">
-                      ✅ Confirmed — we'll start preparing when the store opens{nextOpenWhen ? ` at ${nextOpenWhen}` : ' next'}.
-                    </p>
-                  )}
-                </div>
+                )}
+                {order.confirmedNextOpen && (order.status === 'pending' || order.status === 'confirmed') && (
+                  <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    ✅ Confirmed — we'll start preparing when the store opens{nextOpenWhen ? ` at ${nextOpenWhen}` : ' next'}.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -159,23 +215,25 @@ function OrderDetailSheet({
               <MapPin className="w-4 h-4 text-emerald-600" />
             </div>
             <div>
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivered to</p>
-              <p className="text-sm text-gray-700 dark:text-slate-300">{order.guestAddress}</p>
+              <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-0.5">Delivered to</p>
+              <div className="flex items-center justify-between gap-2">
+                {(order.guestName || fallbackName) && (
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{order.guestName || fallbackName}</p>
+                )}
+                {(order.guestPhone || fallbackPhone) && (
+                  <p className="text-xs text-gray-500 dark:text-slate-400 shrink-0">{order.guestPhone || fallbackPhone}</p>
+                )}
+              </div>
+              <p className="text-sm text-gray-700 dark:text-slate-300 mt-0.5">{order.guestAddress}</p>
             </div>
           </div>
 
-          {/* Payment + Receipt + Fulfilled — compact single section */}
+          {/* Payment + Receipt — compact single section */}
           <div className="border-t border-gray-100 dark:border-slate-700 pt-3 space-y-2">
             {order.status === 'delivered' && order.paymentCollectedAt && (
               <div className="flex items-center justify-between">
                 <p className="text-xs text-gray-500 dark:text-slate-400">Payment</p>
                 <p className="text-xs font-semibold text-gray-900 dark:text-white uppercase">{order.paymentMethod === 'cod' ? 'Cash' : order.paymentMethod}</p>
-              </div>
-            )}
-            {order.fulfilledBy && (
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 dark:text-slate-400">Fulfilled by</p>
-                <p className="text-xs font-semibold text-gray-900 dark:text-white">{order.fulfilledBy}</p>
               </div>
             )}
           </div>
@@ -202,7 +260,7 @@ function OrderDetailSheet({
                   );
                 })()}
                 {canCancel && confirmCancel !== order.id && (
-                  <button type="button" onClick={() => onRequestCancel(order)}
+                  <button type="button" onClick={() => { setCancelReason(''); onRequestCancel(order); }}
                     className="shrink-0 px-2 py-2 text-xs font-semibold text-red-500 transition-colors hover:text-red-600">
                     Cancel order
                   </button>
@@ -211,13 +269,30 @@ function OrderDetailSheet({
                 )}
                 {canCancel && confirmCancel === order.id && (
                   <div className="rounded-xl bg-red-50 px-3 py-3 dark:bg-red-950/30">
-                    <p className="mb-2 text-xs font-medium text-red-700 dark:text-red-300">Cancel this order?</p>
+                    <p className="mb-2 text-xs font-medium text-red-700 dark:text-red-300">Why are you cancelling this order?</p>
+                    <div className="mb-3 space-y-1.5">
+                      {CANCEL_REASONS.map(reason => (
+                        <label key={reason.value}
+                          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-xs transition-colors ${
+                            cancelReason === reason.value
+                              ? 'border-red-400 bg-white text-red-800 dark:border-red-500 dark:bg-slate-800 dark:text-red-200'
+                              : 'border-transparent bg-white/60 text-gray-700 dark:bg-slate-800/60 dark:text-slate-300'
+                          }`}>
+                          <input type="radio" name={`cancel-reason-${order.id}`} value={reason.value}
+                            checked={cancelReason === reason.value}
+                            onChange={() => setCancelReason(reason.value)}
+                            className="h-3.5 w-3.5 accent-red-600" />
+                          {reason.label}
+                        </label>
+                      ))}
+                    </div>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => onCancel(order)} disabled={cancelling === order.id}
-                        className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50">
-                        {cancelling === order.id ? 'Cancelling...' : 'Yes, cancel order'}
+                      <button type="button" onClick={() => onCancel(order, cancelReason)}
+                        disabled={!cancelReason || cancelling === order.id}
+                        className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        {cancelling === order.id ? 'Cancelling...' : 'Cancel order'}
                       </button>
-                      <button type="button" onClick={onDismissConfirm}
+                      <button type="button" onClick={() => { setCancelReason(''); onDismissConfirm(); }}
                         className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
                         Keep order
                       </button>
@@ -330,15 +405,15 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
    * for a guest hits a guaranteed 401 and would leave the card showing a stale
    * status after a successful cancel.
    */
-  const handleCancel = async (order: any) => {
+  const handleCancel = async (order: any, reason: string) => {
     setCancelling(order.id);
     setCancelError('');
     try {
       if (isLoggedIn) {
-        await authApi.cancelOrder(order.id);
+        await authApi.cancelOrder(order.id, reason);
         await fetchOrders(true);
       } else {
-        await storeApi.cancelOrderByToken(order.id, order.trackingToken);
+        await storeApi.cancelOrderByToken(order.id, order.trackingToken, reason);
         await fetchGuestOrders(true);
       }
       setSelectedOrder(null);

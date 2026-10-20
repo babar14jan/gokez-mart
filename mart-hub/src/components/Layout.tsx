@@ -6,7 +6,7 @@ import {
   Users, Settings, Shield, QrCode, Boxes, UserPlus,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
-  Store, ShoppingBasket, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate,
+  Store, ShoppingBasket, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, settingsApi, authApi } from '../services/api';
@@ -24,6 +24,7 @@ export const NAV_ALL = [
   { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'staff'] },
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin'] },
   { label: 'Leads',              href: '/customer-leads',      icon: UserPlus,        roles: ['super_admin'] },
+  { label: 'Suggestions',        href: '/suggestions',         icon: Lightbulb,       roles: ['super_admin'] },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'] },
   { label: 'Install Analytics',  href: '/install-analytics',   icon: Smartphone,      roles: ['super_admin'] },
   { label: 'Categories',         href: '/categories',          icon: LayoutGrid,      roles: ['super_admin', 'store_owner'] },
@@ -152,6 +153,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/team': 'My Team',
     '/delivery': 'My Deliveries',
     '/customer-leads': 'Leads',
+    '/suggestions': 'Product Suggestions',
     '/install-analytics': 'Install Analytics',
     '/subscriptions': 'Subscriptions',
   };
@@ -234,7 +236,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/settings', '/analytics', '/customers', '/customer-leads', '/install-analytics', '/subscriptions', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
+              {['/change-password', '/settings', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <div className="flex items-center gap-1 -ml-1 min-w-0">
                   <button onClick={() => navigate(-1)}
                     className="p-2 rounded-xl hover:bg-white/10 transition-colors flex-shrink-0">

@@ -23,6 +23,7 @@ import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
 import { HomeSectionService } from '../services/homeSection.service';
 import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
+import { ProductSuggestionService, SuggestionStatus, BuyerType, SuggestionRange } from '../services/productSuggestion.service';
 import { FunnelService, FunnelRange } from '../services/funnel.service';
 import { CustomerAnalyticsService } from '../services/customerAnalytics.service';
 import { emitOrderEvent, orderEventBus, type OrderLiveEvent } from '../services/orderEventBus';
@@ -731,14 +732,14 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
     const custResult = await query<{ customer_id: string | null; delivery_preference: string; order_number: string; store_id: string | null }>(
       `SELECT customer_id, delivery_preference, order_number, store_id FROM mart_orders WHERE id = $1`, [orderIds[i]]
     );
-    const { customer_id, delivery_preference, order_number, store_id } = custResult.rows[0] || {};
-    if (customer_id) {
-      PushService.notifyCustomer(customer_id, {
-        title: `Order #${order_number} update`,
-        body: riderOnTheWayBody(order_number, admin?.name || req.admin!.username, delivery_preference),
-        url: '/orders',
-      }).catch(() => {});
-    }
+    const { delivery_preference, order_number, store_id } = custResult.rows[0] || {};
+    // Recipient resolved server-side: member by customer id, guest by tracking
+    // token, so guests get the same dispatch push as signed-in customers.
+    PushService.notifyOrderRecipient(orderIds[i], {
+      title: `Order #${order_number} update`,
+      body: riderOnTheWayBody(order_number, admin?.name || req.admin!.username, delivery_preference),
+      url: '/orders',
+    }).catch(() => {});
     emitOrderEvent({
       type: 'order.updated',
       order: {
@@ -783,13 +784,13 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
       url: '/delivery', tag,
     }).catch(() => {});
   }
-  if (detail?.customer_id && messages[status]) {
-    PushService.notifyCustomer(detail.customer_id, {
+  if (messages[status]) {
+    // Member by customer id, guest by tracking token — same update either way.
+    PushService.notifyOrderRecipient(order.id, {
       title: `Order #${order.orderNumber} update`,
       body: messages[status], url: '/orders', tag,
     }).catch(() => {});
-  }
-  if (status === 'failed_delivery') {
+  }  if (status === 'failed_delivery') {
     PushService.notifyStoreAdmins(order.storeId, {
       title: `Gokez Mart · Delivery failed · Order #${order.orderNumber}`,
       body: `${detail?.guest_name || 'Customer'} · ${failureReason || 'Delivery failed'}`,
@@ -810,16 +811,14 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
 // plus a promise the customer card shows and a push explaining it.
 export const adminConfirmNextOpen = asyncHandler(async (req: AdminRequest, res: Response) => {
   const order = await OrderService.confirmForNextOpen(req.params.id, req.admin!);
-  if (order.customerId) {
-    PushService.notifyCustomer(order.customerId, {
-      title: `Order #${order.orderNumber} update`,
-      body: order.nextOpenLabel
-        ? `✅ Order #${order.orderNumber} confirmed — we'll deliver it when the store opens (${order.nextOpenLabel}).`
-        : `✅ Order #${order.orderNumber} confirmed — we'll deliver it during the next opening hours.`,
-      url: '/orders',
-      tag: `order-${req.params.id}`,
-    }).catch(() => {});
-  }
+  PushService.notifyOrderRecipient(req.params.id, {
+    title: `Order #${order.orderNumber} update`,
+    body: order.nextOpenLabel
+      ? `✅ Order #${order.orderNumber} confirmed — we'll deliver it when the store opens (${order.nextOpenLabel}).`
+      : `✅ Order #${order.orderNumber} confirmed — we'll deliver it during the next opening hours.`,
+    url: '/orders',
+    tag: `order-${req.params.id}`,
+  }).catch(() => {});
   emitOrderEvent({
     type: 'order.updated',
     order: {
@@ -864,10 +863,7 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
     technical_issue:   '😔 Sorry — a technical issue prevented delivery. You will not be charged. Please reorder.',
     other:             '😔 Sorry — your order had to be cancelled by our team. You will not be charged. Please reorder.',
   };
-  if (ord.customer_id) {
-    PushService.notifyCustomer(ord.customer_id, { title: `Order #${ord.order_number}`, body: MSGS[reason] || MSGS.other, url: '/orders', tag: `order-${req.params.id}` }).catch(() => {});
-  }
-  emitOrderEvent({
+  PushService.notifyOrderRecipient(req.params.id, { title: `Order #${ord.order_number}`, body: MSGS[reason] || MSGS.other, url: '/orders', tag: `order-${req.params.id}` }).catch(() => {});  emitOrderEvent({
     type: 'order.updated',
     order: {
       id: req.params.id,
@@ -1231,7 +1227,7 @@ export const customerSendOtp = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const customerVerifyOtp = asyncHandler(async (req: Request, res: Response) => {
-  const { phone, otp, funnelSessionId } = req.body;
+  const { phone, otp, funnelSessionId, trackingTokens } = req.body;
   if (!phone || !otp) { res.status(400).json({ success: false, error: 'Phone and OTP required' }); return; }
   const result = await CustomerAuthService.verifyOtp(phone, otp);
   // Attribution link only. Auth behaviour is unchanged and a missing or invalid
@@ -1240,6 +1236,17 @@ export const customerVerifyOtp = asyncHandler(async (req: Request, res: Response
   // customer id was already resolved server-side by the call above.
   if (funnelSessionId && result?.customer?.id) {
     await FunnelEventService.linkSessionToCustomer(funnelSessionId, result.customer.id).catch(() => undefined);
+  }
+  // Move this device's guest push subscriptions onto the now-known customer id,
+  // so a device that ordered as a guest then logged in gets one push per order,
+  // not a member push and a guest push. Best-effort: never block login. Only the
+  // tokens the client actually holds are accepted, and only rows still owned by
+  // a guest (tracking_token set) are moved.
+  if (result?.customer?.id && Array.isArray(trackingTokens)) {
+    const tokens = trackingTokens.filter((t: unknown): t is string => typeof t === 'string' && t.trim().length > 0).slice(0, 20);
+    if (tokens.length) {
+      await PushService.rekeyGuestSubscriptions(result.customer.id, tokens).catch(() => undefined);
+    }
   }
   res.json({ success: true, data: result });
 });
@@ -1403,9 +1410,12 @@ type CancelScope = { customerId: string } | { trackingToken: string };
  * side effects of cancelling (campaign redemption, audit event, store push).
  */
 async function runCancel(req: CustomerRequest, res: Response, scope: CancelScope) {
+  const reason = typeof (req.body?.reason ?? req.query.reason) === 'string'
+    ? String(req.body?.reason ?? req.query.reason).trim()
+    : null;
   let order;
   try {
-    order = await OrderService.cancelByCaller(req.params.id, scope);
+    order = await OrderService.cancelByCaller(req.params.id, scope, reason);
   } catch (err: any) {
     const status = err?.status === 404 || err?.status === 400 ? err.status : 500;
     res.status(status).json({ success: false, error: err?.message || 'Could not cancel the order' });
@@ -1415,7 +1425,7 @@ async function runCancel(req: CustomerRequest, res: Response, scope: CancelScope
   if (order.storeId) {
     PushService.notifyStoreAdmins(order.storeId, {
       title: `Order #${order.orderNumber} cancelled`,
-      body: `${order.guestName || 'Customer'} cancelled the order`,
+      body: `${order.guestName || 'Customer'} cancelled the order${order.cancellationReason && order.cancellationReason !== 'customer_request' ? ` — ${order.cancellationReason.replace(/_/g, ' ')}` : ''}`,
       url: '/orders',
       tag: `order-${req.params.id}`,
     }).catch(() => {});
@@ -1561,6 +1571,29 @@ export const adminSavePushSub = asyncHandler(async (req: AdminRequest, res: Resp
     res.status(400).json({ success: false, error: 'Invalid subscription' }); return;
   }
   await PushService.saveAdminSubscription(req.admin!.id, { endpoint, keys });
+  res.json({ success: true });
+});
+
+/**
+ * Guest push subscription. No session — the credential is the per-order
+ * tracking token the device already holds. We verify the token maps to a real
+ * order before storing, so a junk token cannot occupy the UNIQUE(endpoint) row
+ * a real device would later need. Returns the same 404 shape as an unknown
+ * order so tokens cannot be probed for existence.
+ */
+export const guestSavePushSub = asyncHandler(async (req: Request, res: Response) => {
+  const { endpoint, keys, trackingToken } = req.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth || !trackingToken || typeof trackingToken !== 'string') {
+    res.status(400).json({ success: false, error: 'Invalid subscription' }); return;
+  }
+  const found = await query<{ id: string }>(
+    `SELECT id FROM mart_orders WHERE tracking_token = $1 LIMIT 1`,
+    [trackingToken.trim()]
+  );
+  if (!found.rows.length) {
+    res.status(404).json({ success: false, error: 'Order not found' }); return;
+  }
+  await PushService.saveGuestSubscription(trackingToken.trim(), { endpoint, keys });
   res.json({ success: true });
 });
 
@@ -1786,7 +1819,84 @@ export const adminGetFeedback = asyncHandler(async (req: AdminRequest, res: Resp
   res.json({ success: true, data: result.rows, stats: statsRes.rows[0] });
 });
 
-// ── Admin photo upload ────────────────────────────────────────────────────────
+// ── Product suggestions ("Suggest products") ──────────────────────────────────
+
+export const submitProductSuggestion = asyncHandler(async (req: Request, res: Response) => {
+  const { suggestedProduct, detail, zoneId, zoneName, storeId, storeName, contactConsent } = req.body;
+  const product = typeof suggestedProduct === 'string' ? suggestedProduct.trim() : '';
+  if (!product) { res.status(400).json({ success: false, error: 'Please tell us what you would like us to stock.' }); return; }
+  if (product.length > 200) { res.status(400).json({ success: false, error: 'Keep the suggestion under 200 characters.' }); return; }
+
+  // Guests and signed-in customers both reach this route. authenticateCustomerIfPresent
+  // fills req.customer when a token is present, so identity is optional.
+  const customer = (req as CustomerRequest).customer;
+  let phone = customer?.phone || null;
+  let name: string | null = null;
+
+  if (customer) {
+    const cust = (await query<{ name: string | null; phone: string | null }>(
+      `SELECT name, phone FROM mart_customers WHERE id = $1`, [customer.id]
+    )).rows[0];
+    if (cust) { phone = cust.phone || phone; name = cust.name; }
+  }
+
+  // Prefer the DB store record over whatever the client sent, so a spoofed or
+  // stale storeId can't attribute demand to the wrong store.
+  let resolvedStoreName = storeName || null;
+  if (storeId) {
+    const store = (await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId])).rows[0];
+    if (store) resolvedStoreName = store.name;
+  }
+
+  const suggestion = await ProductSuggestionService.create({
+    customerId: customer?.id || null,
+    phone,
+    name,
+    suggestedProduct: product,
+    detail: typeof detail === 'string' && detail.trim() ? detail.trim().slice(0, 500) : null,
+    zoneId: typeof zoneId === 'string' && zoneId ? zoneId : null,
+    zoneName: typeof zoneName === 'string' && zoneName ? zoneName : null,
+    storeId: typeof storeId === 'string' && storeId ? storeId : null,
+    storeName: resolvedStoreName,
+    contactConsent: contactConsent === true,
+  });
+
+  res.status(201).json({ success: true, data: suggestion, message: 'Thanks! We have noted your suggestion.' });
+});
+
+export const adminGetSuggestions = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { status, buyerType, zoneId, range, from, to } = req.query;
+  const suggestions = await ProductSuggestionService.findAll(
+    {
+      status: (status as SuggestionStatus | 'all') || 'all',
+      buyerType: (buyerType as BuyerType | 'all') || 'all',
+      zoneId: typeof zoneId === 'string' && zoneId ? zoneId : undefined,
+    },
+    (range as SuggestionRange) || '30d',
+    from as string | undefined,
+    to as string | undefined
+  );
+  res.json({ success: true, data: suggestions });
+});
+
+export const adminGetSuggestionInsights = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { range, from, to } = req.query;
+  const insights = await ProductSuggestionService.getInsights(
+    (range as SuggestionRange) || '30d',
+    from as string | undefined,
+    to as string | undefined
+  );
+  res.json({ success: true, data: insights });
+});
+
+export const adminUpdateSuggestionStatus = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { status } = req.body;
+  const allowed: SuggestionStatus[] = ['new', 'reviewing', 'added', 'declined'];
+  if (!allowed.includes(status)) { res.status(400).json({ success: false, error: 'Invalid status' }); return; }
+  const updated = await ProductSuggestionService.updateStatus(req.params.id, status);
+  if (!updated) { res.status(404).json({ success: false, error: 'Suggestion not found' }); return; }
+  res.json({ success: true, data: updated });
+});
 
 export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }

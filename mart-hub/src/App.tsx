@@ -18,6 +18,7 @@ const CategoriesPage = lazyWithRetry(() => import('./pages/CategoriesPage'));
 const OrdersPage = lazyWithRetry(() => import('./pages/OrdersPage'));
 const CustomersPage = lazyWithRetry(() => import('./pages/CustomersPage'));
 const CustomerLeadsPage = lazyWithRetry(() => import('./pages/CustomerLeadsPage'));
+const SuggestionsPage = lazyWithRetry(() => import('./pages/SuggestionsPage'));
 const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'));
 const AnalyticsPage = lazyWithRetry(() => import('./pages/AnalyticsPage'));
 const InstallAnalyticsPage = lazyWithRetry(() => import('./pages/InstallAnalyticsPage'));
@@ -85,7 +86,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/analytics', '/install-analytics', '/settings', '/stores', '/subscriptions', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/install-analytics', '/settings', '/stores', '/subscriptions', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -156,6 +157,7 @@ export default function App() {
         <Route path="/categories"      element={<ProtectedRoute path="/categories"><CategoriesPage /></ProtectedRoute>} />
         <Route path="/customers"       element={<ProtectedRoute path="/customers"><CustomersPage /></ProtectedRoute>} />
         <Route path="/customer-leads"   element={<ProtectedRoute path="/customer-leads"><CustomerLeadsPage /></ProtectedRoute>} />
+        <Route path="/suggestions"      element={<ProtectedRoute path="/suggestions"><SuggestionsPage /></ProtectedRoute>} />
         <Route path="/analytics"       element={<ProtectedRoute path="/analytics"><AnalyticsPage /></ProtectedRoute>} />
         <Route path="/install-analytics" element={<ProtectedRoute path="/install-analytics"><InstallAnalyticsPage /></ProtectedRoute>} />
         <Route path="/settings"        element={<ProtectedRoute path="/settings"><SettingsPage /></ProtectedRoute>} />
