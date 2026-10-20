@@ -15,6 +15,11 @@
 // The images are intentionally NOT precached by the service worker: iOS caches
 // them natively at install time, so they work offline without app involvement,
 // and precaching them would only bloat the install payload.
+//
+// The file names in public/ are the plain ones; the build adds the build id to
+// them in dist (see write-version.mjs) so that every deploy produces a URL the
+// OS cache cannot already hold. Without that, a new splash only ever reached a
+// customer who removed and reinstalled the app.
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, existsSync } from 'node:fs';
