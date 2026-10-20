@@ -87,7 +87,7 @@ export class InstallAnalyticsService {
       params = [to];
     }
 
-    const [byPlatform, byEvent, totals, uniqueVisitors] = await Promise.all([
+    const [byPlatform, byEvent, totals, uniqueVisitors, shareClicks] = await Promise.all([
       query(
         `SELECT platform,
                 COUNT(*) AS events,
@@ -115,6 +115,18 @@ export class InstallAnalyticsService {
          GROUP BY platform`,
         params
       ),
+      // Share App clicks live in the funnel events table (share_app_clicked),
+      // not the install table, because sharing is a growth action anyone can
+      // take, installed or not. Counted by the device platform the client sent.
+      query(
+        `SELECT platform, COUNT(*) AS count
+         FROM mart_funnel_events
+         WHERE event_name = 'share_app_clicked'
+           AND ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
+           AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)
+         GROUP BY platform`,
+        [from ?? null, to ?? null]
+      ),
     ]);
 
     return {
@@ -122,6 +134,7 @@ export class InstallAnalyticsService {
       byEvent: byEvent.rows,
       totals: totals.rows[0] ?? { total_events: 0, total_sessions: 0 },
       uniqueVisitors: uniqueVisitors.rows,
+      shareClicks: shareClicks.rows,
     };
   }
 }

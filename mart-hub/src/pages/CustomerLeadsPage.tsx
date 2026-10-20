@@ -71,7 +71,7 @@ export default function CustomerLeadsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-gray-500 dark:text-slate-400">
-            People who entered their mobile number but never completed OTP verification. These are prospects, not yet customers — verified and guest customers live on the Customers page. Reporting uses India time.
+            Shoppers who entered their number but never verified OTP. Prospects, not customers — see the Customers page for verified and guest buyers. Times are India time.
           </p>
         </div>
         <button
