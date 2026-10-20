@@ -32,6 +32,6 @@ export const BACKEND_NOTICE: BackendNotice = {
   imageWidth: 841,
   imageHeight: 619,
   title: 'Your neighbourhood store is taking a little break.',
-  body: ['On the occasion of festival.', 'Thank you for your patience!'],
+  body: ['Thank you for your patience!'],
   checkAgainLabel: 'Check Again',
 };
