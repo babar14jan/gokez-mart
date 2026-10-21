@@ -17,8 +17,19 @@
  *
  * Step 2 needs the TypeScript compiler and step 3 needs tsx; both are
  * production dependencies (not devDependencies), so they survive an install
- * with --omit=dev. The source is not a build artefact, so it is always in the
- * image.
+ * with --omit=dev. The source is not a build artefact, so it is always in
+ * the image.
+ *
+ * One case is specific to the platform. The build step and the start step
+ * can be the same command -- a Build Command that runs this script -- and
+ * then the build step must not leave a server listening, because a build
+ * step that never returns is a deploy that never finishes. The two steps
+ * cannot be told apart from inside: neither Nixpacks nor Railpack labels
+ * the phase, so there is no environment variable that says "this is the
+ * build". What does tell them apart is the compiled output, which is missing
+ * at the start of a build and present by the start of a run. So on the
+ * platform a missing output means "compile it, then step out of the way",
+ * and the start step that follows finds the output and runs the server.
  */
 
 import { existsSync } from 'node:fs';
@@ -36,16 +47,10 @@ function log(message) {
 }
 
 /**
- * True when this process is the build step rather than the running service.
- *
- * It matters because the start command is sometimes pasted into a service's
- * Build Command field by mistake. Starting a server there would leave the
- * build hanging until it timed out. Detecting the build phase lets this
- * script compile the output and exit instead, so the deploy still ends up
- * with a correct image.
+ * True when this process is running on the platform rather than on a
+ * developer's machine.
  */
-const isBuildPhase = ['NIXPACKS_BUILD_PHASE', 'RAILPACK_BUILD_PHASE', 'RAILWAY_BUILD_PHASE']
-  .some((name) => process.env[name] === 'true');
+const isRailway = Boolean(process.env.RAILWAY_SERVICE_ID || process.env.RAILWAY_ENVIRONMENT_NAME);
 
 /** Compiles the API in place. Returns true when the output is there. */
 function build() {
@@ -63,23 +68,25 @@ function build() {
   return existsSync(COMPILED);
 }
 
-if (isBuildPhase) {
-  // We are the build command: make sure the output exists and get out of the
-  // way, so the build does not sit there with a server listening.
-  if (existsSync(COMPILED)) log('compiled output is present');
-  else if (build()) log('compiled output built');
-  else {
-    console.error('[start] the build did not produce dist/index.js');
-    process.exit(1);
-  }
-  log('build phase done, not starting a server');
-  process.exit(0);
-}
-
 if (existsSync(COMPILED)) {
   log('starting the compiled build');
   await import(pathToFileURL(COMPILED).href);
 } else if (build()) {
+  if (isRailway) {
+    // The compiled output was not in the image, so the build step did not
+    // put it there. The usual cause is a Build Command that runs this same
+    // script: the build step and the start step then run the same command,
+    // and the build step gets a server instead of a build.
+    //
+    // A build step that leaves a server listening never returns, and the
+    // deploy sits there until the platform kills it. So the output is
+    // compiled and this process steps out of the way. The output is now in
+    // the image, so the start step that follows finds it and runs the
+    // server -- which is also what makes a Build Command that runs this
+    // script work, instead of hanging the deploy.
+    log('compiled output is now in place; not starting a server here');
+    process.exit(0);
+  }
   log('starting the compiled build');
   await import(pathToFileURL(COMPILED).href);
 } else if (existsSync(SOURCE)) {
