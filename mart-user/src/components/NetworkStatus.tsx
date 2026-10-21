@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
-import { BACKEND_NOTICE } from '../constants/backendNotice';
 import { hideSplash } from '../utils/splash';
 
 // Generous on purpose. A dead backend rejects the connection instantly (or
@@ -95,9 +94,9 @@ function probeConnectivityOnce(): Promise<Connectivity> {
 }
 
 type Status = 'checking' | 'connected' | 'failed';
-// `server` and `timeout` both mean "the backend did not answer" and carry the
-// configurable BACKEND_NOTICE; `offline` means the customer's own device has
-// no connection and keeps its dedicated copy.
+// `server` and `timeout` both mean "the backend did not answer" and share one
+// screen; `offline` means the customer's own device has no connection and keeps
+// its own.
 type Mode = 'offline' | 'server' | 'timeout';
 
 interface NoticeView {
@@ -118,39 +117,26 @@ const OFFLINE_VIEW: NoticeView = {
   button: 'Try Again',
 };
 
-const SERVER_FALLBACK: NoticeView = {
-  img: '/server_unreachable.webp',
-  width: 590,
-  height: 423,
-  title: 'Something went wrong',
-  body: ['We’re having trouble connecting to our server. Please try again shortly.'],
-  button: 'Try Again',
+// The backend itself is unreachable — a suspended or stopped server, a failed
+// deploy, a database outage. It is not the customer's own device being
+// offline; that keeps its own screen above.
+//
+// There is one server-down screen, not a separate notice for it: the artwork
+// is the closed storefront and the copy says the store is taking a break,
+// which is what the customer is actually experiencing.
+const SERVER_DOWN_VIEW: NoticeView = {
+  img: '/backend_donw.webp',
+  width: 841,
+  height: 619,
+  title: 'Your neighbourhood store is taking a little break.',
+  body: ['Thank you for your patience!'],
+  button: 'Check Again',
 };
-
-const TIMEOUT_FALLBACK: NoticeView = {
-  img: '/server_unreachable.webp',
-  width: 590,
-  height: 423,
-  title: 'Connection timed out',
-  body: ['This is taking longer than usual. Please check your connection and try again.'],
-  button: 'Try Again',
-};
-
-const BACKEND_DOWN_VIEW: NoticeView = BACKEND_NOTICE.enabled
-  ? {
-      img: BACKEND_NOTICE.image,
-      width: BACKEND_NOTICE.imageWidth,
-      height: BACKEND_NOTICE.imageHeight,
-      title: BACKEND_NOTICE.title,
-      body: BACKEND_NOTICE.body,
-      button: BACKEND_NOTICE.checkAgainLabel,
-    }
-  : SERVER_FALLBACK;
 
 const VIEWS: Record<Mode, NoticeView> = {
   offline: OFFLINE_VIEW,
-  server: BACKEND_DOWN_VIEW,
-  timeout: BACKEND_NOTICE.enabled ? BACKEND_DOWN_VIEW : TIMEOUT_FALLBACK,
+  server: SERVER_DOWN_VIEW,
+  timeout: SERVER_DOWN_VIEW,
 };
 
 interface ApiFailedDetail {
