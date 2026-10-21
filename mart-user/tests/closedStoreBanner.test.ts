@@ -48,15 +48,16 @@ describe('closed store banner', () => {
   test('with nothing configured the default wording is used', () => {
     const html = render({ openState: CLOSED });
     assert.match(html, /closed right now\./);
-    assert.match(html, /You can still place your order/);
+    // This closure has no end at all, so there is no time to give and the
+    // reassurance is all there is to say.
+    assert.match(html, /as soon as we reopen/);
   });
 
-  test('the reopening line says the order can still be placed', () => {
-    // The two questions a customer actually has: can I still order, and when
-    // will it arrive.
+  test('the reopening time is the line the customer reads', () => {
+    // The time is the one fact they act on, so it is the line rather than a
+    // sentence wrapped around it.
     const html = render({ openState: SCHEDULED });
-    assert.match(html, /You can still place your order/);
-    assert.match(html, /when we reopen today at 11:00 PM/);
+    assert.match(html, /Reopens today at 11:00 PM/);
   });
 
   test('a store closed by hand is promised no reopening time it never made', () => {

@@ -47,16 +47,9 @@ export default function StoreStatusStrip({
 
   // When the store reopens. A scheduled closure says exactly when it lifts;
   // a store that is simply past its opening hours says so through the weekly
-  // schedule, and the customer is told that time too rather than being left
-  // with "as soon as we reopen". Only a closure with no end at all has nothing
-  // to promise.
+  // schedule, and the customer is told that time too. Only a closure with no
+  // end at all has nothing to promise.
   const resume = openState.closedUntilLabel ?? openState.nextOpenLabel;
-
-  // The default explanation tells the customer what happens to an order they
-  // place while the store is closed. A store's own message replaces it.
-  const explanation = message
-    ? withResumeTime(message, resume)
-    : reopenLine(resume);
 
   return (
     <div
@@ -78,14 +71,21 @@ export default function StoreStatusStrip({
           )}
           {message && (
             <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
-              {explanation}
+              {withResumeTime(message, resume)}
             </p>
           )}
-          {/* The reopening line, always. It is the answer to the two questions
-              the customer has: can I still order, and when will it arrive. */}
-          <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
-            {reopenLine(openState.closedUntilLabel)}
-          </p>
+          {/* The reopening time. It is the one fact the customer acts on, so
+              it is the line, not a sentence wrapped around it. The reassurance
+              that they can still order is in the card. */}
+          {resume ? (
+            <p className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 leading-snug break-words">
+              Reopens {resume}
+            </p>
+          ) : (
+            <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
+              {reopenLine(null)}
+            </p>
+          )}
         </div>
       </div>
     </div>
