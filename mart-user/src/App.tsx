@@ -1317,12 +1317,6 @@ export default function App() {
         /* Home */
         <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${productPageBottom}`}>
 
-          {settings.store_open === 'false' && (
-            <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium px-4 py-3 rounded-2xl text-center">
-              🕐 Store is currently closed. We&apos;ll be back soon!
-            </div>
-          )}
-
           <div className="pb-6">
             {/* Desktop search opens the complete store catalogue. */}
             <button type="button" onClick={() => openCatalogSearch()}

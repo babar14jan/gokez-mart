@@ -68,6 +68,13 @@ describe('a catalogue that will not load', () => {
     );
   });
 
+  test('the home page has no closure banner of its own', () => {
+    assert.ok(
+      !/Store is currently closed/.test(appSource),
+      'the home page must not carry its own closure banner; the strip below the header covers it, with the reopen time',
+    );
+  });
+
   test('the notice covers the whole screen, so it always wins', () => {
     assert.match(
       statusSource,
