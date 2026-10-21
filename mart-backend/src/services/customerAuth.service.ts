@@ -5,6 +5,7 @@ import { config } from '../config';
 import { ComplianceService } from './compliance.service';
 import { CustomerLeadService } from './customerLead.service';
 import { badRequest, unauthorized, notFound, tooManyRequests, badGateway } from '../utils/apiError';
+import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 
 const TWO_FACTOR_BASE = 'https://2factor.in/API/V1';
 const OTP_EXPIRY_MINUTES = 10;
@@ -49,7 +50,10 @@ export class CustomerAuthService {
     if (!apiKey) throw new Error('SMS service not configured');
 
     const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/91${cleaned}/AUTOGEN2`;
-    const res = await fetch(url);
+    // The SMS provider is on the critical path of a customer signing in, so it
+    // gets the most generous of the outbound budgets — but it still must not
+    // be able to hang the request indefinitely.
+    const res = await fetch(url, { signal: timeoutSignal(OUTBOUND_TIMEOUTS.otpSms) });
     const data: any = await res.json();
 
     if (data.Status !== 'Success') {

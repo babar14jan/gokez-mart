@@ -41,10 +41,9 @@ const SHELL_URLS = [
   // where the artwork should be.
   '/Gokez_mart_brand_transparent.webp',
   '/splash2.webp',
-  // The offline / server-unreachable screens render these while the network is
-  // down, so they must already be cached to display.
+  // The offline / server-down screens render these while the network is down,
+  // so they must already be cached to display.
   '/offline.webp',
-  '/server_unreachable.webp',
   '/backend_donw.webp',
 ];
 

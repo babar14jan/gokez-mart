@@ -224,6 +224,10 @@ export interface StoreOpenState {
   nextOpenAt: string | null;
   /** Preformatted IST label, e.g. "9:00 AM tomorrow". */
   nextOpenLabel: string | null;
+  /** When a scheduled closure lifts, as an absolute IST label
+   *  ("22 Oct, 6:00 PM"). Fills the "{until}" placeholder in the store's own
+   *  banner message. Null unless the store is closed by a scheduled closure. */
+  closedUntilLabel?: string | null;
   closesAtLabel: string | null;
 }
 
@@ -237,6 +241,14 @@ export interface PublicSettings {
   cod_enabled: string; upi_enabled: string; phonepay_enabled: string;
   phonepay_qr_url: string; upi_phone: string; upi_id: string;
   whatsapp_number: string; support_name: string; support_phone: string;
+  /** The store's own wording for the closed notice, set in the hub. Empty
+   *  means the storefront uses its default wording. */
+  store_closed_message: string;
+  /** The store's greeting for the closed notice. Replaces the default heading. */
+  store_closed_greeting: string;
+  /** The closure the store scheduled, as the local times it was typed in. */
+  store_closed_from: string;
+  store_closed_until: string;
   openState?: StoreOpenState;
   openingHours?: StoreOpeningHours;
 }
