@@ -11,6 +11,7 @@ import * as Sentry from '@sentry/node';
 import { config } from './config';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware';
+import { installRequestLogger } from './utils/requestLog';
 
 const app = express();
 
@@ -195,7 +196,19 @@ app.use(compression({
   },
 }));
 if (config.env !== 'test') {
-  app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));
+  // The production log line carries only what is needed to follow a request:
+  // method, path, status and how long it took. Everything the previous
+  // "combined" format added has been left out on purpose.
+  //
+  //   * the query string — order tracking tokens, phone lookups and OTP
+  //     related values are passed there, and a URL is exactly the kind of
+  //     value that ends up in a log aggregator
+  //   * the remote address — personal data, and not needed to follow a request
+  //   * the user agent and referrer — large, and rarely needed
+  //
+  // Errors are still logged in full by the error handler below, so a failure
+  // keeps its diagnostics.
+  installRequestLogger(app, config.env);
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────

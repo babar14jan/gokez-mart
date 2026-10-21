@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
-import sharp from 'sharp';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
@@ -32,6 +31,8 @@ import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
 import { CatalogService } from '../services/catalog.service';
 import { evaluateStoreOpen } from '../utils/storeHours';
+import { trackStream } from '../utils/sse';
+import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -46,6 +47,11 @@ function hasValidCoordinates(latitude: unknown, longitude: unknown): boolean {
 }
 
 async function prepareImage(buffer: Buffer, maxDimension: number): Promise<PreparedImage> {
+  // sharp is a native module (libvips) and it is only needed when an image is
+  // actually being re-encoded, which is rare. Importing it lazily keeps it out
+  // of the boot path, so the process does not hold ~11 MB of native bindings
+  // for the whole time it is running.
+  const { default: sharp } = await import('sharp');
   const image = sharp(buffer, { failOn: 'error' }).rotate().resize({
     width: maxDimension,
     height: maxDimension,
@@ -168,6 +174,7 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
   try {
     const response = await fetch(url.toString(), {
       headers: { 'User-Agent': config.geocoding.userAgent, Accept: 'application/json', 'Accept-Language': 'en' },
+      signal: timeoutSignal(OUTBOUND_TIMEOUTS.geocode),
     });
     if (!response.ok) throw new Error(`Reverse geocoding failed: ${response.status}`);
     const result: any = await response.json();
@@ -683,11 +690,16 @@ export const adminOrderStream = asyncHandler(async (req: AdminRequest, res: Resp
   };
   orderEventBus.on('order', listener);
   const heartbeat = setInterval(() => {
-    res.write(`: keepalive\n\n`);
+    res.write(': keepalive\n\n');
   }, 25000);
+  // The stream is registered so a shutdown can end it. An event stream never
+  // finishes on its own, so while one is open the HTTP server cannot finish
+  // closing — see utils/sse.ts.
+  const untrack = trackStream(res);
   const close = () => {
     orderEventBus.off('order', listener);
     clearInterval(heartbeat);
+    untrack();
   };
   res.on('close', close);
   req.on('close', close);
@@ -1740,6 +1752,7 @@ export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res
       'cache-control': 'max-age=31536000',
     },
     body: image.buffer,
+    signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
   });
   if (!uploadRes.ok) { res.status(500).json({ success: false, error: 'Upload failed' }); return; }
   const publicUrl = `${config.supabase.url}/storage/v1/object/public/${bucket}/${filename}`;
@@ -1942,6 +1955,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
       'cache-control': 'max-age=31536000',
     },
     body: image.buffer,
+    signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
   });
 
   if (!uploadRes.ok) {
