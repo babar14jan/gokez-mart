@@ -96,6 +96,9 @@ function DeferredPage({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="min-h-[12rem]" />}>{children}</Suspense>;
 }
 
+/** How long to wait before trying a catalogue that would not load again. */
+const CATALOGUE_RETRY_MS = 15000;
+
 const DEFAULT_SETTINGS: PublicSettings = {
   store_name: BRAND_NAME, store_address: 'Kolkata',
   delivery_charge: '0', free_delivery_above: '0', min_order_amount: '0',
@@ -290,13 +293,22 @@ export default function App() {
   const selectedZone = useZoneStore(s => s.selectedZone);
   const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
 
-  // The connection came back. The catalogue that could not be loaded is
-  // loaded again, so the home page is not left empty behind the notice.
+  // A catalogue that would not load is loaded again: when the connection
+  // comes back, and on a short timer for as long as it keeps failing. The
+  // outage screen has its own re-check, but the catalogue is this app's
+  // business, so the retry lives here rather than being triggered by a
+  // message from the screen.
   useEffect(() => {
-    const onBack = () => setCatalogRequest(request => request + 1);
-    window.addEventListener('mart:api-back', onBack);
-    return () => window.removeEventListener('mart:api-back', onBack);
-  }, []);
+    if (!catalogError) return;
+    const retry = () => setCatalogRequest(request => request + 1);
+    const onOnline = () => retry();
+    window.addEventListener('online', onOnline);
+    const timer = window.setInterval(retry, CATALOGUE_RETRY_MS);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(timer);
+    };
+  }, [catalogError]);
 
   // The card, on arrival at a closed store. It opens every time the app is
   // opened or refreshed, and every time the PWA is reopened, because that is

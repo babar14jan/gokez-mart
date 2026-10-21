@@ -56,15 +56,46 @@ describe('a catalogue that will not load', () => {
   });
 
   test('the catalogue is loaded again once the connection is back', () => {
+    // The catalogue is the app's own business, so the retry lives with the
+    // app rather than being triggered by a message from the outage screen.
     assert.match(
       appSource,
-      /addEventListener\('mart:api-back'/,
-      'the app must reload the catalogue when the connection returns',
+      /addEventListener\('online'/,
+      'the app must retry the catalogue when the connection returns',
+    );
+    assert.match(
+      appSource,
+      /CATALOGUE_RETRY_MS/,
+      'the app must keep retrying a catalogue that will not load',
+    );
+  });
+
+  test('a healthy app is not told to reload the catalogue on every probe', () => {
+    // The health probe runs every fifteen seconds. Telling the app to reload
+    // the catalogue on each of those would re-download the whole catalogue,
+    // every fifteen seconds, for the life of the app -- and the stamp-based
+    // polling exists to avoid exactly that. The event is for coming back
+    // from an outage, and only then.
+    assert.match(
+      statusSource,
+      /const recovered = showingFailure;/,
+      'the app must only be told to reload after an outage',
     );
     assert.match(
       statusSource,
-      /dispatchEvent\(new CustomEvent\('mart:api-back'\)\)/,
-      'the notice must tell the app the connection is back',
+      /if \(recovered\) \{/,
+      'the reload must be conditional on having been down',
+    );
+  });
+
+  test('a failure that has not lasted is dropped when the connection returns', () => {
+    // The pending confirmation used to survive the device coming back
+    // online, and could fire afterwards and put the outage screen over a
+    // working app.
+    assert.match(
+      statusSource,
+      /if \(confirmTimer\) \{ clearTimeout\(confirmTimer\); confirmTimer = undefined; \}[\s\S]*?showingFailure = false;/,
+      'coming back online must cancel the pending confirmation',
     );
   });
 

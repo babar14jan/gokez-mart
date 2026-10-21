@@ -30,7 +30,13 @@ export function rememberClosedCopy(greeting: string | undefined | null, message:
   try {
     const g = (greeting ?? '').trim();
     const m = (message ?? '').trim();
-    if (!g && !m) return;
+    if (!g && !m) {
+      // The store has cleared its wording, so the cached copy goes with it.
+      // Keeping it would have the outage screen say something the store has
+      // since removed.
+      localStorage.removeItem(CLOSED_COPY_KEY);
+      return;
+    }
     localStorage.setItem(CLOSED_COPY_KEY, JSON.stringify({ greeting: g, message: m }));
   } catch {
     // No storage: the outage screen falls back to the generic wording.

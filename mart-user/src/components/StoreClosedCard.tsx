@@ -46,6 +46,12 @@ export default function StoreClosedCard({
   primaryLabel = 'Got it',
 }: StoreClosedCardProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
+  // The latest handler, so the effect below does not have to depend on the
+  // function's identity. The app passes a new arrow on every render, and
+  // depending on it re-ran the effect every render, which re-focused the
+  // button while the customer was using it.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   // Escape closes, and the button takes focus so the card is usable from the
   // keyboard straight away.
@@ -53,11 +59,11 @@ export default function StoreClosedCard({
     if (!open) return;
     buttonRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeRef.current();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

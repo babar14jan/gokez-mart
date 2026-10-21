@@ -223,13 +223,19 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
         if (disposed) return;
         consecutiveSuccesses += 1;
         if (!showingFailure || consecutiveSuccesses >= RECOVER_SUCCESSES) {
+          // Whether an outage screen was up. Only then is there something to
+          // recover from, and only then does the app need telling.
+          const recovered = showingFailure;
           showingFailure = false;
           consecutiveSuccesses = 0;
           // The server answered, so whatever failed was a one-off.
           if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = undefined; }
-          // The app is reachable again. If it gave up on loading the
-          // catalogue, this is its cue to try once more.
-          try { window.dispatchEvent(new CustomEvent('mart:api-back')); } catch {}
+          // Only when the app was actually down. A healthy app probes every
+          // fifteen seconds, and telling it to reload the catalogue on each of
+          // those would re-download the whole catalogue for no reason.
+          if (recovered) {
+            try { window.dispatchEvent(new CustomEvent('mart:api-back')); } catch {}
+          }
           setStatus('connected');
           setChecking(false);
           scheduleProbe(HEALTH_CHECK_INTERVAL_MS);
@@ -294,6 +300,10 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
       // Coming back online: drop the overlay right away so the store reappears,
       // then confirm with a probe (the app also refreshes its catalogue on
       // 'online', so recovery never clears what is already rendered).
+      // A pending confirmation is dropped with it: the connection is back, so
+      // a failure that has not lasted is not a failure at all, and letting the
+      // timer fire would put the outage screen over a working app.
+      if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = undefined; }
       showingFailure = false;
       consecutiveSuccesses = 0;
       setChecking(false);
@@ -309,6 +319,7 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     return () => {
       disposed = true;
       if (probeTimer) clearTimeout(probeTimer);
+      if (confirmTimer) clearTimeout(confirmTimer);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('mart:api-failed', onApiFailed);
@@ -326,9 +337,9 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     setRetryKey((key) => key + 1);
   };
 
-  // Read once per render: the store's copy only changes when the store
+  // Read once per mount: the store's copy only changes when the store
   // changes it, and the outage screen is the only place that uses it.
-  const storeCopy = readClosedCopy();
+  const [storeCopy] = useState(() => readClosedCopy());
   const view = mode === 'offline'
     ? VIEWS.offline
     : withStoreCopy(VIEWS[mode], storeCopy);
