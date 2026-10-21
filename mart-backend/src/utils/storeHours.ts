@@ -46,7 +46,22 @@ export type OpeningHours = Record<string, DayHours | null | undefined> | null | 
  * meaningful "next opening" to promise, whereas being outside scheduled hours
  * usually does.
  */
-export type ClosedReason = 'manual' | 'outside_hours' | 'never_opens';
+export type ClosedReason = 'manual' | 'scheduled' | 'outside_hours' | 'never_opens';
+
+/**
+ * A closure the owner scheduled in advance.
+ *
+ * Both ends are local IST wall-clock times as typed in the hub
+ * ("2026-10-21T10:00"). They are read as IST because that is the timezone the
+ * store trades in and the one every other schedule here is written against.
+ *
+ * Either end may be missing: a start on its own is a closure that runs until
+ * it is cleared, and an end on its own is a closure from now until then.
+ */
+export interface StoreClosure {
+  from?: string | null;
+  until?: string | null;
+}
 
 export interface StoreOpenState {
   isOpen: boolean;
@@ -63,6 +78,14 @@ export interface StoreOpenState {
    * folds this in). Null whenever the store is closed.
    */
   closesAt?: string | null;
+  /**
+   * When a scheduled closure lifts, as an absolute IST label
+   * ("22 Oct, 6:00 PM"). This is what fills the "{until}" placeholder in the
+   * store's own banner message, so the sentence the owner wrote can promise
+   * the reopening time without the owner having to keep it up to date.
+   * Null unless the store is closed by a scheduled closure with a known end.
+   */
+  closedUntilLabel?: string | null;
 }
 
 // ── IST primitives ────────────────────────────────────────────────────────────
@@ -115,15 +138,63 @@ function istInstant(reference: Date, dayOffset: number, minutesOfDay: number): D
   return new Date(base + minutesOfDay * 60_000 - istOffsetMinutes(sample) * 60_000);
 }
 
-/** Parse "HH:mm" to minutes past midnight IST. Returns null if unusable. */
+/**
+ * Parse "HH:mm" to minutes past midnight IST. Returns null if unusable. */
 function parseHhMm(value: unknown): number | null {
   if (typeof value !== 'string') return null;
   const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
   if (!m) return null;
   const h = Number(m[1]); const min = Number(m[2]);
-  if (!Number.isInteger(h) || !Number.isInteger(min)) return null;
   if (h < 0 || h > 23 || min < 0 || min > 59) return null;
   return h * 60 + min;
+}
+
+/**
+ * The UTC instant for an IST wall-clock date and time.
+ *
+ * The same arithmetic as istInstant, but for an absolute calendar date rather
+ * than a day offset from a reference.
+ */
+function istInstantOnDate(year: number, month: number, day: number, minutesOfDay: number): Date {
+  const base = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
+  // Offset sampled at midday of the target day, so a DST boundary inside the
+  // shift cannot skew the result by an hour.
+  const sample = new Date(base + 12 * 3600_000);
+  return new Date(base + minutesOfDay * 60_000 - istOffsetMinutes(sample) * 60_000);
+}
+
+/**
+ * Parse a local datetime as typed in the hub ("2026-10-21T10:00") and return
+ * the UTC instant it names, read as IST.
+ *
+ * Returns null for anything unusable, so a half-typed or malformed value
+ * simply means "no closure" rather than a store that silently disappears.
+ */
+export function parseIstLocalDateTime(value: string | null | undefined): Date | null {
+  if (typeof value !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/.exec(value.trim());
+  if (!m) return null;
+  const year = Number(m[1]); const month = Number(m[2]); const day = Number(m[3]);
+  const hour = Number(m[4]); const minute = Number(m[5]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (hour > 23 || minute > 59) return null;
+  const instant = istInstantOnDate(year, month, day, hour * 60 + minute);
+  return Number.isNaN(instant.getTime()) ? null : instant;
+}
+
+/**
+ * The closure window a scheduled closure describes, resolved to instants.
+ *
+ * Returns null when there is no closure set, so the store is judged purely on
+ * its opening hours.
+ */
+function resolveClosureWindow(closure: StoreClosure | null | undefined, now: Date): { from: Date; until: Date | null } | null {
+  const from = parseIstLocalDateTime(closure?.from);
+  const until = parseIstLocalDateTime(closure?.until);
+  if (!from && !until) return null;
+  // An end on its own closes the store from now until then.
+  if (!from) return { from: now, until };
+  return { from, until };
 }
 
 /** A day is usable only when it is not flagged closed and both times parse. */
@@ -166,6 +237,20 @@ function describeNextOpen(dayOffset: number, minutesOfDay: number, target: DayKe
   return `${time} on ${DAY_NAMES[target]}`;
 }
 
+/**
+ * "22 Oct, 6:00 PM" — when a closure that has a known end lifts.
+ *
+ * Absolute rather than relative ("today", "tomorrow") on purpose: the hub
+ * shows the owner a preview of the banner using the time they typed, and a
+ * relative label cannot be reproduced there without duplicating this
+ * timezone logic. An absolute time is also the clearer thing to promise.
+ */
+function describeResume(instant: Date): string {
+  const then = istParts(instant);
+  const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][then.mo - 1];
+  return `${then.d} ${month}, ${formatIstTime(then.h * 60 + then.mi)}`;
+}
+
 // ── The evaluation ────────────────────────────────────────────────────────────
 
 /**
@@ -176,17 +261,35 @@ function describeNextOpen(dayOffset: number, minutesOfDay: number, target: DayKe
  *                     other than the string 'true' (or boolean true) is closed,
  *                     matching how the hub's BOOLEAN_KEYS toggle stores it.
  * @param now          injectable for tests
+ * @param closure      an optional closure the owner scheduled in advance
  */
 export function evaluateStoreOpen(
   openingHours: OpeningHours,
   storeOpen: string | boolean | null | undefined,
   now: Date = new Date(),
+  closure?: StoreClosure | null,
 ): StoreOpenState {
   // Manual override wins. A closed store is not "outside hours", and promising a
-  // next opening would be a lie: the owner closed it deliberately.
+  // next opening would be a lie: the owner closed it deliberately. It also wins
+  // over a scheduled closure, so a store left switched off stays closed rather
+  // than reopening itself on a schedule the owner has already overridden.
   const manualOpen = storeOpen === true || storeOpen === 'true';
   if (!manualOpen) {
     return { isOpen: false, closedReason: 'manual', nextOpenAt: null, nextOpenLabel: null, closesAtLabel: null };
+  }
+
+  // A closure scheduled in advance. Unlike the manual override this has a
+  // known end, so the customer can be told when the store is back.
+  const window = resolveClosureWindow(closure, now);
+  if (window && now >= window.from && (window.until === null || now < window.until)) {
+    return {
+      isOpen: false,
+      closedReason: 'scheduled',
+      nextOpenAt: window.until ? window.until.toISOString() : null,
+      nextOpenLabel: window.until ? describeResume(window.until) : null,
+      closedUntilLabel: window.until ? describeResume(window.until) : null,
+      closesAtLabel: null,
+    };
   }
 
   const p = istParts(now);

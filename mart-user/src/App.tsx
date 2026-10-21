@@ -101,8 +101,8 @@ const DEFAULT_SETTINGS: PublicSettings = {
   delivery_area: 'Kolkata', store_open: 'true',
   estimated_delivery: '30-45 mins', cod_enabled: 'true',
   upi_enabled: 'true', phonepay_enabled: 'false',
-  phonepay_qr_url: '', upi_phone: '', upi_id: '', whatsapp_number: '918777376280',
-  support_name: '', support_phone: '',
+  phonepay_qr_url: '', upi_phone: '', upi_id: '', whatsapp_number: '',
+  support_name: '', support_phone: '', store_closed_message: '', store_closed_greeting: '',
 };
 
 export default function App() {
@@ -1099,8 +1099,17 @@ export default function App() {
         />
       )}
 
-      {/* Closed-store notice: below the header, on every page, never blocking. */}
-      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
+      {/* Closed-store notice: below the header, on every page, never blocking.
+          The store's own greeting and message come from the hub's Hours tab;
+          without them the notice falls back to the default wording. */}
+      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
+        <StoreStatusStrip
+          openState={openState}
+          zoneName={selectedZone?.name}
+          closedGreeting={settings.store_closed_greeting}
+          closedMessage={settings.store_closed_message}
+        />
+      )}
         </>
       }
       floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}

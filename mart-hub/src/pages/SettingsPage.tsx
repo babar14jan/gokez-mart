@@ -39,7 +39,8 @@ const TABS: { id: TabId; label: string; keys: string[]; store?: boolean }[] = [
     keys: ['delivery_area', 'estimated_delivery',
            'whatsapp_number', 'support_name', 'support_phone'] },
   { id: 'hours', label: 'Hours & Delivery', store: true,
-    keys: ['store_open', 'delivery_charge', 'free_delivery_above', 'min_order_amount'] },
+    keys: ['store_open', 'store_closed_from', 'store_closed_until', 'store_closed_greeting',
+           'store_closed_message', 'delivery_charge', 'free_delivery_above', 'min_order_amount'] },
   // Zones persist on their own per action, so this tab has no bulk save.
   { id: 'zones', label: 'Delivery Zones', keys: [] },
   { id: 'payments', label: 'Payments & Inventory',
@@ -53,22 +54,57 @@ const FIELD_META: Record<string, { label: string; placeholder?: string; hint?: s
   delivery_area:       { label: 'Delivery Area',                     placeholder: 'e.g. Shapoorji, Kolkata', hint: 'Shown to customers on the app' },
   estimated_delivery:  { label: 'Estimated Delivery Time',           placeholder: 'e.g. 10-15 mins' },
   store_open:          { label: 'Store is Open' },
+  store_closed_message: { label: 'Closed Banner Message',            placeholder: 'e.g. Your neighbourhood store is taking a break today. We will remove this tomorrow.', hint: 'Shown under the closed notice in the app. Leave empty to use the default wording.' },
   delivery_charge:     { label: 'Delivery Charge (₹)',               placeholder: 'e.g. 15' },
   free_delivery_above: { label: 'Free Delivery Above (₹)',           placeholder: 'e.g. 150', hint: 'Orders above this amount get free delivery' },
   min_order_amount:    { label: 'Minimum Order Amount (₹)',          placeholder: 'e.g. 50' },
-  whatsapp_number:     { label: 'WhatsApp Number',                   placeholder: 'e.g. 918777376280', hint: 'Include country code — 91 for India' },
+  whatsapp_number:     { label: 'WhatsApp Number',                   placeholder: 'e.g. 91XXXXXXXXXX', hint: 'Include country code — 91 for India' },
   support_name:        { label: 'Support Contact Name',              placeholder: 'e.g. Arman' },
-  support_phone:       { label: 'Support Phone Number',              placeholder: 'e.g. 9330317102' },
+  support_phone:       { label: 'Support Phone Number',              placeholder: 'e.g. 9XXXXXXXXX' },
   cod_enabled:         { label: 'Accept Cash on Delivery' },
   upi_enabled:         { label: 'Accept UPI Payment' },
-  upi_id:              { label: 'UPI ID',                            placeholder: 'e.g. 9330317102@ybl', hint: 'Your UPI VPA / payment address' },
-  upi_phone:           { label: 'UPI Phone Number',                  placeholder: 'e.g. 9330317102', hint: 'Phone number linked to your UPI' },
+  upi_id:              { label: 'UPI ID',                            placeholder: 'e.g. name@bank', hint: 'Your UPI VPA / payment address' },
+  upi_phone:           { label: 'UPI Phone Number',                  placeholder: 'e.g. 9XXXXXXXXX', hint: 'Phone number linked to your UPI' },
   upi_qr_enabled:      { label: 'Show UPI QR Code to Customers' },
   phonepay_enabled:    { label: 'Accept PhonePe / QR Payments' },
   phonepay_qr_url:     { label: 'UPI QR Code Image',                 hint: 'Upload any UPI QR (PhonePe, GPay, Paytm, etc.)' },
 };
 
 const BOOLEAN_KEYS = new Set(['store_open', 'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'phonepay_enabled', 'inventory_tracking']);
+
+/**
+ * How long the closed banner message may be.
+ *
+ * It is one line under the closed notice in the app, so it is capped rather
+ * than left open — a paragraph would push the product grid off the screen and
+ * the customer would read the store's apology instead of the shop.
+ */
+const CLOSED_MESSAGE_MAX = 200;
+
+/** The greeting is the banner's first line, so it is much shorter. */
+const CLOSED_GREETING_MAX = 80;
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * The reopening time as the app will show it: "22 Oct, 6:00 PM".
+ *
+ * Formatted from the raw value the owner typed, with no timezone conversion,
+ * because the value IS the store's IST wall clock — the same string the backend
+ * reads. That makes the preview here match the banner on a customer's phone
+ * exactly, instead of drifting by the admin's own timezone offset.
+ */
+function formatResumeTime(raw: string | undefined | null): string {
+  if (!raw) return 'later';
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/.exec(raw.trim());
+  if (!m) return 'later';
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const meridiem = hour < 12 ? 'AM' : 'PM';
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${day} ${MONTHS[Number(m[2]) - 1] || ''}, ${h12}:${String(minute).padStart(2, '0')} ${meridiem}`;
+}
 
 // Proper toggle component
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -164,6 +200,23 @@ export default function SettingsPage() {
       setLoading(false);
     });
   }, []);
+
+  /**
+   * The closed banner exactly as the customer will see it.
+   *
+   * The defaults mirror the storefront's, so the preview never promises
+   * something the app will not show.
+   */
+  const closedPreview = (() => {
+    const resume = formatResumeTime(values['store_closed_until']);
+    const greeting = (values['store_closed_greeting'] || '').trim()
+      || 'Your neighbourhood store is closed now.';
+    const raw = (values['store_closed_message'] || '').trim();
+    const message = raw
+      ? raw.replace(/\{until\}/g, resume)
+      : `You can order now — we will start delivering from next opening hours.`;
+    return { greeting, message };
+  })();
 
   /** Settings keys belonging to the active tab, as a settingsApi.update payload. */
   const keysFor = (tab: TabId) => {
@@ -456,6 +509,96 @@ export default function SettingsPage() {
               </div>
               <Toggle checked={values['store_open'] === 'true'}
                 onChange={() => setValues(v => ({ ...v, store_open: v['store_open'] === 'true' ? 'false' : 'true' }))} />
+            </div>
+            {/* Scheduled closure: when the store is shut, for how long, and what
+                the customer is told. Bespoke rather than a normal field because
+                it is a form, not a value, and because it belongs next to the
+                switch that turns the store off. */}
+            <div className="space-y-4 border-t border-gray-100 dark:border-slate-700 pt-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-800 dark:text-slate-200">Scheduled Closure</p>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
+                  Close the store for a set period. From the start time the app shows the closed banner,
+                  and at the end time the store reopens by itself. Times are India Standard Time.
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Closed from</label>
+                  <input
+                    type="datetime-local"
+                    value={values['store_closed_from'] || ''}
+                    onChange={e => setValues(v => ({ ...v, store_closed_from: e.target.value }))}
+                    className={inp}
+                  />
+                  <p className="text-[10px] text-gray-400 dark:text-slate-500">Leave empty for no scheduled closure.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Reopens at</label>
+                  <input
+                    type="datetime-local"
+                    value={values['store_closed_until'] || ''}
+                    onChange={e => setValues(v => ({ ...v, store_closed_until: e.target.value }))}
+                    className={inp}
+                  />
+                  <p className="text-[10px] text-gray-400 dark:text-slate-500">The store reopens on its own at this time.</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Greeting (optional)</label>
+                  <span className={`text-[10px] font-semibold ${(values['store_closed_greeting'] || '').length >= CLOSED_GREETING_MAX ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                    {(values['store_closed_greeting'] || '').length}/{CLOSED_GREETING_MAX}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={values['store_closed_greeting'] || ''}
+                  onChange={e => setValues(v => ({ ...v, store_closed_greeting: e.target.value.slice(0, CLOSED_GREETING_MAX) }))}
+                  maxLength={CLOSED_GREETING_MAX}
+                  placeholder="e.g. Hi! 👋"
+                  className={inp}
+                />
+                <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                  The bold first line of the banner. Leave empty to use the default heading.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Message (optional)</label>
+                  <span className={`text-[10px] font-semibold ${(values['store_closed_message'] || '').length >= CLOSED_MESSAGE_MAX ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>
+                    {(values['store_closed_message'] || '').length}/{CLOSED_MESSAGE_MAX}
+                  </span>
+                </div>
+                <textarea
+                  value={values['store_closed_message'] || ''}
+                  onChange={e => setValues(v => ({ ...v, store_closed_message: e.target.value.slice(0, CLOSED_MESSAGE_MAX) }))}
+                  rows={3}
+                  maxLength={CLOSED_MESSAGE_MAX}
+                  placeholder={'e.g. Your neighbourhood store is taking a break today. We will be back {until}.'}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400 resize-y"
+                />
+                <p className="text-[10px] text-gray-400 dark:text-slate-500">
+                  The line under the greeting. Write <code className="font-mono text-gray-500">{'{until}'}</code> anywhere in it and the
+                  reopening time is filled in for you. Leave empty to use the default wording.
+                </p>
+              </div>
+
+              {/* Exactly what the customer will see. */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Preview</label>
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 px-4 py-2.5">
+                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200 leading-snug">
+                    {closedPreview.greeting}
+                  </p>
+                  <p className="text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug">
+                    {closedPreview.message}
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="border-t border-gray-100 dark:border-slate-700 pt-4">
               <p className="text-[11px] text-gray-500 dark:text-slate-400 mb-3">

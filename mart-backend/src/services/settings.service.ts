@@ -12,6 +12,12 @@ const PUBLIC_KEYS = [
   'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'phonepay_qr_url',
   'upi_phone', 'upi_id', 'whatsapp_number', 'support_name', 'support_phone',
   'inventory_tracking', 'auto_out_of_stock', 'low_stock_threshold',
+  // The store's own wording for the closed notice, and the closure it
+  // scheduled. Public because the storefront renders the wording in the banner
+  // and needs the schedule to know when the store is back. All written from
+  // the hub's Hours tab.
+  'store_closed_message', 'store_closed_greeting',
+  'store_closed_from', 'store_closed_until',
 ];
 
 // Store name and address live only on mart_stores (hub Stores page). They used

@@ -117,7 +117,8 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   // customer's device clock or timezone. The storefront re-fetches at
   // nextOpenAt to pick up the change instead of re-deriving it locally.
   const store = await StoreService.findById(storeId);
-  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
+  const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
+  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
   // Store name and address have a single source of truth: mart_stores (edited on
   // the hub Stores page). They used to live in mart_settings too, which let the
   // storefront show a different name/address from receipts. Overlay the store
