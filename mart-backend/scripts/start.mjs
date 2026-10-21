@@ -35,6 +35,18 @@ function log(message) {
   console.log(`[start] ${message}`);
 }
 
+/**
+ * True when this process is the build step rather than the running service.
+ *
+ * It matters because the start command is sometimes pasted into a service's
+ * Build Command field by mistake. Starting a server there would leave the
+ * build hanging until it timed out. Detecting the build phase lets this
+ * script compile the output and exit instead, so the deploy still ends up
+ * with a correct image.
+ */
+const isBuildPhase = ['NIXPACKS_BUILD_PHASE', 'RAILPACK_BUILD_PHASE', 'RAILWAY_BUILD_PHASE']
+  .some((name) => process.env[name] === 'true');
+
 /** Compiles the API in place. Returns true when the output is there. */
 function build() {
   if (!existsSync(join(ROOT, 'src', 'index.ts'))) {
@@ -49,6 +61,19 @@ function build() {
     return false;
   }
   return existsSync(COMPILED);
+}
+
+if (isBuildPhase) {
+  // We are the build command: make sure the output exists and get out of the
+  // way, so the build does not sit there with a server listening.
+  if (existsSync(COMPILED)) log('compiled output is present');
+  else if (build()) log('compiled output built');
+  else {
+    console.error('[start] the build did not produce dist/index.js');
+    process.exit(1);
+  }
+  log('build phase done, not starting a server');
+  process.exit(0);
 }
 
 if (existsSync(COMPILED)) {
