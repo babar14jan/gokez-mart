@@ -280,27 +280,27 @@ export function evaluateStoreOpen(
   now: Date = new Date(),
   closure?: StoreClosure | null,
 ): StoreOpenState {
-  // Manual override wins. A closed store is not "outside hours", and promising a
-  // next opening would be a lie: the owner closed it deliberately. It also wins
-  // over a scheduled closure, so a store left switched off stays closed rather
-  // than reopening itself on a schedule the owner has already overridden.
+  // The manual switch decides whether the store is shut at all. When it is off
+  // the store follows its own hours, and any times left over from an earlier
+  // closure are ignored — so the owner can clear the old times, switch the
+  // closure on, and pick the new ones without the old ones biting in between.
   const manualOpen = storeOpen === true || storeOpen === 'true';
   if (!manualOpen) {
+    // The store says it is shut. If it also said when it reopens, the
+    // customer is told; otherwise the closure is open-ended, and promising a
+    // time the owner never gave would be a lie.
+    const window = resolveClosureWindow(closure, now);
+    if (window && now >= window.from && (window.until === null || now < window.until)) {
+      return {
+        isOpen: false,
+        closedReason: 'scheduled',
+        nextOpenAt: window.until ? window.until.toISOString() : null,
+        nextOpenLabel: window.until ? describeResume(window.until, now) : null,
+        closedUntilLabel: window.until ? describeResume(window.until, now) : null,
+        closesAtLabel: null,
+      };
+    }
     return { isOpen: false, closedReason: 'manual', nextOpenAt: null, nextOpenLabel: null, closesAtLabel: null };
-  }
-
-  // A closure scheduled in advance. Unlike the manual override this has a
-  // known end, so the customer can be told when the store is back.
-  const window = resolveClosureWindow(closure, now);
-  if (window && now >= window.from && (window.until === null || now < window.until)) {
-    return {
-      isOpen: false,
-      closedReason: 'scheduled',
-      nextOpenAt: window.until ? window.until.toISOString() : null,
-      nextOpenLabel: window.until ? describeResume(window.until, now) : null,
-      closedUntilLabel: window.until ? describeResume(window.until, now) : null,
-      closesAtLabel: null,
-    };
   }
 
   const p = istParts(now);

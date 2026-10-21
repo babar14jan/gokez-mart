@@ -1,17 +1,19 @@
 /**
  * A store that closes for a set period.
  *
- * The owner schedules a closure from and until, writes the wording customers
- * should see, and the storefront shows it. The rules that matter:
+ * The owner switches the store to "Manually Closed" and says when it starts
+ * and when it reopens. The rules that matter:
  *
- *   1. a scheduled closure closes the store between its two ends, and reopens
- *      by itself at the end
- *   2. the manual switch still wins over it, so a store switched off stays
- *      closed rather than reopening itself on a schedule
+ *   1. the switch decides whether the store is shut at all: with it off the
+ *      store follows its own hours, and any times left over from an earlier
+ *      closure are ignored
+ *   2. with the switch on, the closure wins over the weekly hours
  *   3. the times are read as IST, because that is the timezone the store
  *      trades in and every other schedule here is written against
  *   4. a malformed time means "no closure" rather than a store that silently
  *      disappears
+ *   5. the reopening time is worded the way a customer reads it: "tomorrow at
+ *      9:00 AM" for the next day, a date for anything further out
  *
  * Node's `node:test` via `tsx`, same as the other backend suites.
  */
@@ -58,9 +60,41 @@ describe('parsing a local datetime as IST', () => {
   });
 });
 
+describe('the manual closure switch', () => {
+  test('with the switch off the store follows its own hours', () => {
+    // The switch is off, so the store is open by its own schedule, and any
+    // times left over from an earlier closure are ignored.
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, {
+      from: '2026-10-21T10:00',
+      until: '2026-10-21T23:00',
+    });
+    assert.equal(state.isOpen, true, 'the switch decides whether the store is shut at all');
+    assert.equal(state.closedReason, null);
+  });
+
+  test('with the switch on the closure wins over the weekly hours', () => {
+    // The store's own hours say it is open right now, but the closure is on.
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, {
+      from: '2026-10-21T10:00',
+      until: '2026-10-21T23:00',
+    });
+    assert.equal(state.isOpen, false, 'the closure must win over the hours');
+    assert.equal(state.closedReason, 'scheduled');
+  });
+
+  test('a closure with no times stays shut, with no time invented', () => {
+    // The API refuses this state, so it is only reachable by editing the
+    // database directly. It must fail shut, not open.
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, null);
+    assert.equal(state.isOpen, false);
+    assert.equal(state.closedReason, 'manual');
+    assert.equal(state.nextOpenAt, null, 'no reopening time may be invented');
+  });
+});
+
 describe('a scheduled closure', () => {
   test('the store is closed between the two ends', () => {
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, {
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, {
       from: '2026-10-21T10:00',
       until: '2026-10-21T23:00',
     });
@@ -70,7 +104,7 @@ describe('a scheduled closure', () => {
 
   test('the store reopens by itself at the end', () => {
     // NOW is 17:30 IST, so the window has to run past it to be active.
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, {
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, {
       from: '2026-10-21T10:00',
       until: '2026-10-21T23:00',
     });
@@ -80,47 +114,47 @@ describe('a scheduled closure', () => {
     assert.equal(state.closedUntilLabel, 'today at 11:00 PM');
   });
 
-  test('before the window the store is open as usual', () => {
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, {
+  test('the reopening time is worded for the day it falls on', () => {
+    // Today and tomorrow are named; anything further out gets the date.
+    const today = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, { from: '2026-10-21T10:00', until: '2026-10-21T23:00' });
+    assert.equal(today.closedUntilLabel, 'today at 11:00 PM');
+    const tomorrow = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, { from: '2026-10-21T10:00', until: '2026-10-22T18:00' });
+    assert.equal(tomorrow.closedUntilLabel, 'tomorrow at 6:00 PM');
+    const later = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, { from: '2026-10-21T10:00', until: '2026-10-28T18:00' });
+    assert.equal(later.closedUntilLabel, 'on 28 Oct at 6:00 PM');
+  });
+
+  test('before the window the closure has not started, so no time is promised', () => {
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, {
       from: '2026-10-22T10:00',
       until: '2026-10-22T18:00',
     });
-    assert.equal(state.isOpen, true, 'a closure tomorrow must not close the store today');
-    assert.equal(state.closedReason, null);
+    assert.equal(state.isOpen, false, 'the store is still manually closed');
+    assert.equal(state.closedReason, 'manual', 'the closure has not started yet');
+    assert.equal(state.nextOpenAt, null);
   });
 
-  test('after the window the store is open as usual', () => {
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, {
+  test('after the window the closure has passed, so no time is promised', () => {
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, {
       from: '2026-10-20T10:00',
       until: '2026-10-20T18:00',
     });
-    assert.equal(state.isOpen, true, 'a closure that has finished must not close the store');
+    assert.equal(state.isOpen, false);
+    assert.equal(state.closedReason, 'manual');
+    assert.equal(state.nextOpenAt, null);
   });
 
   test('a start with no end closes the store from that moment on', () => {
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, { from: '2026-10-21T10:00' });
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, { from: '2026-10-21T10:00' });
     assert.equal(state.isOpen, false);
     assert.equal(state.closedReason, 'scheduled');
     assert.equal(state.nextOpenAt, null, 'no end was promised, so none may be invented');
   });
 
   test('an end with no start closes the store from now until then', () => {
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, { until: '2026-10-21T23:00' });
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, { until: '2026-10-21T23:00' });
     assert.equal(state.isOpen, false);
     assert.equal(state.closedReason, 'scheduled');
-  });
-
-  test('the manual switch still wins, so a store switched off stays shut', () => {
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, {
-      from: '2026-10-21T10:00',
-      until: '2026-10-21T13:00',
-    });
-    assert.equal(state.isOpen, false);
-    assert.equal(
-      state.closedReason,
-      'manual',
-      'a store switched off must not reopen itself when the schedule ends',
-    );
   });
 
   test('no schedule means the store is judged on its hours alone', () => {
@@ -130,7 +164,8 @@ describe('a scheduled closure', () => {
   });
 
   test('a malformed schedule is ignored rather than closing the store', () => {
-    const state = evaluateStoreOpen(ALWAYS_OPEN, 'true', NOW, { from: 'not a date', until: 'also not' });
-    assert.equal(state.isOpen, true, 'a broken value must not silently close a live store');
+    const state = evaluateStoreOpen(ALWAYS_OPEN, 'false', NOW, { from: 'not a date', until: 'also not' });
+    assert.equal(state.isOpen, false, 'the manual closure still applies');
+    assert.equal(state.closedReason, 'manual', 'a broken time must not be read as a window');
   });
 });

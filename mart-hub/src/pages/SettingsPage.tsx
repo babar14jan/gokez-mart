@@ -258,6 +258,18 @@ export default function SettingsPage() {
     && (!values['store_closed_from'] || !values['store_closed_until']);
 
   /**
+   * Whether there is anything left to clear.
+   *
+   * The Clear button is offered whenever a closure is on, and also when the
+   * switch is off but the times from an earlier closure are still filled in.
+   * That is the flow it exists for: wipe the old times first, then switch the
+   * closure on and pick the new ones, rather than editing a stale pair.
+   */
+  const hasClosureData = manualClosed
+    || Boolean(values['store_closed_from'])
+    || Boolean(values['store_closed_until']);
+
+  /**
    * One click back to the store's normal hours: the closure is switched off
    * and both of its times are cleared, so nothing is left half-set.
    */
@@ -548,7 +560,7 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
-                {manualClosed && (
+                {hasClosureData && (
                   <button type="button" onClick={clearManualClosure}
                     className="text-[11px] font-semibold text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 underline">
                     Clear
