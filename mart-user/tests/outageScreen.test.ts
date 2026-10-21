@@ -84,13 +84,18 @@ describe('the store cannot be reached', () => {
     assert.match(statusSource, /withStoreCopy/);
     assert.match(
       statusSource,
-      /title: greeting \|\| 'Your neighbourhood store is closed right now\.'/,
-      "the store's greeting must be the heading",
+      /title: 'We can\\u2019t reach your neighbourhood store right now\.'/,
+      'the heading must say plainly that the store cannot be reached, not that it has shut',
     );
     assert.match(
       statusSource,
-      /body: message[\s\S]*?: view\.body/,
-      "the store's own message must be the body of the outage screen",
+      /\.\.\.\(greeting \? \[greeting\] : \[\]\)/,
+      "the store's greeting belongs under the heading, not instead of it",
+    );
+    assert.match(
+      statusSource,
+      /body: body\.length \? body : view\.body/,
+      "the store's own words must be the body of the outage screen",
     );
   });
 

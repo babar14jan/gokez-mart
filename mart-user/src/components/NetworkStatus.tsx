@@ -139,8 +139,11 @@ const SERVER_DOWN_VIEW: NoticeView = {
   img: '/backend_donw.webp',
   width: 841,
   height: 619,
-  title: 'Your neighbourhood store is taking a little break.',
-  body: ['Thank you for your patience!'],
+  // Plainly a connection problem, and not the store having shut. The store is
+  // open; our server is the thing that is down, and the customer should not
+  // be left thinking the shop has closed because of it.
+  title: 'We can\u2019t reach your neighbourhood store right now.',
+  body: ['Please try again in a moment.'],
   button: 'Check Again',
 };
 
@@ -164,16 +167,21 @@ function withStoreCopy(view: NoticeView, copy: StoreClosedCopy | null): NoticeVi
   const greeting = copy.greeting.trim();
   const message = copy.message.trim();
   if (!greeting && !message) return view;
+  // The store's own words go underneath the heading, not instead of it. The
+  // heading says what is actually happening -- we cannot reach the store --
+  // and the store's message says what the customer should make of it.
+  //
+  // The message may carry the "{until}" placeholder. There is no reopening
+  // time to put in it here -- the server that would tell us is the thing
+  // that is down -- so the customer would have been shown the placeholder
+  // itself. A soft phrase is the honest answer.
+  const body = [
+    ...(greeting ? [greeting] : []),
+    ...(message ? [message.replace(/\{until\}/g, 'shortly')] : []),
+  ];
   return {
     ...view,
-    title: greeting || 'Your neighbourhood store is closed right now.',
-    // The store's message may carry the "{until}" placeholder. There is no
-    // reopening time to put in it here -- the server that would tell us is
-    // the thing that is down -- so the customer would have been shown the
-    // placeholder itself. A soft phrase is the honest answer.
-    body: message
-      ? [message.replace(/\{until\}/g, 'shortly')]
-      : view.body,
+    body: body.length ? body : view.body,
   };
 }
 
