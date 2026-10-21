@@ -28,7 +28,11 @@ const RECOVER_SUCCESSES = 2;
 // request that happened to time out, a deploy that is rolling — and none of
 // those should take the screen away from a customer who is happily browsing.
 // The screen appears only when the failure is real and has lasted.
-const OUTAGE_CONFIRM_MS = 4000;
+const OUTAGE_CONFIRM_MS = 6000;
+// A request that timed out may be a slow link rather than a dead server, so it
+// waits longer before the screen takes over. A customer on a weak connection
+// browsing normally should not lose the app to a timeout.
+const TIMEOUT_CONFIRM_MS = 10000;
 
 // A transport failure only tells us that *something* is unreachable, and the
 // browser reports "customer has no wifi" and "our backend's DNS is gone" as the
@@ -163,7 +167,13 @@ function withStoreCopy(view: NoticeView, copy: StoreClosedCopy | null): NoticeVi
   return {
     ...view,
     title: greeting || 'Your neighbourhood store is closed right now.',
-    body: message ? [message] : view.body,
+    // The store's message may carry the "{until}" placeholder. There is no
+    // reopening time to put in it here -- the server that would tell us is
+    // the thing that is down -- so the customer would have been shown the
+    // placeholder itself. A soft phrase is the honest answer.
+    body: message
+      ? [message.replace(/\{until\}/g, 'shortly')]
+      : view.body,
   };
 }
 
@@ -273,6 +283,7 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
       // failure has to persist before the screen appears, and a success in the
       // meantime cancels it.
       if (confirmTimer) return;
+      const delay = detail.timeout ? TIMEOUT_CONFIRM_MS : OUTAGE_CONFIRM_MS;
       confirmTimer = setTimeout(() => {
         confirmTimer = undefined;
         void (async () => {
@@ -289,7 +300,7 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
         else if (connectivity === 'online') showFailure('server');
         else showFailure('timeout');
         })();
-      }, OUTAGE_CONFIRM_MS);
+      }, delay);
     };
 
     const onOffline = () => {

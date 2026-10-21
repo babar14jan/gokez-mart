@@ -40,8 +40,33 @@ describe('the store cannot be reached', () => {
     );
     assert.match(
       statusSource,
-      /setTimeout\([\s\S]*?OUTAGE_CONFIRM_MS\)/,
+      /confirmTimer = setTimeout\(/,
       'the confirmation must be a delay, not an immediate show',
+    );
+  });
+
+  test('a timeout waits longer than a hard failure', () => {
+    // A request that timed out may be a slow link rather than a dead server.
+    // A customer browsing on a weak connection should not lose the app to it.
+    assert.match(
+      statusSource,
+      /detail\.timeout \? TIMEOUT_CONFIRM_MS : OUTAGE_CONFIRM_MS/,
+      'a timeout must be treated as ambiguous and wait longer',
+    );
+    assert.match(
+      statusSource,
+      /const TIMEOUT_CONFIRM_MS = 10000;/,
+      'a timeout must wait long enough to ride out a slow link',
+    );
+  });
+
+  test('the reopening placeholder never reaches the customer', () => {
+    // During an outage there is no reopening time to put in it, so the
+    // placeholder must be filled with something rather than shown as-is.
+    assert.match(
+      statusSource,
+      /message\.replace\(\/\\\{until\\\}\/g, 'shortly'\)/,
+      'the {until} placeholder must never be shown to a customer',
     );
   });
 
@@ -62,7 +87,11 @@ describe('the store cannot be reached', () => {
       /title: greeting \|\| 'Your neighbourhood store is closed right now\.'/,
       "the store's greeting must be the heading",
     );
-    assert.match(statusSource, /body: message \? \[message\] : view\.body/);
+    assert.match(
+      statusSource,
+      /body: message[\s\S]*?: view\.body/,
+      "the store's own message must be the body of the outage screen",
+    );
   });
 
   test("the store's wording is kept on the device, because the server may be down", () => {
