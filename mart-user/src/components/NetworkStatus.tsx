@@ -194,6 +194,9 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
         if (!showingFailure || consecutiveSuccesses >= RECOVER_SUCCESSES) {
           showingFailure = false;
           consecutiveSuccesses = 0;
+          // The app is reachable again. If it gave up on loading the
+          // catalogue, this is its cue to try once more.
+          try { window.dispatchEvent(new CustomEvent('mart:api-back')); } catch {}
           setStatus('connected');
           setChecking(false);
           scheduleProbe(HEALTH_CHECK_INTERVAL_MS);

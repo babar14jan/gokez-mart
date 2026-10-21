@@ -289,6 +289,14 @@ export default function App() {
   const selectedZone = useZoneStore(s => s.selectedZone);
   const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
 
+  // The connection came back. The catalogue that could not be loaded is
+  // loaded again, so the home page is not left empty behind the notice.
+  useEffect(() => {
+    const onBack = () => setCatalogRequest(request => request + 1);
+    window.addEventListener('mart:api-back', onBack);
+    return () => window.removeEventListener('mart:api-back', onBack);
+  }, []);
+
   // The card, on arrival at a closed store. It opens every time the app is
   // opened or refreshed, and every time the PWA is reopened, because that is
   // when the customer has no idea why the store is shut. Once they have read
@@ -610,6 +618,17 @@ export default function App() {
       bodyDone = true;
     }).catch(() => {
       bodyDone = true;
+      if (!cancelled) {
+        // Hand the failure to the full-screen offline / unreachable notice, so
+        // it is shown once, over everything, instead of a card sitting in the
+        // middle of the home page.
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        try {
+          window.dispatchEvent(new CustomEvent('mart:api-failed', {
+            detail: offline ? { offline: true } : { server: true },
+          }));
+        } catch {}
+      }
       if (!cancelled) setCatalogError(
         typeof navigator !== 'undefined' && !navigator.onLine
           ? 'You\u2019re offline. Check your internet connection and try again.'
@@ -1308,7 +1327,7 @@ export default function App() {
           </div>
 
           {/* Products */}
-          {loading ? (
+          {loading || catalogError ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse shadow-sm">
@@ -1319,15 +1338,6 @@ export default function App() {
                   </div>
                 </div>
               ))}
-            </div>
-          ) : catalogError ? (
-            <div className="max-w-md mx-auto text-center py-16 px-5">
-              <p className="text-base font-semibold text-gray-900 dark:text-white mb-2">Couldn&apos;t load the store</p>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">{catalogError}</p>
-              <button onClick={() => setCatalogRequest(request => request + 1)}
-                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors">
-                Try Again
-              </button>
             </div>
           ) : resolvedHomeSections.length > 0 ? (
             /* Home — admin-configured sections (Today's Combos, Deals, Top Picks, ...) */
