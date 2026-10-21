@@ -74,15 +74,9 @@ export default function StoreStatusStrip({
               {withResumeTime(message, resume)}
             </p>
           )}
-          {/* The reopening time. It is the one fact the customer acts on, so
-              it is the line, not a sentence wrapped around it. */}
-          {resume && (
-            <p className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 leading-snug break-words">
-              Reopens {resume}
-            </p>
-          )}
-          {/* And the reassurance that their order still counts, with the time
-              they can expect it. */}
+          {/* The reassurance that their order still counts, with the time
+              they can expect it. The reopening time is in this one sentence,
+              so it is not also stated on a line of its own. */}
           <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
             {reopenLine(resume)}
           </p>

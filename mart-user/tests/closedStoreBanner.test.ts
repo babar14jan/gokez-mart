@@ -57,9 +57,9 @@ describe('closed store banner', () => {
     // The time is the one fact they act on, so it is the line rather than a
     // sentence wrapped around it.
     const html = render({ openState: SCHEDULED });
-    assert.match(html, /Reopens today at 11:00 PM/);
     assert.match(html, /You can still place your order/);
     assert.match(html, /start delivering today at 11:00 PM/);
+    assert.ok(!/Reopens today at 11:00 PM/.test(html), 'the time must not be stated twice');
   });
 
   test('a store closed by hand is promised no reopening time it never made', () => {
