@@ -53,8 +53,13 @@ const pg = require('pg');
       }
       if (/INSERT INTO mart_migrations/.test(text)) return { rows: [] };
       if (/CREATE TABLE IF NOT EXISTS mart_migrations/.test(text)) return { rows: [] };
-      // Anything left is a migration statement.
-      if (failAfter-- <= 0) throw new Error('migration failed');
+      // Only a migration statement counts. The transaction control statements
+      // (BEGIN, COMMIT, ROLLBACK) and the lock are not the migration, and
+      // failing on one of those would make the test depend on statement order
+      // rather than on the migration.
+      if (!/^(BEGIN|COMMIT|ROLLBACK)\s*$/i.test(text.trim())) {
+        if (failAfter-- <= 0) throw new Error('migration failed');
+      }
       return { rows: [] };
     },
     release: () => undefined,
@@ -156,11 +161,16 @@ describe('migration runner', () => {
 
     await assert.rejects(() => runMigrations(), /migration failed/);
 
+    // The transaction that failed must have been rolled back, and no commit
+    // may follow it for that transaction.
     const rollback = calls.findIndex(c => /^ROLLBACK/.test(textOf(c)));
     assert.ok(rollback >= 0, 'a failed migration must roll back its transaction');
-    const commit = calls.findIndex(c => /^COMMIT/.test(textOf(c)));
-    assert.ok(
-      commit < 0 || commit > rollback,
+    const commitAfter = calls.findIndex(
+      (c, i) => i > rollback && /^COMMIT/.test(textOf(c)),
+    );
+    assert.equal(
+      commitAfter,
+      -1,
       'a rolled back transaction must not be committed',
     );
   });

@@ -58,6 +58,8 @@ describe('closed store banner', () => {
     // sentence wrapped around it.
     const html = render({ openState: SCHEDULED });
     assert.match(html, /Reopens today at 11:00 PM/);
+    assert.match(html, /You can still place your order/);
+    assert.match(html, /start delivering today at 11:00 PM/);
   });
 
   test('a store closed by hand is promised no reopening time it never made', () => {

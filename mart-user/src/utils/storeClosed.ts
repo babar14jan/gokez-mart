@@ -36,9 +36,9 @@ export function defaultClosedHeading(): string {
  */
 export function reopenLine(resumeLabel: string | null | undefined): string {
   if (!resumeLabel) {
-    return "You can still place your order — we'll deliver it as soon as we reopen.";
+    return "You can still place your order — we'll start delivering as soon as we reopen.";
   }
-  return `You can still place your order — we'll deliver it when we reopen ${resumeLabel}.`;
+  return `You can still place your order — we'll start delivering ${resumeLabel}.`;
 }
 
 /**
