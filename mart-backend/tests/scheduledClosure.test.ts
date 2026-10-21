@@ -77,7 +77,7 @@ describe('a scheduled closure', () => {
     assert.equal(state.isOpen, false);
     assert.ok(state.nextOpenAt, 'the customer must be told when the store is back');
     assert.equal(state.nextOpenAt, '2026-10-21T17:30:00.000Z'); // 23:00 IST
-    assert.equal(state.closedUntilLabel, '21 Oct, 11:00 PM');
+    assert.equal(state.closedUntilLabel, 'today at 11:00 PM');
   });
 
   test('before the window the store is open as usual', () => {

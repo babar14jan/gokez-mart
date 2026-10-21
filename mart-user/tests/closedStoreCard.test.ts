@@ -38,10 +38,10 @@ describe('closed store card', () => {
   });
 
   test('the reopening time is in its own solid block', () => {
-    const html = render({ resumeLabel: '22 Oct, 6:00 PM' });
+    const html = render({ resumeLabel: 'on 22 Oct at 6:00 PM' });
     // A block of its own, not folded into the sentence.
-    assert.match(html, /Reopens 22 Oct, 6:00 PM/);
-    assert.match(html, /bg-emerald-600/, 'the reopening time gets the solid block');
+    assert.match(html, /Reopens on 22 Oct at 6:00 PM/);
+    assert.match(html, /bg-amber-400/, 'the reopening time gets a solid yellow block');
   });
 
   test('no reopening time means no block', () => {
@@ -59,8 +59,8 @@ describe('closed store card', () => {
   });
 
   test('"{until}" is filled with the reopening time', () => {
-    const html = render({ message: 'We will be back {until}.', resumeLabel: '22 Oct, 6:00 PM' });
-    assert.match(html, /We will be back 22 Oct, 6:00 PM\./);
+    const html = render({ message: 'We will be back {until}.', resumeLabel: 'on 22 Oct at 6:00 PM' });
+    assert.match(html, /We will be back on 22 Oct at 6:00 PM\./);
     assert.ok(!html.includes('{until}'), 'the placeholder must never reach the customer');
   });
 

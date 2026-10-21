@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Save, Upload, MapPin, Plus, Trash2, Pencil, X, Store, Clock } from 'lucide-react';
 import { settingsApi, productsApi, zonesApi, storesApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
@@ -86,24 +86,48 @@ const CLOSED_GREETING_MAX = 80;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** The IST calendar date as { y, mo, d }. */
+function istToday(): { y: number; mo: number; d: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find(p => p.type === t)!.value;
+  return { y: Number(get('year')), mo: Number(get('month')), d: Number(get('day')) };
+}
+
 /**
- * The reopening time as the app will show it: "22 Oct, 6:00 PM".
+ * The reopening time as the app will show it: "today at 6:00 PM",
+ * "tomorrow at 9:00 AM", or "on 22 Oct at 6:00 PM".
  *
  * Formatted from the raw value the owner typed, with no timezone conversion,
- * because the value IS the store's IST wall clock — the same string the backend
- * reads. That makes the preview here match the banner on a customer's phone
- * exactly, instead of drifting by the admin's own timezone offset.
+ * because the value IS the store's IST wall clock — the same string the
+ * backend reads. That makes the preview here match the banner on a customer's
+ * phone exactly, instead of drifting by the admin's own timezone offset.
  */
 function formatResumeTime(raw: string | undefined | null): string {
   if (!raw) return 'later';
   const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/.exec(raw.trim());
   if (!m) return 'later';
+  const year = Number(m[1]);
+  const month = Number(m[2]);
   const day = Number(m[3]);
   const hour = Number(m[4]);
   const minute = Number(m[5]);
   const meridiem = hour < 12 ? 'AM' : 'PM';
   const h12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${day} ${MONTHS[Number(m[2]) - 1] || ''}, ${h12}:${String(minute).padStart(2, '0')} ${meridiem}`;
+  const time = `${h12}:${String(minute).padStart(2, '0')} ${meridiem}`;
+
+  // Today and tomorrow are named rather than dated, exactly as the app words
+  // it, so the preview is the same sentence the customer will read.
+  const today = istToday();
+  if (year === today.y && month === today.mo && day === today.d) return `today at ${time}`;
+  const tomorrow = new Date(Date.UTC(today.y, today.mo - 1, today.d + 1));
+  if (year === tomorrow.getUTCFullYear()
+    && month === tomorrow.getUTCMonth() + 1
+    && day === tomorrow.getUTCDate()) {
+    return `tomorrow at ${time}`;
+  }
+  return `on ${day} ${MONTHS[month - 1] || ''} at ${time}`;
 }
 
 // Proper toggle component
@@ -225,6 +249,21 @@ export default function SettingsPage() {
     for (const key of tab_.keys) if (key in values) payload[key] = values[key];
     return payload;
   };
+
+  /** The store has said it is shut, regardless of what its hours say. */
+  const manualClosed = values['store_open'] === 'false';
+
+  /** A manual closure has to say when it lifts, so both ends are required. */
+  const closureTimesMissing = manualClosed
+    && (!values['store_closed_from'] || !values['store_closed_until']);
+
+  /**
+   * One click back to the store's normal hours: the closure is switched off
+   * and both of its times are cleared, so nothing is left half-set.
+   */
+  const clearManualClosure = useCallback(() => {
+    setValues(v => ({ ...v, store_open: 'true', store_closed_from: '', store_closed_until: '' }));
+  }, []);
 
   const isDirty = (tab: TabId) => {
     const tab_ = TABS.find(t => t.id === tab)!;
@@ -415,7 +454,7 @@ export default function SettingsPage() {
               Discard
             </button>
           )}
-          <button onClick={() => saveTab(activeTab)} disabled={saving || !isDirty(activeTab)}
+          <button onClick={() => saveTab(activeTab)} disabled={saving || !isDirty(activeTab) || (activeTab === 'hours' && closureTimesMissing)}
             className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white text-sm font-semibold rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors">
             {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
               : <><Save className="w-4 h-4" /> {saved ? 'Saved \u2713' : 'Save Changes'}</>}
@@ -502,13 +541,22 @@ export default function SettingsPage() {
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between gap-4 py-0.5">
               <div>
-                <label className="text-sm text-gray-700 dark:text-slate-300">Store is Open</label>
+                <label className="text-sm text-gray-700 dark:text-slate-300">Manually Closed</label>
                 <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">
-                  Overrides the hours below. While off, customers see a closed notice with no reopening time.
+                  Overrides the hours below, and always wins over them. While it is on, the start and reopen
+                  times below are required.
                 </p>
               </div>
-              <Toggle checked={values['store_open'] === 'true'}
-                onChange={() => setValues(v => ({ ...v, store_open: v['store_open'] === 'true' ? 'false' : 'true' }))} />
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {manualClosed && (
+                  <button type="button" onClick={clearManualClosure}
+                    className="text-[11px] font-semibold text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 underline">
+                    Clear
+                  </button>
+                )}
+                <Toggle checked={manualClosed}
+                  onChange={() => setValues(v => ({ ...v, store_open: manualClosed ? 'true' : 'false' }))} />
+              </div>
             </div>
             {/* Scheduled closure: when the store is shut, for how long, and what
                 the customer is told. Bespoke rather than a normal field because
@@ -525,7 +573,9 @@ export default function SettingsPage() {
 
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Closed from</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">
+                    Closed from {manualClosed && <span className="text-red-500">*</span>}
+                  </label>
                   <input
                     type="datetime-local"
                     value={values['store_closed_from'] || ''}
@@ -535,7 +585,9 @@ export default function SettingsPage() {
                   <p className="text-[10px] text-gray-400 dark:text-slate-500">Leave empty for no scheduled closure.</p>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Reopens at</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">
+                    Reopens at {manualClosed && <span className="text-red-500">*</span>}
+                  </label>
                   <input
                     type="datetime-local"
                     value={values['store_closed_until'] || ''}
@@ -586,6 +638,13 @@ export default function SettingsPage() {
                   reopening time is filled in for you. Leave empty to use the default wording.
                 </p>
               </div>
+
+              {closureTimesMissing && (
+                <p className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                  A manual closure needs both a start and a reopen time, so the customer is told when it
+                  reopens. Use Clear to go back to the normal hours.
+                </p>
+              )}
 
               {/* Exactly what the customer will see. */}
               <div className="space-y-1.5">

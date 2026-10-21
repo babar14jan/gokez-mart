@@ -34,7 +34,7 @@ const SCHEDULED = {
   closedReason: 'scheduled' as const,
   nextOpenAt: '2026-10-21T17:30:00.000Z',
   nextOpenLabel: '11:00 PM today',
-  closedUntilLabel: '21 Oct, 11:00 PM',
+  closedUntilLabel: 'today at 11:00 PM',
 };
 
 const render = (props: any) => renderToStaticMarkup(createElement(StoreStatusStrip as any, props));
@@ -46,9 +46,42 @@ describe('closed store banner', () => {
   });
 
   test('with nothing configured the default wording is used', () => {
-    const html = render({ openState: CLOSED, zoneName: 'Shapoorji' });
-    assert.match(html, /Shapoorji store is closed now\./);
-    assert.match(html, /You can order now/);
+    const html = render({ openState: CLOSED });
+    assert.match(html, /closed right now\./);
+    assert.match(html, /You can still place your order/);
+  });
+
+  test('the reopening line says the order can still be placed', () => {
+    // The two questions a customer actually has: can I still order, and when
+    // will it arrive.
+    const html = render({ openState: SCHEDULED });
+    assert.match(html, /You can still place your order/);
+    assert.match(html, /when we reopen today at 11:00 PM/);
+  });
+
+  test('a store closed by hand is promised no reopening time it never made', () => {
+    const html = render({ openState: CLOSED });
+    assert.match(html, /as soon as we reopen/);
+    assert.ok(!/on \d+ \w+,/.test(html), 'no time may be invented for a hand-made closure');
+  });
+
+  test('the zone name is not repeated in the notice', () => {
+    // The zone is already named in the navbar directly above the strip, so
+    // naming it again in the notice was noise.
+    const html = render({ openState: CLOSED, zoneName: 'Newtown, Shapoorji' });
+    assert.ok(
+      !/Newtown/.test(html) && !/Shapoorji/.test(html),
+      'the notice must not name the zone again',
+    );
+  });
+
+  test('a store that wrote a message needs no heading of its own', () => {
+    const html = render({
+      openState: CLOSED,
+      closedMessage: 'Your neighbourhood store is taking a break today.',
+    });
+    assert.match(html, /Your neighbourhood store is closed right now./);
+    assert.match(html, /taking a break today/);
   });
 
   test("the store's own greeting replaces the default heading", () => {
@@ -78,7 +111,7 @@ describe('closed store banner', () => {
       openState: SCHEDULED,
       closedMessage: 'We will be back {until}.',
     });
-    assert.match(html, /We will be back 21 Oct, 11:00 PM\./);
+    assert.match(html, /We will be back today at 11:00 PM\./);
     assert.ok(!html.includes('{until}'), 'the placeholder must never reach the customer');
   });
 

@@ -30,7 +30,7 @@ import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.ser
 import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
 import { CatalogService } from '../services/catalog.service';
-import { evaluateStoreOpen } from '../utils/storeHours';
+import { evaluateStoreOpen, parseIstLocalDateTime } from '../utils/storeHours';
 import { trackStream } from '../utils/sse';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
@@ -1116,10 +1116,30 @@ export const adminGetSettings = asyncHandler(async (req: AdminRequest, res: Resp
 
 export const adminUpdateSettings = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = resolveStoreId(req);
+  // A manual closure has to say when it lifts, so the customer can be told
+  // rather than left with a store that is simply shut.
+  //
+  // The check is on the MERGED result, not on the body: clearing the closure
+  // sends only the switch, and the times stay as they were, so looking at the
+  // body alone would read as a closure with no times.
+  const current = await SettingsService.getPublic(storeId);
+  const merged: Record<string, string | undefined> = { ...current, ...req.body };
+  if (merged.store_open === 'false') {
+    if (!merged.store_closed_from || !merged.store_closed_until) {
+      res.status(400).json({
+        success: false,
+        error: 'A manual closure needs both a start time and a reopen time, so customers know when the store is back.',
+      });
+      return;
+    }
+    if (!parseIstLocalDateTime(merged.store_closed_from) || !parseIstLocalDateTime(merged.store_closed_until)) {
+      res.status(400).json({ success: false, error: 'The closure times are not valid.' });
+      return;
+    }
+  }
   await SettingsService.updateMany(storeId, req.body);
   res.json({ success: true, message: 'Settings updated' });
 });
-
 // ── Admin zone controllers ────────────────────────────────────────────────────
 
 export const adminGetZones = asyncHandler(async (req: AdminRequest, res: Response) => {

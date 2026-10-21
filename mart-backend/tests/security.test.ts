@@ -447,7 +447,7 @@ describe('I2. The Settings page saves each scope it shows', () => {
   test('the Save button is disabled while the tab is clean', () => {
     // Without this the button is always live, and clicking it re-writes values
     // nobody changed -- including a stale `openingHours` object from load time.
-    assert.ok(src.includes('disabled={saving || !isDirty(activeTab)}'),
+    assert.ok(/disabled=\{saving \|\| !isDirty\(activeTab\)/.test(src),
       'the settings Save button is no longer gated on the active tab being dirty');
   });
 

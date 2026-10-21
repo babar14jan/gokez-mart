@@ -238,17 +238,28 @@ function describeNextOpen(dayOffset: number, minutesOfDay: number, target: DayKe
 }
 
 /**
- * "22 Oct, 6:00 PM" — when a closure that has a known end lifts.
+ * When a closure lifts, as a phrase that reads on its own and inside a
+ * sentence: "today at 6:00 PM", "tomorrow at 9:00 AM", "on 22 Oct at 6:00 PM".
  *
- * Absolute rather than relative ("today", "tomorrow") on purpose: the hub
- * shows the owner a preview of the banner using the time they typed, and a
- * relative label cannot be reproduced there without duplicating this
- * timezone logic. An absolute time is also the clearer thing to promise.
+ * The next day is named rather than dated. A customer reads "tomorrow" and
+ * knows what to plan around; a date three weeks out is noise. Anything
+ * further away gets the date, because "tomorrow" would be a lie by then.
+ *
+ * All of it is IST, like every other time this module produces.
  */
-function describeResume(instant: Date): string {
+function describeResume(instant: Date, now: Date): string {
   const then = istParts(instant);
+  const today = istParts(now);
+  const time = formatIstTime(then.h * 60 + then.mi);
+  if (then.y === today.y && then.mo === today.mo && then.d === today.d) {
+    return `today at ${time}`;
+  }
+  const tomorrow = istParts(new Date(now.getTime() + 24 * 3600_000));
+  if (then.y === tomorrow.y && then.mo === tomorrow.mo && then.d === tomorrow.d) {
+    return `tomorrow at ${time}`;
+  }
   const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][then.mo - 1];
-  return `${then.d} ${month}, ${formatIstTime(then.h * 60 + then.mi)}`;
+  return `on ${then.d} ${month} at ${time}`;
 }
 
 // ── The evaluation ────────────────────────────────────────────────────────────
@@ -286,8 +297,8 @@ export function evaluateStoreOpen(
       isOpen: false,
       closedReason: 'scheduled',
       nextOpenAt: window.until ? window.until.toISOString() : null,
-      nextOpenLabel: window.until ? describeResume(window.until) : null,
-      closedUntilLabel: window.until ? describeResume(window.until) : null,
+      nextOpenLabel: window.until ? describeResume(window.until, now) : null,
+      closedUntilLabel: window.until ? describeResume(window.until, now) : null,
       closesAtLabel: null,
     };
   }

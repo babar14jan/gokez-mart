@@ -1,9 +1,9 @@
 import { Clock } from 'lucide-react';
 import type { StoreOpenState } from '../services/api';
+import { reopenLine, defaultClosedHeading } from '../utils/storeClosed';
 
 interface StoreStatusStripProps {
   openState?: StoreOpenState;
-  zoneName?: string;
   /**
    * The store's own wording for the closure, written in the hub.
    *
@@ -30,7 +30,6 @@ function withResumeTime(message: string, resumeLabel: string | null | undefined)
 
 export default function StoreStatusStrip({
   openState,
-  zoneName,
   closedGreeting,
   closedMessage,
 }: StoreStatusStripProps) {
@@ -39,22 +38,18 @@ export default function StoreStatusStrip({
   const greeting = (closedGreeting ?? '').trim();
   const message = (closedMessage ?? '').trim();
 
-  const heading = greeting || (zoneName ? `${zoneName} store is closed now.` : "We're closed right now.");
+  // No heading by default. The zone name is already in the navbar directly
+  // above this strip, so naming it again was noise, and the message the
+  // store wrote carries the meaning on its own. The one case that still needs
+  // a heading is a store that wrote no message either, where the strip would
+  // otherwise say nothing about the closure at all.
+  const heading = greeting || defaultClosedHeading();
 
   // The default explanation tells the customer what happens to an order they
   // place while the store is closed. A store's own message replaces it.
   const explanation = message
     ? withResumeTime(message, openState.closedUntilLabel)
-    : (openState.closedReason === 'manual'
-        ? 'You can order now — we will start delivering from next opening hours.'
-        : openState.nextOpenLabel
-          ? `You can order now — we will start delivering from ${openState.nextOpenLabel}.`
-          : 'You can order now — we will start delivering from next opening hours.');
-
-  // The reopening time is always shown when the store knows it, whether or not
-  // the owner wrote it into their message. It is the one fact the customer
-  // acts on.
-  const resume = openState.closedUntilLabel;
+    : reopenLine(openState.closedUntilLabel);
 
   return (
     <div
@@ -69,17 +64,21 @@ export default function StoreStatusStrip({
             and wrap. Without it a flex item keeps its automatic minimum size
             and a long message runs off the side of the phone. */}
         <div className="text-left min-w-0">
-          <p className="text-[11px] sm:text-xs font-bold text-amber-900 dark:text-amber-200 leading-snug break-words">
-            {heading}
-          </p>
-          <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
-            {explanation}
-          </p>
-          {resume && (
-            <p className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 leading-snug break-words">
-              Reopens {resume}
+          {heading && (
+            <p className="text-[11px] sm:text-xs font-bold text-amber-900 dark:text-amber-200 leading-snug break-words">
+              {heading}
             </p>
           )}
+          {message && (
+            <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
+              {explanation}
+            </p>
+          )}
+          {/* The reopening line, always. It is the answer to the two questions
+              the customer has: can I still order, and when will it arrive. */}
+          <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
+            {reopenLine(openState.closedUntilLabel)}
+          </p>
         </div>
       </div>
     </div>

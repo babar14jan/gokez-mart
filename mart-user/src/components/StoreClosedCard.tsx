@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Clock, X } from 'lucide-react';
+import { reopenBlockLine, defaultClosedHeading } from '../utils/storeClosed';
 
 interface StoreClosedCardProps {
   open: boolean;
@@ -56,7 +57,7 @@ export default function StoreClosedCard({
 
   if (!open) return null;
 
-  const heading = (greeting ?? '').trim() || 'Your neighbourhood store is closed right now.';
+  const heading = (greeting ?? '').trim() || defaultClosedHeading();
   const text = (message ?? '').trim()
     .replace(/\{until\}/g, resumeLabel || 'later');
 
@@ -79,7 +80,7 @@ export default function StoreClosedCard({
           <X className="w-4 h-4" />
         </button>
 
-        <div className="px-6 pt-7 pb-6 text-center">
+        <div className="px-6 pt-12 pb-6 text-center">
           <p className="text-base font-bold text-gray-900 dark:text-white leading-snug break-words">
             {heading}
           </p>
@@ -90,11 +91,19 @@ export default function StoreClosedCard({
           )}
 
           {/* The reopening time, in a solid block so it is the thing the eye
-              lands on. */}
+              lands on, with the reassurance the customer needs to know they
+              can still order. Yellow, and deliberately not the same green as
+              the button below it: one is information and the other is an
+              action, and they should not look like the same thing. */}
           {resumeLabel && (
-            <div className="mt-5 flex items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 px-4 py-3 text-white">
-              <Clock className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm font-bold">Reopens {resumeLabel}</span>
+            <div className="mt-5 rounded-2xl bg-amber-400 px-4 py-3 text-amber-950">
+              <div className="flex items-center justify-center gap-2.5">
+                <Clock className="w-4 h-4 flex-shrink-0" />
+                <span className="text-sm font-extrabold">Reopens {resumeLabel}</span>
+              </div>
+              <p className="mt-1.5 text-xs font-semibold text-amber-900/80 leading-snug">
+                {reopenBlockLine(resumeLabel)}
+              </p>
             </div>
           )}
 
@@ -102,7 +111,7 @@ export default function StoreClosedCard({
             ref={buttonRef}
             type="button"
             onClick={() => (onConfirm ?? onClose)()}
-            className="mt-5 w-full rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700 active:scale-[0.98] transition"
+            className="mx-auto mt-5 rounded-2xl bg-emerald-600 px-7 py-3 text-sm font-bold text-white hover:bg-emerald-700 active:scale-[0.98] transition"
           >
             {primaryLabel}
           </button>

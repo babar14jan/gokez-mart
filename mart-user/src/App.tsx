@@ -237,15 +237,6 @@ export default function App() {
    * created either way -- closing a store delays fulfilment, it does not
    * disqualify anyone -- and the server independently records the closure state.
    */
-  /**
-   * Which closure the customer is looking at.
-   *
-   * Used to decide whether the card is worth showing on arrival: the card is
-   * shown once per closure, not once per app open, so a customer who keeps
-   * browsing during a long closure is not nagged every time.
-   */
-  const closureSignature = `${openState?.closedReason ?? ''}|${settings.store_closed_from ?? ''}|${settings.store_closed_until ?? ''}`;
-
   const confirmOrder = useCallback(() => new Promise<boolean>(resolve => {
     if (openState?.isOpen !== false) { resolve(true); return; }
     setClosedPrompt({ resolve });
@@ -293,22 +284,15 @@ export default function App() {
   const selectedZone = useZoneStore(s => s.selectedZone);
   const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
 
-  // The card, on arrival at a closed store. Shown once per closure: the
-  // customer is told what is happening, and after that the banner along the
-  // top of the app keeps the message in view without blocking anything.
-  const closedCardKey = `mart-closed-card:${activeStoreId}`;
-
-  const rememberClosureSeen = useCallback(() => {
-    try { localStorage.setItem(closedCardKey, closureSignature); } catch { /* private mode */ }
-  }, [closedCardKey, closureSignature]);
-
+  // The card, on arrival at a closed store. It opens every time the app is
+  // opened or refreshed, and every time the PWA is reopened, because that is
+  // when the customer has no idea why the store is shut. Once they have read
+  // it, the strip under the header keeps it in view without blocking
+  // anything.
   useEffect(() => {
     if (openState?.isOpen !== false) return;
-    let seen: string | null = null;
-    try { seen = localStorage.getItem(closedCardKey); } catch { seen = null; }
-    if (seen === closureSignature) return;
     setClosedCard(true);
-  }, [openState?.isOpen, closedCardKey, closureSignature]);
+  }, [openState?.isOpen, openState?.closedReason, openState?.closedUntilLabel]);
 
   // The ONE fetch path for the home catalogue (categories, products, settings and
   // sections). Shared by the silent resume/poll refresh and the pull gesture, so a
@@ -1134,7 +1118,6 @@ export default function App() {
       {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
         <StoreStatusStrip
           openState={openState}
-          zoneName={selectedZone?.name}
           closedGreeting={settings.store_closed_greeting}
           closedMessage={settings.store_closed_message}
         />
@@ -1166,7 +1149,7 @@ export default function App() {
           primaryLabel="Place order"
           // The cross backs out of the order, the button goes ahead with it.
           onClose={() => settlePrompt(false)}
-          onConfirm={() => { rememberClosureSeen(); settlePrompt(true); }}
+          onConfirm={() => { settlePrompt(true); }}
         />,
         document.body,
       )}
@@ -1181,8 +1164,8 @@ export default function App() {
           message={settings.store_closed_message}
           resumeLabel={openState?.closedUntilLabel ?? null}
           primaryLabel="Got it"
-          onClose={() => { rememberClosureSeen(); setClosedCard(false); }}
-          onConfirm={() => { rememberClosureSeen(); setClosedCard(false); }}
+          onClose={() => { setClosedCard(false); }}
+          onConfirm={() => { setClosedCard(false); }}
         />,
         document.body,
       )}
