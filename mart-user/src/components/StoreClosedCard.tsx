@@ -105,7 +105,7 @@ export default function StoreClosedCard({
                 <Clock className="w-4 h-4 flex-shrink-0" />
                 <span className="text-sm font-extrabold">Reopens {resumeLabel}</span>
               </div>
-              <p className="mt-1.5 text-xs font-semibold text-white leading-snug">
+              <p className="mt-1.5 text-xs font-semibold text-amber-950 leading-snug">
                 {reopenBlockLine(resumeLabel)}
               </p>
             </div>
