@@ -51,9 +51,21 @@ export class SettingsService {
     return result.rows[0]?.value ?? null;
   }
 
+  /**
+   * Write one setting.
+   *
+   * An upsert, not an update. A plain UPDATE only touches rows that already
+   * exist, so a setting that had never been set could never be created: the
+   * hub would show the field, the admin would fill it in, the save would
+   * report success, and the value would be silently dropped. Every setting
+   * that was ever added started life with no row, so this was a trap for any
+   * new key.
+   */
   static async update(storeId: string, key: string, value: string): Promise<void> {
     await query(
-      `UPDATE mart_settings SET value = $1, updated_at = NOW() WHERE store_id = $2 AND key = $3`,
+      `INSERT INTO mart_settings (store_id, key, value, updated_at)
+       VALUES ($2, $3, $1, NOW())
+       ON CONFLICT (store_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
       [value, storeId, key]
     );
   }

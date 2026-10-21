@@ -152,10 +152,16 @@ export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) 
     SettingsService.getPublic(storeId),
     StoreService.findById(storeId),
   ]);
-  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
+  // The scheduled closure has to be part of this, not just the weekly hours:
+  // a store that schedules a closure, or reaches the end of one, has changed
+  // its open state without anything in the database being touched, so without
+  // it here the storefront would never refetch and the banner would never
+  // appear or disappear.
+  const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
+  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
   const boundary = openState.isOpen ? openState.closesAt : openState.nextOpenAt;
   res.set('Cache-Control', 'no-store');
-  res.json({ success: true, data: { stamp: `${dbStamp}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}` } });
+  res.json({ success: true, data: { stamp: `${dbStamp}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}:${openState.closedUntilLabel ?? '-'}` } });
 });
 
 export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {

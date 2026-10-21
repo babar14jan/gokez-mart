@@ -57,6 +57,8 @@ const pg = require('pg');
   };
 };
 
+const textOf = (c: Call) => c.text.replace(/\s+/g, ' ').trim();
+
 const KEY = 'store_closed_message';
 
 describe('store closed message', () => {
@@ -92,7 +94,7 @@ describe('store closed message', () => {
   test('the hub is allowed to write it', async () => {
     const { SettingsService } = await import('../src/services/settings.service');
     await SettingsService.updateMany('store-1', { [KEY]: 'Closed for a bit.' });
-    const write = calls.find(c => /UPDATE mart_settings SET value/.test(c.text));
+    const write = calls.find(c => /mart_settings/i.test(c.text));
     assert.ok(write, 'the message must be writable');
     assert.equal(write!.params[0], 'Closed for a bit.');
   });
@@ -107,7 +109,7 @@ describe('store closed message', () => {
     );
     assert.match(
       settingsSource,
-      /UPDATE mart_settings SET value = \$1, updated_at = NOW\(\)/,
+      /INSERT INTO mart_settings \(store_id, key, value, updated_at\)[\s\S]*?updated_at = NOW\(\)/,
       'a settings write must bump updated_at or the storefront never sees the change',
     );
 
@@ -127,7 +129,37 @@ describe('store closed message', () => {
     // The protected keys are the store name and address, which live only on
     // mart_stores. The message must not be caught by that.
     await SettingsService.updateMany('store-1', { store_name: 'Hijacked' });
-    const write = calls.find(c => /UPDATE mart_settings SET value/.test(c.text));
+    const write = calls.find(c => /mart_settings/i.test(c.text));
     assert.equal(write, undefined, 'a protected key must not be written through the settings path');
+  });
+
+  test('a setting that has never been written can still be created', async () => {
+    // This is the bug that stopped the whole feature working. A plain UPDATE
+    // only touches rows that already exist, so the first time anyone set the
+    // closure the value was silently dropped: the hub showed the field, the
+    // save reported success, and the store never closed.
+    const { SettingsService } = await import('../src/services/settings.service');
+    await SettingsService.update('store-1', 'store_closed_from', '2026-10-21T10:00');
+    const write = calls.find(c => /mart_settings/i.test(c.text));
+    assert.ok(write, 'the setting must be written');
+    assert.match(
+      textOf(write!),
+      /INSERT INTO mart_settings/i,
+      'the write must be an insert, or a key with no row yet is dropped',
+    );
+    assert.match(
+      textOf(write!),
+      /ON CONFLICT \(store_id, key\) DO UPDATE/i,
+      'the write must also update a row that already exists',
+    );
+  });
+
+  test('writing an existing setting still updates it in place', async () => {
+    const { SettingsService } = await import('../src/services/settings.service');
+    await SettingsService.updateMany('store-1', { [KEY]: 'Closed for a bit.' });
+    const writes = calls.filter(c => /mart_settings/i.test(c.text));
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0]!.params[0], 'Closed for a bit.');
+    assert.match(textOf(writes[0]!), /updated_at = NOW\(\)/, 'the write must bump updated_at');
   });
 });
