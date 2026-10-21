@@ -7,6 +7,50 @@
  */
 
 /**
+ * The store's own words, remembered on the device.
+ *
+ * When the backend is genuinely down the app cannot ask it for the store's
+ * wording, and showing the customer "We could not load the store" is the
+ * platform talking about itself. The store's own message is what belongs on
+ * screen — "your neighbourhood store is taking a break today" — and it is
+ * also the honest description of an outage.
+ *
+ * So the copy is kept on the device as it is fetched, and used for the
+ * outage screen when the server cannot be reached to ask.
+ */
+const CLOSED_COPY_KEY = 'mart-closed-copy';
+
+export interface StoreClosedCopy {
+  greeting: string;
+  message: string;
+}
+
+/** Remember the store's wording, so it is available during an outage. */
+export function rememberClosedCopy(greeting: string | undefined | null, message: string | undefined | null): void {
+  try {
+    const g = (greeting ?? '').trim();
+    const m = (message ?? '').trim();
+    if (!g && !m) return;
+    localStorage.setItem(CLOSED_COPY_KEY, JSON.stringify({ greeting: g, message: m }));
+  } catch {
+    // No storage: the outage screen falls back to the generic wording.
+  }
+}
+
+/** The store's wording, if it was ever fetched. Null when there is none. */
+export function readClosedCopy(): StoreClosedCopy | null {
+  try {
+    const raw = localStorage.getItem(CLOSED_COPY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || (!parsed.greeting && !parsed.message)) return null;
+    return { greeting: String(parsed.greeting || ''), message: String(parsed.message || '') };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The heading used when the store has not written one of its own.
  *
  * The store's own greeting is used first when there is one. This is the

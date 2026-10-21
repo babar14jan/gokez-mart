@@ -29,6 +29,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
 import { useUpdateStore } from './store/updateStore';
 import { hideSplash, splashRevealMs, MIN_SPLASH_MS } from './utils/splash';
+import { rememberClosedCopy } from './utils/storeClosed';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
@@ -333,6 +334,13 @@ export default function App() {
     setCategories([...(catRes.data.data || [])]);
     setProducts([...(prodRes.data.data || [])]);
     setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
+    // Keep the store's closure wording on the device. When the backend is
+    // genuinely down the app cannot ask it for the message, and the customer's
+    // screen should still say what the store would have said.
+    rememberClosedCopy(
+      settingsRes.data.data?.store_closed_greeting,
+      settingsRes.data.data?.store_closed_message,
+    );
     setHomeSections([...(sectionsRes.data.data || [])]);
     // The bundle is on screen, so any previous load error is resolved. This is
     // what clears the banner after a silent refresh/reconnect recovers from a
