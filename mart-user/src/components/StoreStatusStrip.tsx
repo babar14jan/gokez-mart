@@ -51,6 +51,11 @@ export default function StoreStatusStrip({
           ? `You can order now — we will start delivering from ${openState.nextOpenLabel}.`
           : 'You can order now — we will start delivering from next opening hours.');
 
+  // The reopening time is always shown when the store knows it, whether or not
+  // the owner wrote it into their message. It is the one fact the customer
+  // acts on.
+  const resume = openState.closedUntilLabel;
+
   return (
     <div
       role="status"
@@ -70,6 +75,11 @@ export default function StoreStatusStrip({
           <p className="text-[11px] sm:text-xs font-medium text-amber-800/80 dark:text-amber-300/80 leading-snug break-words">
             {explanation}
           </p>
+          {resume && (
+            <p className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 leading-snug break-words">
+              Reopens {resume}
+            </p>
+          )}
         </div>
       </div>
     </div>

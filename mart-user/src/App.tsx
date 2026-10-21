@@ -9,7 +9,7 @@ import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore
 import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported, hasActivePushSubscription } from './services/push';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
-import ConfirmDialog from './components/ConfirmDialog';
+import StoreClosedCard from './components/StoreClosedCard';
 import BottomNav from './components/BottomNav';
 import AppShell from './components/AppShell';
 import ProductCard from './components/ProductCard';
@@ -103,6 +103,7 @@ const DEFAULT_SETTINGS: PublicSettings = {
   upi_enabled: 'true', phonepay_enabled: 'false',
   phonepay_qr_url: '', upi_phone: '', upi_id: '', whatsapp_number: '',
   support_name: '', support_phone: '', store_closed_message: '', store_closed_greeting: '',
+  store_closed_from: '', store_closed_until: '',
 };
 
 export default function App() {
@@ -219,6 +220,9 @@ export default function App() {
   // a ref-backed closure rather than a boolean so the promise settles exactly
   // once, whether the customer confirms, cancels, or the dialog unmounts.
   const [closedPrompt, setClosedPrompt] = useState<{ resolve: (ok: boolean) => void } | null>(null);
+  // The closed-store card, shown on its own when the customer first arrives
+  // at a closed store. It has nothing pending, so it only has to be closed.
+  const [closedCard, setClosedCard] = useState(false);
   const openState = settings.openState;
 
   /**
@@ -233,11 +237,19 @@ export default function App() {
    * created either way -- closing a store delays fulfilment, it does not
    * disqualify anyone -- and the server independently records the closure state.
    */
+  /**
+   * Which closure the customer is looking at.
+   *
+   * Used to decide whether the card is worth showing on arrival: the card is
+   * shown once per closure, not once per app open, so a customer who keeps
+   * browsing during a long closure is not nagged every time.
+   */
+  const closureSignature = `${openState?.closedReason ?? ''}|${settings.store_closed_from ?? ''}|${settings.store_closed_until ?? ''}`;
+
   const confirmOrder = useCallback(() => new Promise<boolean>(resolve => {
     if (openState?.isOpen !== false) { resolve(true); return; }
     setClosedPrompt({ resolve });
   }), [openState?.isOpen]);
-
   const settlePrompt = useCallback((ok: boolean) => {
     setClosedPrompt(current => {
       current?.resolve(ok);
@@ -280,6 +292,23 @@ export default function App() {
   // Account page toggle and this catalog loader all read/write one source of truth.
   const selectedZone = useZoneStore(s => s.selectedZone);
   const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
+
+  // The card, on arrival at a closed store. Shown once per closure: the
+  // customer is told what is happening, and after that the banner along the
+  // top of the app keeps the message in view without blocking anything.
+  const closedCardKey = `mart-closed-card:${activeStoreId}`;
+
+  const rememberClosureSeen = useCallback(() => {
+    try { localStorage.setItem(closedCardKey, closureSignature); } catch { /* private mode */ }
+  }, [closedCardKey, closureSignature]);
+
+  useEffect(() => {
+    if (openState?.isOpen !== false) return;
+    let seen: string | null = null;
+    try { seen = localStorage.getItem(closedCardKey); } catch { seen = null; }
+    if (seen === closureSignature) return;
+    setClosedCard(true);
+  }, [openState?.isOpen, closedCardKey, closureSignature]);
 
   // The ONE fetch path for the home catalogue (categories, products, settings and
   // sections). Shared by the silent resume/poll refresh and the pull gesture, so a
@@ -1129,16 +1158,31 @@ export default function App() {
           at z-[55]). At the document level this dialog's z-[60] sits above it,
           which is what lets the customer confirm a closed-store order. */}
       {closedPrompt && createPortal(
-        <ConfirmDialog
-          title="We're closed right now"
-          message={openState?.nextOpenLabel
-            ? `You can still place your order. We'll start preparing it when we reopen at ${openState.nextOpenLabel}, and deliver as soon as possible after that.`
-            : "You can still place your order. We'll start preparing it when we reopen."}
-          confirmLabel="Place order"
-          cancelLabel="Keep shopping"
-          danger={false}
-          onConfirm={() => settlePrompt(true)}
-          onCancel={() => settlePrompt(false)}
+        <StoreClosedCard
+          open
+          greeting={settings.store_closed_greeting}
+          message={settings.store_closed_message}
+          resumeLabel={openState?.closedUntilLabel ?? null}
+          primaryLabel="Place order"
+          // The cross backs out of the order, the button goes ahead with it.
+          onClose={() => settlePrompt(false)}
+          onConfirm={() => { rememberClosureSeen(); settlePrompt(true); }}
+        />,
+        document.body,
+      )}
+
+      {/* The same card, on its own, the first time the customer arrives at a
+          closed store. It has nothing pending, so either button just closes
+          it and the banner carries the message from then on. */}
+      {closedCard && !closedPrompt && createPortal(
+        <StoreClosedCard
+          open
+          greeting={settings.store_closed_greeting}
+          message={settings.store_closed_message}
+          resumeLabel={openState?.closedUntilLabel ?? null}
+          primaryLabel="Got it"
+          onClose={() => { rememberClosureSeen(); setClosedCard(false); }}
+          onConfirm={() => { rememberClosureSeen(); setClosedCard(false); }}
         />,
         document.body,
       )}

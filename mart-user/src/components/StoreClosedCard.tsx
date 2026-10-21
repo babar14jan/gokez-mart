@@ -1,0 +1,113 @@
+import { useEffect, useRef } from 'react';
+import { Clock, X } from 'lucide-react';
+
+interface StoreClosedCardProps {
+  open: boolean;
+  /** The cross, and the primary button when there is nothing else to do. */
+  onClose: () => void;
+  /** The primary button, when it does something different from dismissing. */
+  onConfirm?: () => void;
+  /** The store's greeting, shown as the card's heading. */
+  greeting?: string;
+  /** The store's message. May contain "{until}", which is filled with the
+   *  reopening time. */
+  message?: string;
+  /** When the store reopens, as an absolute IST label ("22 Oct, 6:00 PM"). */
+  resumeLabel?: string | null;
+  /** The closing button's label. */
+  primaryLabel?: string;
+}
+
+/**
+ * The closed-store card.
+ *
+ * The banner along the top of the app says the store is shut, but it is a
+ * thin strip and it is easy to read past. This card is the version a
+ * customer meets the first time they arrive, and the version they meet again
+ * if they try to order while the store is shut — the two moments when "the
+ * store is closed" actually changes what they should do.
+ *
+ * The reopening time sits in a solid block rather than in the sentence,
+ * because it is the one fact the customer acts on, and it should survive
+ * being skimmed.
+ */
+export default function StoreClosedCard({
+  open,
+  onClose,
+  onConfirm,
+  greeting,
+  message,
+  resumeLabel,
+  primaryLabel = 'Got it',
+}: StoreClosedCardProps) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Escape closes, and the button takes focus so the card is usable from the
+  // keyboard straight away.
+  useEffect(() => {
+    if (!open) return;
+    buttonRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const heading = (greeting ?? '').trim() || 'Your neighbourhood store is closed right now.';
+  const text = (message ?? '').trim()
+    .replace(/\{until\}/g, resumeLabel || 'later');
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4 py-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Store closed"
+      data-testid="store-closed-card"
+    >
+      <div className="relative w-full max-w-sm rounded-3xl bg-white dark:bg-slate-800 shadow-2xl overflow-hidden">
+        {/* Cross, top right. Dismisses the card exactly like the button does. */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 active:scale-95 transition dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="px-6 pt-7 pb-6 text-center">
+          <p className="text-base font-bold text-gray-900 dark:text-white leading-snug break-words">
+            {heading}
+          </p>
+          {text && (
+            <p className="mt-2 text-sm text-gray-600 dark:text-slate-300 leading-relaxed break-words">
+              {text}
+            </p>
+          )}
+
+          {/* The reopening time, in a solid block so it is the thing the eye
+              lands on. */}
+          {resumeLabel && (
+            <div className="mt-5 flex items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 px-4 py-3 text-white">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm font-bold">Reopens {resumeLabel}</span>
+            </div>
+          )}
+
+          <button
+            ref={buttonRef}
+            type="button"
+            onClick={() => (onConfirm ?? onClose)()}
+            className="mt-5 w-full rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700 active:scale-[0.98] transition"
+          >
+            {primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

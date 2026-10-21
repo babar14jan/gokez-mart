@@ -246,6 +246,9 @@ export interface PublicSettings {
   store_closed_message: string;
   /** The store's greeting for the closed notice. Replaces the default heading. */
   store_closed_greeting: string;
+  /** The closure the store scheduled, as the local times it was typed in. */
+  store_closed_from: string;
+  store_closed_until: string;
   openState?: StoreOpenState;
   openingHours?: StoreOpeningHours;
 }
