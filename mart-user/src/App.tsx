@@ -224,6 +224,11 @@ export default function App() {
   // at a closed store. It has nothing pending, so it only has to be closed.
   const [closedCard, setClosedCard] = useState(false);
   const openState = settings.openState;
+  // When the store reopens. A scheduled closure says exactly when it lifts; a
+  // store that is simply past its opening hours says so through the weekly
+  // schedule. Either way the customer is told the time, rather than being
+  // left with "as soon as we reopen".
+  const storeResumeLabel = openState?.closedUntilLabel ?? openState?.nextOpenLabel ?? null;
 
   /**
    * Gate for order submission while the store is shut.
@@ -1145,7 +1150,7 @@ export default function App() {
           open
           greeting={settings.store_closed_greeting}
           message={settings.store_closed_message}
-          resumeLabel={openState?.closedUntilLabel ?? null}
+          resumeLabel={storeResumeLabel}
           primaryLabel="Place order"
           // The cross backs out of the order, the button goes ahead with it.
           onClose={() => settlePrompt(false)}
@@ -1162,7 +1167,7 @@ export default function App() {
           open
           greeting={settings.store_closed_greeting}
           message={settings.store_closed_message}
-          resumeLabel={openState?.closedUntilLabel ?? null}
+          resumeLabel={storeResumeLabel}
           primaryLabel="Got it"
           onClose={() => { setClosedCard(false); }}
           onConfirm={() => { setClosedCard(false); }}

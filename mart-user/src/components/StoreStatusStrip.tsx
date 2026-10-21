@@ -45,11 +45,18 @@ export default function StoreStatusStrip({
   // otherwise say nothing about the closure at all.
   const heading = greeting || defaultClosedHeading();
 
+  // When the store reopens. A scheduled closure says exactly when it lifts;
+  // a store that is simply past its opening hours says so through the weekly
+  // schedule, and the customer is told that time too rather than being left
+  // with "as soon as we reopen". Only a closure with no end at all has nothing
+  // to promise.
+  const resume = openState.closedUntilLabel ?? openState.nextOpenLabel;
+
   // The default explanation tells the customer what happens to an order they
   // place while the store is closed. A store's own message replaces it.
   const explanation = message
-    ? withResumeTime(message, openState.closedUntilLabel)
-    : reopenLine(openState.closedUntilLabel);
+    ? withResumeTime(message, resume)
+    : reopenLine(resume);
 
   return (
     <div

@@ -13,7 +13,11 @@ interface StoreClosedCardProps {
   /** The store's message. May contain "{until}", which is filled with the
    *  reopening time. */
   message?: string;
-  /** When the store reopens, as an absolute IST label ("22 Oct, 6:00 PM"). */
+  /**
+   * When the store reopens, as a label the customer can read
+   * ("tomorrow at 9:00 AM", "9:00 AM tomorrow", "on 22 Oct at 6:00 PM").
+   * Null when the store has not said, and its hours do not say either.
+   */
   resumeLabel?: string | null;
   /** The closing button's label. */
   primaryLabel?: string;
