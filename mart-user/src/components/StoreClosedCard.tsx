@@ -105,7 +105,7 @@ export default function StoreClosedCard({
                 <Clock className="w-4 h-4 flex-shrink-0" />
                 <span className="text-sm font-extrabold">Reopens {resumeLabel}</span>
               </div>
-              <p className="mt-1.5 text-xs font-semibold text-amber-900/80 leading-snug">
+              <p className="mt-1.5 text-xs font-semibold text-white leading-snug">
                 {reopenBlockLine(resumeLabel)}
               </p>
             </div>
@@ -115,7 +115,7 @@ export default function StoreClosedCard({
             ref={buttonRef}
             type="button"
             onClick={() => (onConfirm ?? onClose)()}
-            className="mx-auto mt-5 rounded-2xl bg-emerald-600 px-7 py-3 text-sm font-bold text-white hover:bg-emerald-700 active:scale-[0.98] transition"
+            className="mx-auto mt-5 rounded-2xl border-2 border-emerald-800 bg-emerald-600 px-7 py-3 text-sm font-bold text-white hover:bg-emerald-500 active:scale-[0.98] transition"
           >
             {primaryLabel}
           </button>
