@@ -9,7 +9,7 @@ import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore
 import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported, hasActivePushSubscription } from './services/push';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
-import ConfirmDialog from './components/ConfirmDialog';
+import StoreClosedCard from './components/StoreClosedCard';
 import BottomNav from './components/BottomNav';
 import AppShell from './components/AppShell';
 import ProductCard from './components/ProductCard';
@@ -29,6 +29,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
 import { useUpdateStore } from './store/updateStore';
 import { hideSplash, splashRevealMs, MIN_SPLASH_MS } from './utils/splash';
+import { rememberClosedCopy } from './utils/storeClosed';
 import { useCartStore } from './store/cartStore';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
@@ -95,14 +96,18 @@ function DeferredPage({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="min-h-[12rem]" />}>{children}</Suspense>;
 }
 
+/** How long to wait before trying a catalogue that would not load again. */
+const CATALOGUE_RETRY_MS = 15000;
+
 const DEFAULT_SETTINGS: PublicSettings = {
   store_name: BRAND_NAME, store_address: 'Kolkata',
   delivery_charge: '0', free_delivery_above: '0', min_order_amount: '0',
   delivery_area: 'Kolkata', store_open: 'true',
   estimated_delivery: '30-45 mins', cod_enabled: 'true',
   upi_enabled: 'true', phonepay_enabled: 'false',
-  phonepay_qr_url: '', upi_phone: '', upi_id: '', whatsapp_number: '918777376280',
-  support_name: '', support_phone: '',
+  phonepay_qr_url: '', upi_phone: '', upi_id: '', whatsapp_number: '',
+  support_name: '', support_phone: '', store_closed_message: '', store_closed_greeting: '',
+  store_closed_from: '', store_closed_until: '',
 };
 
 export default function App() {
@@ -219,7 +224,15 @@ export default function App() {
   // a ref-backed closure rather than a boolean so the promise settles exactly
   // once, whether the customer confirms, cancels, or the dialog unmounts.
   const [closedPrompt, setClosedPrompt] = useState<{ resolve: (ok: boolean) => void } | null>(null);
+  // The closed-store card, shown on its own when the customer first arrives
+  // at a closed store. It has nothing pending, so it only has to be closed.
+  const [closedCard, setClosedCard] = useState(false);
   const openState = settings.openState;
+  // When the store reopens. A scheduled closure says exactly when it lifts; a
+  // store that is simply past its opening hours says so through the weekly
+  // schedule. Either way the customer is told the time, rather than being
+  // left with "as soon as we reopen".
+  const storeResumeLabel = openState?.closedUntilLabel ?? openState?.nextOpenLabel ?? null;
 
   /**
    * Gate for order submission while the store is shut.
@@ -237,7 +250,6 @@ export default function App() {
     if (openState?.isOpen !== false) { resolve(true); return; }
     setClosedPrompt({ resolve });
   }), [openState?.isOpen]);
-
   const settlePrompt = useCallback((ok: boolean) => {
     setClosedPrompt(current => {
       current?.resolve(ok);
@@ -281,6 +293,33 @@ export default function App() {
   const selectedZone = useZoneStore(s => s.selectedZone);
   const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
 
+  // A catalogue that would not load is loaded again: when the connection
+  // comes back, and on a short timer for as long as it keeps failing. The
+  // outage screen has its own re-check, but the catalogue is this app's
+  // business, so the retry lives here rather than being triggered by a
+  // message from the screen.
+  useEffect(() => {
+    if (!catalogError) return;
+    const retry = () => setCatalogRequest(request => request + 1);
+    const onOnline = () => retry();
+    window.addEventListener('online', onOnline);
+    const timer = window.setInterval(retry, CATALOGUE_RETRY_MS);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(timer);
+    };
+  }, [catalogError]);
+
+  // The card, on arrival at a closed store. It opens every time the app is
+  // opened or refreshed, and every time the PWA is reopened, because that is
+  // when the customer has no idea why the store is shut. Once they have read
+  // it, the strip under the header keeps it in view without blocking
+  // anything.
+  useEffect(() => {
+    if (openState?.isOpen !== false) return;
+    setClosedCard(true);
+  }, [openState?.isOpen, openState?.closedReason, openState?.closedUntilLabel]);
+
   // The ONE fetch path for the home catalogue (categories, products, settings and
   // sections). Shared by the silent resume/poll refresh and the pull gesture, so a
   // manual refresh updates data in place instead of reloading the document — the
@@ -307,6 +346,13 @@ export default function App() {
     setCategories([...(catRes.data.data || [])]);
     setProducts([...(prodRes.data.data || [])]);
     setSettings(settingsRes.data.data || DEFAULT_SETTINGS);
+    // Keep the store's closure wording on the device. When the backend is
+    // genuinely down the app cannot ask it for the message, and the customer's
+    // screen should still say what the store would have said.
+    rememberClosedCopy(
+      settingsRes.data.data?.store_closed_greeting,
+      settingsRes.data.data?.store_closed_message,
+    );
     setHomeSections([...(sectionsRes.data.data || [])]);
     // The bundle is on screen, so any previous load error is resolved. This is
     // what clears the banner after a silent refresh/reconnect recovers from a
@@ -592,6 +638,17 @@ export default function App() {
       bodyDone = true;
     }).catch(() => {
       bodyDone = true;
+      if (!cancelled) {
+        // Hand the failure to the full-screen offline / unreachable notice, so
+        // it is shown once, over everything, instead of a card sitting in the
+        // middle of the home page.
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        try {
+          window.dispatchEvent(new CustomEvent('mart:api-failed', {
+            detail: offline ? { offline: true } : { server: true },
+          }));
+        } catch {}
+      }
       if (!cancelled) setCatalogError(
         typeof navigator !== 'undefined' && !navigator.onLine
           ? 'You\u2019re offline. Check your internet connection and try again.'
@@ -1099,8 +1156,16 @@ export default function App() {
         />
       )}
 
-      {/* Closed-store notice: below the header, on every page, never blocking. */}
-      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && <StoreStatusStrip openState={openState} zoneName={selectedZone?.name} />}
+      {/* Closed-store notice: below the header, on every page, never blocking.
+          The store's own greeting and message come from the hub's Hours tab;
+          without them the notice falls back to the default wording. */}
+      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
+        <StoreStatusStrip
+          openState={openState}
+          closedGreeting={settings.store_closed_greeting}
+          closedMessage={settings.store_closed_message}
+        />
+      )}
         </>
       }
       floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
@@ -1120,16 +1185,31 @@ export default function App() {
           at z-[55]). At the document level this dialog's z-[60] sits above it,
           which is what lets the customer confirm a closed-store order. */}
       {closedPrompt && createPortal(
-        <ConfirmDialog
-          title="We're closed right now"
-          message={openState?.nextOpenLabel
-            ? `You can still place your order. We'll start preparing it when we reopen at ${openState.nextOpenLabel}, and deliver as soon as possible after that.`
-            : "You can still place your order. We'll start preparing it when we reopen."}
-          confirmLabel="Place order"
-          cancelLabel="Keep shopping"
-          danger={false}
-          onConfirm={() => settlePrompt(true)}
-          onCancel={() => settlePrompt(false)}
+        <StoreClosedCard
+          open
+          greeting={settings.store_closed_greeting}
+          message={settings.store_closed_message}
+          resumeLabel={storeResumeLabel}
+          primaryLabel="Place order"
+          // The cross backs out of the order, the button goes ahead with it.
+          onClose={() => settlePrompt(false)}
+          onConfirm={() => { settlePrompt(true); }}
+        />,
+        document.body,
+      )}
+
+      {/* The same card, on its own, the first time the customer arrives at a
+          closed store. It has nothing pending, so either button just closes
+          it and the banner carries the message from then on. */}
+      {closedCard && !closedPrompt && createPortal(
+        <StoreClosedCard
+          open
+          greeting={settings.store_closed_greeting}
+          message={settings.store_closed_message}
+          resumeLabel={storeResumeLabel}
+          primaryLabel="Got it"
+          onClose={() => { setClosedCard(false); }}
+          onConfirm={() => { setClosedCard(false); }}
         />,
         document.body,
       )}
@@ -1249,12 +1329,6 @@ export default function App() {
         /* Home */
         <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${productPageBottom}`}>
 
-          {settings.store_open === 'false' && (
-            <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium px-4 py-3 rounded-2xl text-center">
-              🕐 Store is currently closed. We&apos;ll be back soon!
-            </div>
-          )}
-
           <div className="pb-6">
             {/* Desktop search opens the complete store catalogue. */}
             <button type="button" onClick={() => openCatalogSearch()}
@@ -1267,7 +1341,7 @@ export default function App() {
           </div>
 
           {/* Products */}
-          {loading ? (
+          {loading || catalogError ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse shadow-sm">
@@ -1278,15 +1352,6 @@ export default function App() {
                   </div>
                 </div>
               ))}
-            </div>
-          ) : catalogError ? (
-            <div className="max-w-md mx-auto text-center py-16 px-5">
-              <p className="text-base font-semibold text-gray-900 dark:text-white mb-2">Couldn&apos;t load the store</p>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">{catalogError}</p>
-              <button onClick={() => setCatalogRequest(request => request + 1)}
-                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-xl transition-colors">
-                Try Again
-              </button>
             </div>
           ) : resolvedHomeSections.length > 0 ? (
             /* Home — admin-configured sections (Today's Combos, Deals, Top Picks, ...) */

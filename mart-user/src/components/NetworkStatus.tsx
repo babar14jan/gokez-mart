@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
-import { BACKEND_NOTICE } from '../constants/backendNotice';
 import { hideSplash } from '../utils/splash';
+import { readClosedCopy, type StoreClosedCopy } from '../utils/storeClosed';
 
 // Generous on purpose. A dead backend rejects the connection instantly (or
 // answers with a 5xx), so a long ceiling costs nothing there; what it buys is
@@ -23,6 +23,16 @@ const RECHECK_INTERVAL_MS = 2000;
 // A screen that is already up needs this many consecutive successes to come
 // down, so one lucky response on a flaky link cannot blink the store.
 const RECOVER_SUCCESSES = 2;
+// How long a failed request has to persist before the outage screen takes
+// over the app. A single failed request is a blip — a flaky connection, a
+// request that happened to time out, a deploy that is rolling — and none of
+// those should take the screen away from a customer who is happily browsing.
+// The screen appears only when the failure is real and has lasted.
+const OUTAGE_CONFIRM_MS = 6000;
+// A request that timed out may be a slow link rather than a dead server, so it
+// waits longer before the screen takes over. A customer on a weak connection
+// browsing normally should not lose the app to a timeout.
+const TIMEOUT_CONFIRM_MS = 10000;
 
 // A transport failure only tells us that *something* is unreachable, and the
 // browser reports "customer has no wifi" and "our backend's DNS is gone" as the
@@ -95,9 +105,9 @@ function probeConnectivityOnce(): Promise<Connectivity> {
 }
 
 type Status = 'checking' | 'connected' | 'failed';
-// `server` and `timeout` both mean "the backend did not answer" and carry the
-// configurable BACKEND_NOTICE; `offline` means the customer's own device has
-// no connection and keeps its dedicated copy.
+// `server` and `timeout` both mean "the backend did not answer" and share one
+// screen; `offline` means the customer's own device has no connection and keeps
+// its own.
 type Mode = 'offline' | 'server' | 'timeout';
 
 interface NoticeView {
@@ -118,40 +128,62 @@ const OFFLINE_VIEW: NoticeView = {
   button: 'Try Again',
 };
 
-const SERVER_FALLBACK: NoticeView = {
-  img: '/server_unreachable.webp',
-  width: 590,
-  height: 423,
-  title: 'Something went wrong',
-  body: ['We’re having trouble connecting to our server. Please try again shortly.'],
-  button: 'Try Again',
+// The backend itself is unreachable — a suspended or stopped server, a failed
+// deploy, a database outage. It is not the customer's own device being
+// offline; that keeps its own screen above.
+//
+// There is one server-down screen, not a separate notice for it: the artwork
+// is the closed storefront and the copy says the store is taking a break,
+// which is what the customer is actually experiencing.
+const SERVER_DOWN_VIEW: NoticeView = {
+  img: '/backend_donw.webp',
+  width: 841,
+  height: 619,
+  // Plainly a connection problem, and not the store having shut. The store is
+  // open; our server is the thing that is down, and the customer should not
+  // be left thinking the shop has closed because of it.
+  title: 'We can\u2019t reach your neighbourhood store right now.',
+  body: ['Please try again in a moment.'],
+  button: 'Check Again',
 };
-
-const TIMEOUT_FALLBACK: NoticeView = {
-  img: '/server_unreachable.webp',
-  width: 590,
-  height: 423,
-  title: 'Connection timed out',
-  body: ['This is taking longer than usual. Please check your connection and try again.'],
-  button: 'Try Again',
-};
-
-const BACKEND_DOWN_VIEW: NoticeView = BACKEND_NOTICE.enabled
-  ? {
-      img: BACKEND_NOTICE.image,
-      width: BACKEND_NOTICE.imageWidth,
-      height: BACKEND_NOTICE.imageHeight,
-      title: BACKEND_NOTICE.title,
-      body: BACKEND_NOTICE.body,
-      button: BACKEND_NOTICE.checkAgainLabel,
-    }
-  : SERVER_FALLBACK;
 
 const VIEWS: Record<Mode, NoticeView> = {
   offline: OFFLINE_VIEW,
-  server: BACKEND_DOWN_VIEW,
-  timeout: BACKEND_NOTICE.enabled ? BACKEND_DOWN_VIEW : TIMEOUT_FALLBACK,
+  server: SERVER_DOWN_VIEW,
+  timeout: SERVER_DOWN_VIEW,
 };
+
+/**
+ * The store's own words, for the screen that says the store cannot be reached.
+ *
+ * "We could not load the store" is the platform talking about itself. What the
+ * customer needs to know is that the store is taking a break and that their
+ * order still counts — and that is what the store wrote for exactly this
+ * situation, so it is what is shown. The wording is kept on the device, because
+ * when the backend is down the app cannot ask it for the message.
+ */
+function withStoreCopy(view: NoticeView, copy: StoreClosedCopy | null): NoticeView {
+  if (!copy) return view;
+  const greeting = copy.greeting.trim();
+  const message = copy.message.trim();
+  if (!greeting && !message) return view;
+  // The store's own words go underneath the heading, not instead of it. The
+  // heading says what is actually happening -- we cannot reach the store --
+  // and the store's message says what the customer should make of it.
+  //
+  // The message may carry the "{until}" placeholder. There is no reopening
+  // time to put in it here -- the server that would tell us is the thing
+  // that is down -- so the customer would have been shown the placeholder
+  // itself. A soft phrase is the honest answer.
+  const body = [
+    ...(greeting ? [greeting] : []),
+    ...(message ? [message.replace(/\{until\}/g, 'shortly')] : []),
+  ];
+  return {
+    ...view,
+    body: body.length ? body : view.body,
+  };
+}
 
 interface ApiFailedDetail {
   offline?: boolean;
@@ -176,6 +208,9 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     // dismissal rules can be applied without reading stale state.
     let showingFailure = false;
     let consecutiveSuccesses = 0;
+    // A pending confirmation that the failure has lasted. Cancelled if the
+    // app talks to the server again in the meantime.
+    let confirmTimer: ReturnType<typeof setTimeout> | undefined;
 
     // Both screens come up the moment they are known — there is no confirmation
     // delay, so an outage is never a silent stall.
@@ -206,8 +241,19 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
         if (disposed) return;
         consecutiveSuccesses += 1;
         if (!showingFailure || consecutiveSuccesses >= RECOVER_SUCCESSES) {
+          // Whether an outage screen was up. Only then is there something to
+          // recover from, and only then does the app need telling.
+          const recovered = showingFailure;
           showingFailure = false;
           consecutiveSuccesses = 0;
+          // The server answered, so whatever failed was a one-off.
+          if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = undefined; }
+          // Only when the app was actually down. A healthy app probes every
+          // fifteen seconds, and telling it to reload the catalogue on each of
+          // those would re-download the whole catalogue for no reason.
+          if (recovered) {
+            try { window.dispatchEvent(new CustomEvent('mart:api-back')); } catch {}
+          }
           setStatus('connected');
           setChecking(false);
           scheduleProbe(HEALTH_CHECK_INTERVAL_MS);
@@ -239,7 +285,16 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     // screen reacts without waiting for its own /health poll.
     const onApiFailed = (event: Event) => {
       const detail = (event as CustomEvent<ApiFailedDetail>).detail || {};
-      void (async () => {
+      // One failed request is not an outage. A flaky connection, a request that
+      // happened to time out, a deploy that is rolling -- none of those should
+      // take the screen over from a customer who is happily browsing. The
+      // failure has to persist before the screen appears, and a success in the
+      // meantime cancels it.
+      if (confirmTimer) return;
+      const delay = detail.timeout ? TIMEOUT_CONFIRM_MS : OUTAGE_CONFIRM_MS;
+      confirmTimer = setTimeout(() => {
+        confirmTimer = undefined;
+        void (async () => {
         if (disposed) return;
         if (detail.server) {
           // An HTTP 5xx: the backend answered, so the customer's connection is fine.
@@ -252,7 +307,8 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
         if (connectivity === 'offline') showFailure('offline');
         else if (connectivity === 'online') showFailure('server');
         else showFailure('timeout');
-      })();
+        })();
+      }, delay);
     };
 
     const onOffline = () => {
@@ -263,6 +319,10 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
       // Coming back online: drop the overlay right away so the store reappears,
       // then confirm with a probe (the app also refreshes its catalogue on
       // 'online', so recovery never clears what is already rendered).
+      // A pending confirmation is dropped with it: the connection is back, so
+      // a failure that has not lasted is not a failure at all, and letting the
+      // timer fire would put the outage screen over a working app.
+      if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = undefined; }
       showingFailure = false;
       consecutiveSuccesses = 0;
       setChecking(false);
@@ -278,6 +338,7 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     return () => {
       disposed = true;
       if (probeTimer) clearTimeout(probeTimer);
+      if (confirmTimer) clearTimeout(confirmTimer);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('mart:api-failed', onApiFailed);
@@ -295,7 +356,12 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     setRetryKey((key) => key + 1);
   };
 
-  const view = VIEWS[mode];
+  // Read once per mount: the store's copy only changes when the store
+  // changes it, and the outage screen is the only place that uses it.
+  const [storeCopy] = useState(() => readClosedCopy());
+  const view = mode === 'offline'
+    ? VIEWS.offline
+    : withStoreCopy(VIEWS[mode], storeCopy);
   const visible = status === 'failed' || checking;
 
   // The app stays mounted underneath at all times, so recovering from an outage

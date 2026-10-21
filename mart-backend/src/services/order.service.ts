@@ -442,6 +442,8 @@ export class OrderService {
         `SELECT s.opening_hours, sv.value AS store_open
            FROM mart_stores s
            LEFT JOIN mart_settings sv ON sv.store_id = s.id AND sv.key = 'store_open'
+           LEFT JOIN mart_settings cf ON cf.store_id = s.id AND cf.key = 'store_closed_from'
+           LEFT JOIN mart_settings cu ON cu.store_id = s.id AND cu.key = 'store_closed_until'
           WHERE s.id = $1`,
         [data.storeId]
       );
@@ -450,6 +452,7 @@ export class OrderService {
         closure?.opening_hours as never,
         closure?.store_open,
         new Date(),
+        { from: closure?.store_closed_from, until: closure?.store_closed_until },
       );
 
       // A customer can book a later delivery window ("scheduled"). When they do,
@@ -589,7 +592,10 @@ export class OrderService {
           upiPhone: settings.upi_phone || '',
           upiId: settings.upi_id || '',
         }),
-        whatsappNumber: settings.whatsapp_number || '918777376280',
+        // The store's own WhatsApp number, so the customer can reach the store
+        // they ordered from. Empty when the store has not set one — never a
+        // number belonging to somebody else.
+        whatsappNumber: settings.whatsapp_number || '',
         duplicate: false,
       };
     });
@@ -1003,14 +1009,22 @@ export class OrderService {
       // has no reopening time to promise, so it keeps whatever the order
       // recorded (usually null) rather than inventing one.
       const hours = await client.query(
-        `SELECT s.opening_hours, sv.value AS store_open
+        `SELECT s.opening_hours, sv.value AS store_open,
+                cf.value AS store_closed_from, cu.value AS store_closed_until
            FROM mart_stores s
            LEFT JOIN mart_settings sv ON sv.store_id = s.id AND sv.key = 'store_open'
+           LEFT JOIN mart_settings cf ON cf.store_id = s.id AND cf.key = 'store_closed_from'
+           LEFT JOIN mart_settings cu ON cu.store_id = s.id AND cu.key = 'store_closed_until'
           WHERE s.id = $1`,
         [existing.storeId]
       );
       const closure = hours.rows[0];
-      const openState = evaluateStoreOpen(closure?.opening_hours as never, closure?.store_open, new Date());
+      const openState = evaluateStoreOpen(
+        closure?.opening_hours as never,
+        closure?.store_open,
+        new Date(),
+        { from: closure?.store_closed_from, until: closure?.store_closed_until },
+      );
 
       await client.query(
         `UPDATE mart_orders

@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
-import sharp from 'sharp';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
@@ -31,7 +30,9 @@ import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.ser
 import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
 import { CatalogService } from '../services/catalog.service';
-import { evaluateStoreOpen } from '../utils/storeHours';
+import { evaluateStoreOpen, parseIstLocalDateTime } from '../utils/storeHours';
+import { trackStream } from '../utils/sse';
+import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -46,6 +47,11 @@ function hasValidCoordinates(latitude: unknown, longitude: unknown): boolean {
 }
 
 async function prepareImage(buffer: Buffer, maxDimension: number): Promise<PreparedImage> {
+  // sharp is a native module (libvips) and it is only needed when an image is
+  // actually being re-encoded, which is rare. Importing it lazily keeps it out
+  // of the boot path, so the process does not hold ~11 MB of native bindings
+  // for the whole time it is running.
+  const { default: sharp } = await import('sharp');
   const image = sharp(buffer, { failOn: 'error' }).rotate().resize({
     width: maxDimension,
     height: maxDimension,
@@ -111,7 +117,8 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   // customer's device clock or timezone. The storefront re-fetches at
   // nextOpenAt to pick up the change instead of re-deriving it locally.
   const store = await StoreService.findById(storeId);
-  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
+  const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
+  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
   // Store name and address have a single source of truth: mart_stores (edited on
   // the hub Stores page). They used to live in mart_settings too, which let the
   // storefront show a different name/address from receipts. Overlay the store
@@ -145,10 +152,16 @@ export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) 
     SettingsService.getPublic(storeId),
     StoreService.findById(storeId),
   ]);
-  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open);
+  // The scheduled closure has to be part of this, not just the weekly hours:
+  // a store that schedules a closure, or reaches the end of one, has changed
+  // its open state without anything in the database being touched, so without
+  // it here the storefront would never refetch and the banner would never
+  // appear or disappear.
+  const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
+  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
   const boundary = openState.isOpen ? openState.closesAt : openState.nextOpenAt;
   res.set('Cache-Control', 'no-store');
-  res.json({ success: true, data: { stamp: `${dbStamp}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}` } });
+  res.json({ success: true, data: { stamp: `${dbStamp}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}:${openState.closedUntilLabel ?? '-'}` } });
 });
 
 export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {
@@ -168,6 +181,7 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
   try {
     const response = await fetch(url.toString(), {
       headers: { 'User-Agent': config.geocoding.userAgent, Accept: 'application/json', 'Accept-Language': 'en' },
+      signal: timeoutSignal(OUTBOUND_TIMEOUTS.geocode),
     });
     if (!response.ok) throw new Error(`Reverse geocoding failed: ${response.status}`);
     const result: any = await response.json();
@@ -683,11 +697,16 @@ export const adminOrderStream = asyncHandler(async (req: AdminRequest, res: Resp
   };
   orderEventBus.on('order', listener);
   const heartbeat = setInterval(() => {
-    res.write(`: keepalive\n\n`);
+    res.write(': keepalive\n\n');
   }, 25000);
+  // The stream is registered so a shutdown can end it. An event stream never
+  // finishes on its own, so while one is open the HTTP server cannot finish
+  // closing — see utils/sse.ts.
+  const untrack = trackStream(res);
   const close = () => {
     orderEventBus.off('order', listener);
     clearInterval(heartbeat);
+    untrack();
   };
   res.on('close', close);
   req.on('close', close);
@@ -1097,10 +1116,30 @@ export const adminGetSettings = asyncHandler(async (req: AdminRequest, res: Resp
 
 export const adminUpdateSettings = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = resolveStoreId(req);
+  // A manual closure has to say when it lifts, so the customer can be told
+  // rather than left with a store that is simply shut.
+  //
+  // The check is on the MERGED result, not on the body: clearing the closure
+  // sends only the switch, and the times stay as they were, so looking at the
+  // body alone would read as a closure with no times.
+  const current = await SettingsService.getPublic(storeId);
+  const merged: Record<string, string | undefined> = { ...current, ...req.body };
+  if (merged.store_open === 'false') {
+    if (!merged.store_closed_from || !merged.store_closed_until) {
+      res.status(400).json({
+        success: false,
+        error: 'A manual closure needs both a start time and a reopen time, so customers know when the store is back.',
+      });
+      return;
+    }
+    if (!parseIstLocalDateTime(merged.store_closed_from) || !parseIstLocalDateTime(merged.store_closed_until)) {
+      res.status(400).json({ success: false, error: 'The closure times are not valid.' });
+      return;
+    }
+  }
   await SettingsService.updateMany(storeId, req.body);
   res.json({ success: true, message: 'Settings updated' });
 });
-
 // ── Admin zone controllers ────────────────────────────────────────────────────
 
 export const adminGetZones = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -1740,6 +1779,7 @@ export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res
       'cache-control': 'max-age=31536000',
     },
     body: image.buffer,
+    signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
   });
   if (!uploadRes.ok) { res.status(500).json({ success: false, error: 'Upload failed' }); return; }
   const publicUrl = `${config.supabase.url}/storage/v1/object/public/${bucket}/${filename}`;
@@ -1942,6 +1982,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
       'cache-control': 'max-age=31536000',
     },
     body: image.buffer,
+    signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
   });
 
   if (!uploadRes.ok) {
