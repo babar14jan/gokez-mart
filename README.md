@@ -15,7 +15,7 @@ gokez_mart/
 
 | Service | URL |
 |---------|-----|
-| API | https://mart-api-qzml.onrender.com |
+| API | https://api.mart.gokez.com |
 | Customer App | https://mart.gokez.com |
 | Gokez Hub | https://hub.gokez.com |
 | Store Onboarding | https://hub.gokez.com/apply |

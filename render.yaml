@@ -23,7 +23,7 @@
 
 services:
   - type: web
-    name: mart-api-qzml
+    name: gokez-mart-backend
     runtime: node
     plan: free
     # Singapore is the closest region to Kolkata. The region cannot be changed

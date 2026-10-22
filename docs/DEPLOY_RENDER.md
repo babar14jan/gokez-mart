@@ -31,7 +31,7 @@ Fill the form exactly like this.
 | Field | Value |
 | --- | --- |
 | **Source Code** | `babar14jan / gokez-mart` |
-| **Name** | `mart-api-qzml` |
+| **Name** | `gokez-mart-backend` |
 | **Language** | `Node` |
 | **Branch** | `main` |
 | **Region** | Singapore (Southeast Asia) |
@@ -59,9 +59,10 @@ examples.
 
 ## Why these values
 
-**`Name` must match the existing Render service (`mart-api-qzml`).** The web
-apps are built against that hostname. A different name creates a *second*
-service and leaves the apps pointed at the first one.
+The name only needs to be unique within the Render account. It becomes the
+`onrender.com` subdomain, but nothing in the repository depends on it, because
+the web apps and the Android builds call `api.mart.gokez.com` rather than the
+`onrender.com` address.
 
 **`Root Directory` must stay blank.** This is a monorepo: `npm install` at the
 root hoists every workspace's dependencies into the root `node_modules`. A
@@ -142,10 +143,10 @@ A missing one is a boot failure, not a warning. See
 
 ## 4. Custom domain — you already have one
 
-`api.mart.gokez.com` exists and currently points at the Railway service. So
-there is **no new DNS record to create** — the existing one has to be
-**repointed** once Render is live. Until it is, the domain keeps serving from
-Railway.
+The domain `api.mart.gokez.com` already exists and pointed at the Railway
+service. So there was **no new DNS record to create** — the existing one had to
+be **repointed** once Render was live. Until it was, the domain kept serving
+from Railway.
 
 The order below avoids downtime, because the old service stays up until the
 new one is answering.
@@ -154,20 +155,21 @@ new one is answering.
    directly and check the health route:
 
    ```bash
-   curl https://mart-api-qzml.onrender.com/api/v1/health
+   curl https://gokez-mart-backend.onrender.com/api/v1/health
    # {"status":"ok","service":"gokez-mart-api"}
    ```
 
 2. **Render → your service → Settings → Custom Domains** → add
-   `api.mart.gokez.com`. Render issues the certificate automatically. Add it
-   here first — it has to verify ownership before the record resolves.
+   `api.mart.gokez.com`. Render shows the target to use and issues the
+   certificate automatically. Add it here first — it has to verify ownership
+   before the record resolves.
 
 3. **Cloudflare (or wherever `gokez.com` is managed)** → edit the **existing**
    record for `api.mart`:
 
    | Type | Name | Value | Proxy |
    | --- | --- | --- | --- |
-   | `CNAME` | `api.mart` | `mart-api-qzml.onrender.com` | **DNS only (grey cloud)** |
+   | `CNAME` | `api.mart` | `gokez-mart-backend.onrender.com` | **DNS only (grey cloud)** |
 
    If it was an `A` record pointing at a Railway IP, replace it with the
    `CNAME` above. Only one record for `api.mart` may exist.
@@ -199,7 +201,7 @@ VITE_API_URL=https://api.mart.gokez.com/api/v1
 If you skipped the custom domain and want to call Render directly:
 
 ```
-VITE_API_URL=https://mart-api-qzml.onrender.com/api/v1
+VITE_API_URL=https://gokez-mart-backend.onrender.com/api/v1
 ```
 
 **Then redeploy both apps.** Changing a build variable does *not* rebuild
@@ -260,7 +262,7 @@ not to leave both running long-term.
 Once the service is live:
 
 ```bash
-curl https://mart-api-qzml.onrender.com/api/v1/health
+curl https://api.mart.gokez.com/api/v1/health
 # {"status":"ok","service":"gokez-mart-api"}
 ```
 

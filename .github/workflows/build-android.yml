@@ -31,7 +31,7 @@ jobs:
       - name: Build web app
         run: npm run build --workspace=mart-user
         env:
-          VITE_API_URL: https://mart-api-qzml.onrender.com/api/v1
+          VITE_API_URL: https://api.mart.gokez.com/api/v1
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
