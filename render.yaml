@@ -23,7 +23,7 @@
 
 services:
   - type: web
-    name: gokez-mart-api
+    name: mart-api-qzml
     runtime: node
     plan: free
     # Singapore is the closest region to Kolkata. The region cannot be changed
@@ -53,7 +53,9 @@ services:
       - key: MART_JWT_SECRET
         sync: false
       # The web origins allowed to call the API, comma separated, each one
-      # HTTPS. The API refuses to boot in production without at least one.
+      # HTTPS. The API refuses to boot in production without at least one, and
+      # refuses any entry that is not https://. These are the origins the page
+      # is served from -- the web apps -- not the API's own address.
       # Example: https://mart.gokez.com,https://hub.gokez.com
       - key: MART_CORS_ORIGIN
         sync: false
