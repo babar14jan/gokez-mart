@@ -50,7 +50,43 @@ npm run dev:api
 
 The backend only permits a local database host during development. It refuses remote database URLs unless `ALLOW_REMOTE_DATABASE=true` is deliberately set for a temporary, non-production environment.
 
-Railway production runs with `NODE_ENV=production` and uses only the variables configured in Railway. Do not add a local `.env.local` file to Railway.
+Deployed production runs with `NODE_ENV=production` and uses only the variables set on the platform. Do not add a local `.env.local` file to a deployment.
+
+## Deploying the API
+
+The API is deployed on Render (primary). Railway remains configured in `railway.json` and can be used as a fallback; nothing in the code is specific to either platform.
+
+### Render
+
+`render.yaml` at the repository root describes the service. To set it up:
+
+1. Render Dashboard → **New → Blueprint**, and pick this repository.
+2. Render reads `render.yaml` and prompts for the variables marked `sync: false`. Enter the same values the Railway service has:
+   `DATABASE_URL`, `MART_JWT_SECRET`, `MART_CORS_ORIGIN`, `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+   `VAPID_SUBJECT`, `TWO_FACTOR_API_KEY`, `SENTRY_DSN`.
+3. Deploy. Migrations run automatically on startup.
+
+Notes:
+- The service is created in **Singapore** because the region cannot be changed afterwards.
+- On the **free** plan Render stops an idle service and starts it again on the next
+  request. The first request after a pause waits for the boot, so the storefront shows
+  its offline notice until the API answers. Move to a paid instance type to avoid this.
+- `PORT` is provided by Render; do not set it.
+- The API refuses to boot in production without `MART_JWT_SECRET` (32+ chars) and an
+  HTTPS `MART_CORS_ORIGIN`.
+
+### Railway
+
+`railway.json` holds the build and start commands and the deploy settings. Set the
+service's **Root Directory** to the repository root, and let `railway.json` supply the
+Build Command (clear any Build Command set in the dashboard so the file is not
+overridden). The Variables tab needs the same list as Render above.
+
+### Web apps
+
+Cloudflare Pages builds `mart-user` and `mart-hub`. Point their `VITE_API_URL` at the
+API's public URL (`https://<api-host>/api/v1`).
 
 ## Build & Deploy
 
@@ -65,19 +101,19 @@ npm run build --workspace=mart-backend
 ### mart-user (Customer App)
 - Build command: `npm ci && npm run build --workspace=mart-user`
 - Build output: `mart-user/dist`
-- Build variable: `VITE_API_URL=https://<Railway public domain>/api/v1`
+- Build variable: `VITE_API_URL=https://<api-host>/api/v1`
 
 ### mart-hub (Gokez Hub)
 - Build command: `npm ci && npm run build --workspace=mart-hub`
 - Build output: `mart-hub/dist`
-- Build variable: `VITE_API_URL=https://<Railway public domain>/api/v1`
+- Build variable: `VITE_API_URL=https://<api-host>/api/v1`
 
 ## Architecture
 
 ### mart-backend
 - Node.js + Express + TypeScript
 - PostgreSQL (Supabase)
-- Hosted on Render
+- Hosted on Render (Railway configured as a fallback)
 - Auto-runs DB migrations on startup
 - Push notifications via Web Push API
 - Image uploads via Supabase Storage (1-year cache-control)
@@ -265,7 +301,7 @@ Always work in feature branches:
 ```
 feature/* → develop → main
 ```
-Main branch triggers Render + Cloudflare deployments.
+The `main` branch triggers the Render (API) and Cloudflare Pages (web apps) deployments.
 
 ## Contact
 

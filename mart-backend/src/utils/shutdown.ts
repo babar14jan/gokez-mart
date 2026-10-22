@@ -3,10 +3,11 @@ import { closeAllStreams } from './sse';
 /**
  * Graceful shutdown.
  *
- * Railway sends SIGTERM on every deploy and restart, and Node's default
- * handling of SIGTERM is to terminate immediately. That drops in-flight
- * responses mid-request — a customer placing an order during a deploy can see
- * the connection die — and abandons the database pool without draining it.
+ * A hosting platform sends SIGTERM on every deploy and restart, and Node's
+ * default handling of SIGTERM is to terminate immediately. That drops
+ * in-flight responses mid-request — a customer placing an order during a
+ * deploy can see the connection die — and abandons the database pool without
+ * draining it.
  *
  * The sequence below is ordered so each step unblocks the next:
  *
@@ -22,23 +23,22 @@ import { closeAllStreams } from './sse';
  * forever: a shutdown that hangs is a deploy that never completes and a
  * container that has to be killed.
  *
- * On Railway this only runs at all if the service sets
- * RAILWAY_DEPLOYMENT_DRAINING_SECONDS — the platform's default is zero
- * seconds, which means the old container is SIGKILLed the instant it is
- * sent SIGTERM and none of the work below gets a chance to happen.
+ * How long the platform waits between SIGTERM and SIGKILL is a per-platform
+ * setting, and it is what this budget has to fit inside. On Railway the
+ * default is zero seconds -- the old container is SIGKILLed the instant it
+ * is sent SIGTERM and none of the work below gets a chance to happen -- so
+ * the drain has to be widened there (railway.json sets it to 15 seconds).
+ * Render also sends SIGTERM with a grace window before it force-kills.
  */
 
 /**
  * How long in-flight requests are given to finish.
  *
  * This has to fit inside the window the platform allows between SIGTERM and
- * SIGKILL. Railway sends SIGTERM to the old container and then, by default,
- * gives it **zero** seconds before force-killing it. That window is set with
- * the RAILWAY_DEPLOYMENT_DRAINING_SECONDS service variable, so this budget is
- * deliberately well under the ten seconds that setting is normally given:
- * the process must be down on its own, not waiting for the platform to kill
- * it, or the graceful path never completes and the deploy is no cleaner than
- * it was before.
+ * SIGKILL. Eight seconds sits comfortably inside the fifteen that both
+ * platforms are configured for, and it has to be the process that goes down,
+ * not the platform that kills it -- otherwise the graceful path never
+ * completes and the deploy is no cleaner than it was before.
  */
 export const DEFAULT_GRACE_MS = 8_000;
 
