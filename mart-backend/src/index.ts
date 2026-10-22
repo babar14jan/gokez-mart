@@ -13,9 +13,9 @@ async function start() {
     console.log(`   Health: http://localhost:${config.port}/api/v1/health`);
   });
 
-  // Railway sends SIGTERM on every deploy and restart. Without a handler the
-  // process dies mid-request and the database pool is abandoned; this drains
-  // the in-flight work first. See utils/shutdown.ts.
+  // The hosting platform sends SIGTERM on every deploy and restart. Without a
+  // handler the process dies mid-request and the database pool is abandoned;
+  // this drains the in-flight work first. See utils/shutdown.ts.
   installShutdownHandlers({ server, pool });
 }
 

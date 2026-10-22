@@ -20,16 +20,22 @@
  * with --omit=dev. The source is not a build artefact, so it is always in
  * the image.
  *
- * One case is specific to the platform. The build step and the start step
- * can be the same command -- a Build Command that runs this script -- and
- * then the build step must not leave a server listening, because a build
+ * One case is specific to a hosting platform. The build step and the start
+ * step can be the same command -- a Build Command that runs this script --
+ * and then the build step must not leave a server listening, because a build
  * step that never returns is a deploy that never finishes. The two steps
- * cannot be told apart from inside: neither Nixpacks nor Railpack labels
- * the phase, so there is no environment variable that says "this is the
- * build". What does tell them apart is the compiled output, which is missing
- * at the start of a build and present by the start of a run. So on the
- * platform a missing output means "compile it, then step out of the way",
- * and the start step that follows finds the output and runs the server.
+ * cannot be told apart from inside: neither Nixpacks nor Railpack nor
+ * Render's builder labels the phase, so there is no environment variable
+ * that says "this is the build". What does tell them apart is the compiled
+ * output, which is missing at the start of a build and present by the start
+ * of a run. So on a platform a missing output means "compile it, then step
+ * out of the way", and the start step that follows finds the output and runs
+ * the server.
+ *
+ * The platform is only asked about when it can be recognized (Railway sets
+ * RAILWAY_*, Render sets RENDER). On a developer's machine the output is
+ * compiled and the server runs, because there the same command is never
+ * asked to be both.
  */
 
 import { existsSync } from 'node:fs';
@@ -47,10 +53,20 @@ function log(message) {
 }
 
 /**
- * True when this process is running on the platform rather than on a
+ * True when this process is running on a hosting platform rather than on a
  * developer's machine.
+ *
+ * Both platforms run a build step and a start step, and either one can be
+ * given this same command. A build step that leaves a server listening never
+ * returns, so the two have to be told apart -- see the note above. Railway
+ * sets RAILWAY_* on everything it runs; Render sets RENDER.
  */
-const isRailway = Boolean(process.env.RAILWAY_SERVICE_ID || process.env.RAILWAY_ENVIRONMENT_NAME);
+const isHosted = Boolean(
+  process.env.RAILWAY_SERVICE_ID ||
+  process.env.RAILWAY_ENVIRONMENT_NAME ||
+  process.env.RENDER ||
+  process.env.RENDER_SERVICE_ID,
+);
 
 /** Compiles the API in place. Returns true when the output is there. */
 function build() {
@@ -72,7 +88,7 @@ if (existsSync(COMPILED)) {
   log('starting the compiled build');
   await import(pathToFileURL(COMPILED).href);
 } else if (build()) {
-  if (isRailway) {
+  if (isHosted) {
     // The compiled output was not in the image, so the build step did not
     // put it there. The usual cause is a Build Command that runs this same
     // script: the build step and the start step then run the same command,

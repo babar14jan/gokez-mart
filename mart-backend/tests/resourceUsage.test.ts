@@ -233,10 +233,10 @@ describe('graceful shutdown', () => {
 
   test('the grace period fits inside the window the platform allows', async () => {
     const { DEFAULT_GRACE_MS } = await import('../src/utils/shutdown');
-    // Railway sends SIGTERM to the old container and then SIGKILLs it after
-    // RAILWAY_DEPLOYMENT_DRAINING_SECONDS (zero by default). The shutdown
-    // budget must be comfortably shorter than that window, or the process is
-    // killed before it can finish and the graceful path never happens.
+    // The platform sends SIGTERM to the old container and then SIGKILLs it
+    // once the drain window has passed. The shutdown budget must be
+    // comfortably shorter than that window, or the process is killed before
+    // it can finish and the graceful path never happens.
     assert.ok(
       DEFAULT_GRACE_MS < 10_000,
       `the grace period of ${DEFAULT_GRACE_MS}ms must leave room inside a ten second drain window`,
