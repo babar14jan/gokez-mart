@@ -134,7 +134,7 @@ export default function App() {
     if (path === '/') {
       // A refresh keeps whatever tab the shopper was on. The last view is
       // mirrored into sessionStorage on every change and wins over the
-      // guest→Account boot rule below, which stays the first-visit default.
+      // default below, which is only the first-visit destination.
       if (!isEmbed) {
         let stored: string | null = null;
         try { stored = sessionStorage.getItem(LAST_VIEW_KEY); } catch {}
@@ -144,7 +144,12 @@ export default function App() {
           return storedView;
         }
       }
-      return useCustomerAuthStore.getState().isLoggedIn ? 'home' : 'account';
+      // A first visit lands on the catalogue, signed in or not. Browsing comes
+      // before an account: the old rule sent every signed-out visitor to
+      // Account first, which put a login wall in front of the products and
+      // asked for the least urgent thing first. Sign-in is still required to
+      // check out, and that is where it is asked for.
+      return 'home';
     }
     // Unrecognized/private routes boot to Home and are normalized so the address
     // bar is not left showing a stale route over the Home view.
