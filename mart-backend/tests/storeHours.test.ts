@@ -16,7 +16,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { evaluateStoreOpen, formatIstDateTime } from '../src/utils/storeHours';
+import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery } from '../src/utils/storeHours';
 
 /** 09:00-21:00 every day -- the shape seeded by migration 026. */
 const ALL_DAY_9_21 = Object.fromEntries(
@@ -209,7 +209,7 @@ describe('Store opening hours', () => {
  */
 describe('the recorded closure state always satisfies the order constraint', () => {
   // mart_orders_closure_consistency:
-  //   (outside = false AND reason IS NULL AND scheduled_for IS NULL)
+  //   (outside = false AND reason IS NULL)
   //   OR (outside = true AND reason IS NOT NULL)
   const satisfiesConstraint = (r: ReturnType<typeof evaluateStoreOpen>) =>
     r.isOpen
@@ -277,6 +277,43 @@ describe('the recorded closure state always satisfies the order constraint', () 
           `nextOpenAt ${r.nextOpenAt} is not after ${iso}`);
       }
     }
+  });
+});
+
+describe('scheduled delivery preferences', () => {
+  // Wednesday, 9:00 AM IST. Every expected result is independent of the host
+  // timezone because the values below are UTC instants for IST wall-clock time.
+  const now = at('2026-01-07T03:30:00Z');
+
+  test('accepts an available future 30-minute window today or tomorrow', () => {
+    assert.equal(isValidScheduledDelivery(ALL_DAY_9_21, at('2026-01-07T04:30:00Z'), now), true, '10:00 AM IST today');
+    assert.equal(isValidScheduledDelivery(ALL_DAY_9_21, at('2026-01-08T04:30:00Z'), now), true, '10:00 AM IST tomorrow');
+  });
+
+  test('rejects passed, too-soon, misaligned and out-of-range preferences', () => {
+    assert.equal(isValidScheduledDelivery(ALL_DAY_9_21, at('2026-01-07T03:45:00Z'), now), false, '9:15 AM is inside the lead time');
+    assert.equal(isValidScheduledDelivery(ALL_DAY_9_21, at('2026-01-07T04:15:00Z'), now), false, '9:45 AM is not on a 30-minute boundary');
+    assert.equal(isValidScheduledDelivery(ALL_DAY_9_21, at('2026-01-07T15:45:00Z'), now), false, '9:15 PM cannot form a full window');
+    assert.equal(isValidScheduledDelivery(ALL_DAY_9_21, at('2026-01-09T04:30:00Z'), now), false, 'the day after tomorrow is unavailable');
+  });
+
+  test('uses the requested IST weekday when applying store hours', () => {
+    const hours = { ...ALL_DAY_9_21, wed: { open: '10:00', close: '12:00', closed: false } };
+    assert.equal(isValidScheduledDelivery(hours, at('2026-01-07T04:30:00Z'), now), true, 'Wednesday 10:00 AM IST');
+    assert.equal(isValidScheduledDelivery(hours, at('2026-01-07T04:00:00Z'), now), false, 'Wednesday 9:30 AM IST is before opening');
+  });
+
+  test('the migration permits a customer preference without weakening closure metadata', () => {
+    const migration = readFileSync(join(__dirname, '..', 'src', 'database', 'migrations', '098_scheduled_delivery_preferences.sql'), 'utf8');
+    assert.ok(!migration.includes('scheduled_for IS NULL'));
+    assert.ok(migration.includes('placed_outside_hours = false AND closed_reason IS NULL'));
+    assert.ok(migration.includes('placed_outside_hours = true AND closed_reason IS NOT NULL'));
+  });
+
+  test('a valid scheduled delivery does not enter the after-hours flow', () => {
+    const source = readFileSync(join(__dirname, '..', 'src', 'services', 'order.service.ts'), 'utf8');
+    assert.ok(source.includes("const placedOutsideHours = data.deliveryPreference !== 'scheduled' && !openState.isOpen;"));
+    assert.ok(source.includes('const closedReason = placedOutsideHours ? openState.closedReason : null;'));
   });
 });
 

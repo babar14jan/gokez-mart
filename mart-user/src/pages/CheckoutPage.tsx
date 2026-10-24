@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronUp, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
+import { Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi } from '../services/api';
 import type { PublicSettings, Product, StoreOpeningHours } from '../services/api';
@@ -49,21 +49,13 @@ const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 round
 
 const PREFERENCES = [
   { value: 'within_15', label: '⚡ 10-15 mins', sub: 'Fastest' },
-  { value: 'within_30', label: '🕐 30 mins',   sub: 'Standard' },
-  { value: 'within_60', label: '🕑 1 hour',    sub: 'Flexible' },
   { value: 'scheduled', label: '📅 Schedule',  sub: 'Pick a slot' },
 ] as const;
 
-/* Designated delivery windows, generated from the store's opening hours. A
-   customer who does not need the fastest option picks a day and a two-hour
-   slot; the chosen start instant is stored on the order so the hub and the
-   rider plan around it. Slots run open→close for today and tomorrow only, and
-   any window that has already started is dropped, so the picker never offers a
-   time that has passed. All of this is reasoned about in IST -- the store's
-   clock -- rather than the customer's device, matching the backend. Exit the
-   country and the slots still line up with the shop's day. */
+/* Delivery preferences are generated in IST from the store's published hours.
+  They are non-exclusive 30-minute windows for today or tomorrow only. */
 const IST_OFFSET_MIN = 330; // Asia/Kolkata, fixed +05:30
-const SLOT_MINUTES = 120;
+const SLOT_MINUTES = 30;
 const SLOT_LEAD_MINUTES = 30; // a window opening within 30 min is not bookable
 const FALLBACK_OPEN_MIN = 8 * 60;
 const FALLBACK_CLOSE_MIN = 22 * 60;
@@ -123,10 +115,10 @@ function buildSchedule(hours: StoreOpeningHours | undefined): DeliveryDay[] {
     if (w && !w.closed) {
       const open = toMinutes(w.open, FALLBACK_OPEN_MIN);
       const close = toMinutes(w.close, FALLBACK_CLOSE_MIN);
-      for (let s = open; s + 60 <= close; s += SLOT_MINUTES) {
+      for (let s = open; s + SLOT_MINUTES <= close; s += SLOT_MINUTES) {
         const at = istInstant(offset, s);
         if (at.getTime() <= nowMs + SLOT_LEAD_MINUTES * 60000) continue;
-        slots.push({ offset, start: s, end: Math.min(s + SLOT_MINUTES, close), at });
+        slots.push({ offset, start: s, end: s + SLOT_MINUTES, at });
       }
     }
     days.push({ offset, label, slots });
@@ -250,21 +242,21 @@ function OffersPanel(props: OffersPanelProps) {
     codeInput, onCodeInput, codeLoading, codeError,
     codeSuccess, onValidateCode, onApply, onClearCode, onRemoveOffer } = props;
   const hasMinimumOrderNotice = /^Add ₹[\d.]+ more to unlock this offer/.test(notice);
+  const showOffersHeader = campaigns.length > 0 || locked || Boolean(notice);
 
   return (
     <div className={cardClass}>
       <div className="px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
-            <div className="min-w-0">
-              <span className="block text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
-              {campaigns.length === 0 && !locked && !hasMinimumOrderNotice && (
-                <span className="block text-[11px] text-gray-500 dark:text-slate-400">No offers are available for this cart right now.</span>
-              )}
+        {showOffersHeader && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
+              <div className="min-w-0">
+                <span className="block text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {campaigns.length > 0 && (
           <div className="mt-3 space-y-2">
@@ -350,7 +342,7 @@ function OffersPanel(props: OffersPanelProps) {
             here gets a bare "No token provided". Guests apply the campaign code
             with Apply & Save, and the code is printed in the offer details. */}
         {!locked && !hasMinimumOrderNotice && (
-        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+        <div className={showOffersHeader ? 'mt-3 border-t border-gray-100 pt-3 dark:border-slate-700' : ''}>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300">Have a coupon code?</label>
             {appliedCode && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Applied</span>}
@@ -558,11 +550,18 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const [showPreferences, setShowPreferences] = useState(false);
   const [scheduledSlot, setScheduledSlot] = useState<DeliverySlot | null>(null);
   const [scheduleDay, setScheduleDay] = useState(0);
+  const [schedulePeriod, setSchedulePeriod] = useState<'all' | 'am' | 'pm'>('all');
   const schedule = useMemo(() => buildSchedule(settings.openingHours), [settings.openingHours]);
+  const availableScheduleDays = useMemo(() => schedule.filter(day => day.slots.length > 0), [schedule]);
+  const selectedSchedule = availableScheduleDays.find(day => day.offset === scheduleDay) ?? availableScheduleDays[0];
+  const visibleScheduleSlots = (selectedSchedule?.slots ?? []).filter(slot => (
+    schedulePeriod === 'all'
+    || (schedulePeriod === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60)
+  ));
 
   // Delivery note
   const [deliveryNote, setDeliveryNote] = useState('Ring the bell');
-  const [showNotes, setShowNotes] = useState(false);
+  const [showNoteMenu, setShowNoteMenu] = useState(false);
   const [showCustomNote, setShowCustomNote] = useState(false);
   const [customNote, setCustomNote] = useState('');
 
@@ -585,7 +584,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState('');
   const [couponSuccess, setCouponSuccess] = useState('');
-  const [billExpanded, setBillExpanded] = useState(false);
   const [offerNotice, setOfferNotice] = useState('');
 
   useEffect(() => {
@@ -906,9 +904,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
     track('checkout_reviewed', { itemCount: lockedItems.length, subtotal: lockedSubtotal });
     // After validation, before the request: a customer with a form problem
     // should be told about that, not asked to confirm a delay they have not
-    // reached yet. Defaulting to "proceed" keeps checkout working if this page
-    // is ever rendered without the prop.
-    if (confirmOrder && !(await confirmOrder())) return;
+    // reached yet. A valid customer-selected schedule already falls within
+    // published store hours, so the closed-store prompt applies only to the
+    // immediate Fastest option. Defaulting to "proceed" keeps checkout working
+    // if this page is ever rendered without the prop.
+    if (deliveryPreference !== 'scheduled' && confirmOrder && !(await confirmOrder())) return;
     setLoading(true); setError(''); setValidationField(null); setShowMissingDetails(false); setSubmittedTotal(total);
     try {
       const res = await storeApi.placeOrder({
@@ -1301,22 +1301,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
           />
 
           {/* ── USP: Delivery time + Note in one card ── */}
-          <div className={card}>
-            {/* Fastest is the default and is deliberately not offered as a choice.
-                A customer who does not need it taps "Schedule Delivery" to book a
-                later window. */}
+          <div className={`${card} !overflow-visible`}>
             <button type="button"
               onClick={() => {
-                setShowNotes(false);
-                if (showPreferences) { setShowPreferences(false); return; }
-                setDeliveryPreference('scheduled');
-                setShowPreferences(true);
-                if (scheduledSlot) {
-                  setScheduleDay(scheduledSlot.offset);
-                } else {
-                  const first = schedule.find(d => d.slots.length > 0);
-                  if (first) { setScheduleDay(first.offset); setScheduledSlot(first.slots[0]); }
-                }
+                setShowPreferences(open => !open);
               }}
               className="w-full flex items-center gap-3 px-4 py-3 text-left">
               <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
@@ -1330,59 +1318,59 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                     : <>Delivery in 10-15 mins</>}
                 </p>
               </div>
-              <span className="flex items-center flex-shrink-0 bg-gray-900 dark:bg-slate-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg">
-                {showPreferences ? 'Done' : deliveryPreference === 'scheduled' ? 'Change' : 'Schedule Delivery'}
+              <span className="flex h-7 items-center flex-shrink-0 rounded-lg bg-gray-900 px-2.5 text-[11px] font-bold text-white dark:bg-slate-700">
+                {showPreferences ? 'Done' : 'Schedule Delivery'}
               </span>
             </button>
             {showPreferences && (
               <div className="border-t border-gray-100 dark:border-slate-700 p-3 space-y-2.5">
-                <div className="space-y-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 p-2.5">
-                  <div className="flex gap-2 overflow-x-auto">
-                    {schedule.map(d => {
-                      const active = scheduleDay === d.offset;
-                      return (
-                        <button key={d.offset} type="button" disabled={d.slots.length === 0}
-                          onClick={() => setScheduleDay(d.offset)}
-                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold whitespace-nowrap border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                            active ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400'
-                                   : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/60 dark:text-slate-300'}`}>
-                          {d.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {(() => {
-                    const day = schedule.find(d => d.offset === scheduleDay);
-                    if (!day || day.slots.length === 0) {
-                      return <p className="text-xs text-violet-700 dark:text-violet-300 text-center font-medium py-2">No delivery slots left for this day</p>;
-                    }
-                    return (
-                      <div className="grid grid-cols-2 gap-2">
-                        {day.slots.map(s => {
-                          const active = scheduledSlot?.offset === s.offset && scheduledSlot?.start === s.start;
-                          return (
-                            <button key={`${s.offset}-${s.start}`} type="button"
-                              onClick={() => { setScheduledSlot(s); setScheduleDay(s.offset); }}
-                              className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${
-                                active ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400'
-                                       : 'border-transparent bg-white/70 text-gray-700 dark:bg-slate-800/60 dark:text-slate-200'}`}>
-                              {slotRange(s)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                  {scheduledSlot && (
-                    <p className="text-[10px] text-violet-700 dark:text-violet-300 text-center font-medium">
-                      {slotLabel(schedule, scheduledSlot)}
-                    </p>
-                  )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => { setDeliveryPreference('within_15'); setScheduledSlot(null); }}
+                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold ${deliveryPreference === 'within_15' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
+                    Fastest Delivery <span className="block text-[10px] font-medium opacity-70">Delivered in 10-15 min</span>
+                  </button>
+                  <button type="button" disabled={availableScheduleDays.length === 0}
+                    onClick={() => {
+                      const first = availableScheduleDays[0];
+                      if (!first) return;
+                      const existingDay = scheduledSlot && availableScheduleDays.find(day => (
+                        day.offset === scheduledSlot.offset
+                        && day.slots.some(slot => slot.start === scheduledSlot.start)
+                      ));
+                      const day = existingDay ?? first;
+                      setDeliveryPreference('scheduled');
+                      setScheduleDay(day.offset);
+                      setScheduledSlot(existingDay ? scheduledSlot : day.slots[0]);
+                    }}
+                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold disabled:cursor-not-allowed disabled:opacity-45 ${deliveryPreference === 'scheduled' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
+                    Schedule Delivery <span className="block text-[10px] font-medium opacity-70">Choose your preferred time</span>
+                  </button>
                 </div>
-                <button type="button" onClick={() => { setDeliveryPreference('within_15'); setShowPreferences(false); setScheduledSlot(null); }}
-                  className="w-full text-center text-[11px] font-semibold text-gray-500 hover:text-emerald-600 py-1">
-                  Deliver as soon as possible
-                </button>
+                {deliveryPreference === 'scheduled' && (
+                  <div className="space-y-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 p-2.5">
+                    {availableScheduleDays.length === 0 ? <p className="py-2 text-center text-xs font-medium text-violet-700 dark:text-violet-300">No delivery times are available today or tomorrow.</p> : <>
+                      <div className="flex gap-2">
+                        {availableScheduleDays.map(day => <button key={day.offset} type="button"
+                          onClick={() => { setScheduleDay(day.offset); setScheduledSlot(day.slots.find(slot => schedulePeriod === 'all' || (schedulePeriod === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60)) ?? day.slots[0]); }}
+                          className={`flex-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold ${selectedSchedule?.offset === day.offset ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400' : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/60 dark:text-slate-300'}`}>{day.label}</button>)}
+                      </div>
+                      <div className="flex gap-1.5">
+                        {(['all', 'am', 'pm'] as const).map(period => <button key={period} type="button" onClick={() => {
+                          setSchedulePeriod(period);
+                          const first = selectedSchedule?.slots.find(slot => period === 'all' || (period === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60));
+                          if (first) setScheduledSlot(first);
+                        }} className={`flex-1 rounded-md py-1 text-[10px] font-bold uppercase ${schedulePeriod === period ? 'bg-violet-600 text-white' : 'bg-white/70 text-violet-700 dark:bg-slate-800 dark:text-violet-300'}`}>{period}</button>)}
+                      </div>
+                      {visibleScheduleSlots.length === 0 ? <p className="py-1 text-center text-xs text-violet-700 dark:text-violet-300">No {schedulePeriod.toUpperCase()} times for this day.</p> : <select value={scheduledSlot && scheduledSlot.offset === selectedSchedule?.offset ? `${scheduledSlot.offset}-${scheduledSlot.start}` : ''} onChange={event => {
+                        const slot = selectedSchedule?.slots.find(item => `${item.offset}-${item.start}` === event.target.value);
+                        if (slot) setScheduledSlot(slot);
+                      }} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 dark:border-violet-800 dark:bg-slate-800 dark:text-white">
+                        {visibleScheduleSlots.map(slot => <option key={`${slot.offset}-${slot.start}`} value={`${slot.offset}-${slot.start}`}>{slotRange(slot)}</option>)}
+                      </select>}
+                      {scheduledSlot && <p className="text-center text-[11px] font-semibold text-violet-700 dark:text-violet-300">Scheduled: {slotLabel(schedule, scheduledSlot)}</p>}
+                    </>}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1390,8 +1378,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             <div className="border-t border-gray-50 dark:border-slate-700" />
 
             {/* Delivery note */}
-            <button type="button" onClick={() => setShowNotes(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left">
+            <div className="relative flex items-center gap-3 px-4 py-3">
               <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center flex-shrink-0">
                 <MessageCircle className="w-4 h-4 text-violet-600" />
               </div>
@@ -1399,93 +1386,42 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery instruction</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{currentNote}</p>
               </div>
-              <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">Change</span>
-            </button>
-          </div>
-
-          {/* Delivery note bottom sheet */}
-          {showNotes && (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
-              onClick={() => setShowNotes(false)}>
-              <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl"
-                onClick={e => e.stopPropagation()}>
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-slate-700">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
-                    <MessageCircle className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">Delivery instruction</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">How should we handle your delivery?</p>
-                  </div>
-                  <button onClick={() => setShowNotes(false)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                    <X className="w-4 h-4 text-gray-500" />
+              <button type="button" onClick={() => setShowNoteMenu(open => !open)}
+                className="flex h-7 shrink-0 items-center rounded-lg border border-violet-600 bg-violet-600 px-2.5 text-[11px] font-bold text-white dark:border-violet-500 dark:bg-violet-600">
+                Change
+              </button>
+              {showNoteMenu && (
+                <div className="absolute right-4 top-[calc(100%-4px)] z-20 w-52 overflow-hidden rounded-lg border border-violet-100 bg-white py-1 shadow-lg dark:border-violet-900 dark:bg-slate-800">
+                  {NOTES.map(note => <button key={note} type="button" onClick={() => {
+                    setDeliveryNote(note);
+                    setShowCustomNote(false);
+                    setShowNoteMenu(false);
+                  }} className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-violet-50 dark:text-slate-200 dark:hover:bg-violet-900/30">
+                    {note}
+                  </button>)}
+                  <button type="button" onClick={() => { setShowCustomNote(true); setShowNoteMenu(false); }} className="w-full border-t border-violet-100 px-3 py-2 text-left text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-900/30">
+                    Write your own...
                   </button>
                 </div>
-                <div className="px-5 py-4 space-y-2">
-                  {NOTES.map(note => (
-                    <label key={note} className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                      !showCustomNote && deliveryNote === note ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'
-                    }`}>
-                      <input type="radio" name="note" checked={!showCustomNote && deliveryNote === note}
-                        onChange={() => { setDeliveryNote(note); setShowCustomNote(false); setShowNotes(false); }} className="accent-emerald-500" />
-                      <span className="text-sm text-gray-700 dark:text-slate-300">{note}</span>
-                    </label>
-                  ))}
-                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                    showCustomNote ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'
-                  }`}>
-                    <input type="radio" name="note" checked={showCustomNote}
-                      onChange={() => setShowCustomNote(true)} className="accent-emerald-500" />
-                    <span className="text-sm text-gray-700 dark:text-slate-300">✏️ Write your own...</span>
-                  </label>
-                  {showCustomNote && (
-                    <>
-                      <textarea value={customNote} onChange={e => setCustomNote(e.target.value)}
-                        className={`${inp} resize-none`} rows={2} placeholder="e.g. Come to 3rd floor" autoFocus={finePointer} />
-                      <button type="button" onClick={() => setShowNotes(false)}
-                        className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-colors">
-                        Done
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
-          )}
+            {showCustomNote && (
+              <div className="border-t border-gray-100 px-4 py-3 dark:border-slate-700">
+                <textarea value={customNote} onChange={event => setCustomNote(event.target.value)}
+                  className={`${inp} resize-none`} rows={2} placeholder="e.g. Come to 3rd floor" autoFocus={finePointer} />
+              </div>
+            )}
+          </div>
 
           {/* ── Bill Summary ── */}
           <div className={card}>
-            <button type="button" onClick={() => setBillExpanded(s => !s)}
-              className="w-full flex items-center justify-between px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-slate-700">
               <span className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Bill Summary</span>
-              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                {billExpanded ? 'Hide' : 'View'} details
-                <ChevronUp className={`h-3.5 w-3.5 transition-transform ${billExpanded ? '' : 'rotate-180'}`} />
-              </span>
-            </button>
-            {billExpanded && (
-              <div className="border-t border-gray-100 dark:border-slate-700 px-4 py-3">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500">Items</p>
-                {items.map((item, index) => (
-                  <div key={`${item.productId}-${item.unit}`} className={`flex items-start justify-between gap-3 py-2.5 ${index > 0 ? 'border-t border-gray-100 dark:border-slate-700/70' : ''}`}>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-800 dark:text-slate-100">{item.productName}</p>
-                      <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">{item.unit} · ₹{item.price} × {item.quantity}</p>
-                    </div>
-                    <span className="shrink-0 pt-0.5 text-sm font-semibold text-gray-900 dark:text-white">₹{(item.price * item.quantity).toFixed(0)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className={`px-4 py-3 space-y-2 ${billExpanded ? 'border-t border-gray-100 dark:border-slate-700' : ''}`}>
-              {totalSavings > 0 && (
-                <div className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-2 text-amber-950 shadow-sm">
-                  <span className="text-sm" aria-hidden="true">🎉</span>
-                  <span className="text-sm font-extrabold">You saved ₹{totalSavings.toFixed(0)}</span>
-                  <span className="text-xs font-semibold text-amber-900/80">on this order</span>
-                </div>
-              )}
-              {billExpanded && <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-slate-500">Charges</p>}
+              {totalSavings > 0 && <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-2 py-1 text-[11px] font-bold text-amber-950 shadow-sm">
+                <span aria-hidden="true">🎉</span> You saved ₹{totalSavings.toFixed(0)} on this order
+              </span>}
+            </div>
+            <div className="space-y-2 px-4 py-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600 dark:text-slate-400">Item total</span>
                 <span className="flex items-center gap-1.5">
