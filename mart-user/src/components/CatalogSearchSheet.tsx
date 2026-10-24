@@ -170,6 +170,15 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
             <section className="mb-5">
               <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">Browse categories</h2>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                <button type="button" onClick={() => setCategoryId(null)}
+                  className={`flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-colors ${
+                    categoryId === null
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                      : 'border-gray-100 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                  }`}>
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-current/10 text-sm font-bold">All</span>
+                  <span className="line-clamp-2 text-[10px] font-semibold leading-tight">All products</span>
+                </button>
                 {categoriesWithProducts.slice(0, 5).map(category => {
                   const selected = category.id === categoryId;
                   return (
