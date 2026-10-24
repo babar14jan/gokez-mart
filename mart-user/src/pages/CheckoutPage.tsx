@@ -242,21 +242,21 @@ function OffersPanel(props: OffersPanelProps) {
     codeInput, onCodeInput, codeLoading, codeError,
     codeSuccess, onValidateCode, onApply, onClearCode, onRemoveOffer } = props;
   const hasMinimumOrderNotice = /^Add ₹[\d.]+ more to unlock this offer/.test(notice);
+  const showOffersHeader = campaigns.length > 0 || locked || Boolean(notice);
 
   return (
     <div className={cardClass}>
       <div className="px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
-            <div className="min-w-0">
-              <span className="block text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
-              {campaigns.length === 0 && !locked && !hasMinimumOrderNotice && (
-                <span className="block text-[11px] text-gray-500 dark:text-slate-400">No offers are available for this cart right now.</span>
-              )}
+        {showOffersHeader && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
+              <div className="min-w-0">
+                <span className="block text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {campaigns.length > 0 && (
           <div className="mt-3 space-y-2">
@@ -342,7 +342,7 @@ function OffersPanel(props: OffersPanelProps) {
             here gets a bare "No token provided". Guests apply the campaign code
             with Apply & Save, and the code is printed in the offer details. */}
         {!locked && !hasMinimumOrderNotice && (
-        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+        <div className={showOffersHeader ? 'mt-3 border-t border-gray-100 pt-3 dark:border-slate-700' : ''}>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300">Have a coupon code?</label>
             {appliedCode && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Applied</span>}
@@ -561,7 +561,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
   // Delivery note
   const [deliveryNote, setDeliveryNote] = useState('Ring the bell');
-  const [showNotes, setShowNotes] = useState(false);
+  const [showNoteMenu, setShowNoteMenu] = useState(false);
   const [showCustomNote, setShowCustomNote] = useState(false);
   const [customNote, setCustomNote] = useState('');
 
@@ -1301,10 +1301,9 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
           />
 
           {/* ── USP: Delivery time + Note in one card ── */}
-          <div className={card}>
+          <div className={`${card} !overflow-visible`}>
             <button type="button"
               onClick={() => {
-                setShowNotes(false);
                 setShowPreferences(open => !open);
               }}
               className="w-full flex items-center gap-3 px-4 py-3 text-left">
@@ -1319,7 +1318,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                     : <>Delivery in 10-15 mins</>}
                 </p>
               </div>
-              <span className="flex items-center flex-shrink-0 bg-gray-900 dark:bg-slate-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg">
+              <span className="flex h-7 items-center flex-shrink-0 rounded-lg bg-gray-900 px-2.5 text-[11px] font-bold text-white dark:bg-slate-700">
                 {showPreferences ? 'Done' : 'Schedule Delivery'}
               </span>
             </button>
@@ -1379,8 +1378,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             <div className="border-t border-gray-50 dark:border-slate-700" />
 
             {/* Delivery note */}
-            <button type="button" onClick={() => setShowNotes(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left">
+            <div className="relative flex items-center gap-3 px-4 py-3">
               <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center flex-shrink-0">
                 <MessageCircle className="w-4 h-4 text-violet-600" />
               </div>
@@ -1388,59 +1386,32 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery instruction</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{currentNote}</p>
               </div>
-              <span className="text-xs font-semibold text-emerald-600 flex-shrink-0">Change</span>
-            </button>
-          </div>
-
-          {/* Delivery note bottom sheet */}
-          {showNotes && (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
-              onClick={() => setShowNotes(false)}>
-              <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl"
-                onClick={e => e.stopPropagation()}>
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-slate-700">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
-                    <MessageCircle className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">Delivery instruction</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">How should we handle your delivery?</p>
-                  </div>
-                  <button onClick={() => setShowNotes(false)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
-                    <X className="w-4 h-4 text-gray-500" />
+              <button type="button" onClick={() => setShowNoteMenu(open => !open)}
+                className="flex h-7 shrink-0 items-center rounded-lg border border-violet-600 bg-violet-600 px-2.5 text-[11px] font-bold text-white dark:border-violet-500 dark:bg-violet-600">
+                Change
+              </button>
+              {showNoteMenu && (
+                <div className="absolute right-4 top-[calc(100%-4px)] z-20 w-52 overflow-hidden rounded-lg border border-violet-100 bg-white py-1 shadow-lg dark:border-violet-900 dark:bg-slate-800">
+                  {NOTES.map(note => <button key={note} type="button" onClick={() => {
+                    setDeliveryNote(note);
+                    setShowCustomNote(false);
+                    setShowNoteMenu(false);
+                  }} className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-violet-50 dark:text-slate-200 dark:hover:bg-violet-900/30">
+                    {note}
+                  </button>)}
+                  <button type="button" onClick={() => { setShowCustomNote(true); setShowNoteMenu(false); }} className="w-full border-t border-violet-100 px-3 py-2 text-left text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-900/30">
+                    Write your own...
                   </button>
                 </div>
-                <div className="px-5 py-4 space-y-2">
-                  {NOTES.map(note => (
-                    <label key={note} className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                      !showCustomNote && deliveryNote === note ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'
-                    }`}>
-                      <input type="radio" name="note" checked={!showCustomNote && deliveryNote === note}
-                        onChange={() => { setDeliveryNote(note); setShowCustomNote(false); setShowNotes(false); }} className="accent-emerald-500" />
-                      <span className="text-sm text-gray-700 dark:text-slate-300">{note}</span>
-                    </label>
-                  ))}
-                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
-                    showCustomNote ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-100 dark:border-slate-700'
-                  }`}>
-                    <input type="radio" name="note" checked={showCustomNote}
-                      onChange={() => setShowCustomNote(true)} className="accent-emerald-500" />
-                    <span className="text-sm text-gray-700 dark:text-slate-300">✏️ Write your own...</span>
-                  </label>
-                  {showCustomNote && (
-                    <>
-                      <textarea value={customNote} onChange={e => setCustomNote(e.target.value)}
-                        className={`${inp} resize-none`} rows={2} placeholder="e.g. Come to 3rd floor" autoFocus={finePointer} />
-                      <button type="button" onClick={() => setShowNotes(false)}
-                        className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-colors">
-                        Done
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
-          )}
+            {showCustomNote && (
+              <div className="border-t border-gray-100 px-4 py-3 dark:border-slate-700">
+                <textarea value={customNote} onChange={event => setCustomNote(event.target.value)}
+                  className={`${inp} resize-none`} rows={2} placeholder="e.g. Come to 3rd floor" autoFocus={finePointer} />
+              </div>
+            )}
+          </div>
 
           {/* ── Bill Summary ── */}
           <div className={card}>
