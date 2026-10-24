@@ -197,7 +197,7 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
               </div>
             ) : layout === 'row' ? (
               <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-                {visibleItems.slice(0, items.length > 4 ? 4 : items.length).map((p: any) => (
+                {visibleItems.map((p: any) => (
                   <div key={p.id} className="w-[42%] min-w-[140px] sm:w-[170px] md:w-[190px] flex-shrink-0">
                     <ProductCard product={p} />
                   </div>
