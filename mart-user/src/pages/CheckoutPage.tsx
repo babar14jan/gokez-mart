@@ -49,21 +49,13 @@ const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 round
 
 const PREFERENCES = [
   { value: 'within_15', label: '⚡ 10-15 mins', sub: 'Fastest' },
-  { value: 'within_30', label: '🕐 30 mins',   sub: 'Standard' },
-  { value: 'within_60', label: '🕑 1 hour',    sub: 'Flexible' },
   { value: 'scheduled', label: '📅 Schedule',  sub: 'Pick a slot' },
 ] as const;
 
-/* Designated delivery windows, generated from the store's opening hours. A
-   customer who does not need the fastest option picks a day and a two-hour
-   slot; the chosen start instant is stored on the order so the hub and the
-   rider plan around it. Slots run open→close for today and tomorrow only, and
-   any window that has already started is dropped, so the picker never offers a
-   time that has passed. All of this is reasoned about in IST -- the store's
-   clock -- rather than the customer's device, matching the backend. Exit the
-   country and the slots still line up with the shop's day. */
+/* Delivery preferences are generated in IST from the store's published hours.
+  They are non-exclusive 30-minute windows for today or tomorrow only. */
 const IST_OFFSET_MIN = 330; // Asia/Kolkata, fixed +05:30
-const SLOT_MINUTES = 120;
+const SLOT_MINUTES = 30;
 const SLOT_LEAD_MINUTES = 30; // a window opening within 30 min is not bookable
 const FALLBACK_OPEN_MIN = 8 * 60;
 const FALLBACK_CLOSE_MIN = 22 * 60;
@@ -123,10 +115,10 @@ function buildSchedule(hours: StoreOpeningHours | undefined): DeliveryDay[] {
     if (w && !w.closed) {
       const open = toMinutes(w.open, FALLBACK_OPEN_MIN);
       const close = toMinutes(w.close, FALLBACK_CLOSE_MIN);
-      for (let s = open; s + 60 <= close; s += SLOT_MINUTES) {
+      for (let s = open; s + SLOT_MINUTES <= close; s += SLOT_MINUTES) {
         const at = istInstant(offset, s);
         if (at.getTime() <= nowMs + SLOT_LEAD_MINUTES * 60000) continue;
-        slots.push({ offset, start: s, end: Math.min(s + SLOT_MINUTES, close), at });
+        slots.push({ offset, start: s, end: s + SLOT_MINUTES, at });
       }
     }
     days.push({ offset, label, slots });
@@ -558,7 +550,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const [showPreferences, setShowPreferences] = useState(false);
   const [scheduledSlot, setScheduledSlot] = useState<DeliverySlot | null>(null);
   const [scheduleDay, setScheduleDay] = useState(0);
+  const [schedulePeriod, setSchedulePeriod] = useState<'all' | 'am' | 'pm'>('all');
   const schedule = useMemo(() => buildSchedule(settings.openingHours), [settings.openingHours]);
+  const availableScheduleDays = useMemo(() => schedule.filter(day => day.slots.length > 0), [schedule]);
+  const selectedSchedule = availableScheduleDays.find(day => day.offset === scheduleDay) ?? availableScheduleDays[0];
+  const visibleScheduleSlots = (selectedSchedule?.slots ?? []).filter(slot => (
+    schedulePeriod === 'all'
+    || (schedulePeriod === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60)
+  ));
 
   // Delivery note
   const [deliveryNote, setDeliveryNote] = useState('Ring the bell');
@@ -906,9 +905,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
     track('checkout_reviewed', { itemCount: lockedItems.length, subtotal: lockedSubtotal });
     // After validation, before the request: a customer with a form problem
     // should be told about that, not asked to confirm a delay they have not
-    // reached yet. Defaulting to "proceed" keeps checkout working if this page
-    // is ever rendered without the prop.
-    if (confirmOrder && !(await confirmOrder())) return;
+    // reached yet. A valid customer-selected schedule already falls within
+    // published store hours, so the closed-store prompt applies only to the
+    // immediate Fastest option. Defaulting to "proceed" keeps checkout working
+    // if this page is ever rendered without the prop.
+    if (deliveryPreference !== 'scheduled' && confirmOrder && !(await confirmOrder())) return;
     setLoading(true); setError(''); setValidationField(null); setShowMissingDetails(false); setSubmittedTotal(total);
     try {
       const res = await storeApi.placeOrder({
@@ -1302,21 +1303,10 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
           {/* ── USP: Delivery time + Note in one card ── */}
           <div className={card}>
-            {/* Fastest is the default and is deliberately not offered as a choice.
-                A customer who does not need it taps "Schedule Delivery" to book a
-                later window. */}
             <button type="button"
               onClick={() => {
                 setShowNotes(false);
-                if (showPreferences) { setShowPreferences(false); return; }
-                setDeliveryPreference('scheduled');
-                setShowPreferences(true);
-                if (scheduledSlot) {
-                  setScheduleDay(scheduledSlot.offset);
-                } else {
-                  const first = schedule.find(d => d.slots.length > 0);
-                  if (first) { setScheduleDay(first.offset); setScheduledSlot(first.slots[0]); }
-                }
+                setShowPreferences(open => !open);
               }}
               className="w-full flex items-center gap-3 px-4 py-3 text-left">
               <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
@@ -1331,58 +1321,58 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 </p>
               </div>
               <span className="flex items-center flex-shrink-0 bg-gray-900 dark:bg-slate-700 text-white text-xs font-bold px-3.5 py-2 rounded-lg">
-                {showPreferences ? 'Done' : deliveryPreference === 'scheduled' ? 'Change' : 'Schedule Delivery'}
+                {showPreferences ? 'Done' : 'Schedule Delivery'}
               </span>
             </button>
             {showPreferences && (
               <div className="border-t border-gray-100 dark:border-slate-700 p-3 space-y-2.5">
-                <div className="space-y-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 p-2.5">
-                  <div className="flex gap-2 overflow-x-auto">
-                    {schedule.map(d => {
-                      const active = scheduleDay === d.offset;
-                      return (
-                        <button key={d.offset} type="button" disabled={d.slots.length === 0}
-                          onClick={() => setScheduleDay(d.offset)}
-                          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold whitespace-nowrap border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                            active ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400'
-                                   : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/60 dark:text-slate-300'}`}>
-                          {d.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {(() => {
-                    const day = schedule.find(d => d.offset === scheduleDay);
-                    if (!day || day.slots.length === 0) {
-                      return <p className="text-xs text-violet-700 dark:text-violet-300 text-center font-medium py-2">No delivery slots left for this day</p>;
-                    }
-                    return (
-                      <div className="grid grid-cols-2 gap-2">
-                        {day.slots.map(s => {
-                          const active = scheduledSlot?.offset === s.offset && scheduledSlot?.start === s.start;
-                          return (
-                            <button key={`${s.offset}-${s.start}`} type="button"
-                              onClick={() => { setScheduledSlot(s); setScheduleDay(s.offset); }}
-                              className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${
-                                active ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400'
-                                       : 'border-transparent bg-white/70 text-gray-700 dark:bg-slate-800/60 dark:text-slate-200'}`}>
-                              {slotRange(s)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                  {scheduledSlot && (
-                    <p className="text-[10px] text-violet-700 dark:text-violet-300 text-center font-medium">
-                      {slotLabel(schedule, scheduledSlot)}
-                    </p>
-                  )}
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => { setDeliveryPreference('within_15'); setScheduledSlot(null); }}
+                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold ${deliveryPreference === 'within_15' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
+                    Fastest Delivery <span className="block text-[10px] font-medium opacity-70">Delivered in 10-15 min</span>
+                  </button>
+                  <button type="button" disabled={availableScheduleDays.length === 0}
+                    onClick={() => {
+                      const first = availableScheduleDays[0];
+                      if (!first) return;
+                      const existingDay = scheduledSlot && availableScheduleDays.find(day => (
+                        day.offset === scheduledSlot.offset
+                        && day.slots.some(slot => slot.start === scheduledSlot.start)
+                      ));
+                      const day = existingDay ?? first;
+                      setDeliveryPreference('scheduled');
+                      setScheduleDay(day.offset);
+                      setScheduledSlot(existingDay ? scheduledSlot : day.slots[0]);
+                    }}
+                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold disabled:cursor-not-allowed disabled:opacity-45 ${deliveryPreference === 'scheduled' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
+                    Schedule Delivery <span className="block text-[10px] font-medium opacity-70">Choose your preferred time</span>
+                  </button>
                 </div>
-                <button type="button" onClick={() => { setDeliveryPreference('within_15'); setShowPreferences(false); setScheduledSlot(null); }}
-                  className="w-full text-center text-[11px] font-semibold text-gray-500 hover:text-emerald-600 py-1">
-                  Deliver as soon as possible
-                </button>
+                {deliveryPreference === 'scheduled' && (
+                  <div className="space-y-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 p-2.5">
+                    {availableScheduleDays.length === 0 ? <p className="py-2 text-center text-xs font-medium text-violet-700 dark:text-violet-300">No delivery times are available today or tomorrow.</p> : <>
+                      <div className="flex gap-2">
+                        {availableScheduleDays.map(day => <button key={day.offset} type="button"
+                          onClick={() => { setScheduleDay(day.offset); setScheduledSlot(day.slots.find(slot => schedulePeriod === 'all' || (schedulePeriod === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60)) ?? day.slots[0]); }}
+                          className={`flex-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold ${selectedSchedule?.offset === day.offset ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400' : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/60 dark:text-slate-300'}`}>{day.label}</button>)}
+                      </div>
+                      <div className="flex gap-1.5">
+                        {(['all', 'am', 'pm'] as const).map(period => <button key={period} type="button" onClick={() => {
+                          setSchedulePeriod(period);
+                          const first = selectedSchedule?.slots.find(slot => period === 'all' || (period === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60));
+                          if (first) setScheduledSlot(first);
+                        }} className={`flex-1 rounded-md py-1 text-[10px] font-bold uppercase ${schedulePeriod === period ? 'bg-violet-600 text-white' : 'bg-white/70 text-violet-700 dark:bg-slate-800 dark:text-violet-300'}`}>{period}</button>)}
+                      </div>
+                      {visibleScheduleSlots.length === 0 ? <p className="py-1 text-center text-xs text-violet-700 dark:text-violet-300">No {schedulePeriod.toUpperCase()} times for this day.</p> : <select value={scheduledSlot && scheduledSlot.offset === selectedSchedule?.offset ? `${scheduledSlot.offset}-${scheduledSlot.start}` : ''} onChange={event => {
+                        const slot = selectedSchedule?.slots.find(item => `${item.offset}-${item.start}` === event.target.value);
+                        if (slot) setScheduledSlot(slot);
+                      }} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 dark:border-violet-800 dark:bg-slate-800 dark:text-white">
+                        {visibleScheduleSlots.map(slot => <option key={`${slot.offset}-${slot.start}`} value={`${slot.offset}-${slot.start}`}>{slotRange(slot)}</option>)}
+                      </select>}
+                      {scheduledSlot && <p className="text-center text-[11px] font-semibold text-violet-700 dark:text-violet-300">Scheduled: {slotLabel(schedule, scheduledSlot)}</p>}
+                    </>}
+                  </div>
+                )}
               </div>
             )}
 
