@@ -191,23 +191,41 @@ export interface Product {
 }
 
 /**
- * A configurable homepage section, ordered by the backend. `sectionKey` selects
- * how the storefront renders it; `config` carries the small amount of per-section
- * setting. Product content is resolved live from the catalogue, never stored here.
+ * A configurable homepage section, ordered by the backend. `kind` selects
+ * how the storefront renders it; `config` carries per-section settings.
+ * When served publicly, `items` may be pre-resolved by the server.
  */
 export interface HomeSection {
   id: string;
-  sectionKey: 'todays_combos' | 'fresh_vegetables' | 'deals' | 'top_picks' | string;
+  kind?: 'manual' | 'category' | 'combo' | 'deals' | 'bestsellers' | 'new_arrivals' | 'buy_again' | 'banner' | 'category_tiles' | string;
+  sectionKey?: 'todays_combos' | 'fresh_vegetables' | 'deals' | 'top_picks' | string;
   title: string;
   subtitle: string | null;
   sortOrder: number;
   isEnabled: boolean;
+  layout?: 'row' | 'grid' | 'hero' | 'tiles' | null;
+  badge?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  visibilityRule?: string | null;
   config: {
-    categorySlug: string | null;
+    categorySlug?: string | null;
+    categorySlugs?: string[];
     productIds?: string[];
+    excludeProductIds?: string[];
     limit?: number | null;
-    layout?: 'row' | 'grid' | null;
+    layout?: 'row' | 'grid' | 'hero' | 'tiles' | null;
+    fallback?: 'none' | 'bestsellers' | 'new_arrivals';
+    sort?: 'catalogue' | 'discount' | 'price_asc' | 'price_desc' | 'newest' | 'bestselling';
+    inStockOnly?: boolean;
+    minDiscount?: number;
+    windowDays?: number;
+    imageUrl?: string | null;
+    href?: string | null;
+    alt?: string | null;
+    columns?: number | null;
   };
+  items?: Product[];
 }
 
 /**
@@ -413,4 +431,5 @@ export const campaignApi = {
   validateCode: (code: string, cartTotal: number, storeId: string) =>
     api.post("/campaigns/validate", { code, cartTotal, storeId }),
   getCarousel: () => api.get("/carousel"),
+  getCarouselSettings: () => api.get("/carousel/settings"),
 };

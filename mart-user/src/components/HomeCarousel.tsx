@@ -17,12 +17,10 @@ interface Slide {
   couponCode: string | null;
 }
 
-// Fallback static slides if API fails
-const FALLBACK: Slide[] = [
-  { id: '1', title: 'Shop local. Support local.', subtitle: 'Fresh from your neighbourhood', image_url: '/1.webp', gradient: 'from-emerald-500 via-teal-500 to-cyan-500', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null },
-  { id: '2', title: 'Farm fresh every day', subtitle: 'Sourced directly from local vendors', image_url: '/2.webp', gradient: 'from-violet-500 via-purple-600 to-indigo-600', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null },
-  { id: '3', title: 'Bringing local stores online', subtitle: 'Your neighbourhood store, now at your door', image_url: '/3.webp', gradient: 'from-rose-500 via-pink-500 to-fuchsia-500', campaign_id: null, campaignTitle: null, campaignBadge: null, discountType: null, discountValue: null, couponCode: null },
-];
+interface CarouselSettings {
+  autoplay_enabled: boolean;
+  autoplay_interval_seconds: number;
+}
 
 function discountLabel(slide: Slide): string {
   if (!slide.discountType) return '';
@@ -42,14 +40,16 @@ function discountLabel(slide: Slide): string {
 // paint the exact same frame instantly.
 let cachedSlides: Slide[] | null = null;
 let cachedActive = 0;
+let cachedSettings: CarouselSettings = { autoplay_enabled: true, autoplay_interval_seconds: 4 };
 
 export default function HomeCarousel() {
   const { isLoggedIn } = useCustomerAuthStore();
-  const [slides, setSlides] = useState<Slide[]>(() => cachedSlides ?? FALLBACK);
+  const [slides, setSlides] = useState<Slide[]>(() => cachedSlides ?? []);
   const [active, setActive] = useState(() => {
-    const len = (cachedSlides ?? FALLBACK).length;
+    const len = (cachedSlides ?? []).length;
     return Math.min(Math.max(cachedActive, 0), Math.max(0, len - 1));
   });
+  const [settings, setSettings] = useState<CarouselSettings>(cachedSettings);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const settleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -74,9 +74,8 @@ export default function HomeCarousel() {
 
   useEffect(() => {
     campaignApi.getCarousel()
-      .then(r => {
-        const data: Slide[] = r.data.data || [];
-        if (data.length === 0) return;
+      .then(slidesResponse => {
+        const data: Slide[] = slidesResponse.data.data || [];
         cachedSlides = data;
         const prev = slidesRef.current;
         // Identical set (the common remount case): keep the current slide and DOM
@@ -84,7 +83,14 @@ export default function HomeCarousel() {
         if (prev.length === data.length && prev.every((s, i) => s.id === data[i].id)) return;
         setSlides(data);
       })
-      .catch(() => {}); // fallback to static
+      .catch(() => {});
+    campaignApi.getCarouselSettings()
+      .then(settingsResponse => {
+        const savedSettings: CarouselSettings = settingsResponse.data.data || cachedSettings;
+        cachedSettings = savedSettings;
+        setSettings(savedSettings);
+      })
+      .catch(() => {});
   }, [isLoggedIn]);
 
   const stopTimer = useCallback(() => {
@@ -115,7 +121,7 @@ export default function HomeCarousel() {
   // Scroll-driven scale/opacity for the peek effect, plus loop bookkeeping.
   const handleScroll = useCallback(() => {
     const track = trackRef.current;
-    if (!track) return;
+    if (!track || n === 0) return;
     const center = track.scrollLeft + track.clientWidth / 2;
     let best = offset;
     let bestDist = Infinity;
@@ -140,11 +146,11 @@ export default function HomeCarousel() {
 
   const startTimer = useCallback(() => {
     stopTimer();
-    if (!loop) return;
+    if (!loop || !settings.autoplay_enabled) return;
     timerRef.current = setInterval(() => {
       scrollToDisplay(displayIndexRef.current + 1);
-    }, 4000);
-  }, [loop, stopTimer, scrollToDisplay]);
+    }, settings.autoplay_interval_seconds * 1000);
+  }, [loop, settings, stopTimer, scrollToDisplay]);
 
   useEffect(() => {
     startTimer();
@@ -158,7 +164,7 @@ export default function HomeCarousel() {
   const slidesKey = slides.map(s => s.id).join('|');
   useLayoutEffect(() => {
     const track = trackRef.current;
-    if (!track || track.clientWidth === 0) return;
+    if (!track || track.clientWidth === 0 || n === 0) return;
     let real = Math.max(cachedActive, 0);
     if (real >= n) real = 0;
     cachedActive = real;

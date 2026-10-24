@@ -465,6 +465,8 @@ export const campaignsApi = {
 
 export const carouselApi = {
   getAll: () => api.get("/admin/carousel"),
+  getSettings: () => api.get("/admin/carousel/settings"),
+  updateSettings: (data: { autoplayEnabled: boolean; autoplayIntervalSeconds: number }) => api.put("/admin/carousel/settings", data),
   create: (data: any) => api.post("/admin/carousel", data),
   update: (id: string, data: any) => api.put("/admin/carousel/" + id, data),
   delete: (id: string) => api.delete("/admin/carousel/" + id),
@@ -481,6 +483,7 @@ export const homeSectionsApi = {
   getAll: (storeId: string) => api.get("/admin/home-sections", { params: { storeId } }),
   create: (storeId: string, data: any) => api.post("/admin/home-sections", data, { params: { storeId } }),
   update: (storeId: string, id: string, data: any) => api.put("/admin/home-sections/" + id, data, { params: { storeId } }),
+  duplicate: (storeId: string, id: string) => api.post("/admin/home-sections/" + id + "/duplicate", {}, { params: { storeId } }),
   delete: (storeId: string, id: string) => api.delete("/admin/home-sections/" + id, { params: { storeId } }),
   reorder: (storeId: string, ids: string[]) => api.post("/admin/home-sections/reorder", { ids }, { params: { storeId } }),
 };

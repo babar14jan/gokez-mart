@@ -163,6 +163,8 @@ router.post('/admin/campaigns/:id/supersede',   authenticate, requireSuperAdmin,
 
 // Carousel slides (super_admin only)
 router.get('/admin/carousel',                  authenticate, requireSuperAdmin, ctrl.adminGetCarouselSlides);
+router.get('/admin/carousel/settings',         authenticate, requireSuperAdmin, ctrl.adminGetCarouselSettings);
+router.put('/admin/carousel/settings',         authenticate, requireSuperAdmin, ctrl.adminUpdateCarouselSettings);
 router.post('/admin/carousel',                 authenticate, requireSuperAdmin, ctrl.adminCreateCarouselSlide);
 router.put('/admin/carousel/:id',              authenticate, requireSuperAdmin, ctrl.adminUpdateCarouselSlide);
 router.delete('/admin/carousel/:id',           authenticate, requireSuperAdmin, ctrl.adminDeleteCarouselSlide);
@@ -170,6 +172,7 @@ router.post('/admin/carousel/reorder',         authenticate, requireSuperAdmin, 
 
 // Public campaign routes
 router.get('/carousel',                        authenticateCustomerIfPresent, ctrl.getCarouselSlides);
+router.get('/carousel/settings',               ctrl.getCarouselSettings);
 router.get('/campaigns/welcome',              authenticateCustomerIfPresent, ctrl.getPublicWelcomeOffers);
 router.get('/campaigns/eligible',              authenticateCustomerIfPresent, ctrl.getEligibleCampaigns);
 router.post('/campaigns/validate',             authenticateCustomer, ctrl.validateCouponCode);
@@ -178,6 +181,7 @@ router.post('/campaigns/validate',             authenticateCustomer, ctrl.valida
 router.get('/home-sections',                   ctrl.getPublicHomeSections);   // ?storeId=
 router.get('/admin/home-sections',             authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminGetHomeSections);
 router.post('/admin/home-sections',            authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminCreateHomeSection);
+router.post('/admin/home-sections/:id/duplicate', authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminDuplicateHomeSection);
 router.put('/admin/home-sections/:id',         authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminUpdateHomeSection);
 router.delete('/admin/home-sections/:id',      authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminDeleteHomeSection);
 router.post('/admin/home-sections/reorder',    authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminReorderHomeSections);
