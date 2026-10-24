@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import ProductCard from './ProductCard';
@@ -35,7 +35,10 @@ function matches(product: Product, query: string): boolean {
 
 export default function CategoriesView({ categories, products, initialCategoryId, initialCategorySlug }: CategoriesViewProps) {
   // Hide categories with no visible products for this store
-  const visibleCategories = categories.filter(cat => products.some(p => p.categoryId === cat.id));
+  const visibleCategories = useMemo(
+    () => categories.filter(category => products.some(product => product.categoryId === category.id)),
+    [categories, products],
+  );
   const getInitial = () => {
     if (initialCategoryId && visibleCategories.some(c=>c.id===initialCategoryId)) return initialCategoryId;
     if (initialCategorySlug) {
@@ -46,17 +49,28 @@ export default function CategoriesView({ categories, products, initialCategoryId
   };
   const [activeCatId, setActiveCatId] = useState<string>(getInitial());
   const [search, setSearch] = useState('');
+  const appliedInitialSelection = useRef<string | null>(null);
   const { ref: inputRef, dismiss, onKeyDown, onSurfaceClick } = useKeyboardDismiss();
 
   useEffect(() => {
-    if (initialCategoryId && visibleCategories.some(c=>c.id===initialCategoryId)) {
-      setActiveCatId(initialCategoryId);
-      return;
+    const selectionKey = initialCategoryId
+      ? `id:${initialCategoryId}`
+      : initialCategorySlug
+        ? `slug:${initialCategorySlug.toLowerCase()}`
+        : '';
+
+    if (selectionKey && appliedInitialSelection.current !== selectionKey) {
+      const targetId = initialCategoryId && visibleCategories.some(category => category.id === initialCategoryId)
+        ? initialCategoryId
+        : visibleCategories.find(category => String(category.slug).toLowerCase() === String(initialCategorySlug).toLowerCase())?.id;
+      if (targetId) {
+        appliedInitialSelection.current = selectionKey;
+        setActiveCatId(targetId);
+        return;
+      }
     }
-    if (initialCategorySlug) {
-      const found = visibleCategories.find(c=>String(c.slug).toLowerCase()===String(initialCategorySlug).toLowerCase());
-      if (found) { setActiveCatId(found.id); return; }
-    }
+
+    if (!selectionKey) appliedInitialSelection.current = selectionKey;
     if (!visibleCategories.some(category => category.id === activeCatId)) {
       setActiveCatId(visibleCategories[0]?.id || '');
     }
