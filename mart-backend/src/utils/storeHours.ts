@@ -88,6 +88,9 @@ export interface StoreOpenState {
   closedUntilLabel?: string | null;
 }
 
+const SCHEDULE_SLOT_MINUTES = 30;
+const SCHEDULE_LEAD_MINUTES = 30;
+
 // ── IST primitives ────────────────────────────────────────────────────────────
 
 const partsFmt = new Intl.DateTimeFormat('en-US', {
@@ -206,6 +209,35 @@ function dayWindow(hours: OpeningHours, day: DayKey): { open: number; close: num
   const close = parseHhMm(raw.close);
   if (open === null || close === null) return null;
   return { open, close };
+}
+
+/**
+ * A requested delivery preference is a non-exclusive 30-minute IST window.
+ * It must be today or tomorrow, after the booking lead time, and within the
+ * store's published hours. It intentionally does not inspect other orders:
+ * several customers may choose the same window.
+ */
+export function isValidScheduledDelivery(
+  openingHours: OpeningHours,
+  scheduledFor: Date,
+  now: Date = new Date(),
+): boolean {
+  if (Number.isNaN(scheduledFor.getTime())) return false;
+  if (scheduledFor.getTime() <= now.getTime() + SCHEDULE_LEAD_MINUTES * 60_000) return false;
+
+  const current = istParts(now);
+  const requested = istParts(scheduledFor);
+  const dayOffset = Math.round(
+    (Date.UTC(requested.y, requested.mo - 1, requested.d) - Date.UTC(current.y, current.mo - 1, current.d)) / 86_400_000,
+  );
+  if (dayOffset !== 0 && dayOffset !== 1) return false;
+
+  const window = dayWindow(openingHours, requested.day);
+  if (!window) return false;
+  const minutes = requested.h * 60 + requested.mi;
+  return minutes >= window.open
+    && minutes + SCHEDULE_SLOT_MINUTES <= window.close
+    && (minutes - window.open) % SCHEDULE_SLOT_MINUTES === 0;
 }
 
 /**

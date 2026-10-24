@@ -3,7 +3,7 @@ import { badRequest, forbidden, notFound, conflict } from '../utils/apiError';
 import { v4 as uuidv4 } from 'uuid';
 import { SettingsService } from './settings.service';
 import { InventoryService } from './inventory.service';
-import { evaluateStoreOpen, formatIstDateTime } from '../utils/storeHours';
+import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
 
 // Reasons a customer may give for cancelling, chosen from the order screen. The
@@ -456,13 +456,22 @@ export class OrderService {
         { from: closure?.store_closed_from, until: closure?.store_closed_until },
       );
 
-      // A customer can book a later delivery window ("scheduled"). When they do,
-      // their explicit choice is what the order promises; the store-closed
-      // fallback only applies when no schedule was requested (or it is malformed).
+      // A scheduled delivery is a non-exclusive customer preference, not an
+      // appointment. The timestamp must still be a valid future 30-minute IST
+      // window inside published store hours.
       const requestedSchedule = data.scheduledFor ? new Date(data.scheduledFor) : null;
-      const scheduledFor = requestedSchedule && !Number.isNaN(requestedSchedule.getTime())
+      if (data.deliveryPreference === 'scheduled' && (!requestedSchedule || !isValidScheduledDelivery(closure?.opening_hours, requestedSchedule))) {
+        throw badRequest('Choose an available delivery time today or tomorrow');
+      }
+      const scheduledFor = data.deliveryPreference === 'scheduled'
         ? requestedSchedule
         : openState.nextOpenAt;
+      // A future scheduled delivery is already inside a published opening
+      // window, so it must not enter the after-hours confirmation flow. That
+      // flow remains for immediate delivery requests made while the store is
+      // closed.
+      const placedOutsideHours = data.deliveryPreference !== 'scheduled' && !openState.isOpen;
+      const closedReason = placedOutsideHours ? openState.closedReason : null;
 
       // Create order
       const orderId = uuidv4();
@@ -486,8 +495,8 @@ export class OrderService {
          data.storeName || null,
         campaign?.id || null, campaignDiscount, campaign?.coupon_code || null, data.idempotencyKey,
         itemSavings, freeDeliverySaving,
-        openState.isOpen ? false : true,
-        openState.closedReason,
+        placedOutsideHours,
+        closedReason,
         // A manual closure has no reopening time to promise, so it stays null
         // rather than carrying a guess the owner never made.
         scheduledFor,

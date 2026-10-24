@@ -112,7 +112,7 @@ const DATE_TABS: { id: DateRange; label: string }[] = [
 ];
 
 const PREF_LABELS: Record<string, string> = {
-  within_15: '⚡ 10-15 mins',
+  within_15: '⚡ Fastest',
   within_30: '🕐 30 mins',
   within_60: '🕑 1 hour',
   scheduled: '📅 Scheduled',
@@ -121,8 +121,10 @@ const PREF_LABELS: Record<string, string> = {
 function deliveryDuration(order: any): { minutes: number; color: string } | null {
   if (order.status !== 'delivered') return null;
   const deliveredAt = order.deliveredAt || order.statusEvents?.find((event: any) => event.toStatus === 'delivered')?.createdAt;
-  if (!deliveredAt) return null;
-  const minutes = Math.max(0, Math.round((new Date(deliveredAt).getTime() - new Date(order.createdAt).getTime()) / 60000));
+  const preparationStartedAt = order.statusEvents?.find((event: any) => event.toStatus === 'preparing')?.createdAt;
+  const startedAt = order.deliveryPreference === 'scheduled' ? preparationStartedAt : order.createdAt;
+  if (!deliveredAt || !startedAt) return null;
+  const minutes = Math.max(0, Math.round((new Date(deliveredAt).getTime() - new Date(startedAt).getTime()) / 60000));
   if (!Number.isFinite(minutes)) return null;
   if (minutes < 15) return { minutes, color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' };
   if (minutes < 30) return { minutes, color: 'bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-400' };
@@ -621,7 +623,7 @@ export default function OrdersPage() {
                         )}
                         {/* Customer booked a later delivery window. Staff plan
                             around the slot rather than the express ETA. */}
-                        {order.deliveryPreference === 'scheduled' && order.scheduledForLabel && !TERMINAL.includes(order.status) && (
+                        {order.deliveryPreference === 'scheduled' && order.scheduledForLabel && (
                           <span
                             title={`Scheduled delivery · ${order.scheduledForLabel}`}
                             className="text-[10px] font-semibold bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded-full"
