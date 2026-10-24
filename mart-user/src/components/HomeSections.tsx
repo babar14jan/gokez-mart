@@ -111,7 +111,9 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
   const isBanner = kind === 'banner' || layout === 'hero';
   const isTiles = kind === 'category_tiles' || layout === 'tiles';
   const visibleItems = items;
-        const canViewAll = items.length >= 4;
+    const configuredLimit = Number(section.config?.limit);
+    const hasReachedLimit = Number.isInteger(configuredLimit) && configuredLimit > 0 && items.length >= configuredLimit;
+      const canViewAll = hasReachedLimit;
 
   const viewAll = isComboSection
     ? { label: section.badge || 'View all', cls: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500' }
@@ -170,7 +172,7 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{typeof section.subtitle === 'string' ? section.subtitle.replace(/\b\w/g, c => c.toUpperCase()) : section.subtitle}</p>
                 )}
               </div>
-              {canViewAll && !isStoreFavourites && !isTiles && items.length >= 4 && (
+              {canViewAll && !isStoreFavourites && !isTiles && (
                 <button
                   type="button"
                   onClick={() => onViewAll(section, items)}
@@ -200,7 +202,7 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
                     <ProductCard product={p} />
                   </div>
                 ))}
-                {items.length > 4 && (
+                {canViewAll && (
                   <button
                     type="button"
                     onClick={() => onViewAll(section, items)}
@@ -231,7 +233,7 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
               </div>
             )}
 
-            {canViewAll && isStoreFavourites && !isTiles && items.length >= 4 && (
+            {canViewAll && isStoreFavourites && !isTiles && (
               <div className="mt-3 flex justify-center">
                 <button
                   type="button"
