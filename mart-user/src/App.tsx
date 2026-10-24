@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, CheckCircle, BellRing, RefreshCw } from 'lucide-react';
+import { Search, CheckCircle, BellRing, RefreshCw, CalendarClock } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -990,8 +990,8 @@ export default function App() {
                   {successData.preference === 'within_15' ? '⚡ Expected in 10-15 mins'
                     : successData.preference === 'within_30' ? '🕐 Expected in ~30 mins'
                     : successData.preference === 'within_60' ? '🕑 Expected in ~1 hour'
-                    : successData.scheduledLabel ? `📅 Scheduled · ${successData.scheduledLabel}`
-                    : '📅 Scheduled delivery'}
+                    : successData.scheduledLabel ? <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />Scheduled · {successData.scheduledLabel}</span>
+                    : <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />Scheduled delivery</span>}
                 </p>
               </div>
               <div className="text-right">

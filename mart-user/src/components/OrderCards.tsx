@@ -1,5 +1,5 @@
 import {
-  AlertCircle, Bike, CheckCircle, ChefHat, MapPin,
+  AlertCircle, Bike, CalendarClock, CheckCircle, ChefHat, MapPin,
   Phone, RotateCcw, ShoppingCart, type LucideIcon,
   XCircle,
 } from 'lucide-react';
@@ -166,8 +166,8 @@ export function ActiveOrderCard({
               {order.deliveryPreference === 'within_15' ? '⚡ Expected in 10-15 mins'
                 : order.deliveryPreference === 'within_30' ? '🕐 Expected in ~30 mins'
                 : order.deliveryPreference === 'within_60' ? '🕑 Expected in ~1 hour'
-                : order.scheduledForLabel ? `📅 Scheduled · ${order.scheduledForLabel}`
-                : '📅 Scheduled delivery'}
+                : order.scheduledForLabel ? <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />Scheduled · {order.scheduledForLabel}</span>
+                : <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />Scheduled delivery</span>}
             </p>
           )}
         </div>
