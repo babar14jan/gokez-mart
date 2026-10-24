@@ -2189,9 +2189,24 @@ export const getCarouselSlides = asyncHandler(async (req: CustomerRequest, res: 
   res.json({ success: true, data: slides });
 });
 
+export const getCarouselSettings = asyncHandler(async (_req: Request, res: Response) => {
+  const settings = await CampaignService.getCarouselSettings();
+  res.json({ success: true, data: settings });
+});
+
 export const adminGetCarouselSlides = asyncHandler(async (_req: AdminRequest, res: Response) => {
   const slides = await CampaignService.getCarouselSlides(false);
   res.json({ success: true, data: slides });
+});
+
+export const adminGetCarouselSettings = asyncHandler(async (_req: AdminRequest, res: Response) => {
+  const settings = await CampaignService.getCarouselSettings();
+  res.json({ success: true, data: settings });
+});
+
+export const adminUpdateCarouselSettings = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const settings = await CampaignService.updateCarouselSettings(req.body);
+  res.json({ success: true, data: settings });
 });
 
 export const adminCreateCarouselSlide = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -2244,6 +2259,13 @@ export const adminUpdateHomeSection = asyncHandler(async (req: AdminRequest, res
   const section = await HomeSectionService.update(req.params.id, storeId, req.body);
   if (!section) { res.status(404).json({ success: false, error: 'Section not found' }); return; }
   res.json({ success: true, data: section });
+});
+
+export const adminDuplicateHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = resolveStoreId(req);
+  const section = await HomeSectionService.duplicate(req.params.id, storeId);
+  if (!section) { res.status(404).json({ success: false, error: 'Section not found' }); return; }
+  res.status(201).json({ success: true, data: section });
 });
 
 export const adminDeleteHomeSection = asyncHandler(async (req: AdminRequest, res: Response) => {

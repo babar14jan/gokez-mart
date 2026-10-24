@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, GripVertical, Eye, EyeOff, Image } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Loader2, GripVertical, Eye, EyeOff, Image, Settings2 } from 'lucide-react';
 import { carouselApi, campaignsApi } from '../services/api';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
@@ -15,13 +15,23 @@ const GRADIENTS = [
   'from-slate-700 via-slate-800 to-slate-900',
 ];
 
+const AUDIENCES = [
+  { value: 'all', label: 'Everyone' },
+  { value: 'guests', label: 'Guests only' },
+  { value: 'signed_in', label: 'Signed-in customers' },
+  { value: 'new_customers', label: 'New customers (no orders yet)' },
+  { value: 'returning_customers', label: 'Returning customers (has ordered)' },
+];
+
 export default function CarouselPage() {
   const [slides, setSlides] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
-  const [form, setForm] = useState({ title: '', subtitle: '', gradient: GRADIENTS[0], campaignId: '', isActive: true });
+  const [form, setForm] = useState({ title: '', subtitle: '', gradient: GRADIENTS[0], campaignId: '', isActive: true, audience: 'all', hideAfterCampaignUse: true });
+  const [settings, setSettings] = useState({ autoplayEnabled: true, autoplayIntervalSeconds: 4 });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -31,9 +41,11 @@ export default function CarouselPage() {
 
   const load = async () => {
     try {
-      const [sr, cr] = await Promise.all([carouselApi.getAll(), campaignsApi.getAll()]);
+      const [sr, cr, settingsResponse] = await Promise.all([carouselApi.getAll(), campaignsApi.getAll(), carouselApi.getSettings()]);
       setSlides(sr.data.data || []);
       setCampaigns((cr.data.data || []).filter((c: any) => c.status === 'active'));
+      const saved = settingsResponse.data.data;
+      setSettings({ autoplayEnabled: saved.autoplay_enabled, autoplayIntervalSeconds: saved.autoplay_interval_seconds });
     } catch {} finally { setLoading(false); }
   };
 
@@ -41,14 +53,14 @@ export default function CarouselPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ title: '', subtitle: '', gradient: GRADIENTS[0], campaignId: '', isActive: true });
+    setForm({ title: '', subtitle: '', gradient: GRADIENTS[0], campaignId: '', isActive: true, audience: 'all', hideAfterCampaignUse: true });
     setImageFile(null); setImagePreview(null);
     setShowModal(true);
   };
 
   const openEdit = (s: any) => {
     setEditing(s);
-    setForm({ title: s.title || '', subtitle: s.subtitle || '', gradient: s.gradient || GRADIENTS[0], campaignId: s.campaign_id || '', isActive: s.is_active });
+    setForm({ title: s.title || '', subtitle: s.subtitle || '', gradient: s.gradient || GRADIENTS[0], campaignId: s.campaign_id || '', isActive: s.is_active, audience: s.audience || 'all', hideAfterCampaignUse: s.hide_after_campaign_use !== false });
     setImageFile(null); setImagePreview(s.image_url);
     setShowModal(true);
   };
@@ -74,6 +86,8 @@ export default function CarouselPage() {
         imageUrl, gradient: form.gradient,
         campaignId: form.campaignId || undefined,
         isActive: form.isActive,
+        audience: form.audience,
+        hideAfterCampaignUse: form.hideAfterCampaignUse,
         sortOrder: editing?.sort_order || slides.length + 1,
       };
       if (editing) await carouselApi.update(editing.id, data);
@@ -82,6 +96,15 @@ export default function CarouselPage() {
       await load();
     } catch (e: any) { alert(e?.response?.data?.error || 'Failed to save'); }
     finally { setSaving(false); setUploading(false); }
+  };
+
+  const saveSettings = async () => {
+    setSaving(true);
+    try {
+      await carouselApi.updateSettings(settings);
+      setShowSettings(false);
+    } catch (e: any) { alert(e?.response?.data?.error || 'Failed to save carousel settings'); }
+    finally { setSaving(false); }
   };
 
   const toggleActive = async (s: any) => {
@@ -111,9 +134,14 @@ export default function CarouselPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500 dark:text-slate-400">{slides.length} slide{slides.length !== 1 ? 's' : ''} · Drag to reorder</p>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
-          <Plus className="w-3.5 h-3.5" /> Add Slide
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowSettings(true)} title="Carousel settings" className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors">
+            <Settings2 className="w-4 h-4" />
+          </button>
+          <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
+            <Plus className="w-3.5 h-3.5" /> Add Slide
+          </button>
+        </div>
       </div>
 
       {slides.length === 0 ? (
@@ -167,6 +195,31 @@ export default function CarouselPage() {
         </div>
       )}
 
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
+              <p className="text-sm font-bold text-gray-900 dark:text-white">Carousel Settings</p>
+              <button onClick={() => setShowSettings(false)} className="p-2 rounded-xl bg-red-50 dark:bg-red-900/20 hover:bg-red-100 transition-colors"><X className="w-4 h-4 text-red-500" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={settings.autoplayEnabled} onChange={e => setSettings(s => ({ ...s, autoplayEnabled: e.target.checked }))} className="accent-emerald-500" />
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">Auto-advance slides</span>
+              </label>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Advance every (seconds)</label>
+                <input type="number" min="3" max="30" disabled={!settings.autoplayEnabled} value={settings.autoplayIntervalSeconds} onChange={e => setSettings(s => ({ ...s, autoplayIntervalSeconds: Number(e.target.value) }))} className={`${inp} disabled:opacity-50`} />
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-100 dark:border-slate-700">
+              <button onClick={() => setShowSettings(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl">Cancel</button>
+              <button onClick={saveSettings} disabled={saving} className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50">{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -217,6 +270,20 @@ export default function CarouselPage() {
                   <option value="">No campaign</option>
                   {campaigns.map((c: any) => <option key={c.id} value={c.id}>{c.title} — {c.badge_text || ''}</option>)}
                 </select></div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Show this slide to</label>
+                <select value={form.audience} onChange={e => setForm(f => ({ ...f, audience: e.target.value }))} className={inp}>
+                  {AUDIENCES.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                </select>
+              </div>
+
+              {form.campaignId && (
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" checked={form.hideAfterCampaignUse} onChange={e => setForm(f => ({ ...f, hideAfterCampaignUse: e.target.checked }))} className="mt-0.5 accent-emerald-500" />
+                  <span className="text-sm text-gray-900 dark:text-white"><span className="font-semibold block">Hide after campaign use</span><span className="text-xs text-gray-500">Stop showing this slide after the signed-in customer uses its linked campaign.</span></span>
+                </label>
+              )}
 
               <label className="flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="accent-emerald-500" />

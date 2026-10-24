@@ -68,6 +68,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
               o.total::float, o.payment_method as "paymentMethod", o.payment_collected_at as "paymentCollectedAt",
               o.status, o.notes, o.created_at as "createdAt", o.updated_at as "updatedAt",
+              o.delivered_at as "deliveredAt",
               o.delivery_latitude::float as "deliveryLatitude", o.delivery_longitude::float as "deliveryLongitude",
               o.termination_reason as "terminationReason",
               o.cancellation_reason as "cancellationReason",

@@ -118,6 +118,17 @@ const PREF_LABELS: Record<string, string> = {
   scheduled: '📅 Scheduled',
 };
 
+function deliveryDuration(order: any): { minutes: number; color: string } | null {
+  if (order.status !== 'delivered') return null;
+  const deliveredAt = order.deliveredAt || order.statusEvents?.find((event: any) => event.toStatus === 'delivered')?.createdAt;
+  if (!deliveredAt) return null;
+  const minutes = Math.max(0, Math.round((new Date(deliveredAt).getTime() - new Date(order.createdAt).getTime()) / 60000));
+  if (!Number.isFinite(minutes)) return null;
+  if (minutes < 15) return { minutes, color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' };
+  if (minutes < 30) return { minutes, color: 'bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-400' };
+  return { minutes, color: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' };
+}
+
 const STALE_MINS: Record<string, number> = {
   pending: 15, confirmed: 20, preparing: 30, out_for_delivery: 45,
 };
@@ -541,6 +552,7 @@ export default function OrdersPage() {
               && (order.status === 'pending' || order.status === 'confirmed');
             const isActive = !TERMINAL.includes(order.status);
             const timeStr = new Date(order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+            const duration = deliveryDuration(order);
             const isAssignedDeliveryHandler = order.deliveryById === currentUserId;
             const canReportDeliveryIssue = isAssignedDeliveryHandler || ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
             const canResolveDelivery = order.status === 'out_for_delivery' && (canReportDeliveryIssue || canTerminate);
@@ -576,9 +588,14 @@ export default function OrdersPage() {
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold text-gray-600 dark:text-slate-300">#{order.orderNumber}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
-                        {STATUS_LABELS[order.status] || order.status}
+                      <span className="text-[10px] text-gray-500 dark:text-slate-400 flex items-center gap-1 whitespace-nowrap">
+                        <Clock className="w-3 h-3" />{timeStr}
                       </span>
+                      {order.status !== 'delivered' && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
+                          {STATUS_LABELS[order.status] || order.status}
+                        </span>
+                      )}
                       {/* Customer-cancelled orders carry the reason the customer
                           chose, so staff do not have to open the order (or call)
                           to find out why it stopped. */}
@@ -592,9 +609,14 @@ export default function OrdersPage() {
                       )}
                         {/* Express ETA is meaningless on an after-hours order,
                             and the scheduled window has its own badge below. */}
-                        {order.deliveryPreference && order.deliveryPreference !== 'scheduled' && !order.placedOutsideHours && (
+                        {order.deliveryPreference && order.deliveryPreference !== 'scheduled' && (!TERMINAL.includes(order.status) || order.status === 'delivered') && (!order.placedOutsideHours || order.status === 'delivered') && (
                           <span className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">
                             {PREF_LABELS[order.deliveryPreference]}
+                          </span>
+                        )}
+                        {duration && (
+                          <span title={`Delivered in ${duration.minutes} minutes`} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${duration.color}`}>
+                            Delivered in {duration.minutes} min
                           </span>
                         )}
                         {/* Customer booked a later delivery window. Staff plan
@@ -649,24 +671,15 @@ export default function OrdersPage() {
                             {PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}
                           </span>
                         )}
-                        <span className="text-[10px] text-gray-500 dark:text-slate-400 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />{timeStr}
-                        </span>
                       </div>
                     </div>
-                    {/* Call, receipt and journey */}
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    {/* Keep delivered cards to one compact action; active cards retain their call control. */}
+                    <div className={`flex flex-shrink-0 ${order.status === 'delivered' ? 'items-center' : 'flex-col items-end gap-1.5'}`}>
                       {!TERMINAL.includes(order.status) && (
                         <button onClick={e => { e.stopPropagation(); window.open(`tel:${order.guestPhone}`); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
                           <Phone className="w-3.5 h-3.5" />
                           <span className="text-xs font-semibold">{order.guestPhone}</span>
-                        </button>
-                      )}
-                      {order.status === 'delivered' && (
-                        <button onClick={e => { e.stopPropagation(); printReceipt(order); }}
-                          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 transition-colors">
-                          <IndianRupee className="w-3 h-3" /> Receipt
                         </button>
                       )}
                       <JourneyButton onClick={e => { e.stopPropagation(); setDetailsOrder(order); }} />
@@ -996,6 +1009,12 @@ export default function OrdersPage() {
                             <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">
                               <span>Total</span><span>₹{order.total}</span>
                             </div>
+                            {order.status === 'delivered' && (
+                              <button onClick={e => { e.stopPropagation(); printReceipt(order); }}
+                                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400">
+                                <IndianRupee className="w-3.5 h-3.5" /> View receipt
+                              </button>
+                            )}
                           </>
                         );
                       })()}

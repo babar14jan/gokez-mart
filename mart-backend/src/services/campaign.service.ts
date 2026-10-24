@@ -708,16 +708,27 @@ export class CampaignService {
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (activeOnly) conditions.push('cs.is_active = true');
-    if (customerId) {
+    if (activeOnly && customerId) {
+      conditions.push(`(cs.audience IN ('all', 'signed_in') OR
+        (cs.audience = 'new_customers' AND NOT EXISTS (
+          SELECT 1 FROM mart_orders o
+          WHERE o.customer_id = $1 AND o.status NOT IN ('cancelled', 'terminated', 'failed_delivery')
+        )) OR
+        (cs.audience = 'returning_customers' AND EXISTS (
+          SELECT 1 FROM mart_orders o
+          WHERE o.customer_id = $1 AND o.status NOT IN ('cancelled', 'terminated', 'failed_delivery')
+        )))`);
       params.push(customerId);
       conditions.push(`(
-        cs.campaign_id IS NULL OR NOT EXISTS (
+        NOT cs.hide_after_campaign_use OR cs.campaign_id IS NULL OR NOT EXISTS (
           SELECT 1 FROM mart_campaign_uses cu
           WHERE cu.campaign_id = cs.campaign_id
             AND cu.customer_id = $1
             AND cu.reversed_at IS NULL
         )
       )`);
+    } else if (activeOnly) {
+      conditions.push(`cs.audience IN ('all', 'guests')`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const result = await query(
@@ -733,13 +744,39 @@ export class CampaignService {
     return result.rows;
   }
 
+  static async getCarouselSettings(): Promise<any> {
+    const result = await query(
+      `SELECT autoplay_enabled, autoplay_interval_seconds
+       FROM mart_carousel_settings
+       ORDER BY updated_at DESC LIMIT 1`
+    );
+    return result.rows[0] || { autoplay_enabled: true, autoplay_interval_seconds: 4 };
+  }
+
+  static async updateCarouselSettings(data: any): Promise<any> {
+    const autoplayEnabled = data.autoplayEnabled !== false;
+    const interval = Number(data.autoplayIntervalSeconds);
+    if (!Number.isInteger(interval) || interval < 3 || interval > 30) {
+      throw new Error('Autoplay interval must be between 3 and 30 seconds');
+    }
+    const result = await query(
+      `UPDATE mart_carousel_settings
+       SET autoplay_enabled = $1, autoplay_interval_seconds = $2, updated_at = NOW()
+       WHERE id = (SELECT id FROM mart_carousel_settings ORDER BY updated_at DESC LIMIT 1)
+       RETURNING autoplay_enabled, autoplay_interval_seconds`,
+      [autoplayEnabled, interval]
+    );
+    return result.rows[0];
+  }
+
   static async createSlide(data: any, adminId: string): Promise<any> {
     const result = await query(
-      `INSERT INTO mart_carousel_slides (title, subtitle, image_url, gradient, campaign_id, sort_order, is_active, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      `INSERT INTO mart_carousel_slides (title, subtitle, image_url, gradient, campaign_id, sort_order, is_active, audience, hide_after_campaign_use, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [data.title || null, data.subtitle || null, data.imageUrl || null,
        data.gradient || 'from-emerald-500 via-teal-500 to-cyan-500',
-       data.campaignId || null, data.sortOrder || 0, data.isActive !== false, adminId]
+       data.campaignId || null, data.sortOrder || 0, data.isActive !== false,
+       data.audience || 'all', data.hideAfterCampaignUse !== false, adminId]
     );
     return result.rows[0];
   }
@@ -755,6 +792,15 @@ export class CampaignService {
     if (data.campaignId !== undefined) { fields.push(`campaign_id = $${i++}`); params.push(data.campaignId); }
     if (data.sortOrder !== undefined)  { fields.push(`sort_order = $${i++}`);  params.push(data.sortOrder); }
     if (data.isActive !== undefined)   { fields.push(`is_active = $${i++}`);   params.push(data.isActive); }
+    if (data.audience !== undefined) {
+      if (!['all', 'guests', 'signed_in', 'new_customers', 'returning_customers'].includes(data.audience)) {
+        throw new Error('Invalid carousel audience');
+      }
+      fields.push(`audience = $${i++}`); params.push(data.audience);
+    }
+    if (data.hideAfterCampaignUse !== undefined) {
+      fields.push(`hide_after_campaign_use = $${i++}`); params.push(data.hideAfterCampaignUse);
+    }
     if (!fields.length) throw new Error('Nothing to update');
     params.push(id);
     const result = await query(
