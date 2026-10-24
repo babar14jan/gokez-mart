@@ -498,8 +498,9 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     return matchFilter && matchSearch;
   });
 
-  // Auto-switch to past tab if no active or delivered orders
-  const showTab = (activeOrders.length > 0 || deliveredOrders.length > 0) ? activeTab : 'past';
+  // Both tabs stay selectable even when one is empty. A customer may still want
+  // to verify there is no current order before looking through older orders.
+  const showTab = activeTab;
 
   const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -577,30 +578,46 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
 
     return (
       <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+        <div className="flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-slate-800">
+          <button type="button" onClick={() => setActiveTab('current')}
+            className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-all ${showTab === 'current' ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-gray-500 dark:text-slate-400'}`}>
+            Current
+          </button>
+          <button type="button" onClick={() => setActiveTab('past')}
+            className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-all ${showTab === 'past' ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-gray-500 dark:text-slate-400'}`}>
+            History
+          </button>
+        </div>
+
         {/* Same three cards the signed-in view uses. The only guest-specific
             input is canCancel: cancelling needs the order's tracking token, and
             an order whose token is missing cannot be proven to belong to this
             device, so no button is offered rather than one that would 404. */}
-        {orders.map(order => {
-          const isClosed = ALL_CLOSED.includes(order.status);
-          if (!isClosed) {
-            return (
-              <ActiveOrderCard key={order.id} order={order} whatsappNumber={whatsappNumber}
-                nextOpenLabel={nextOpenWhen}
-                onViewDetails={setSelectedOrder} />
-            );
-          }
-          if (order.status === 'delivered') {
-            return (
-              <DeliveredOrderCard key={order.id} order={order}
-                onViewDetails={setSelectedOrder} onOrderAgain={handleOrderAgain} />
-            );
-          }
-          return (
-            <ClosedOrderCard key={order.id} order={order}
-              onViewDetails={setSelectedOrder} onOrderAgain={handleOrderAgain} />
-          );
-        })}
+        {showTab === 'current' && (activeOrders.length === 0 && deliveredOrders.length === 0 ? (
+          <div className="py-12 text-center">
+            <div className="mb-3 text-4xl">✅</div>
+            <p className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">No active orders</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Looking for an older order? Check History.</p>
+            <button type="button" onClick={() => setActiveTab('past')}
+              className="mt-3 text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">
+              View History
+            </button>
+          </div>
+        ) : <>
+          {activeOrders.map(order => <ActiveOrderCard key={order.id} order={order} whatsappNumber={whatsappNumber}
+            nextOpenLabel={nextOpenWhen} onViewDetails={setSelectedOrder} />)}
+          {deliveredOrders.map(order => <DeliveredOrderCard key={order.id} order={order}
+            onViewDetails={setSelectedOrder} onOrderAgain={handleOrderAgain} />)}
+        </>)}
+
+        {showTab === 'past' && (pastOrders.length === 0 ? (
+          <div className="py-12 text-center">
+            <div className="mb-3 text-4xl">📦</div>
+            <p className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">No past orders</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Completed orders will appear here.</p>
+          </div>
+        ) : pastOrders.map(order => <ClosedOrderCard key={order.id} order={order}
+          onViewDetails={setSelectedOrder} onOrderAgain={handleOrderAgain} />))}
 
         {/* Detail sheet for guests too — "View Details" has to open something. */}
         {selectedOrder && (
@@ -618,10 +635,10 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
             onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
             className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
           >
-            Track a different order →
+            Log in to see all orders →
           </button>
           <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-            Log in with the same mobile number to view your full order history.
+            Use the same mobile number to retrieve your complete order history, including orders from other devices.
           </p>
         </div>
       </div>
@@ -731,7 +748,11 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
           <div className="text-center py-12">
             <div className="text-4xl mb-3">✅</div>
             <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No active orders</p>
-            <p className="text-xs text-gray-500">All your orders have been delivered.</p>
+            <p className="text-xs text-gray-500">Looking for an older order? Check History.</p>
+            <button type="button" onClick={() => setActiveTab('past')}
+              className="mt-3 text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">
+              View History
+            </button>
           </div>
         ) : (
           <>
