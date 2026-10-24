@@ -129,7 +129,7 @@ export default function App() {
     // /categories, /orders or /deals has to come back to that tab instead of
     // being normalised to Home (the popstate handler already resolved them).
     if (path === '/orders') return 'orders';
-    if (path === '/categories') return 'categories';
+    if (path === '/categories' || path.startsWith('/categories')) return 'categories';
     if (path === '/deals') return 'deals';
     if (path === '/') {
       // A refresh keeps whatever tab the shopper was on. The last view is
@@ -211,6 +211,25 @@ export default function App() {
   const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [pendingCategorySlug, setPendingCategorySlug] = useState<string | null>(null);
+  const [carouselPosition] = useState<'top' | 'bottom'>(() => {
+    try {
+      if (localStorage.getItem('mart_has_delivered_order') === '1') return 'bottom';
+    } catch {}
+    try {
+      const raw = localStorage.getItem('mart_orders_cache');
+      if (raw) {
+        const orders = JSON.parse(raw);
+        if (Array.isArray(orders) && orders.some((o: any) => o?.status === 'delivered' || o?.status === 'completed')) {
+          try { localStorage.setItem('mart_has_delivered_order', '1'); } catch {}
+          return 'bottom';
+        }
+      }
+    } catch {}
+    return 'top';
+  });
+  const categoriesRef = useRef<Category[]>([]);
+  useEffect(() => { categoriesRef.current = categories; }, [categories]);
   const [products, setProducts] = useState<Product[]>([]);
   useEffect(() => {
     const iconUrls = [...new Set(categories.map(category => category.icon)
@@ -521,7 +540,7 @@ export default function App() {
       else if (path === '/orders') setView('orders');
       // Declining login from the account tab returns here, so this path has to
       // resolve to a view. Without it the guest exit fell through to Home.
-      else if (path === '/categories') setView('categories');
+      else if (path === '/categories' || path.startsWith('/categories')) setView('categories');
       else if (path === '/deals') setView('deals');
       else if (path === '/checkout') { setView('home'); setCheckoutActive(true); }
       else setView('home');
@@ -1115,6 +1134,7 @@ export default function App() {
           setView('orders');
         } else {
           setView('home');
+          setPendingCategorySlug(null);
         }
       }} />}
 
@@ -1302,7 +1322,7 @@ export default function App() {
         <DeferredPage><WhatIsGokezMartPage /></DeferredPage>
       ) : view === 'categories' ? (
         <div className={productPageBottom}>
-          <CategoriesView categories={categories} products={products} />
+          <CategoriesView categories={categories} products={products} initialCategorySlug={pendingCategorySlug} />
         </div>
       ) : view === 'deals' ? (
         <div className={PAGE_BOTTOM}>
@@ -1334,16 +1354,16 @@ export default function App() {
         /* Home */
         <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${productPageBottom}`}>
 
-          <div className="pb-6">
-            {/* Desktop search opens the complete store catalogue. */}
-            <button type="button" onClick={() => openCatalogSearch()}
-              className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
-              <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
-            </button>
-
-            <HomeCarousel />
-          </div>
+          {carouselPosition === 'top' && (
+            <div className="pb-6">
+              <button type="button" onClick={() => openCatalogSearch()}
+                className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
+                <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+              </button>
+              <HomeCarousel />
+            </div>
+          )}
 
           {/* Products */}
           {loading || catalogError ? (
@@ -1363,17 +1383,35 @@ export default function App() {
             <>
               <HomeSections
                 entries={resolvedHomeSections}
+                categories={categories}
                 onViewAll={(section, sectionProducts) => {
-                  if (section.sectionKey === 'todays_combos') {
-                    setComboSheet({ title: section.title, subtitle: section.subtitle || undefined, products: sectionProducts });
+                  const kind = section.kind || section.sectionKey;
+                  if (kind === 'combo' || kind === 'todays_combos') {
+                    setComboSheet({ title: typeof section.title === 'string' ? section.title.replace(/\b\w/g, (c: string) => c.toUpperCase()) : section.title, subtitle: typeof section.subtitle === 'string' ? section.subtitle.replace(/\b\w/g, (c: string) => c.toUpperCase()) : (section.subtitle || undefined), products: sectionProducts });
                     return;
                   }
-                  if (section.sectionKey === 'deals') {
-                    setDealsSheet({ title: section.title || "Today's Deals", products: sectionProducts });
+                  if (kind === 'deals') {
+                    setDealsSheet({ title: typeof section.title === 'string' ? section.title.replace(/\b\w/g, (c: string) => c.toUpperCase()) : (section.title || "Today's Deals"), products: sectionProducts });
                     return;
                   }
-                  if (section.sectionKey === 'top_picks') {
-                    openCatalogSearch(false);
+                  if (kind === 'category' || kind === 'fresh_vegetables' || kind === 'multiCategory' || kind === 'multi_category') {
+                    const cfg = section.config || {};
+                    const slugs = Array.isArray((cfg as any).categorySlugs) ? (cfg as any).categorySlugs : ((cfg as any).categorySlug ? [(cfg as any).categorySlug] : []);
+                    if (slugs.length === 1) {
+                      setPendingCategorySlug(String(slugs[0]));
+                      setView('categories');
+                      return;
+                    }
+                    if (slugs.length > 1) {
+                      setView('categories');
+                      return;
+                    }
+                    setView('categories');
+                    return;
+                  }
+                  if (kind === 'top_picks' || kind === 'manual') {
+                    setView('categories');
+                    setPendingCategorySlug(null);
                     return;
                   }
                   setView('categories');
@@ -1416,6 +1454,12 @@ export default function App() {
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {carouselPosition === 'bottom' && (
+            <div className="pb-2">
+              <HomeCarousel />
             </div>
           )}
 

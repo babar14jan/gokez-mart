@@ -53,10 +53,18 @@ const TERMINATION_MESSAGES: Record<string, { title: string; sub: string }> = {
 
 const CANCELLATION_MESSAGES: Record<string, string> = {
   customer_request: 'Cancelled as requested.',
+  ordered_by_mistake: 'Cancelled because the order was placed by mistake.',
+  changed_my_mind: 'Cancelled because you changed your mind.',
+  wrong_address: 'Cancelled because the delivery details need updating.',
+  found_better_price: 'Cancelled as requested.',
+  delivery_too_slow: 'Cancelled as requested.',
   duplicate_order: 'Cancelled — this appeared to be a duplicate order.',
   out_of_stock: 'Sorry — some items became unavailable. You will not be charged.',
   store_closed: 'Sorry — the store had to close unexpectedly. You will not be charged.',
+  outside_area: 'Delivery is currently unavailable at this address.',
   incorrect_address: 'The delivery address was incorrect. You will not be charged.',
+  rider_unavailable: 'Delivery could not be completed because no rider was available.',
+  technical_issue: 'Your order could not be completed because of a technical issue.',
   other: 'Your order was cancelled. You will not be charged.',
 };
 
@@ -314,11 +322,10 @@ export function ClosedOrderCard({ order, onViewDetails, onOrderAgain }: SharedCa
   const StatusIcon = STATUS_ICONS[order.status] || XCircle;
   const termMsg = order.terminationReason ? TERMINATION_MESSAGES[order.terminationReason] : null;
   const cancelMsg = order.cancellationReason ? CANCELLATION_MESSAGES[order.cancellationReason] : null;
+  const reasonMessage = cancelMsg || termMsg?.title || null;
 
   return (
-    <div className={`bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden shadow-sm ${
-      termMsg ? 'border-amber-200 dark:border-amber-800' : 'border-gray-100 dark:border-slate-700'
-    }`}>
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm">
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start justify-between mb-3">
           <div>
@@ -338,15 +345,11 @@ export function ClosedOrderCard({ order, onViewDetails, onOrderAgain }: SharedCa
           <span className="text-sm font-bold text-gray-900 dark:text-white">₹{order.total}</span>
         </div>
 
-        {(termMsg || cancelMsg) && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2.5 mb-3">
-            {termMsg && <>
-              <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mb-0.5">📍 {termMsg.title}</p>
-              <p className="text-xs text-amber-600 dark:text-amber-500 leading-relaxed">{termMsg.sub}</p>
-            </>}
-            {cancelMsg && !termMsg && (
-              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">{cancelMsg}</p>
-            )}
+        {reasonMessage && (
+          <div className="mb-3">
+            <span className="inline-flex max-w-full rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold leading-tight text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+              {reasonMessage}
+            </span>
           </div>
         )}
 

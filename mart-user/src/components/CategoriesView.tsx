@@ -9,6 +9,8 @@ import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 interface CategoriesViewProps {
   categories: Category[];
   products: Product[];
+  initialCategoryId?: string | null;
+  initialCategorySlug?: string | null;
 }
 
 // Per-category accent so the active tab reads as a colourful highlighter and
@@ -31,18 +33,34 @@ function matches(product: Product, query: string): boolean {
   return name.includes(query) || local.includes(query) || aliases.some(alias => alias.includes(query));
 }
 
-export default function CategoriesView({ categories, products }: CategoriesViewProps) {
+export default function CategoriesView({ categories, products, initialCategoryId, initialCategorySlug }: CategoriesViewProps) {
   // Hide categories with no visible products for this store
   const visibleCategories = categories.filter(cat => products.some(p => p.categoryId === cat.id));
-  const [activeCatId, setActiveCatId] = useState<string>(visibleCategories[0]?.id || '');
+  const getInitial = () => {
+    if (initialCategoryId && visibleCategories.some(c=>c.id===initialCategoryId)) return initialCategoryId;
+    if (initialCategorySlug) {
+      const found = visibleCategories.find(c=>String(c.slug).toLowerCase()===String(initialCategorySlug).toLowerCase());
+      if (found) return found.id;
+    }
+    return visibleCategories[0]?.id || '';
+  };
+  const [activeCatId, setActiveCatId] = useState<string>(getInitial());
   const [search, setSearch] = useState('');
   const { ref: inputRef, dismiss, onKeyDown, onSurfaceClick } = useKeyboardDismiss();
 
   useEffect(() => {
+    if (initialCategoryId && visibleCategories.some(c=>c.id===initialCategoryId)) {
+      setActiveCatId(initialCategoryId);
+      return;
+    }
+    if (initialCategorySlug) {
+      const found = visibleCategories.find(c=>String(c.slug).toLowerCase()===String(initialCategorySlug).toLowerCase());
+      if (found) { setActiveCatId(found.id); return; }
+    }
     if (!visibleCategories.some(category => category.id === activeCatId)) {
       setActiveCatId(visibleCategories[0]?.id || '');
     }
-  }, [activeCatId, visibleCategories]);
+  }, [initialCategoryId, initialCategorySlug, visibleCategories, activeCatId]);
 
   const activeCategory = visibleCategories.find(category => category.id === activeCatId);
   const query = search.trim().toLowerCase();
