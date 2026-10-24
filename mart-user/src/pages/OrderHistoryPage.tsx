@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle, WifiOff } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle, WifiOff, CalendarClock } from 'lucide-react';
 import { authApi, storeApi } from '../services/api';
 import { requestErrorMessage } from '../utils/networkError';
 import { readTrackingTokens } from '../utils/guestTracking';
@@ -175,7 +175,7 @@ function OrderDetailSheet({
           {order.deliveryPreference === 'scheduled' && order.scheduledForLabel && (
             <div className="bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900/60 rounded-xl p-3">
               <div className="flex items-start gap-2">
-                <span className="text-violet-600 dark:text-violet-400">📅</span>
+                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
                 <div className="flex-1">
                   <p className="text-xs font-bold text-violet-900 dark:text-violet-200">Scheduled delivery</p>
                   <p className="text-xs text-violet-700 dark:text-violet-300 mt-1">
