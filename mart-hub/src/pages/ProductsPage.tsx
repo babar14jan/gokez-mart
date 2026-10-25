@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
-  Plus, Pencil, Trash2, Loader2, X, Package,
+  Plus, Trash2, Loader2, X, Package,
   Percent, GripVertical, Check, History, ArrowDownCircle,
   Camera, ChevronDown, SlidersHorizontal, ArrowUpDown, BookOpen, Search,
 } from 'lucide-react';
@@ -279,7 +279,7 @@ export default function ProductsPage() {
   // ── Product CRUD ──────────────────────────────────────────────────────────
   const openCreate = useCallback(() => {
     setEditing(null);
-    setForm({ name: '', localName: '', searchAliases: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', approxWeight: '', discountPercent: '0', description: '', availabilityStatus: 'available', isCatalog: false });
+    setForm({ name: '', localName: '', searchAliases: '', categoryId: categories[0]?.id || '', price: '', unit: '1 kg', approxWeight: '', discountPercent: '0', finalPrice: '', description: '', availabilityStatus: 'available', isCatalog: false });
     setPhotoFile(null); setPhotoPreview(null);
     setShowModal(true);
   }, [categories]);
@@ -291,10 +291,13 @@ export default function ProductsPage() {
 
   const openEdit = (p: Product) => {
     setEditing(p);
+    const dp = p.discountPercent || 0;
+    const fp = dp > 0 ? Math.round(p.price * (1 - dp / 100)) : p.price;
     setForm({
       name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '', price: String(p.price),
       unit: p.unit, approxWeight: p.approxWeight || '',
       discountPercent: String(p.discountPercent),
+      finalPrice: String(fp),
       description: p.description || '',
       availabilityStatus: p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock'),
       isCatalog: (p as any).isCatalog || false,
