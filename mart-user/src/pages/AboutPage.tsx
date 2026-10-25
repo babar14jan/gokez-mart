@@ -6,11 +6,14 @@ export default function AboutPage() {
     <main className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       <PageHeader title="About Gokez Mart" />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
-        <p className="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 mb-2">{BRAND_SLOGAN}</p>
-        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4">About {BRAND_NAME}</h1>
-        <div className="space-y-5 text-sm text-gray-600 dark:text-slate-300 leading-relaxed">
-          <p>{BRAND_DESCRIPTION}</p>
-          <p>{BRAND_PROMISE}</p>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
+          <img src="/mart_brand_new.png" alt="Gokez Mart" className="h-16 w-auto object-contain mx-auto" />
+          <p className="-mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{BRAND_SLOGAN}</p>
+          <p className="mt-4 text-sm text-gray-900 dark:text-white leading-relaxed">{BRAND_DESCRIPTION}</p>
+          <p className="mt-3 text-sm text-gray-500 dark:text-slate-400 leading-relaxed">{BRAND_PROMISE}</p>
+        </div>
+
+        <div className="mt-6 space-y-5 text-sm text-gray-600 dark:text-slate-300 leading-relaxed">
           <p>
             {BRAND_NAME} is a product of{' '}
             <a href={PARENT_COMPANY_URL} className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
@@ -21,6 +24,12 @@ export default function AboutPage() {
           <p>
             Availability depends on the stores and delivery areas currently served by {BRAND_NAME}.
           </p>
+        </div>
+
+        <div className="mt-6 grid grid-cols-4 items-center gap-1.5">
+          {['/f1.png', '/f2.png', '/f3.png', '/f4.png'].map((src) => (
+            <img key={src} src={src} alt="" className="w-full" />
+          ))}
         </div>
       </div>
     </main>

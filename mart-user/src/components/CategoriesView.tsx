@@ -87,7 +87,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
     <div className="categories-pane flex overflow-hidden" onClick={onSurfaceClick}>
 
       {/* Category sidebar */}
-      <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-gray-50 dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800">
+      <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700">
         {visibleCategories.map((cat, index) => {
           const isActive = activeCatId === cat.id;
           const accent = ACCENTS[index % ACCENTS.length];
@@ -95,14 +95,14 @@ export default function CategoriesView({ categories, products, initialCategoryId
             <button
               key={cat.id}
               onClick={() => { setActiveCatId(cat.id); track('category_viewed', { categoryId: cat.id }); }}
-              className={`w-full flex flex-col items-center gap-1 py-3 px-1 border-l-2 transition-colors ${
-                isActive ? `${accent.bar} ${accent.bg}` : 'border-transparent hover:bg-gray-100 dark:hover:bg-slate-800'
+              className={`w-full relative flex flex-col items-center gap-1 py-3 px-1 transition-all ${
+                isActive
+                  ? `bg-white dark:bg-slate-800 ${accent.text} before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r before:${accent.bar.replace('border-', 'bg-')}`
+                  : 'bg-gray-50 dark:bg-slate-900 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'
               }`}
             >
               <CategoryIcon icon={cat.icon} name={cat.name} className="w-8 h-8 object-contain" />
-              <span className={`text-[9px] font-semibold text-center leading-tight line-clamp-2 ${
-                isActive ? accent.text : 'text-gray-500 dark:text-slate-400'
-              }`}>{cat.name}</span>
+              <span className="text-[9px] font-semibold text-center leading-tight line-clamp-2">{cat.name}</span>
             </button>
           );
         })}
