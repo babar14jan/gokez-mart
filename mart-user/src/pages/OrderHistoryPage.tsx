@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle, WifiOff, CalendarClock } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, MessageCircle, WifiOff, CalendarClock } from 'lucide-react';
 import { authApi, storeApi } from '../services/api';
 import { requestErrorMessage } from '../utils/networkError';
 import { readTrackingTokens } from '../utils/guestTracking';

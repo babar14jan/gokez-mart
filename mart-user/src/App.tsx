@@ -42,7 +42,7 @@ import { useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { detectPlatform } from './utils/install';
-import { BRAND_DESCRIPTION, BRAND_PROMISE, BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
+import { BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
 type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
