@@ -85,7 +85,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState({
     name: '', localName: '', searchAliases: '', categoryId: '', price: '', unit: '1 kg',
     approxWeight: '',
-    discountPercent: '0', description: '',
+    discountPercent: '0', finalPrice: '', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
     isCatalog: false,
   });
@@ -431,7 +431,8 @@ export default function ProductsPage() {
 
     return (
       <div
-        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 transition-colors ${reorderMode ? 'cursor-grab active:cursor-grabbing' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
+        onClick={() => { if (!reorderMode) openEdit(p); }}
+        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 transition-colors ${reorderMode ? 'cursor-grab active:cursor-grabbing' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer'}`}
         draggable={reorderMode}
         onDragStart={() => handleDragStart(index)}
         onDragEnter={() => handleDragEnter(index)}
@@ -487,16 +488,12 @@ export default function ProductsPage() {
 
         {!reorderMode && (
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <select value={cur} onChange={e => setAvailability(p, e.target.value as any)} onClick={e => e.stopPropagation()}
+            <select value={cur} onChange={e => { e.stopPropagation(); setAvailability(p, e.target.value as any); }} onClick={e => e.stopPropagation()}
               className={`text-[11px] sm:text-xs border rounded-lg px-1 sm:px-1.5 py-1 focus:outline-none cursor-pointer font-semibold ${availColor}`}>
               <option value="available">✅ On</option>
               <option value="out_of_stock">⚠️ Out</option>
               <option value="hidden">👁 Hide</option>
             </select>
-            <button onClick={() => openEdit(p)}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
-              <Pencil className="w-4 h-4" />
-            </button>
           </div>
         )}
       </div>
@@ -939,9 +936,48 @@ export default function ProductsPage() {
                   )}
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Discount %</label>
-                <input type="number" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className={inp} placeholder="0" min="0" max="100" />
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Discount %</label>
+                  <input type="number" value={form.discountPercent} onChange={e => {
+                    const pct = e.target.value;
+                    setForm(f => {
+                      const price = parseFloat(f.price);
+                      if (price > 0 && pct !== '') {
+                        const disc = Math.min(100, Math.max(0, parseFloat(pct)));
+                        const final = Math.round(price * (1 - disc / 100));
+                        return { ...f, discountPercent: pct, finalPrice: String(final) };
+                      }
+                      return { ...f, discountPercent: pct };
+                    });
+                  }} className={inp} placeholder="0" min="0" max="100" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Price after % (₹)</label>
+                  <input type="number" value={(form as any).finalPrice || ''} onChange={e => {
+                    const final = e.target.value;
+                    setForm(f => {
+                      const price = parseFloat(f.price);
+                      if (price > 0 && final !== '') {
+                        const fp = Math.max(0, parseFloat(final));
+                        const pct = Math.round(((price - fp) / price) * 100);
+                        return { ...f, finalPrice: final, discountPercent: String(Math.max(0, Math.min(100, pct))) };
+                      }
+                      return { ...f, finalPrice: final };
+                    });
+                  }} className={inp} placeholder="0" min="0" step="0.5" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Selling preview</label>
+                  <div className="h-[34px] flex items-center px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                    ₹{(() => {
+                      const p = parseFloat(form.price);
+                      const d = parseFloat(form.discountPercent || '0');
+                      if (isNaN(p)) return 0;
+                      return Math.round(p * (1 - (isNaN(d) ? 0 : d) / 100));
+                    })()}
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Description</label>

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { trackOnce } from '../utils/track';
@@ -51,6 +51,37 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startYRef = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    startYRef.current = e.touches[0].clientY;
+    setDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!dragging) return;
+    const currentY = e.touches[0].clientY;
+    const delta = currentY - startYRef.current;
+    if (delta > 0) {
+      setDragY(delta);
+      e.preventDefault();
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!dragging) return;
+    setDragging(false);
+    if (dragY > 120) {
+      onClose();
+    } else {
+      setDragY(0);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center"
       role="dialog"
@@ -62,35 +93,22 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
 
       {/* Sheet */}
-      <div className="relative flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-800"
-        onClick={e => e.stopPropagation()}>
+      <div
+        ref={sheetRef}
+        className="relative flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl dark:bg-slate-800 transition-transform"
+        style={{ transform: dragY > 0 ? `translateY(${dragY}px)` : undefined }}
+        onClick={e => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}>
 
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-800">
-          {qty > 0 ? (
-            <button type="button" onClick={onClose} aria-label="Done"
-              className="flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-3 text-sm font-bold text-white shadow-sm shadow-emerald-900/20 transition-colors hover:bg-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 active:scale-95">
-              Done
-            </button>
-          ) : (
-            <button type="button" onClick={onClose} aria-label="Back to products"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-white dark:hover:bg-slate-700">
-              <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />
-            </button>
-          )}
-          <div className="shrink-0">
-            {isOutOfStock ? (
-              <span className="flex h-10 items-center rounded-xl border border-gray-200 bg-gray-100 px-4 text-sm font-extrabold tracking-wide text-gray-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                Out of stock
-              </span>
-            ) : (
-              <CartQuantityControl
-                variant="sheet"
-                quantity={qty}
-                onAdd={() => addItem(product, product.unit, discountedPrice)}
-                onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
-              />
-            )}
-          </div>
+        <div className="flex shrink-0 items-center justify-between px-4 pt-3 pb-2">
+          <div className="w-9" />
+          <div className="h-1.5 w-10 rounded-full bg-gray-300 dark:bg-slate-600" />
+          <button type="button" onClick={onClose} aria-label="Close"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -149,8 +167,37 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
           )}
         </div>
 
-        {/* Footer bar — colour only, no content */}
-        <div className="shrink-0 border-t border-gray-100 bg-white py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] dark:border-slate-700 dark:bg-slate-800" />
+        {/* Footer bar */}
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex items-center gap-3">
+            {isOutOfStock ? (
+              <div className="flex-1 h-11 flex items-center justify-center rounded-xl bg-gray-100 text-sm font-bold text-gray-500 dark:bg-slate-700 dark:text-slate-400">
+                Out of stock
+              </div>
+            ) : qty === 0 ? (
+              <button
+                type="button"
+                onClick={() => addItem(product, product.unit, discountedPrice)}
+                className="flex-1 h-11 rounded-xl bg-emerald-600 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+              >
+                Add to Cart
+              </button>
+            ) : (
+              <>
+                <div className="flex-1">
+                  <div className="text-xs text-gray-500 dark:text-slate-400">{qty} {qty === 1 ? 'item' : 'items'} • ₹{discountedPrice} each</div>
+                  <div className="text-sm font-bold text-gray-900 dark:text-white">Total: ₹{qty * discountedPrice}</div>
+                </div>
+                <CartQuantityControl
+                  variant="sheet"
+                  quantity={qty}
+                  onAdd={() => addItem(product, product.unit, discountedPrice)}
+                  onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
+                />
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
