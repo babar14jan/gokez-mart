@@ -13,6 +13,7 @@ import StoreClosedCard from './components/StoreClosedCard';
 import BottomNav from './components/BottomNav';
 import AppShell from './components/AppShell';
 import ProductCard from './components/ProductCard';
+import CategoryIcon from './components/CategoryIcon';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import HomeSections, { resolveSectionItems } from './components/HomeSections';
@@ -1365,6 +1366,34 @@ export default function App() {
             </div>
           )}
 
+          {/* Shop by categories */}
+          {(() => {
+            const visibleCategories = categories.filter(cat => products.some(p => p.categoryId === cat.id));
+            if (visibleCategories.length === 0) return null;
+            return (
+              <section className="mt-4 mb-6">
+                <h2 className="text-base font-bold text-gray-900 dark:text-white mb-3">Shop by categories</h2>
+                <div className="flex flex-wrap gap-2">
+                  {visibleCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        setPendingCategorySlug(cat.slug || null);
+                        handleNavChange('categories');
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-900/20 dark:hover:border-emerald-700 transition-colors"
+                    >
+                      <div className="w-6 h-6 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <CategoryIcon icon={cat.icon} name={cat.name} className="w-6 h-6 object-contain" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-800 dark:text-slate-200 whitespace-nowrap">{cat.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            );
+          })()}
+
           {/* Products */}
           {loading || catalogError ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
@@ -1463,36 +1492,19 @@ export default function App() {
             </div>
           )}
 
-          {/* About section */}
-          <div className="mt-8 flex justify-center">
-            <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-              About
-            </span>
-          </div>
-          <div className="mt-2 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
-            <img src="/mart_brand_new.png" alt="Gokez Mart" className="h-16 w-auto object-contain mx-auto" />
-            <p className="-mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{BRAND_SLOGAN}</p>
-            <p className="mt-4 text-sm text-gray-900 dark:text-white leading-relaxed">
-              {BRAND_DESCRIPTION}
-            </p>
-            <p className="mt-3 text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
-              {BRAND_PROMISE}
-            </p>
-          </div>
-
-          {/* Feature cards */}
-          <div className="mt-4 grid grid-cols-4 items-center gap-1.5">
-            {['/f1.png', '/f2.png', '/f3.png', '/f4.png'].map(src => (
-              <img key={src} src={src} alt="" className="w-full" />
-            ))}
-          </div>
-
           {/* Footer */}
-          <footer className="mt-8 border-t-2 border-emerald-200 bg-white/80 pb-5 pt-6 dark:border-emerald-900/60 dark:bg-slate-900/70">
-            <div className="mx-auto max-w-xl sm:max-w-4xl">
-              <p className="text-center text-[11px] text-gray-500 dark:text-slate-400">
-                &copy; {new Date().getFullYear()} {BRAND_NAME}{' · '}A product of{' '}
+          <footer className="mt-10 pb-8 pt-6">
+            <div className="mx-auto max-w-xl sm:max-w-4xl flex flex-col items-center text-center">
+              <img src="/mart_brand_new.png" alt="Gokez Mart" className="h-14 w-auto object-contain" />
+              <p className="-mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{BRAND_SLOGAN}</p>
+              <p className="mt-2 text-base font-semibold text-gray-900 dark:text-white">From your Neighbourhood Store to your door</p>
+              <div className="mt-3 flex items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+                <button type="button" onClick={() => { setView('privacy' as View); window.history.pushState({}, '', '/privacy'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Privacy Policy</button>
+                <span>·</span>
+                <button type="button" onClick={() => { setView('terms' as View); window.history.pushState({}, '', '/terms'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Terms of Service</button>
+              </div>
+              <p className="mt-4 text-[11px] text-gray-500 dark:text-slate-400">
+                &copy; {new Date().getFullYear()} {BRAND_NAME} · A product of{' '}
                 <a href={PARENT_COMPANY_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline">
                   {PARENT_COMPANY}
                 </a>

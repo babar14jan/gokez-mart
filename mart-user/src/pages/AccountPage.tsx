@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight, X, Sparkles } from 'lucide-react';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight, X, Sparkles, Info } from 'lucide-react';
 import { authApi, suggestionApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
@@ -695,9 +695,14 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </section>
 
         <section>
-        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Privacy &amp; data</p>
+        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">More info</p>
         <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
-          <button onClick={() => navigate('/grievance/')} className="flex min-h-[56px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
+          <button onClick={() => navigate('/about/')} className="flex min-h-[56px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
+            <Info className="h-4 w-4 text-gray-500 dark:text-slate-400" />
+            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">About</span>
+            <ChevronRight className="h-4 w-4 text-gray-300" />
+          </button>
+          <button onClick={() => navigate('/grievance/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#d5dbe4] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
             <MessageCircle className="h-4 w-4 text-gray-500 dark:text-slate-400" />
             <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Submit a grievance</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
