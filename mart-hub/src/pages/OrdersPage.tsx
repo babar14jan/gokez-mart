@@ -186,7 +186,7 @@ function OrderProgress({ status }: { status: string }) {
   if (currentIdx === -1) return null;
 
   return (
-    <div className="px-4 py-3 border-t border-gray-50 dark:border-slate-700">
+    <div className="border-t border-gray-50 px-2 py-3 dark:border-slate-700 sm:px-4">
       <div className="flex items-center gap-0">
         {PIPELINE.map((step, idx) => {
           const done = idx < currentIdx;
@@ -195,7 +195,7 @@ function OrderProgress({ status }: { status: string }) {
           return (
             <div key={step.status} className="flex items-center flex-1 min-w-0">
               {/* Node */}
-              <div className="w-12 flex flex-col items-center flex-shrink-0">
+              <div className="w-14 flex flex-col items-center flex-shrink-0 sm:w-12">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] transition-all ${
                   active ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 dark:shadow-emerald-900 scale-110' :
                   done   ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
@@ -203,7 +203,7 @@ function OrderProgress({ status }: { status: string }) {
                 }`}>
                   {done ? '✓' : step.emoji}
                 </div>
-                <span className={`w-full px-0.5 text-[9px] font-semibold mt-0.5 text-center leading-tight break-words ${
+                <span className={`w-full px-0.5 text-[8px] font-semibold mt-0.5 text-center leading-tight sm:text-[9px] ${step.status !== 'out_for_delivery' ? 'whitespace-nowrap' : ''} ${
                   active ? 'text-emerald-600 dark:text-emerald-400' :
                   done   ? 'text-gray-500 dark:text-slate-400' :
                            'text-gray-500 dark:text-slate-400'
@@ -1004,7 +1004,7 @@ export default function OrdersPage() {
 
                 {/* Expand toggle */}
                 <button onClick={() => setExpanded(isExpanded ? null : order.id)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 border-t border-gray-50 dark:border-slate-700 text-xs text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                  className="w-full flex items-center justify-between border-t border-gray-200 bg-gray-100 px-4 py-2.5 text-xs text-gray-600 transition-colors hover:bg-gray-200 dark:border-slate-700 dark:bg-slate-700/60 dark:text-slate-300 dark:hover:bg-slate-700">
                   <div className="flex items-center gap-1.5">
                     <Package className="w-3.5 h-3.5" />
                     <span>
@@ -1153,7 +1153,7 @@ export default function OrdersPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold capitalize text-gray-900 dark:text-white break-words">
                         {event.type === 'delivery'
-                          ? `Delivery rescheduled to ${new Date(event.scheduledFor).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}`
+                          ? `Delivery rescheduled to ${new Date(event.scheduledFor).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\b(AM|PM)\b/, meridiem => meridiem.toLowerCase())}`
                           : event.toStatus.replaceAll('_', ' ')}
                       </p>
                       <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400 break-words">
