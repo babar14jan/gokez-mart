@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, ClipboardList, User, Search, Loader2, LocateFixed } from 'lucide-react';
+import { MapPin, ChevronDown, Check, Store, ShoppingCart, LayoutGrid, Package, User, Search, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useZoneStore, type ZoneAction } from '../store/zoneStore';
 import AccountGreeting from './AccountGreeting';
@@ -18,9 +18,9 @@ interface NavbarProps {
 
 // Nav items — all including Cart and Profile in center
 const navItems = [
-  { id: 'home',       label: 'Home',       Icon: Home },
+  { id: 'home',       label: 'Home',       Icon: Store },
   { id: 'categories', label: 'Categories', Icon: LayoutGrid },
-  { id: 'orders',     label: 'Orders',     Icon: ClipboardList },
+  { id: 'orders',     label: 'Orders',     Icon: Package },
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
@@ -56,11 +56,11 @@ const navItems = [
       return (
         <button type="button" onClick={triggerMyLocation} className="flex items-center gap-1 hover:opacity-80 transition-opacity">
           {locationBusy
-            ? <Loader2 className="w-6 h-6 text-yellow-400 flex-shrink-0 animate-spin" />
-            : <MapPin className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
+            ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
+            : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
           <div className="text-left">
-            <p className="text-[8px] font-semibold text-white leading-none">Delivery zone</p>
-            <p className="text-[13px] font-bold text-white leading-tight">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
+            <p className="text-sm font-bold text-white leading-tight">
               {selectedZone.name}
             </p>
           </div>
@@ -72,11 +72,11 @@ const navItems = [
       <button onClick={() => setZoneOpen(o => !o)}
         className="flex items-center gap-1 hover:opacity-80 transition-opacity">
         {locationBusy
-          ? <Loader2 className="w-6 h-6 text-yellow-400 flex-shrink-0 animate-spin" />
-          : <MapPin className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
+          ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
+          : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
         <div className="text-left">
-          <p className="text-[8px] font-semibold text-white leading-none">Delivery zone</p>
-          <p className="text-[13px] font-bold text-white leading-tight">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
+          <p className="text-sm font-bold text-white leading-tight">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
         </div>
@@ -86,26 +86,26 @@ const navItems = [
       {zoneOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setZoneOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-2 max-h-[70vh] w-56 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-xl border border-gray-100 bg-white py-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-            <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">Delivery Areas</p>
+          <div className="absolute left-0 top-full z-20 mt-2 max-h-[70vh] w-64 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border border-cream-200 bg-white py-1.5 shadow-lift dark:border-slate-700 dark:bg-slate-800">
+            <p className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-500">Delivery areas</p>
             {onUseMyLocation && (
               <button onClick={triggerMyLocation} disabled={locationBusy}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-gray-50 disabled:opacity-60 dark:hover:bg-slate-700">
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-gokez-50 disabled:opacity-60 dark:hover:bg-slate-700">
                 {locationBusy
-                  ? <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-emerald-500" />
-                  : <LocateFixed className="h-4 w-4 flex-shrink-0 text-emerald-500" />}
-                <span className="text-[13px] font-semibold text-gray-900 dark:text-white">{locationBusy ? 'Finding location...' : 'Use my location'}</span>
+                  ? <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-gokez-700" />
+                  : <LocateFixed className="h-4 w-4 flex-shrink-0 text-gokez-700" />}
+                <span className="text-label font-semibold text-gray-900 dark:text-white">{locationBusy ? 'Finding location...' : 'Use my location'}</span>
               </button>
             )}
-            <div className="my-1 border-t border-gray-100 dark:border-slate-700" />
+            <div className="my-1 border-t border-cream-200 dark:border-slate-700" />
             {zones.map(zone => (
               <button key={zone.id} onClick={() => selectZone(zone)}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-700">
+                className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-gokez-50 dark:hover:bg-slate-700">
                 <div className="min-w-0 text-left">
-                  <p className="truncate text-[13px] font-semibold text-gray-900 dark:text-white">{zone.name}</p>
-                  <p className="text-[10px] text-gray-500">{zone.radiusKm} km radius</p>
+                  <p className="truncate text-label font-semibold text-gray-900 dark:text-white">{zone.name}</p>
+                  <p className="text-[11px] text-gray-500">{zone.radiusKm} km radius</p>
                 </div>
-                {selectedZone?.id === zone.id && <Check className="h-4 w-4 flex-shrink-0 text-emerald-500" />}
+                {selectedZone?.id === zone.id && <Check className="h-4 w-4 flex-shrink-0 text-gokez-700" />}
               </button>
             ))}
             {zones.length === 0 && <p className="px-3 py-2 text-xs text-gray-500">No areas available</p>}
@@ -117,7 +117,7 @@ const navItems = [
   };
 
   return (
-    <header className="sticky top-0 z-40 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#218044] to-[#2e8b57] shadow-sm dark:from-[#18191a] dark:to-[#18191a]">
+    <header className="sticky top-0 z-40 border-b border-white/10 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-gokez-800 to-gokez-700 shadow-sm dark:border-slate-800 dark:from-[#18191a] dark:to-[#18191a]">
 
       {/* Row 1 — 56px (3.5rem), the same app-bar height as PageHeader, the
           Profile header and the OTP/brand bars so every header matches. */}
@@ -135,8 +135,8 @@ const navItems = [
             const isActive = activeView === id;
             return (
               <button key={id} onClick={() => onNavChange(id)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
-                  isActive ? 'text-white bg-white/20' : 'text-white/80 hover:bg-white/10'
+                className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
+                  isActive ? 'bg-white text-gokez-800 shadow-sm' : 'text-white/80 hover:bg-white/10 hover:text-white'
                 }`}>
                 <Icon className="w-4 h-4" />
                 {label}
@@ -145,11 +145,11 @@ const navItems = [
           })}
           {/* Cart in center */}
           <button onClick={onCheckout}
-            className="relative flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white/80 hover:bg-white/10 transition-colors">
+            className="relative ml-1 flex items-center gap-1.5 rounded-full bg-saffron-400 px-4 py-2 text-sm font-bold text-saffron-900 shadow-sm transition-colors hover:bg-saffron-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80">
             <ShoppingCart className="w-4 h-4" />
             Cart
             {totalItems > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-emerald-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+              <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-gokez-800 shadow-sm">
                 {totalItems > 9 ? '9+' : totalItems}
               </span>
             )}
@@ -161,8 +161,8 @@ const navItems = [
       {activeView !== 'account' && activeView !== 'orders' && activeView !== 'categories' && (
         <div className="sm:hidden px-4 py-1">
           <button type="button" onClick={onSearchOpen} className="relative w-full text-left">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
-            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl bg-gray-100 py-2.5 pl-10 pr-3 text-sm text-gray-500 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gokez-700 dark:text-slate-200" />
+            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-500 shadow-sm transition-colors hover:bg-cream-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
           </button>
         </div>
       )}

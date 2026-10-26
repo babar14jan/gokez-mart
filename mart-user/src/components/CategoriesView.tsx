@@ -11,12 +11,14 @@ interface CategoriesViewProps {
   products: Product[];
   initialCategoryId?: string | null;
   initialCategorySlug?: string | null;
+  loading?: boolean;
+  onEmpty: () => void;
 }
 
 // Per-category accent so the active tab reads as a colourful highlighter and
 // neighbouring categories stay visually distinct.
 const ACCENTS = [
-  { bar: 'border-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/15', text: 'text-emerald-700 dark:text-emerald-300' },
+  { bar: 'border-gokez-700', bg: 'bg-gokez-50 dark:bg-gokez-700/15', text: 'text-gokez-800 dark:text-gokez-300' },
   { bar: 'border-blue-500',    bg: 'bg-blue-50 dark:bg-blue-500/15',       text: 'text-blue-700 dark:text-blue-300' },
   { bar: 'border-violet-500',  bg: 'bg-violet-50 dark:bg-violet-500/15',   text: 'text-violet-700 dark:text-violet-300' },
   { bar: 'border-amber-500',   bg: 'bg-amber-50 dark:bg-amber-500/15',     text: 'text-amber-700 dark:text-amber-300' },
@@ -33,7 +35,7 @@ function matches(product: Product, query: string): boolean {
   return name.includes(query) || local.includes(query) || aliases.some(alias => alias.includes(query));
 }
 
-export default function CategoriesView({ categories, products, initialCategoryId, initialCategorySlug }: CategoriesViewProps) {
+export default function CategoriesView({ categories, products, initialCategoryId, initialCategorySlug, loading = false, onEmpty }: CategoriesViewProps) {
   // Hide categories with no visible products for this store
   const visibleCategories = useMemo(
     () => categories.filter(category => products.some(product => product.categoryId === category.id)),
@@ -82,6 +84,16 @@ export default function CategoriesView({ categories, products, initialCategoryId
   const filteredProducts = products.filter(
     product => product.categoryId === activeCatId && (!query || matches(product, query))
   );
+  const redirected = useRef(false);
+
+  useEffect(() => {
+    if (loading || query || redirected.current) return;
+    const hasActiveCategory = visibleCategories.some(category => category.id === activeCatId);
+    if (!hasActiveCategory && visibleCategories.length > 0) return;
+    if (hasActiveCategory && filteredProducts.length > 0) return;
+    redirected.current = true;
+    onEmpty();
+  }, [loading, query, activeCatId, visibleCategories, filteredProducts.length, onEmpty]);
 
   return (
     <div className="categories-pane flex overflow-hidden" onClick={onSurfaceClick}>
@@ -122,7 +134,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
               onChange={event => setSearch(event.target.value)}
               onKeyDown={onKeyDown}
               placeholder={activeCategory ? `Search in ${activeCategory.name}` : 'Search'}
-              className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
+              className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
             />
             {search && (
               <button type="button" onClick={() => setSearch('')} aria-label="Clear search"

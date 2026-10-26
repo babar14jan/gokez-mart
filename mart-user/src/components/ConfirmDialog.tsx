@@ -68,7 +68,7 @@ export default function ConfirmDialog({
           </button>
           <button ref={confirmRef} onClick={onConfirm}
             className={`flex-1 py-2.5 text-sm font-semibold text-white rounded-xl transition-colors ${
-              danger ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'
+              danger ? 'bg-red-500 hover:bg-red-600' : 'bg-gokez-700 hover:bg-gokez-800'
             }`}>
             {confirmLabel}
           </button>

@@ -25,21 +25,21 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
       <div
         className={`flex items-center overflow-hidden rounded-[10px] transition-[width] duration-200 ease-out ${disabled ? 'opacity-40' : ''} ${
           quantity === 0
-            ? 'h-[30px] w-[72px] border-2 border-emerald-600 bg-white'
-            : 'h-[30px] w-[88px] border border-emerald-700 bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-700 p-0.5'
+            ? 'h-[30px] w-[72px] border-2 border-gokez-600 bg-white'
+            : 'h-[30px] w-[88px] border border-gokez-700 bg-gradient-to-r from-gokez-700 to-gokez-800 p-0.5'
         }`}
       >
         {quantity === 0 ? (
-          <button type="button" onClick={handle(onAdd)} disabled={disabled} className="h-full w-full text-xs font-extrabold tracking-wide text-emerald-700 transition-colors hover:bg-emerald-50 active:scale-[0.98]" aria-label="Add to cart">
+          <button type="button" onClick={handle(onAdd)} disabled={disabled} className="h-full w-full text-xs font-extrabold tracking-wide text-gokez-700 transition-colors hover:bg-gokez-50 active:scale-[0.98]" aria-label="Add to cart">
             ADD
           </button>
         ) : (
           <>
-            <button type="button" onClick={handle(onDecrease)} disabled={disabled} className="flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-white transition-colors hover:bg-emerald-700 active:bg-emerald-800" aria-label="Remove one from cart">
+            <button type="button" onClick={handle(onDecrease)} disabled={disabled} className="flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-white transition-colors hover:bg-gokez-800 active:bg-gokez-900" aria-label="Remove one from cart">
               <Minus className="h-4 w-4" />
             </button>
             <span className="min-w-0 flex-1 text-center text-xs font-extrabold tabular-nums text-white" aria-live="polite">{quantity}</span>
-            <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-white transition-colors hover:bg-emerald-700 active:bg-emerald-800" aria-label="Add one more to cart">
+            <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-6 w-7 shrink-0 items-center justify-center rounded-md text-white transition-colors hover:bg-gokez-800 active:bg-gokez-900" aria-label="Add one more to cart">
               <Plus className="h-4 w-4" />
             </button>
           </>
@@ -50,19 +50,19 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
 
   if (quantity === 0) {
     return (
-      <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-10 w-24 items-center justify-center gap-1.5 rounded-xl border-2 border-emerald-600 bg-white px-3 text-sm font-extrabold tracking-wide text-emerald-700 transition-colors hover:bg-emerald-50 active:scale-[0.98] disabled:opacity-40" aria-label="Add to cart">
+      <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-10 w-24 items-center justify-center gap-1.5 rounded-xl border-2 border-gokez-600 bg-white px-3 text-sm font-extrabold tracking-wide text-gokez-700 transition-colors hover:bg-gokez-50 active:scale-[0.98] disabled:opacity-40" aria-label="Add to cart">
         ADD
       </button>
     );
   }
 
   return (
-    <div className={`flex h-10 w-24 items-center justify-between rounded-xl border border-emerald-700 bg-gradient-to-r from-emerald-700 via-emerald-500 to-emerald-700 p-0.5 ${disabled ? 'opacity-40' : ''}`}>
-      <button type="button" onClick={handle(onDecrease)} disabled={disabled} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-emerald-700 active:bg-emerald-800" aria-label="Remove one from cart">
+    <div className={`flex h-10 w-24 items-center justify-between rounded-xl border border-gokez-700 bg-gradient-to-r from-gokez-700 to-gokez-800 p-0.5 ${disabled ? 'opacity-40' : ''}`}>
+      <button type="button" onClick={handle(onDecrease)} disabled={disabled} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-gokez-800 active:bg-gokez-900" aria-label="Remove one from cart">
         <Minus className="h-4 w-4" strokeWidth={2.5} />
       </button>
       <span className="text-sm font-extrabold tabular-nums text-white" aria-live="polite">{quantity}</span>
-      <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-emerald-700 active:bg-emerald-800" aria-label="Add one more to cart">
+      <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white transition-colors hover:bg-gokez-800 active:bg-gokez-900" aria-label="Add one more to cart">
         <Plus className="h-4 w-4" strokeWidth={2.5} />
       </button>
     </div>

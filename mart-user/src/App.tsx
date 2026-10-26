@@ -42,7 +42,7 @@ import { useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { detectPlatform } from './utils/install';
-import { BRAND_NAME, BRAND_SLOGAN, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
+import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 
 type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
@@ -1323,7 +1323,7 @@ export default function App() {
         <DeferredPage><WhatIsGokezMartPage /></DeferredPage>
       ) : view === 'categories' ? (
         <div className={productPageBottom}>
-          <CategoriesView categories={categories} products={products} initialCategorySlug={pendingCategorySlug} />
+          <CategoriesView categories={categories} products={products} initialCategorySlug={pendingCategorySlug} loading={loading} onEmpty={() => setView('home')} />
         </div>
       ) : view === 'deals' ? (
         <div className={PAGE_BOTTOM}>
@@ -1368,25 +1368,29 @@ export default function App() {
 
           {/* Shop by categories */}
           {(() => {
-            const visibleCategories = categories.filter(cat => products.some(p => p.categoryId === cat.id));
+            const visibleCategories = categories.filter(cat => products.some(product => product.categoryId === cat.id));
             if (visibleCategories.length === 0) return null;
             return (
               <section className="mt-4 mb-6">
-                <h2 className="text-base font-bold text-gray-900 dark:text-white mb-3">Shop by categories</h2>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white">Shop by categories</h2>
+                  <button type="button" onClick={() => {
+                    setPendingCategorySlug(null);
+                    handleNavChange('categories');
+                  }} className="rounded-full border border-gokez-200 bg-white px-3 py-1.5 text-xs font-bold text-gokez-800 transition-colors hover:border-gokez-300 hover:bg-gokez-50 dark:border-gokez-800 dark:bg-slate-800 dark:text-white dark:hover:bg-gokez-900/30">
+                    See all
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  {visibleCategories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => {
-                        setPendingCategorySlug(cat.slug || null);
-                        handleNavChange('categories');
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-900/20 dark:hover:border-emerald-700 transition-colors"
-                    >
-                      <div className="w-6 h-6 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        <CategoryIcon icon={cat.icon} name={cat.name} className="w-6 h-6 object-contain" />
-                      </div>
-                      <span className="text-xs font-medium text-gray-800 dark:text-slate-200 whitespace-nowrap">{cat.name}</span>
+                  {visibleCategories.map(cat => (
+                    <button key={cat.id} type="button" onClick={() => {
+                      setPendingCategorySlug(cat.slug || null);
+                      handleNavChange('categories');
+                    }} className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 transition-colors hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/20">
+                      <span className="flex h-6 w-6 items-center justify-center overflow-hidden">
+                        <CategoryIcon icon={cat.icon} name={cat.name} className="h-6 w-6 object-contain" />
+                      </span>
+                      <span className="whitespace-nowrap text-xs font-medium text-gray-800 dark:text-slate-200">{cat.name}</span>
                     </button>
                   ))}
                 </div>
@@ -1413,6 +1417,10 @@ export default function App() {
               <HomeSections
                 entries={resolvedHomeSections}
                 categories={categories}
+                onSelectCategory={(slug) => {
+                  setPendingCategorySlug(slug);
+                  setView('categories');
+                }}
                 onViewAll={(section, sectionProducts) => {
                   const kind = section.kind || section.sectionKey;
                   if (kind === 'combo' || kind === 'todays_combos') {
@@ -1493,18 +1501,15 @@ export default function App() {
           )}
 
           {/* Footer */}
-          <footer className="mt-10 pb-8 pt-6">
-            <div className="mx-auto max-w-xl sm:max-w-4xl flex flex-col items-center text-center">
-              <img src="/mart_brand_new.png" alt="Gokez Mart" className="h-14 w-auto object-contain" />
-              <p className="-mt-1 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{BRAND_SLOGAN}</p>
-              <p className="mt-2 text-base font-semibold text-gray-900 dark:text-white">From your Neighbourhood Store to your door</p>
-              <div className="mt-3 flex items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
-                <button type="button" onClick={() => { setView('privacy' as View); window.history.pushState({}, '', '/privacy'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Privacy Policy</button>
-                <span>·</span>
-                <button type="button" onClick={() => { setView('terms' as View); window.history.pushState({}, '', '/terms'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Terms of Service</button>
+          <footer className="mt-8 border-t-2 border-emerald-200 bg-white/80 pb-5 pt-6 dark:border-emerald-900/60 dark:bg-slate-900/70">
+            <div className="mx-auto max-w-xl sm:max-w-4xl">
+              <div className="mb-3 flex items-center justify-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+                <button type="button" onClick={() => { setView('privacy'); window.history.pushState({}, '', '/privacy'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Privacy Policy</button>
+                <span aria-hidden="true">&middot;</span>
+                <button type="button" onClick={() => { setView('terms'); window.history.pushState({}, '', '/terms'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Terms of Service</button>
               </div>
-              <p className="mt-4 text-[11px] text-gray-500 dark:text-slate-400">
-                &copy; {new Date().getFullYear()} {BRAND_NAME} · A product of{' '}
+              <p className="text-center text-[11px] text-gray-500 dark:text-slate-400">
+                &copy; {new Date().getFullYear()} {BRAND_NAME}{' · '}A product of{' '}
                 <a href={PARENT_COMPANY_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline">
                   {PARENT_COMPANY}
                 </a>

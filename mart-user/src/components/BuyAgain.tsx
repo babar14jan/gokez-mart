@@ -3,6 +3,7 @@ import { authApi } from '../services/api';
 import type { Product } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import ProductCard from './ProductCard';
+import SectionHeading from './ui/SectionHeading';
 
 const MAX_ITEMS = 10;
 const MIN_ITEMS = 2;
@@ -50,14 +51,11 @@ export default function BuyAgain({ products }: { products: Product[] }) {
   if (items.length < MIN_ITEMS) return null;
 
   return (
-    <section className="mb-6">
-      <div className="mb-3">
-        <h2 className="text-base font-bold text-gray-900 dark:text-white leading-tight">Your Usuals</h2>
-        <p className="text-xs text-gray-500 dark:text-slate-400">Order again in one tap</p>
-      </div>
-      <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+    <section className="mb-6" aria-label="Your usual items">
+      <SectionHeading title="Your usuals" subtitle="Order again in one tap" />
+      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
         {items.map(p => (
-          <div key={p.id} className="w-[31%] min-w-[118px] sm:w-[150px] flex-shrink-0">
+          <div key={p.id} className="w-[43%] min-w-[140px] flex-shrink-0 sm:w-[170px]">
             <ProductCard product={p} />
           </div>
         ))}

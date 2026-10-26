@@ -106,7 +106,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
           <div className="w-9" />
           <div className="h-1.5 w-10 rounded-full bg-gray-300 dark:bg-slate-600" />
           <button type="button" onClick={onClose} aria-label="Close"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -124,7 +124,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
               fallback={<div className="flex h-full w-full items-center justify-center text-7xl">🥦</div>}
             />
             {savings > 0 && !isOutOfStock && (
-              <span className="absolute left-0 top-0 rounded-br-lg bg-red-500 px-2 py-1 text-[11px] font-extrabold text-white">
+              <span className="absolute left-3 top-3 rounded-full border border-saffron-600/45 bg-saffron-400 px-3 py-1.5 text-xs font-extrabold leading-none text-ink shadow-[0_1px_4px_rgba(111,59,19,0.3)]">
                 {product.discountPercent}% OFF
               </span>
             )}
@@ -140,7 +140,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
               {savings > 0 && (
                 <>
                   <span className="text-sm font-semibold text-gray-400 line-through dark:text-slate-500">₹{product.price}</span>
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Save ₹{savings}</span>
+                  <span className="rounded-full bg-gokez-50 px-2 py-0.5 text-xs font-bold text-gokez-800 dark:bg-gokez-950/30 dark:text-gokez-400">Save ₹{savings}</span>
                 </>
               )}
             </div>
@@ -178,7 +178,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
               <button
                 type="button"
                 onClick={() => addItem(product, product.unit, discountedPrice)}
-                className="flex-1 h-11 rounded-xl bg-emerald-600 text-sm font-bold text-white transition-colors hover:bg-emerald-700"
+                className="flex-1 h-11 rounded-xl bg-gokez-700 text-sm font-bold text-white transition-colors hover:bg-gokez-800"
               >
                 Add to Cart
               </button>

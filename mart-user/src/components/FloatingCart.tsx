@@ -16,7 +16,7 @@ export default function FloatingCart({ onOpen, hidden }: FloatingCartProps) {
     <div className="sm:hidden absolute left-1/2 -translate-x-1/2 z-40" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px) + 8px)' }}>
       <button
         onClick={onOpen}
-        className="relative flex items-center justify-center gap-2.5 rounded-full border border-emerald-900/25 bg-gradient-to-b from-[#2e8b57] to-[#218044] px-5 py-2 text-white shadow-lg shadow-emerald-900/40 ring-1 ring-inset ring-white/15 transition-all hover:from-[#35a06a] hover:to-[#256e49] hover:shadow-emerald-900/50 active:scale-95 active:from-[#218044] active:to-[#175c34] dark:border-emerald-400/25 dark:from-[#2e8b57] dark:to-[#1c7040] dark:shadow-emerald-950/50 whitespace-nowrap"
+        className="relative flex items-center justify-center gap-2.5 rounded-full border border-gokez-900/25 bg-gradient-to-b from-[#087a43] to-[#09623a] px-5 py-2 text-white shadow-lg shadow-gokez-900/40 ring-1 ring-inset ring-white/15 transition-all hover:from-[#0a9250] hover:to-[#085131] hover:shadow-gokez-900/50 active:scale-95 active:from-[#09623a] active:to-[#085131] dark:border-gokez-400/25 dark:from-[#087a43] dark:to-[#085131] dark:shadow-gokez-950/50 whitespace-nowrap"
       >
         <ShoppingCart className="w-5 h-5 flex-shrink-0" />
 

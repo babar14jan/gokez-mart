@@ -56,7 +56,7 @@ export default function TermsPage({ embed = false }: { embed?: boolean } = {}) {
               <li>Orders can be cancelled before they are confirmed by the store</li>
               <li>Once an order is confirmed or out for delivery, cancellation may not be possible</li>
               <li>Refunds, replacements and payment reversals for goods are handled by the merchant that received the payment. Gokez may help route a support request but does not promise or process a merchant refund</li>
-              <li>For damaged or incorrect items, contact the merchant promptly using the order support details. You may also contact <a href="mailto:support@gokez.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">support@gokez.com</a> for platform support</li>
+              <li>For damaged or incorrect items, contact the merchant promptly using the order support details. You may also contact <a href="mailto:support@gokez.com" className="text-gokez-700 dark:text-gokez-400 hover:underline">support@gokez.com</a> for platform support</li>
             </ul>
           </section>
 
@@ -93,9 +93,9 @@ export default function TermsPage({ embed = false }: { embed?: boolean } = {}) {
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">11. Contact</h2>
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-4">
+            <div className="bg-gokez-50 dark:bg-gokez-950/20 border border-gokez-100 dark:border-gokez-900 rounded-xl p-4">
               <p className="font-semibold text-gray-800 dark:text-white mb-2">Gokez Technologies Pvt. Ltd.</p>
-              <p className="text-gray-600 dark:text-slate-400">Email: <a href="mailto:support@gokez.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">support@gokez.com</a></p>
+              <p className="text-gray-600 dark:text-slate-400">Email: <a href="mailto:support@gokez.com" className="text-gokez-700 dark:text-gokez-400 hover:underline">support@gokez.com</a></p>
               <p className="text-gray-600 dark:text-slate-400">Kolkata, West Bengal, India</p>
             </div>
           </section>
