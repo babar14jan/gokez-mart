@@ -253,7 +253,7 @@ html, body { overscroll-behavior-y: none; }
   .app-tint-bottom {
     bottom: 0;
     height: 12px;
-    background-color: #ffffff;
+    background-color: #faf7ef;
   }
 
   .dark .app-tint-bottom {

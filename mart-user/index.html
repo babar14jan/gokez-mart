@@ -56,8 +56,8 @@
          the browser scrolls a fixed-height page around the caret. iOS Safari
          ignores this directive, which is why --kb exists as well. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#ffffff" />
-    <meta name="msapplication-navbutton-color" content="#ffffff" />
+    <meta name="theme-color" content="#087a43" />
+    <meta name="msapplication-navbutton-color" content="#087a43" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Gokez Mart" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -196,17 +196,23 @@
       var standaloneLaunch = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
         || navigator.standalone === true;
       if (standaloneLaunch) document.documentElement.classList.add('installed-pwa');
+      var savedDarkMode = false;
+      try {
+        var savedTheme = JSON.parse(localStorage.getItem('mart-theme') || 'null');
+        savedDarkMode = savedTheme && savedTheme.state && savedTheme.state.isDark === true;
+      } catch {}
+      if (savedDarkMode) document.documentElement.classList.add('dark');
       // The status bar colour during the cold start. The app sets this again at
-      // runtime (App.tsx), but that happens after the first paint -- on Android
-      // the OS splash is already on screen by then, and a white status bar over
-      // the green splash is a visible seam. Set it here, before first paint.
+      // runtime (App.tsx), but that happens after the first paint. Set it here,
+      // before first paint, so Android does not show a green system strip below
+      // the nav when the customer has selected dark mode.
       // Desktop keeps the white bar the app uses there.
       var mobileUA = /android/i.test(navigator.userAgent)
         || /iphone|ipad|ipod/i.test(navigator.userAgent)
         || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
       if (mobileUA) {
         var themeMeta = document.querySelector('meta[name="theme-color"]');
-        if (themeMeta) themeMeta.setAttribute('content', '#09623a');
+        if (themeMeta) themeMeta.setAttribute('content', savedDarkMode ? '#18191a' : '#087a43');
       }
       window.__splashStart = Date.now();
       // Last-resort fallback: the splash is shown in every context now
