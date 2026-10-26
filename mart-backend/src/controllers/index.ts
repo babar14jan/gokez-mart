@@ -1544,14 +1544,30 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
     res.status(409).json({ success: false, error: 'Username already exists' }); return;
   }
   const hash = await bcrypt.hash(password, 12);
-  const result = await query(
-    `INSERT INTO mart_admins (id, username, password_hash, name, email, phone, role, store_id)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, username, name, email, phone, role, store_id as "storeId", created_at as "createdAt"`,
-    [username.trim(), hash, name?.trim() || null, email?.trim() || null,
-     phone?.trim() || null, role, role === 'super_admin' ? null : storeId]
-  );
-  res.status(201).json({ success: true, data: result.rows[0] });
+  // Writing only mart_admins.store_id left the user without a store assignment,
+  // so the Team screen and the order-assignment dropdown (both read assignments)
+  // never listed them. Create the assignment in the same transaction.
+  const user = await transaction(async client => {
+    const result = await client.query(
+      `INSERT INTO mart_admins (id, username, password_hash, name, email, phone, role, store_id)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, username, name, email, phone, role, store_id as "storeId", created_at as "createdAt"`,
+      [username.trim(), hash, name?.trim() || null, email?.trim() || null,
+       phone?.trim() || null, role, role === 'super_admin' ? null : storeId]
+    );
+    const created = result.rows[0];
+    if (role !== 'super_admin') {
+      await client.query(
+        `INSERT INTO mart_admin_store_assignments (admin_id, store_id, role, assigned_by)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (admin_id, store_id) DO UPDATE SET
+           role = EXCLUDED.role, is_active = true, assigned_by = EXCLUDED.assigned_by, updated_at = NOW()`,
+        [created.id, storeId, role, req.admin!.id]
+      );
+    }
+    return created;
+  });
+  res.status(201).json({ success: true, data: user });
 });
 
 export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -1585,13 +1601,41 @@ export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Respo
   if (!fields.length) { res.status(400).json({ success: false, error: 'Nothing to update' }); return; }
   fields.push(`updated_at = NOW()`);
   params.push(id);
-  const result = await query(
-    `UPDATE mart_admins SET ${fields.join(', ')} WHERE id = $${i}
-     RETURNING id, username, name, email, phone, role, store_id as "storeId", is_active as "isActive"`,
-    params
-  );
-  if (!result.rows[0]) { res.status(404).json({ success: false, error: 'User not found' }); return; }
-  res.json({ success: true, data: result.rows[0] });
+  // The user row and its primary-store assignment must move together: a failure
+  // after the UPDATE used to leave the account changed but the API reporting 500.
+  const updated = await transaction(async client => {
+    const result = await client.query(
+      `UPDATE mart_admins SET ${fields.join(', ')} WHERE id = $${i}
+       RETURNING id, username, name, email, phone, role, store_id as "storeId", is_active as "isActive"`,
+      params
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    // Keep the primary-store assignment in step with a role/store edit. Editing a
+    // user used to change mart_admins only, so a user promoted to delivery_staff
+    // (or moved to another store) stayed absent from the assignment-driven
+    // Team screen and order-assignment dropdown.
+    if (role !== undefined || storeId !== undefined) {
+      if (row.role === 'super_admin') {
+        await client.query(
+          `UPDATE mart_admin_store_assignments SET is_active = false, updated_at = NOW()
+           WHERE admin_id = $1 AND is_active = true`,
+          [id]
+        );
+      } else if (row.storeId) {
+        await client.query(
+          `INSERT INTO mart_admin_store_assignments (admin_id, store_id, role, assigned_by)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (admin_id, store_id) DO UPDATE SET
+             role = EXCLUDED.role, updated_at = NOW()`,
+          [id, row.storeId, row.role, req.admin!.id]
+        );
+      }
+    }
+    return row;
+  });
+  if (!updated) { res.status(404).json({ success: false, error: 'User not found' }); return; }
+  res.json({ success: true, data: updated });
 });
 
 export const adminDeleteUser = asyncHandler(async (req: AdminRequest, res: Response) => {
