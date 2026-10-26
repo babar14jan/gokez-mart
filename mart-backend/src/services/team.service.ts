@@ -1,4 +1,4 @@
-import { query } from '../database/db';
+import { query, transaction } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
@@ -59,15 +59,22 @@ export class TeamService {
     return result.rows[0] || null;
   }
 
-  // Add existing user to store
-  static async addToStore(adminId: string, storeId: string, role: string, assignedBy: string): Promise<void> {
+  // Add existing user to store. `db` lets createAndAssign do this in the same
+  // transaction as the account insert.
+  static async addToStore(
+    adminId: string,
+    storeId: string,
+    role: string,
+    assignedBy: string,
+    db: { query: (text: string, params?: unknown[]) => Promise<{ rows: any[] }> } = { query }
+  ): Promise<void> {
     // mart_admin_store_assignments.role gained a CHECK in migration 056. This
     // write previously accepted any string, so a typo here would have become an
     // unhandled constraint violation instead of a clean rejection.
     if (!isValidAdminRole(role)) {
       throw Object.assign(new Error(`Role must be one of: ${ADMIN_ROLE_LIST}`), { status: 400 });
     }
-    await query(
+    await db.query(
       `INSERT INTO mart_admin_store_assignments (admin_id, store_id, role, assigned_by)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (admin_id, store_id) DO UPDATE SET
@@ -75,7 +82,7 @@ export class TeamService {
       [adminId, storeId, role, assignedBy]
     );
     // Update primary store_id if not set
-    await query(
+    await db.query(
       `UPDATE mart_admins SET store_id = $1 WHERE id = $2 AND store_id IS NULL`,
       [storeId, adminId]
     );
@@ -97,19 +104,37 @@ export class TeamService {
     if (!data.password || data.password.length < 8) {
       throw Object.assign(new Error('Password must be at least 8 characters'), { status: 400 });
     }
-    const existing = await query(`SELECT 1 FROM mart_admins WHERE username = $1`, [data.username]);
-    if (existing.rows.length) throw new Error('Username already exists');
     const hash = await bcrypt.hash(data.password, 12);
     const id = uuidv4();
-    const result = await query(
-      `INSERT INTO mart_admins (id, username, password_hash, name, phone, email, role, store_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       RETURNING id, username, name, phone, email, role`,
-      [id, data.username, hash, data.name || null, data.phone || null,
-       data.email || null, data.role, data.storeId]
-    );
-    await this.addToStore(id, data.storeId, data.role, data.assignedBy);
-    return result.rows[0];
+    // Account and assignment are one unit. Before this, a failure in addToStore
+    // left an account with no assignment, which hid it from the team/dropdown
+    // and made every retry fail with "Username already exists".
+    try {
+      return await transaction(async client => {
+        const existing = await client.query(
+          `SELECT 1 FROM mart_admins WHERE username = $1`, [data.username]
+        );
+        if (existing.rows.length) {
+          throw Object.assign(new Error('Username already exists'), { status: 409 });
+        }
+        const result = await client.query(
+          `INSERT INTO mart_admins (id, username, password_hash, name, phone, email, role, store_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           RETURNING id, username, name, phone, email, role`,
+          [id, data.username, hash, data.name || null, data.phone || null,
+           data.email || null, data.role, data.storeId]
+        );
+        await this.addToStore(id, data.storeId, data.role, data.assignedBy, client);
+        return result.rows[0];
+      });
+    } catch (err: any) {
+      // The check above can lose a race with a concurrent create; the unique
+      // constraint is then the source of truth.
+      if (err?.code === '23505') {
+        throw Object.assign(new Error('Username already exists'), { status: 409 });
+      }
+      throw err;
+    }
   }
 
   // Update assignment (role or active status)

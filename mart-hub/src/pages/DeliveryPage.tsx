@@ -255,6 +255,7 @@ export default function DeliveryPage() {
       {paymentOrder && (
         <PaymentConfirmDialog
           orderTotal={paymentOrder.total}
+          submitting={updating === paymentOrder.id}
           onConfirm={async (method) => {
             if (await updateStatus(paymentOrder.id, 'delivered', method)) {
               setPaymentOrder(null);

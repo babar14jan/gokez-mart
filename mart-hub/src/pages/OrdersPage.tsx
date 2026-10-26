@@ -252,7 +252,7 @@ export default function OrdersPage() {
   useEffect(() => { load(); }, []);
   useEffect(() => {
     teamApi.getStoreTeam(getActiveStoreId())
-      .then(r => setDeliveryHandlers((r.data.data || []).filter((member: any) => member.assignmentActive && ['store_owner', 'store_manager', 'staff', 'delivery_staff'].includes(member.role))))
+      .then(r => setDeliveryHandlers((r.data.data || []).filter((member: any) => member.isActive && member.assignmentActive && ['store_owner', 'store_manager', 'staff', 'delivery_staff'].includes(member.role))))
       .catch(() => {});
   }, []);
   useEffect(() => {
@@ -1100,6 +1100,7 @@ export default function OrdersPage() {
       {paymentOrder && (
         <PaymentConfirmDialog
           orderTotal={paymentOrder.total}
+          submitting={updating === paymentOrder.id}
           onConfirm={async (method) => {
             if (await updateStatus(paymentOrder.id, 'delivered', undefined, undefined, method)) {
               setPaymentOrder(null);
