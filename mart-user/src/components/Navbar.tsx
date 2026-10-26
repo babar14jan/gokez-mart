@@ -117,7 +117,7 @@ const navItems = [
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-gokez-800 to-gokez-700 shadow-sm dark:border-slate-800 dark:from-[#18191a] dark:to-[#18191a]">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a]">
 
       {/* Row 1 — 56px (3.5rem), the same app-bar height as PageHeader, the
           Profile header and the OTP/brand bars so every header matches. */}
