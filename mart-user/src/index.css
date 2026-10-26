@@ -73,21 +73,11 @@ html, body { overscroll-behavior-y: none; }
   transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 
-/* The centre Fresh icon is intentionally larger than the labelled tabs while
-   remaining vertically centered in the fixed-height navigation row. */
+/* The centre Fresh icon stays fully contained inside the fixed-height
+   navigation row, clear of both the top border and lower safe-area padding. */
 .nav-veg-icon {
-  height: 58px;
-  width: 58px;
-}
-
-/* Keep the larger centre control visually above the iOS bottom bar rather than
-   crowding the home-indicator area. The nav remains in flow, so its height and
-   touch layout stay stable. */
-@supports (-webkit-touch-callout: none) {
-  .nav-fresh-button {
-    position: relative;
-    top: -10px;
-  }
+  height: 52px;
+  width: 52px;
 }
 
 /* The checkout footer is a position:sticky child of the scrolling checkout
