@@ -19,7 +19,7 @@ const tabs = [
 export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavProps) {
 
   return (
-    <nav className="mobile-bottom-nav relative z-40 border-t border-cream-200 bg-canvas dark:border-slate-800 dark:bg-slate-900">
+    <nav className="mobile-bottom-nav relative z-40 border-t border-cream-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto flex h-16 max-w-lg items-stretch justify-between px-5">
         {tabs.map(({ id, label, Icon }, index) => {
           const isActive = active === id;
@@ -29,10 +29,10 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
                 <button
                   type="button"
                   onClick={onOpenSearch}
-                  aria-label="Search fresh vegetables"
+                  aria-label="Fresh products"
                   className="flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
                 >
-                  <img src="/fresh-veg.webp" alt="" width={48} height={48} {...{ fetchpriority: 'high' }} decoding="async" className="nav-veg-icon object-contain" />
+                  <img src="/fresh_icon.webp" alt="" width={48} height={48} {...{ fetchpriority: 'high' }} decoding="async" className="nav-veg-icon object-contain" />
                 </button>
               )}
               <button

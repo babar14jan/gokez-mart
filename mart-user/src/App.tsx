@@ -505,9 +505,10 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    // iOS keeps the app-bar green (theme-color is only a flash guard there now);
-    // Android/desktop stay white in light mode. See store/themeStore.ts.
-    if (meta) meta.setAttribute('content', isDark ? '#18191a' : (detectPlatform() === 'ios' || detectPlatform() === 'android') ? '#087a43' : '#ffffff');
+    // Keep launch chrome on the common splash green until the splash completes.
+    if (meta && !document.getElementById('app-splash')) {
+      meta.setAttribute('content', isDark ? '#18191a' : (detectPlatform() === 'ios' || detectPlatform() === 'android') ? '#087a43' : '#ffffff');
+    }
   }, [isDark, view]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps

@@ -12,7 +12,7 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
-body { background-color: #faf7ef; color: #14201a; }
+body { background-color: #f7f8fa; color: #14201a; }
 .dark body { background-color: #18191a; color: #e4e6eb; }
 
 ::selection { background: #b8ebce; color: #085131; }
@@ -253,7 +253,7 @@ html, body { overscroll-behavior-y: none; }
   .app-tint-bottom {
     bottom: 0;
     height: 12px;
-    background-color: #faf7ef;
+    background-color: #ffffff;
   }
 
   .dark .app-tint-bottom {

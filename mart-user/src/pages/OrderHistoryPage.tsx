@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, ArrowRight, MessageCircle, WifiOff, CalendarClock } from 'lucide-react';
+import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, MessageCircle, WifiOff, CalendarClock } from 'lucide-react';
 import { authApi, storeApi } from '../services/api';
 import { requestErrorMessage } from '../utils/networkError';
 import { readTrackingTokens } from '../utils/guestTracking';
@@ -556,21 +556,21 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
           <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 dark:bg-slate-800">
             <ShoppingBag className="h-9 w-9 text-gray-300 dark:text-slate-500" />
           </div>
-          <h2 className="mb-2 text-lg font-bold text-gray-900 dark:text-white">No orders found</h2>
+          <h2 className="mb-2 text-lg font-bold text-gray-900 dark:text-white">Your orders will appear here</h2>
           <p className="mx-auto mb-7 max-w-xs text-sm leading-relaxed text-gray-500 dark:text-slate-400">
-            No recent orders were found on this device. Log in to view your complete order history.
+            Log in to view your order history, or continue shopping as a guest.
           </p>
           <button
             onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
             className="mb-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
           >
-            <User className="h-4 w-4" /> Login to View Order
+            <User className="h-4 w-4" /> Log in
           </button>
           <button
             onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }}
             className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           >
-            Continue as guest <ArrowRight className="h-4 w-4" />
+            Continue Shopping
           </button>
         </div>
       );

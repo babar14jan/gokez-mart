@@ -480,7 +480,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   }
 
   return (
-    <div className="page-shell bg-cream-50 dark:bg-slate-900 font-sans">
+    <div className="page-shell bg-[#f7f8fa] dark:bg-slate-900 font-sans">
       <div className="mx-auto max-w-2xl space-y-7 px-4 py-5 pb-10 sm:px-6 sm:py-7">
         {!isLoggedIn && (
         <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">

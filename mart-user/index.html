@@ -196,23 +196,17 @@
       var standaloneLaunch = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
         || navigator.standalone === true;
       if (standaloneLaunch) document.documentElement.classList.add('installed-pwa');
-      var savedDarkMode = false;
-      try {
-        var savedTheme = JSON.parse(localStorage.getItem('mart-theme') || 'null');
-        savedDarkMode = savedTheme && savedTheme.state && savedTheme.state.isDark === true;
-      } catch {}
-      if (savedDarkMode) document.documentElement.classList.add('dark');
       // The status bar colour during the cold start. The app sets this again at
-      // runtime (App.tsx), but that happens after the first paint. Set it here,
-      // before first paint, so Android does not show a green system strip below
-      // the nav when the customer has selected dark mode.
+      // runtime after the splash has left. Set it here before first paint so
+      // every launch has the same brand-green splash, regardless of the saved
+      // light or dark app preference.
       // Desktop keeps the white bar the app uses there.
       var mobileUA = /android/i.test(navigator.userAgent)
         || /iphone|ipad|ipod/i.test(navigator.userAgent)
         || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
       if (mobileUA) {
         var themeMeta = document.querySelector('meta[name="theme-color"]');
-        if (themeMeta) themeMeta.setAttribute('content', savedDarkMode ? '#18191a' : '#087a43');
+        if (themeMeta) themeMeta.setAttribute('content', '#087a43');
       }
       window.__splashStart = Date.now();
       // Last-resort fallback: the splash is shown in every context now
@@ -249,8 +243,8 @@
          canvas and the splash looked like it was cut off. The class is removed
          as soon as the splash is, so the loaded page keeps its own colours
          (white in light mode, near-black in dark) exactly as before. */
-      html.splash-active { background-color: #09623a; }
-      html.dark.splash-active { background-color: #09623a; }
+      html.splash-active { background-color: #087a43; }
+      html.dark.splash-active { background-color: #087a43; }
       /* Styling for the no-JavaScript SEO block only. Nothing here affects the
          React app, which renders its own layout into #root. */
       .seo-static { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; }
@@ -289,7 +283,7 @@
         height: 100dvh;
         z-index: 2147483000;
         display: none;
-        background-color: #09623a;
+        background-color: #087a43;
         /* A barely-there lift at the top so the flat brand green reads as a
            lit surface rather than a solid fill. */
         background-image: radial-gradient(120% 80% at 50% 12%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 62%);
