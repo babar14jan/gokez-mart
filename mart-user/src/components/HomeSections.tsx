@@ -1,5 +1,8 @@
 import type { Category, HomeSection, Product } from '../services/api';
+import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
+import Button from './ui/Button';
+import SectionHeading from './ui/SectionHeading';
 
 function getKind(section: HomeSection) {
   return section.kind || section.sectionKey || 'manual';
@@ -97,31 +100,21 @@ interface HomeSectionsProps {
   entries: ResolvedSection[];
   categories: Category[];
   onViewAll: (section: HomeSection, items: Product[]) => void;
+  onSelectCategory: (slug: string) => void;
 }
 
-export default function HomeSections({ entries, categories, onViewAll }: HomeSectionsProps) {
+export default function HomeSections({ entries, categories, onViewAll, onSelectCategory }: HomeSectionsProps) {
   return (
     <div className="space-y-8">
       {entries.map(({ section, items }) => {
         const kind = getKind(section);
         const layout = sectionLayout(section);
-  const isComboSection = kind === 'combo' || kind === 'todays_combos';
-  const isStoreFavourites = kind === 'top_picks';
-  const isDeals = kind === 'deals';
-  const isBanner = kind === 'banner' || layout === 'hero';
-  const isTiles = kind === 'category_tiles' || layout === 'tiles';
-  const visibleItems = items;
-    const configuredLimit = Number(section.config?.limit);
-    const hasReachedLimit = Number.isInteger(configuredLimit) && configuredLimit > 0 && items.length >= configuredLimit;
-      const canViewAll = hasReachedLimit;
+        const isBanner = kind === 'banner' || layout === 'hero';
+        const isTiles = kind === 'category_tiles' || layout === 'tiles';
+        const visibleItems = items;
+        const canViewAll = !isTiles;
 
-  const viewAll = isComboSection
-    ? { label: section.badge || 'View all', cls: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500' }
-    : isDeals
-    ? { label: section.badge || 'View all', cls: 'bg-purple-600 text-white hover:bg-purple-700 focus-visible:ring-purple-500' }
-    : isStoreFavourites
-    ? { label: section.badge || 'View all', cls: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500' }
-    : { label: section.badge || 'View all', cls: 'bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500' };
+        const viewAllLabel = section.badge || 'View all';
 
         if (isBanner && section.config?.imageUrl) {
           const href = section.config.href;
@@ -134,7 +127,7 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
                   {section.title && <p className="text-base font-bold text-white">{typeof section.title === 'string' ? section.title.replace(/\b\w/g, c => c.toUpperCase()) : section.title}</p>}
                   {section.subtitle && <p className="text-xs text-white/90 mt-0.5">{typeof section.subtitle === 'string' ? section.subtitle.replace(/\b\w/g, c => c.toUpperCase()) : section.subtitle}</p>}
                   {btnText && href && (
-                    <button type="button" onClick={(e:any)=>{ e.preventDefault(); e.stopPropagation(); if(href.startsWith('#')){window.location.hash = href; window.dispatchEvent(new HashChangeEvent('hashchange'));} else if(href.startsWith('/category/')){const slug = href.split('/category/')[1]?.split('?')[0]; window.dispatchEvent(new CustomEvent('gokez:select-category',{detail:{slug}}));}}} className="mt-2 self-start inline-flex items-center px-3 py-1.5 rounded-lg bg-white/90 text-gray-900 text-xs font-semibold border border-white/60 shadow-sm">{btnText}</button>
+                    <button type="button" onClick={(e:any)=>{ e.preventDefault(); e.stopPropagation(); if(href.startsWith('#')){window.location.hash = href; window.dispatchEvent(new HashChangeEvent('hashchange'));} else if(href.startsWith('/category/')){const slug = href.split('/category/')[1]?.split('?')[0]; if (slug) onSelectCategory(slug);}}} className="mt-2 self-start inline-flex items-center rounded-full border border-white/60 bg-white px-3.5 py-2 text-xs font-bold text-gokez-800 shadow-sm transition-colors hover:bg-cream-50">{btnText}</button>
                   )}
                   {btnText && !href && (
                     <span className="mt-2 self-start inline-flex items-center px-3 py-1.5 rounded-lg bg-white/90 text-gray-900 text-xs font-semibold border border-white/60 shadow-sm">{btnText}</span>
@@ -152,7 +145,7 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
               return;
             } else if (href.startsWith('/category/')) {
               const slug = href.split('/category/')[1]?.split('?')[0];
-              window.dispatchEvent(new CustomEvent('gokez:select-category', { detail: { slug } }));
+              if (slug) onSelectCategory(slug);
               return;
             }
           };
@@ -165,23 +158,15 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
 
         return (
           <section key={section.id}>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="min-w-0">
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">{typeof section.title === 'string' ? section.title.replace(/\b\w/g, c => c.toUpperCase()) : section.title}</h2>
-                {section.subtitle && (
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{typeof section.subtitle === 'string' ? section.subtitle.replace(/\b\w/g, c => c.toUpperCase()) : section.subtitle}</p>
-                )}
-              </div>
-              {canViewAll && !isStoreFavourites && !isTiles && (
-                <button
-                  type="button"
-                  onClick={() => onViewAll(section, items)}
-                  className={`flex-shrink-0 whitespace-nowrap rounded-xl px-5 py-2 text-sm font-bold shadow-md transition-all hover:shadow-lg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
-                >
-                  {viewAll.label}
-                </button>
-              )}
-            </div>
+            <SectionHeading
+              title={typeof section.title === 'string' ? section.title.replace(/\b\w/g, c => c.toUpperCase()) : String(section.title || '')}
+              subtitle={section.subtitle ? (typeof section.subtitle === 'string' ? section.subtitle.replace(/\b\w/g, c => c.toUpperCase()) : String(section.subtitle)) : undefined}
+              action={canViewAll ? (
+                <Button variant="secondary" size="xs" onClick={() => onViewAll(section, items)}>
+                  {viewAllLabel}
+                </Button>
+              ) : undefined}
+            />
 
             {isTiles ? (
               <div className={`grid ${gridCols(section)} gap-2.5`}>
@@ -189,29 +174,27 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
                   const cat = categories.find(c => c.slug === slug);
                   if (!cat) return null;
                   return (
-                    <button key={slug} type="button" onClick={() => { window.location.hash = '#categories'; }} className="rounded-xl border border-gray-100 dark:border-slate-700 p-3 text-sm font-semibold text-gray-900 dark:text-white text-left">
-                      {cat.name}
+                    <button
+                      key={slug}
+                      type="button"
+                      onClick={() => onSelectCategory(cat.slug)}
+                      className="group flex flex-col items-center gap-2 rounded-2xl border border-cream-200 bg-white p-3 text-center shadow-card transition-colors hover:border-gokez-200 hover:bg-gokez-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-gokez-800 dark:hover:bg-gokez-900/20"
+                    >
+                      <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-cream-100 dark:bg-slate-700">
+                        <CategoryIcon icon={cat.icon} name={cat.name} className="h-8 w-8 object-contain" />
+                      </span>
+                      <span className="line-clamp-2 text-[12px] font-semibold leading-tight text-ink dark:text-white">{cat.name}</span>
                     </button>
                   );
                 })}
               </div>
             ) : layout === 'row' ? (
-              <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+              <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
                 {visibleItems.map((p: any) => (
-                  <div key={p.id} className="w-[42%] min-w-[140px] sm:w-[170px] md:w-[190px] flex-shrink-0">
+                  <div key={p.id} className="w-[46%] min-w-[148px] flex-shrink-0 sm:w-[172px] md:w-[190px]">
                     <ProductCard product={p} />
                   </div>
                 ))}
-                {canViewAll && (
-                  <button
-                    type="button"
-                    onClick={() => onViewAll(section, items)}
-                    className="w-[42%] min-w-[140px] sm:w-[170px] md:w-[190px] flex-shrink-0 rounded-xl border-2 border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 flex flex-col items-center justify-center gap-2 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xl">→</div>
-                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{viewAll.label}</span>
-                  </button>
-                )}
               </div>
             ) : layout === 'grid' ? (
               <div className={`grid ${gridCols(section)} gap-2.5`}>
@@ -233,17 +216,6 @@ export default function HomeSections({ entries, categories, onViewAll }: HomeSec
               </div>
             )}
 
-            {canViewAll && isStoreFavourites && !isTiles && (
-              <div className="mt-3 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => onViewAll(section, items)}
-                  className={`flex-shrink-0 whitespace-nowrap rounded-xl px-5 py-2 text-sm font-bold shadow-md transition-all hover:shadow-lg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${viewAll.cls}`}
-                >
-                  {viewAll.label}
-                </button>
-              </div>
-            )}
           </section>
         );
       })}

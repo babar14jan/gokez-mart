@@ -206,7 +206,7 @@
         || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
       if (mobileUA) {
         var themeMeta = document.querySelector('meta[name="theme-color"]');
-        if (themeMeta) themeMeta.setAttribute('content', '#218044');
+        if (themeMeta) themeMeta.setAttribute('content', '#09623a');
       }
       window.__splashStart = Date.now();
       // Last-resort fallback: the splash is shown in every context now
@@ -243,14 +243,14 @@
          canvas and the splash looked like it was cut off. The class is removed
          as soon as the splash is, so the loaded page keeps its own colours
          (white in light mode, near-black in dark) exactly as before. */
-      html.splash-active { background-color: #218044; }
-      html.dark.splash-active { background-color: #218044; }
+      html.splash-active { background-color: #09623a; }
+      html.dark.splash-active { background-color: #09623a; }
       /* Styling for the no-JavaScript SEO block only. Nothing here affects the
          React app, which renders its own layout into #root. */
       .seo-static { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; }
       .seo-static h1 { font-family: Poppins, Inter, system-ui, sans-serif; font-size: 1.75rem; line-height: 1.2; font-weight: 700; margin: 0 0 0.75rem; }
       .seo-static p { font-size: 1rem; line-height: 1.6; margin: 0 0 0.75rem; color: #334155; }
-      .seo-static a { color: #059669; }
+      .seo-static a { color: #087a43; }
       .seo-static nav { margin-top: 1.25rem; font-size: 0.875rem; display: flex; gap: 1rem; flex-wrap: wrap; }
       .js .seo-static { display: none; }
 
@@ -283,7 +283,7 @@
         height: 100dvh;
         z-index: 2147483000;
         display: none;
-        background-color: #218044;
+        background-color: #09623a;
         /* A barely-there lift at the top so the flat brand green reads as a
            lit surface rather than a solid fill. */
         background-image: radial-gradient(120% 80% at 50% 12%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 62%);

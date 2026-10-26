@@ -121,7 +121,7 @@ export default function StoreClosedCard({
             ref={buttonRef}
             type="button"
             onClick={() => (onConfirm ?? onClose)()}
-            className="mx-auto mt-5 rounded-2xl border-2 border-emerald-800 bg-emerald-600 px-7 py-3 text-sm font-bold text-white hover:bg-emerald-500 active:scale-[0.98] transition"
+            className="mx-auto mt-5 rounded-2xl border-2 border-gokez-900 bg-gokez-700 px-7 py-3 text-sm font-bold text-white hover:bg-gokez-800 active:scale-[0.98] transition"
           >
             {primaryLabel}
           </button>

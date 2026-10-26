@@ -5,7 +5,7 @@ import { requestErrorMessage } from '../utils/networkError';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import PageHeader from '../components/PageHeader';
 
-const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400';
+const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-gokez-700/20 focus:border-gokez-700 transition-all placeholder:text-gray-400';
 
 export default function DeleteAccountPage() {
   const { logout } = useCustomerAuthStore();
@@ -40,7 +40,7 @@ export default function DeleteAccountPage() {
       <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 space-y-4">
 
         {loading ? (
-          <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
+          <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-gokez-700 border-t-transparent rounded-full animate-spin" /></div>
         ) : submitted ? (
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-6 text-center">
             <p className="text-2xl mb-3">✓</p>

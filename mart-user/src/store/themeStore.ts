@@ -10,7 +10,7 @@ import { detectPlatform } from '../utils/install';
 // desktop stays white.
 function lightThemeColor(): string {
   const p = detectPlatform();
-  return p === 'ios' || p === 'android' ? '#218044' : '#ffffff';
+  return p === 'ios' || p === 'android' ? '#09623a' : '#ffffff';
 }
 
 interface ThemeState {

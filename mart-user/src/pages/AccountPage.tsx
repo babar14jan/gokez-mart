@@ -409,10 +409,10 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         {showBrandHeader && (
           <div className="flex flex-col items-center px-6 pt-7 text-center">
             <img
-              src="/mart_brand_new.png"
+              src="/mart_brand_new.webp"
               alt="Gokez Mart"
-              width={1536}
-              height={1024}
+              width={384}
+              height={256}
               className="-mb-3 h-[54px] w-auto object-contain"
             />
             <p className="mt-0 text-[clamp(9px,calc(4vw-6px),29px)] font-bold leading-tight text-slate-900 dark:text-white">{BRAND_SLOGAN}</p>
@@ -468,7 +468,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             {!isLoggedIn && <div className="text-center">
               <button
                 onClick={leaveAsGuest}
-                className="text-[13px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+                className="text-[13px] font-semibold text-gokez-700 dark:text-gokez-400 hover:text-gokez-700 dark:hover:text-gokez-300 transition-colors"
               >
                 Continue as guest →
               </button>
@@ -480,43 +480,43 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   }
 
   return (
-    <div className="page-shell bg-[#f7f8fa] dark:bg-slate-900 font-sans">
+    <div className="page-shell bg-cream-50 dark:bg-slate-900 font-sans">
       <div className="mx-auto max-w-2xl space-y-7 px-4 py-5 pb-10 sm:px-6 sm:py-7">
         {!isLoggedIn && (
-        <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-[#e9edf2] bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
+        <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
           <div className="min-w-0">
-              <p className="text-sm font-semibold text-center text-[#687386] dark:text-slate-400">Log in or sign up to access your complete account.</p>
-              <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-[#172033] px-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-[#172033] dark:hover:bg-slate-200">Continue login</button>
+              <p className="text-sm font-semibold text-center text-gray-500 dark:text-slate-400">Log in or sign up to access your complete account.</p>
+              <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-gokez-700 px-3 text-sm font-semibold text-white transition-colors hover:bg-gokez-800 dark:bg-gokez-700 dark:hover:bg-gokez-800">Continue login</button>
           </div>
         </div>
         )}
 
         <section>
           <div className="grid grid-cols-3 gap-2">
-            <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+            <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white px-2 py-2 text-center text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
               <Headphones className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
               <span>Support</span>
             </a>
-            <button type="button" onClick={() => navigate('/feedback/')} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+            <button type="button" onClick={() => navigate('/feedback/')} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white px-2 py-2 text-center text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
               <MessageSquare className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
               <span>Feedback</span>
             </button>
-            <button type="button" onClick={handleShareApp} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white px-2 py-2 text-center text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-              <Share2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <button type="button" onClick={handleShareApp} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white px-2 py-2 text-center text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+              <Share2 className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               <span>Share App</span>
             </button>
           </div>
-          {shareNotice && <p className="mt-2 text-center text-[11px] font-medium text-emerald-600 dark:text-emerald-400" role="status">{shareNotice}</p>}
+          {shareNotice && <p className="mt-2 text-center text-[11px] font-medium text-gokez-700 dark:text-gokez-400" role="status">{shareNotice}</p>}
         </section>
 
         {installGuide.visible && !installCardHidden && (
         <section>
-          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Get the app</p>
+          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Get the app</p>
           {/* The guide is a phone screenshot anyone can follow. It opens in an
               in-app viewer rather than the browser's raw image view (a new tab
               the app cannot add a "Done" button to), so the whole card is one
               stretched button. */}
-          <div className="group relative overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800">
+          <div className="group relative overflow-hidden rounded-[18px] border border-cream-200 bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800">
             <button
               type="button"
               onClick={() => {
@@ -524,7 +524,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 setInstallGuideOpen(true);
               }}
               aria-label="Add Gokez Mart to your home screen — view install steps"
-              className="absolute inset-0 z-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              className="absolute inset-0 z-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500"
             />
             {/* Dismiss starts the cooling period. Sits above the stretched card
                 button so its tap is not swallowed by the "view steps" action. */}
@@ -538,9 +538,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             </button>
             <div className="pointer-events-none relative z-10 flex items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold leading-snug text-[#172033] dark:text-white">Add Gokez Mart to your home screen</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-[#687386] dark:text-slate-400">Install for one-tap ordering and live order updates.</p>
-                <span className="mt-3 inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700 shadow-sm transition-colors group-hover:bg-emerald-100 dark:border-emerald-900/50 dark:bg-emerald-900/30 dark:text-emerald-300 dark:group-hover:bg-emerald-900/50">
+                <p className="text-sm font-bold leading-snug text-ink dark:text-white">Add Gokez Mart to your home screen</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400">Install for one-tap ordering and live order updates.</p>
+                <span className="mt-3 inline-flex items-center gap-1 rounded-lg border border-gokez-200 bg-gokez-50 px-3 py-1.5 text-[11px] font-semibold text-gokez-700 shadow-sm transition-colors group-hover:bg-gokez-100 dark:border-gokez-900/50 dark:bg-gokez-900/30 dark:text-gokez-300 dark:group-hover:bg-gokez-900/50">
                   <Smartphone className="h-3 w-3" aria-hidden="true" /> View install steps
                   <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
                 </span>
@@ -549,7 +549,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   shows it whole instead of cropping it. Sized to roughly match
                   the text column so the card height follows the copy, not the
                   image. */}
-              <div className="h-28 w-[74px] flex-shrink-0 overflow-hidden rounded-lg border border-[#e9edf2] bg-[#f7f8fa] dark:border-slate-700 dark:bg-slate-900">
+              <div className="h-28 w-[74px] flex-shrink-0 overflow-hidden rounded-lg border border-cream-200 bg-cream-50 dark:border-slate-700 dark:bg-slate-900">
                 <img
                   src={installGuide.guideSrc}
                   alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
@@ -567,47 +567,47 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           <button
             type="button"
             onClick={() => setSuggestOpen(true)}
-            className="flex w-full items-center gap-4 rounded-[18px] border border-[#e9edf2] bg-white p-4 text-left shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-emerald-500/60"
+            className="flex w-full items-center gap-4 rounded-[18px] border border-cream-200 bg-white p-4 text-left shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-gokez-500/60"
           >
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
-              <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
+              <Sparkles className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-bold leading-snug text-[#172033] dark:text-white">Suggest a product</p>
-              <p className="mt-1 text-xs text-[#687386] dark:text-slate-400">Tell us what you would like us to stock.</p>
+              <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Suggest a product</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Tell us what you would like us to stock.</p>
             </div>
-            <ChevronRight className="h-4 w-4 flex-shrink-0 text-[#687386] dark:text-slate-400" aria-hidden="true" />
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-slate-400" aria-hidden="true" />
           </button>
         </section>
 
         {(storeName || storeAddress || supportPhone || whatsappNumber) && (
           <section>
-            <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Your local store</p>
-            <div className="rounded-[18px] border border-[#e9edf2] bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
+            <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your local store</p>
+            <div className="rounded-[18px] border border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
+                <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
                   <img src="/store_pic.webp" alt={storeName || 'Store'} className="h-full w-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-[#172033] dark:text-white">{storeName || 'Your delivery store'}</p>
-                  {storeAddress && <p className="mt-0.5 text-xs text-[#687386] dark:text-slate-400">({storeAddress})</p>}
-                  <p className="mt-0.5 text-[13px] text-[#687386] dark:text-slate-400">
+                  <p className="text-[15px] font-semibold text-ink dark:text-white">{storeName || 'Your delivery store'}</p>
+                  {storeAddress && <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">({storeAddress})</p>}
+                  <p className="mt-0.5 text-[13px] text-gray-500 dark:text-slate-400">
                     {storeName ? 'Your orders are fulfilled by this store.' : 'Order and delivery help'}
                   </p>
                 </div>
               </div>
               {(supportPhone || whatsappNumber) && (
-                <div className="mt-4 flex gap-2 border-t border-[#d5dbe4] pt-3 dark:border-slate-700">
+                <div className="mt-4 flex gap-2 border-t border-cream-200 pt-3 dark:border-slate-700">
                   {supportPhone && (
                     <a href={`tel:${supportPhone}`}
-                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-blue-500/60">
+                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-blue-500/60">
                       <Phone className="w-4 h-4 text-blue-600 dark:text-blue-400" /> Call store
                     </a>
                   )}
                   {whatsappNumber && (
                     <a href={buildWhatsAppLink(whatsappNumber, 'Hi, I need help with my order on Gokez Mart.')}
                       target="_blank" rel="noopener noreferrer"
-                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e9edf2] bg-white text-xs font-semibold text-[#172033] shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-green-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-green-500/60">
+                      className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-green-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-green-500/60">
                       <WhatsAppIcon className="h-4 w-4 text-green-600 dark:text-green-400" /> WhatsApp
                     </a>
                   )}
@@ -618,28 +618,28 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
 
         <section>
-        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">Preferences</p>
-        <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800 divide-y divide-[#d5dbe4] dark:divide-slate-700">
+        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Preferences</p>
+        <div className="overflow-hidden rounded-[18px] border border-cream-200 bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800 divide-y divide-cream-200 dark:divide-slate-700">
           <div className="flex min-h-[64px] items-center gap-3 px-4">
             {isDark
               ? <Sun className="w-4 h-4 text-amber-500 flex-shrink-0" />
               : <Moon className="w-4 h-4 text-indigo-500 flex-shrink-0" />}
             <div className="flex-1 min-w-0">
-              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Dark mode</span>
-              <p className="text-[12px] text-[#687386] dark:text-slate-400">
+              <span className="text-[15px] font-semibold text-ink dark:text-slate-200">Dark mode</span>
+              <p className="text-[12px] text-gray-500 dark:text-slate-400">
                 {isDark ? 'On — using the dark theme' : 'Off — using the light theme'}
               </p>
             </div>
             <button onClick={toggle} role="switch" aria-checked={isDark} aria-label="Toggle dark mode"
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isDark ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isDark ? 'bg-gokez-700' : 'bg-gray-200 dark:bg-slate-600'}`}>
               <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isDark ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
           <div className="flex min-h-[64px] items-center gap-3 px-4">
             <Navigation className="w-4 h-4 text-blue-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Location</span>
-              <p className="text-[12px] text-[#687386] dark:text-slate-400">
+              <span className="text-[15px] font-semibold text-ink dark:text-slate-200">Location</span>
+              <p className="text-[12px] text-gray-500 dark:text-slate-400">
                 {locationNotice ?? (locationPermission === 'denied'
                   ? 'Blocked in browser — enable in browser settings'
                   : autoDetect
@@ -653,16 +653,16 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg">Blocked</span>
             ) : (
               <button onClick={handleLocationToggle} role="switch" aria-checked={autoDetect} disabled={locationBusy}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-70 ${autoDetect ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-70 ${autoDetect ? 'bg-gokez-700' : 'bg-gray-200 dark:bg-slate-600'}`}>
                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autoDetect ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             )}
           </div>
           <div className="flex min-h-[64px] items-center gap-3 px-4">
-            <Bell className="w-4 h-4 text-violet-500 flex-shrink-0" />
+            <Bell className="w-4 h-4 text-gokez-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Order notifications</span>
-              <p className="text-[12px] text-[#687386] dark:text-slate-400">
+              <span className="text-[15px] font-semibold text-ink dark:text-slate-200">Order notifications</span>
+              <p className="text-[12px] text-gray-500 dark:text-slate-400">
                 {notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
                  notificationPermission === 'denied' ? 'Blocked - enable in browser settings' :
                  notificationPermission === 'unsupported' ? 'Not supported on this browser' :
@@ -675,7 +675,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
             ) : (
               <button onClick={handleOrderNotifications} role="switch" aria-checked={notificationSubscribed} aria-label="Toggle order notifications"
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notificationSubscribed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notificationSubscribed ? 'bg-gokez-700' : 'bg-gray-200 dark:bg-slate-600'}`}>
                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${notificationSubscribed ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             )}
@@ -683,11 +683,11 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           <div className="flex min-h-[64px] items-center gap-3 px-4">
             <MessageCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <span className="text-[15px] font-semibold text-[#172033] dark:text-slate-200">Promotional notifications</span>
-              <p className="text-[12px] text-[#687386] dark:text-slate-400">{isLoggedIn ? 'Offers, deals and new arrivals' : 'Preference saved on this device'}</p>
+              <span className="text-[15px] font-semibold text-ink dark:text-slate-200">Promotional notifications</span>
+              <p className="text-[12px] text-gray-500 dark:text-slate-400">{isLoggedIn ? 'Offers, deals and new arrivals' : 'Preference saved on this device'}</p>
             </div>
             <button onClick={handleMarketingNotifications} role="switch" aria-checked={marketingConsent} aria-label="Toggle promotional notifications"
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${marketingConsent ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${marketingConsent ? 'bg-gokez-700' : 'bg-gray-200 dark:bg-slate-600'}`}>
               <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${marketingConsent ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
@@ -695,26 +695,26 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </section>
 
         <section>
-        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-[#687386] dark:text-slate-400">More info</p>
-        <div className="overflow-hidden rounded-[18px] border border-[#e9edf2] bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
+        <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">More info</p>
+        <div className="overflow-hidden rounded-[18px] border border-cream-200 bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
           <button onClick={() => navigate('/about/')} className="flex min-h-[56px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-700/50">
             <Info className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">About</span>
+            <span className="flex-1 text-[15px] font-medium text-ink dark:text-slate-300">About</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
           </button>
-          <button onClick={() => navigate('/grievance/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#d5dbe4] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+          <button onClick={() => navigate('/grievance/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-cream-200 px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
             <MessageCircle className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Submit a grievance</span>
+            <span className="flex-1 text-[15px] font-medium text-ink dark:text-slate-300">Submit a grievance</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
           </button>
-          <button onClick={() => navigate('/privacy/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#d5dbe4] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+          <button onClick={() => navigate('/privacy/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-cream-200 px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
             <ShieldCheck className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Privacy policy</span>
+            <span className="flex-1 text-[15px] font-medium text-ink dark:text-slate-300">Privacy policy</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
           </button>
-          <button onClick={() => navigate('/terms/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-[#d5dbe4] px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+          <button onClick={() => navigate('/terms/')} className="flex min-h-[56px] w-full items-center gap-3 border-t border-cream-200 px-4 text-left transition-colors hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
             <FileText className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <span className="flex-1 text-[15px] font-medium text-[#172033] dark:text-slate-300">Terms of service</span>
+            <span className="flex-1 text-[15px] font-medium text-ink dark:text-slate-300">Terms of service</span>
             <ChevronRight className="h-4 w-4 text-gray-300" />
           </button>
         </div>
@@ -739,15 +739,15 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           >
             {suggestDone ? (
               <div className="py-4 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/30">
-                  <Sparkles className="h-6 w-6 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gokez-50 dark:bg-gokez-900/30">
+                  <Sparkles className="h-6 w-6 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
                 </div>
-                <p className="mt-3 text-base font-bold text-[#172033] dark:text-white">Thanks for the suggestion!</p>
-                <p className="mt-1 text-sm text-[#687386] dark:text-slate-400">We share every request with our team. If we add it, you may see it in the catalog soon.</p>
+                <p className="mt-3 text-base font-bold text-ink dark:text-white">Thanks for the suggestion!</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">We share every request with our team. If we add it, you may see it in the catalog soon.</p>
                 <button
                   type="button"
                   onClick={closeSuggest}
-                  className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+                  className="mt-5 w-full rounded-xl bg-gokez-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-gokez-800"
                 >
                   Done
                 </button>
@@ -756,14 +756,14 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-base font-bold text-[#172033] dark:text-white">Suggest a product</p>
-                    <p className="mt-1 text-xs text-[#687386] dark:text-slate-400">Tell us what you would like us to stock.</p>
+                    <p className="text-base font-bold text-ink dark:text-white">Suggest a product</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Tell us what you would like us to stock.</p>
                   </div>
                   <button
                     type="button"
                     onClick={closeSuggest}
                     aria-label="Close"
-                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[#687386] transition-colors hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700"
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-700"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -771,7 +771,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
                 <div className="mt-4 space-y-3">
                   <div>
-                    <label htmlFor="suggest-product" className="mb-1 block text-xs font-medium text-[#687386] dark:text-slate-400">Product name</label>
+                    <label htmlFor="suggest-product" className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Product name</label>
                     <input
                       id="suggest-product"
                       type="text"
@@ -780,11 +780,11 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                       onChange={e => setSuggestText(e.target.value)}
                       placeholder="e.g. Amul butter, Maggi, Dettol soap"
                       autoFocus
-                      className="w-full rounded-xl border border-[#e9edf2] bg-white px-3 py-2.5 text-sm text-[#172033] outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                      className="w-full rounded-xl border border-cream-200 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-gokez-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     />
                   </div>
                   <div>
-                    <label htmlFor="suggest-detail" className="mb-1 block text-xs font-medium text-[#687386] dark:text-slate-400">Any details? <span className="font-normal">(optional)</span></label>
+                    <label htmlFor="suggest-detail" className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Any details? <span className="font-normal">(optional)</span></label>
                     <textarea
                       id="suggest-detail"
                       value={suggestDetail}
@@ -792,15 +792,15 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                       rows={2}
                       onChange={e => setSuggestDetail(e.target.value)}
                       placeholder="Brand, size, or anything else that helps…"
-                      className="w-full resize-none rounded-xl border border-[#e9edf2] bg-white px-3 py-2.5 text-sm text-[#172033] outline-none focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                      className="w-full resize-none rounded-xl border border-cream-200 bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-gokez-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     />
                   </div>
-                  <label className="flex items-start gap-2 text-xs text-[#687386] dark:text-slate-400">
+                  <label className="flex items-start gap-2 text-xs text-gray-500 dark:text-slate-400">
                     <input
                       type="checkbox"
                       checked={suggestConsent}
                       onChange={e => setSuggestConsent(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-gokez-700 focus:ring-gokez-500"
                     />
                     <span>Contact me if this product is added.</span>
                   </label>
@@ -811,7 +811,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   <button
                     type="button"
                     onClick={closeSuggest}
-                    className="flex-1 rounded-xl border border-[#e9edf2] px-4 py-3 text-sm font-semibold text-[#172033] transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-700"
+                    className="flex-1 rounded-xl border border-cream-200 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-white dark:hover:bg-slate-700"
                   >
                     Cancel
                   </button>
@@ -819,7 +819,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                     type="button"
                     onClick={handleSuggestSubmit}
                     disabled={suggestBusy}
-                    className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                    className="flex-1 rounded-xl bg-gokez-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-gokez-800 disabled:opacity-50"
                   >
                     {suggestBusy ? 'Sending…' : 'Submit'}
                   </button>
@@ -860,7 +860,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             <button
               type="button"
               onClick={() => closeInstallGuide()}
-              className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+              className="w-full rounded-xl bg-gokez-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-gokez-800"
             >
               Got it
             </button>

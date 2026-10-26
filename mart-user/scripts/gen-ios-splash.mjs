@@ -32,7 +32,7 @@ const OUT = join(PUBLIC, 'splash');
 const TMP = join(OUT, '.tmp');
 
 // The same forest green the HTML splash uses. Keep in sync with index.html.
-const BG = '#218044';
+const BG = '#09623a';
 const LOGO = join(PUBLIC, 'Gokez_mart_brand_transparent.webp');
 const ART = join(PUBLIC, 'splash2.webp');
 // The grocery-bag artwork. splash2.webp is the transparent-background build of

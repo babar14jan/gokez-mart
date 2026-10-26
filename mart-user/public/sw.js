@@ -87,7 +87,7 @@ function offlineDocument() {
     'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#fff;color:#111}' +
     'img{width:220px;max-width:70vw;height:auto}h1{margin:24px 0 8px;font-size:1.25rem}' +
     'p{margin:0 auto;max-width:20rem;color:#555;font-size:.9rem;line-height:1.6}' +
-    'button{margin-top:24px;padding:11px 18px;border:0;border-radius:12px;background:#059669;color:#fff;font-size:.875rem;font-weight:600}' +
+    'button{margin-top:24px;padding:11px 18px;border:0;border-radius:12px;background:#087a43;color:#fff;font-size:.875rem;font-weight:600}' +
     '@media (prefers-color-scheme:dark){body{background:#0f172a;color:#fff}p{color:#94a3b8}}' +
     '</style></head><body><div><img src="/offline.webp" alt="" onerror="this.style.display=\'none\'">' +
     '<h1>No Internet Connection</h1>' +

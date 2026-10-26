@@ -212,21 +212,21 @@ export default function AccountGreeting() {
                 )}
                 <div className="flex items-center gap-3 pr-8">
                   <div className="relative h-14 w-14 flex-shrink-0">
-                    <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30">
+                    <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-gokez-200 bg-gokez-50 dark:border-gokez-900 dark:bg-gokez-950/30">
                       <SmartImage
                         src={photoUrl}
                         alt=""
                         className="h-full w-full"
                         imgClassName="object-cover"
-                        fallback={<span className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{initials}</span>}
+                        fallback={<span className="text-xl font-bold text-gokez-800 dark:text-gokez-400">{initials}</span>}
                       />
                     </span>
                     {isLoggedIn && (
                       <label aria-label="Change profile photo"
                         className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-[#e9edf2] bg-white shadow-sm transition-colors hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-700 dark:hover:bg-slate-600">
                         {photoUploading
-                          ? <Loader2 className="h-3 w-3 animate-spin text-emerald-600" />
-                          : <Camera className="h-3 w-3 text-emerald-600" />}
+                          ? <Loader2 className="h-3 w-3 animate-spin text-gokez-700" />
+                          : <Camera className="h-3 w-3 text-gokez-700" />}
                         <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={photoUploading} />
                       </label>
                     )}
@@ -244,10 +244,10 @@ export default function AccountGreeting() {
                             if (e.key === 'Escape') { setEditing(false); setValue(name || ''); }
                           }}
                           placeholder="Your name"
-                          className="min-w-0 flex-1 rounded-lg border border-[#e9edf2] bg-[#f7f8fa] px-2.5 py-2 text-sm font-semibold text-[#172033] outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                          className="min-w-0 flex-1 rounded-lg border border-[#e9edf2] bg-[#f7f8fa] px-2.5 py-2 text-sm font-semibold text-[#172033] outline-none focus:border-gokez-700 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
                         />
                         <button type="button" onClick={save} disabled={saving || !value.trim()} aria-label="Save name"
-                          className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-white transition-colors hover:bg-emerald-600 disabled:opacity-60">
+                          className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gokez-700 text-white transition-colors hover:bg-gokez-800 disabled:opacity-60">
                           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                         </button>
                       </div>
@@ -260,13 +260,13 @@ export default function AccountGreeting() {
                     {phone && (
                       <div className="mt-1 flex flex-col items-start gap-1">
                         <span className="text-xs font-medium text-[#687386] dark:text-slate-300">{phone}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isPhoneVerified ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isPhoneVerified ? 'bg-gokez-50 text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-400' : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                           {isPhoneVerified ? 'Verified' : 'Unverified'}
                         </span>
                       </div>
                     )}
                     {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
-                    {saved && <p className="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">Saved ✓</p>}
+                    {saved && <p className="mt-1 text-xs font-semibold text-gokez-700 dark:text-gokez-400">Saved ✓</p>}
                   </div>
                 </div>
               </div>
@@ -286,7 +286,7 @@ export default function AccountGreeting() {
                     <button
                       disabled={exportLoading}
                       onClick={handleExport}
-                      className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 disabled:opacity-50 transition-colors">
+                      className="text-xs font-semibold text-gokez-700 dark:text-gokez-400 bg-gokez-50 dark:bg-gokez-950/20 px-2.5 py-1 rounded-lg hover:bg-gokez-100 disabled:opacity-50 transition-colors">
                       {exportLoading ? 'Preparing...' : exportReady ? 'Downloaded ✓' : 'Export'}
                     </button>
                   </div>
@@ -309,7 +309,7 @@ export default function AccountGreeting() {
               ) : (
                 <div className="mt-6 text-center">
                   <button type="button" onClick={() => { closeProfile(); openLogin(); }}
-                    className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-700">
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-gokez-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-gokez-800">
                     Log in or Sign up
                   </button>
                 </div>

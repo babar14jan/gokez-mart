@@ -173,7 +173,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
                 <button type="button" onClick={() => setCategoryId(null)}
                   className={`flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-colors ${
                     categoryId === null
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                      ? 'border-gokez-700 bg-gokez-50 text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-300'
                       : 'border-gray-100 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                   }`}>
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-current/10"><ShoppingCart className="h-4 w-4" /></span>
@@ -185,7 +185,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
                     <button type="button" key={category.id} onClick={() => selectCategory(category.id)}
                       className={`flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-colors ${
                         selected
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                          ? 'border-gokez-700 bg-gokez-50 text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-300'
                           : 'border-gray-100 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                       }`}>
                       <CategoryIcon icon={category.icon} name={category.name} className="h-7 w-7 object-contain" />

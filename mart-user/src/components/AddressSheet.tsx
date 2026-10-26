@@ -145,7 +145,7 @@ export default function AddressSheet({
                 <div className="mb-4 space-y-2">
                   {!editingAddress.isDefault && onSetDefaultAddress && (
                     <button type="button" onClick={() => onSetDefaultAddress(editingAddress.id)}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-50 py-2.5 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30">
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gokez-50 py-2.5 text-sm font-semibold text-gokez-800 transition-colors hover:bg-gokez-100 dark:bg-gokez-950/20 dark:text-gokez-400 dark:hover:bg-gokez-950/30">
                       <Check className="h-4 w-4" /> Set as default
                     </button>
                   )}
@@ -194,25 +194,25 @@ export default function AddressSheet({
                         <button type="button"
                           onClick={() => (mode === 'select' ? handleSelect(address) : setEditingId(address.id))}
                           className="flex min-w-0 flex-1 items-start gap-3 px-5 py-3.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700">
-                          <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl ${selected || address.isDefault ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
-                            <MapPin className={`h-3.5 w-3.5 ${selected || address.isDefault ? 'text-emerald-500' : 'text-gray-500'}`} />
+                          <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl ${selected || address.isDefault ? 'bg-gokez-50 dark:bg-gokez-950/20' : 'bg-gray-50 dark:bg-slate-700'}`}>
+                            <MapPin className={`h-3.5 w-3.5 ${selected || address.isDefault ? 'text-gokez-700' : 'text-gray-500'}`} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-bold text-gray-700 dark:text-slate-300">{address.label}</span>
                               {address.isDefault && (
-                                <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Default</span>
+                                <span className="rounded-full bg-gokez-50 px-1.5 py-0.5 text-[9px] font-bold text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-400">Default</span>
                               )}
                             </div>
                             <p className="mt-0.5 text-[11px] leading-snug text-gray-500">{address.address}</p>
                           </div>
                           {mode === 'select'
-                            ? (selected && <Check className="mt-1 h-4 w-4 flex-shrink-0 text-emerald-500" />)
+                            ? (selected && <Check className="mt-1 h-4 w-4 flex-shrink-0 text-gokez-700" />)
                             : <PenLine className="mt-1 h-4 w-4 flex-shrink-0 text-gray-400" />}
                         </button>
                         {mode === 'select' && onUpdateAddress && (
                           <button type="button" onClick={() => setEditingId(address.id)} aria-label={`Edit ${address.label} address`}
-                            className="flex w-12 shrink-0 items-center justify-center text-gray-400 transition-colors hover:bg-gray-50 hover:text-emerald-600 dark:hover:bg-slate-700 dark:hover:text-emerald-400">
+                            className="flex w-12 shrink-0 items-center justify-center text-gray-400 transition-colors hover:bg-gray-50 hover:text-gokez-700 dark:hover:bg-slate-700 dark:hover:text-gokez-400">
                             <PenLine className="h-4 w-4" />
                           </button>
                         )}
@@ -222,7 +222,7 @@ export default function AddressSheet({
                 </div>
               )}
               <button type="button" onClick={() => setEditingId('new')}
-                className="flex w-full items-center gap-2.5 border-t border-gray-100 px-5 py-3.5 text-emerald-600 hover:bg-emerald-50 dark:border-slate-700 dark:hover:bg-emerald-900/20">
+                className="flex w-full items-center gap-2.5 border-t border-gray-100 px-5 py-3.5 text-gokez-700 hover:bg-gokez-50 dark:border-slate-700 dark:hover:bg-gokez-950/20">
                 <Plus className="h-4 w-4" />
                 <span className="text-sm font-semibold">Add new address</span>
               </button>

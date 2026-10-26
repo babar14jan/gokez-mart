@@ -33,7 +33,7 @@ interface PageHeaderProps {
 //
 // NOTE: every Tailwind class below is a full static string. Tailwind's JIT only
 // scans for literal class names, so building them via interpolation
-// (`dark:to-[${darkTo}]`) would silently drop them from the CSS bundle.
+// using template interpolation would silently drop them from the CSS bundle.
 export default function PageHeader({
   title,
   subtitle,
@@ -56,7 +56,7 @@ export default function PageHeader({
       ? 'min-h-[calc(64px_+_env(safe-area-inset-top))] gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
       : 'min-h-[calc(3.5rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
   const gradientClass =
-    gradient === 'r' ? 'bg-gradient-to-r from-[#218044] to-[#2e8b57]' : 'bg-gradient-to-b from-[#218044] to-[#2e8b57]';
+    gradient === 'r' ? 'bg-gradient-to-r from-[#09623a] to-[#087a43]' : 'bg-gradient-to-b from-[#09623a] to-[#087a43]';
   const darkClass = darkTo === '#14532d' ? 'dark:from-[#18191a] dark:to-[#14532d]' : 'dark:from-[#18191a] dark:to-[#18191a]';
 
   const backClass =

@@ -393,7 +393,7 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
               onClick={retry}
               disabled={checking}
               aria-busy={checking}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 dark:focus-visible:ring-offset-slate-900"
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gokez-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 dark:focus-visible:ring-offset-slate-900"
             >
               <RefreshCw
                 className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`}
