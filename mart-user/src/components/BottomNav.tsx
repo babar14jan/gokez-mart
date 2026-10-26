@@ -30,7 +30,7 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
                   type="button"
                   onClick={onOpenSearch}
                   aria-label="Fresh products"
-                  className="flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
+                  className="nav-fresh-button z-10 flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
                 >
                   <img src="/fresh_icon.webp" alt="" width={48} height={48} {...{ fetchpriority: 'high' }} decoding="async" className="nav-veg-icon object-contain" />
                 </button>

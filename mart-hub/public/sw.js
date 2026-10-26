@@ -93,7 +93,7 @@ function offlineDocument() {
 async function cacheImage(request, response) {
   if (!response.ok && response.type !== 'opaque') return;
   const cache = await caches.open(IMAGE_CACHE_NAME);
-  await cache.put(request, response.clone());
+  await cache.put(request, response);
   const keys = await cache.keys();
   await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_IMAGE_ENTRIES)).map(key => cache.delete(key)));
 }
@@ -185,7 +185,9 @@ self.addEventListener('fetch', (e) => {
   if (e.request.destination === 'image') {
     e.respondWith(
       caches.match(e.request).then(cached => cached || fetch(e.request).then(response => {
-        e.waitUntil(cacheImage(e.request, response));
+        // Clone before returning: the page can consume the returned body before
+        // an asynchronous cache task has reached its own clone call.
+        e.waitUntil(cacheImage(e.request, response.clone()));
         return response;
       }).catch(() => new Response('', { status: 404 })))
     );

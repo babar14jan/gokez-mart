@@ -5,7 +5,19 @@ import App from './App';
 import { registerAdminSW } from './services/push';
 import { HeaderActionProvider } from './store/headerActionStore';
 
-registerAdminSW();
+const isLocalDevelopment = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+if (isLocalDevelopment) {
+  navigator.serviceWorker?.getRegistrations().then(async registrations => {
+    const removed = (await Promise.all(registrations.map(registration => registration.unregister()))).some(Boolean);
+    if (removed && navigator.serviceWorker.controller && !sessionStorage.getItem('gokez-dev-worker-cleared')) {
+      sessionStorage.setItem('gokez-dev-worker-cleared', '1');
+      window.location.reload();
+    }
+  });
+} else {
+  registerAdminSW();
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode><HeaderActionProvider><App /></HeaderActionProvider></StrictMode>

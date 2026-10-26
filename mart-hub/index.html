@@ -39,14 +39,6 @@
     <meta name="robots" content="noindex,nofollow" />
     <title>Gokez Hub | Bringing local stores online</title>
     <meta name="description" content="Gokez Hub — bringing local stores online. Manage orders, products, inventory and your team from one place." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" as="style"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      onload="this.onload=null;this.rel='stylesheet'" />
-    <noscript>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
-    </noscript>
     <style>
       /* Paint the app background before CSS/JS arrive. An update swap reloads
          through the service worker, but the window between unload and first
@@ -60,6 +52,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        if (!['localhost', '127.0.0.1'].includes(location.hostname) || !('serviceWorker' in navigator)) return;
+        navigator.serviceWorker.getRegistrations().then(async function (registrations) {
+          var removed = (await Promise.all(registrations.map(function (registration) { return registration.unregister(); }))).some(Boolean);
+          if (removed && !sessionStorage.getItem('gokez-dev-worker-cleared')) {
+            sessionStorage.setItem('gokez-dev-worker-cleared', '1');
+            location.reload();
+          }
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <!-- Safety net for a stale cached shell: if the app module never boots
          (its entry chunk was replaced by a deploy while a cached index.html

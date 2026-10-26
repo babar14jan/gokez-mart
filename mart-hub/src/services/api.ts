@@ -181,6 +181,8 @@ export const ordersApi = {
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi') =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
+  reschedule: (id: string, scheduledFor: string) =>
+    api.put(`/admin/orders/${id}/reschedule`, { scheduledFor }),
   // Acknowledge an after-hours order for delivery at the next opening hours
   // (only offered while the order is still pending and was placed outside
   // posted store hours).
