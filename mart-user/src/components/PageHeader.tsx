@@ -56,7 +56,7 @@ export default function PageHeader({
       ? 'min-h-[calc(64px_+_env(safe-area-inset-top))] gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
       : 'min-h-[calc(3.5rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
   const gradientClass =
-    gradient === 'r' ? 'bg-gradient-to-r from-[#09623a] to-[#087a43]' : 'bg-gradient-to-b from-[#09623a] to-[#087a43]';
+    gradient === 'r' ? 'bg-gradient-to-r from-[#087a43] to-[#087a43]' : 'bg-gradient-to-b from-[#087a43] to-[#087a43]';
   const darkClass = darkTo === '#14532d' ? 'dark:from-[#18191a] dark:to-[#14532d]' : 'dark:from-[#18191a] dark:to-[#18191a]';
 
   const backClass =

@@ -57,7 +57,7 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <div className={`app-shell dark:bg-slate-900 font-sans ${className}`}>
+    <div className={`app-shell bg-canvas dark:bg-slate-900 font-sans ${className}`}>
       {overlay}
 
       <div
