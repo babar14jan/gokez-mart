@@ -99,10 +99,12 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
                 SELECT json_agg(json_build_object(
                   'eventType', de.event_type,
                   'scheduledFor', de.scheduled_for,
-                  'actorName', de.actor_name,
+                  'actorName', COALESCE(NULLIF(a.name, ''), de.actor_name),
                   'createdAt', de.created_at
                 ) ORDER BY de.created_at ASC)
-                FROM mart_order_delivery_events de WHERE de.order_id = o.id
+                FROM mart_order_delivery_events de
+                LEFT JOIN mart_admins a ON a.id = de.actor_id
+                WHERE de.order_id = o.id
               ), '[]') as "deliveryEvents",
               COALESCE((
                 SELECT json_agg(json_build_object(
@@ -1011,6 +1013,10 @@ export class OrderService {
       if (!isValidScheduledDelivery(existing.openingHours, scheduledFor)) {
         throw badRequest('Choose an available delivery time today or tomorrow');
       }
+      const actorResult = await client.query(
+        `SELECT COALESCE(name, username) as name FROM mart_admins WHERE id = $1`, [actor.id]
+      );
+      const actorName = actorResult.rows[0]?.name || actor.username;
 
       const updated = await client.query(
         `UPDATE mart_orders
@@ -1026,7 +1032,7 @@ export class OrderService {
       await client.query(
         `INSERT INTO mart_order_delivery_events (order_id, event_type, scheduled_for, actor_id, actor_name)
          VALUES ($1, 'rescheduled', $2, $3, $4)`,
-        [id, scheduledFor.toISOString(), actor.id, actor.username],
+        [id, scheduledFor.toISOString(), actor.id, actorName],
       );
       return updated.rows[0];
     });
