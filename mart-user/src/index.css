@@ -73,23 +73,11 @@ html, body { overscroll-behavior-y: none; }
   transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 
-/* The centre vegetable icon is intentionally larger than the labelled tabs.
-   iOS reserves the home-indicator strip under the nav, so the full 58px asset
-   sat low enough in the 64px row to look bottom-cropped. iOS-only (`@supports`
-   -webkit-touch-callout is the same iOS test used for the tint strip): the icon
-   is trimmed to 54px so it clears the strip without moving the other tabs.
-   Android/desktop keep the full size. */
+/* The centre Fresh icon is intentionally larger than the labelled tabs while
+   remaining vertically centered in the fixed-height navigation row. */
 .nav-veg-icon {
   height: 58px;
   width: 58px;
-}
-
-@supports (-webkit-touch-callout: none) {
-  .nav-veg-icon {
-    height: 54px;
-    width: 54px;
-    transform: translateY(-6px);
-  }
 }
 
 /* The checkout footer is a position:sticky child of the scrolling checkout
@@ -222,7 +210,7 @@ html, body { overscroll-behavior-y: none; }
      Navbar/PageHeader, whose green background paints through its safe-area
      padding at top:0 — so Safari samples the header itself and the bar matches
      with no seam. The BOTTOM edge has no in-flow header to sample from, so a
-     decorative strip pins it to the nav colour (white / dark) instead of the
+    decorative strip pins it to the nav colour (neutral canvas / dark) instead of the
      launched green splash. `display:none` except on iOS, so Android, which
      already paints its bars from theme-color, and desktop never render it.
      pointer-events:none keeps it from eating taps yet Safari still samples it;
@@ -253,7 +241,7 @@ html, body { overscroll-behavior-y: none; }
   .app-tint-bottom {
     bottom: 0;
     height: 12px;
-    background-color: #ffffff;
+    background-color: #f7f8fa;
   }
 
   .dark .app-tint-bottom {
