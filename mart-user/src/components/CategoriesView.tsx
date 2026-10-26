@@ -18,14 +18,14 @@ interface CategoriesViewProps {
 // Per-category accent so the active tab reads as a colourful highlighter and
 // neighbouring categories stay visually distinct.
 const ACCENTS = [
-  { bar: 'border-gokez-700', bg: 'bg-gokez-50 dark:bg-gokez-700/15', text: 'text-gokez-800 dark:text-gokez-300' },
-  { bar: 'border-blue-500',    bg: 'bg-blue-50 dark:bg-blue-500/15',       text: 'text-blue-700 dark:text-blue-300' },
-  { bar: 'border-violet-500',  bg: 'bg-violet-50 dark:bg-violet-500/15',   text: 'text-violet-700 dark:text-violet-300' },
-  { bar: 'border-amber-500',   bg: 'bg-amber-50 dark:bg-amber-500/15',     text: 'text-amber-700 dark:text-amber-300' },
-  { bar: 'border-rose-500',    bg: 'bg-rose-50 dark:bg-rose-500/15',       text: 'text-rose-700 dark:text-rose-300' },
-  { bar: 'border-cyan-500',    bg: 'bg-cyan-50 dark:bg-cyan-500/15',       text: 'text-cyan-700 dark:text-cyan-300' },
-  { bar: 'border-orange-500',  bg: 'bg-orange-50 dark:bg-orange-500/15',   text: 'text-orange-700 dark:text-orange-300' },
-  { bar: 'border-pink-500',    bg: 'bg-pink-50 dark:bg-pink-500/15',       text: 'text-pink-700 dark:text-pink-300' },
+  { bar: 'bg-gokez-700', text: 'text-gokez-800 dark:text-gokez-300' },
+  { bar: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300' },
+  { bar: 'bg-violet-500', text: 'text-violet-700 dark:text-violet-300' },
+  { bar: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
+  { bar: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-300' },
+  { bar: 'bg-cyan-500', text: 'text-cyan-700 dark:text-cyan-300' },
+  { bar: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-300' },
+  { bar: 'bg-pink-500', text: 'text-pink-700 dark:text-pink-300' },
 ];
 
 function matches(product: Product, query: string): boolean {
@@ -109,10 +109,11 @@ export default function CategoriesView({ categories, products, initialCategoryId
               onClick={() => { setActiveCatId(cat.id); track('category_viewed', { categoryId: cat.id }); }}
               className={`w-full relative flex flex-col items-center gap-1 py-3 px-1 transition-all ${
                 isActive
-                  ? `bg-white dark:bg-slate-800 ${accent.text} before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r before:${accent.bar.replace('border-', 'bg-')}`
+                  ? `bg-white dark:bg-slate-800 ${accent.text}`
                   : 'bg-gray-50 dark:bg-slate-900 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'
               }`}
             >
+              {isActive && <span aria-hidden="true" className={`absolute bottom-2 left-0 top-2 w-1 rounded-r ${accent.bar}`} />}
               <CategoryIcon icon={cat.icon} name={cat.name} className="w-8 h-8 object-contain" />
               <span className="text-[9px] font-semibold text-center leading-tight line-clamp-2">{cat.name}</span>
             </button>

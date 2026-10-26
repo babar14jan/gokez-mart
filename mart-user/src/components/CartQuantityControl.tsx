@@ -17,20 +17,16 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
   };
 
   if (variant === 'card') {
-    // One persistent shell so the width can animate as ADD gives way to the
-    // stepper: the height stays 30px, only the width eases out a little (72 ->
-    // 88px) to open up room between the - and + targets. overflow-hidden keeps
-    // the inner content inside the rounded corners while it grows.
     return (
       <div
-        className={`flex items-center overflow-hidden rounded-[10px] transition-[width] duration-200 ease-out ${disabled ? 'opacity-40' : ''} ${
+        className={`flex h-[30px] w-[88px] items-center overflow-hidden rounded-[10px] ${disabled ? 'opacity-40' : ''} ${
           quantity === 0
-            ? 'h-[30px] w-[72px] border-2 border-gokez-600 bg-white'
-            : 'h-[30px] w-[88px] border border-gokez-700 bg-gradient-to-r from-gokez-700 to-gokez-800 p-0.5'
+            ? 'border-2 border-gokez-600 bg-white'
+            : 'border border-gokez-700 bg-gradient-to-r from-gokez-700 to-gokez-800 p-0.5'
         }`}
       >
         {quantity === 0 ? (
-          <button type="button" onClick={handle(onAdd)} disabled={disabled} className="h-full w-full text-xs font-extrabold tracking-wide text-gokez-700 transition-colors hover:bg-gokez-50 active:scale-[0.98]" aria-label="Add to cart">
+          <button type="button" onClick={handle(onAdd)} disabled={disabled} className="h-full w-full text-xs font-extrabold tracking-wide text-gokez-700 transition-colors hover:bg-gokez-50" aria-label="Add to cart">
             ADD
           </button>
         ) : (
@@ -50,7 +46,7 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
 
   if (quantity === 0) {
     return (
-      <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-10 w-24 items-center justify-center gap-1.5 rounded-xl border-2 border-gokez-600 bg-white px-3 text-sm font-extrabold tracking-wide text-gokez-700 transition-colors hover:bg-gokez-50 active:scale-[0.98] disabled:opacity-40" aria-label="Add to cart">
+      <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-10 w-24 items-center justify-center gap-1.5 rounded-xl border-2 border-gokez-600 bg-white px-3 text-sm font-extrabold tracking-wide text-gokez-700 transition-colors hover:bg-gokez-50 disabled:opacity-40" aria-label="Add to cart">
         ADD
       </button>
     );
