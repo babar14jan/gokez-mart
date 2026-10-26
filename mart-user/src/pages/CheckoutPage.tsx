@@ -1015,7 +1015,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   // permanently disabled Place Order button and no explanation.
   if (items.length === 0) {
     return (
-      <div className="page-shell bg-cream-50 dark:bg-slate-900 flex flex-col">
+      <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
         <PageHeader title="Checkout" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
@@ -1033,7 +1033,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   }
 
   return (
-    <div className="page-shell bg-cream-50 dark:bg-slate-900">
+    <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
       <PageHeader title="My Cart" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
 

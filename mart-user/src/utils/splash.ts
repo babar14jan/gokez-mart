@@ -29,6 +29,13 @@ const REMOVE_DELAY_MS = FADE_MS + 40;
  */
 function releaseCanvas(): void {
   document.documentElement.classList.remove('splash-active');
+  const isDark = document.documentElement.classList.contains('dark');
+  const mobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute(
+    'content',
+    isDark ? '#18191a' : mobile ? '#087a43' : '#ffffff',
+  );
 }
 
 /**
