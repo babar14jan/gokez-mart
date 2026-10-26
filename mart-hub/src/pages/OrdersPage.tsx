@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  ClipboardList, Calendar, ChevronDown, Phone, MapPin,
+  ClipboardList, Calendar, CalendarClock, ChevronDown, Phone, MapPin,
   Navigation, Package, XCircle, CheckSquare, Square,
   Truck, Clock, IndianRupee, Search, X,
 } from 'lucide-react';
@@ -20,6 +20,22 @@ type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_picku
 
 const toDateStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const toStoreDateTimeLocal = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
+const storeDateTimeToIso = (value: string) => {
+  const date = new Date(`${value}:00+05:30`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
 
 // Order pipeline — used for progress bar
 const PIPELINE = [
@@ -68,7 +84,7 @@ const CANCELLATION_REASON_LABELS: Record<string, string> = {
   out_of_stock: 'Out of stock',
   store_closed: 'Store closed',
   outside_area: 'Outside delivery area',
-  incorrect_address: 'Incorrect delivery address',
+  incorrect_address: 'Invalid address',
   rider_unavailable: 'Rider unavailable',
   technical_issue: 'Technical issue',
   other: 'Other',
@@ -131,6 +147,13 @@ function deliveryDuration(order: any): { minutes: number; color: string } | null
   return { minutes, color: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' };
 }
 
+function getJourneyEvents(order: any) {
+  const statusEvents = (order.statusEvents || []).map((event: any) => ({ ...event, type: 'status' }));
+  const deliveryEvents = (order.deliveryEvents || []).map((event: any) => ({ ...event, type: 'delivery' }));
+  return [...statusEvents, ...deliveryEvents]
+    .sort((first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime());
+}
+
 const STALE_MINS: Record<string, number> = {
   pending: 15, confirmed: 20, preparing: 30, out_for_delivery: 45,
 };
@@ -143,9 +166,9 @@ function openGoogleMaps(address: string, latitude?: number | null, longitude?: n
 function JourneyButton({ onClick }: { onClick: (event: React.MouseEvent<HTMLButtonElement>) => void }) {
   return (
     <button type="button" onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
       View journey
-      <ChevronDown className="h-3 w-3" strokeWidth={2.5} />
+      <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.5} />
     </button>
   );
 }
@@ -236,9 +259,12 @@ export default function OrdersPage() {
   const [assigneeId, setAssigneeId] = useState('');
   const [detailsOrder, setDetailsOrder] = useState<any | null>(null);
   const [confirmNextOpenOrder, setConfirmNextOpenOrder] = useState<any | null>(null);
+  const [rescheduleOrder, setRescheduleOrder] = useState<any | null>(null);
+  const [rescheduleAt, setRescheduleAt] = useState('');
 
   const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
+  const canReschedule = ['super_admin', 'store_owner'].includes(role || '');
   const canCancelOutsideArea = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
   const canManage    = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
   const canDispatch = false;
@@ -305,6 +331,28 @@ export default function OrdersPage() {
     } catch (error: any) {
       alert(error?.response?.data?.error || 'Could not confirm this order for the next opening hours');
       setConfirmNextOpenOrder(null);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const openReschedule = (order: any) => {
+    setRescheduleOrder(order);
+    setRescheduleAt(toStoreDateTimeLocal(order.scheduledFor));
+  };
+
+  const handleReschedule = async () => {
+    if (!rescheduleOrder || !rescheduleAt) return;
+    const scheduledFor = storeDateTimeToIso(rescheduleAt);
+    if (!scheduledFor) return;
+    setUpdating(rescheduleOrder.id);
+    try {
+      await ordersApi.reschedule(rescheduleOrder.id, scheduledFor);
+      setRescheduleOrder(null);
+      setRescheduleAt('');
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Could not reschedule this delivery');
     } finally {
       setUpdating(null);
     }
@@ -675,8 +723,7 @@ export default function OrdersPage() {
                         )}
                       </div>
                     </div>
-                    {/* Keep delivered cards to one compact action; active cards retain their call control. */}
-                    <div className={`flex flex-shrink-0 ${order.status === 'delivered' ? 'items-center' : 'flex-col items-end gap-1.5'}`}>
+                    <div className="flex flex-shrink-0">
                       {!TERMINAL.includes(order.status) && (
                         <button onClick={e => { e.stopPropagation(); window.open(`tel:${order.guestPhone}`); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
@@ -684,7 +731,6 @@ export default function OrdersPage() {
                           <span className="text-xs font-semibold">{order.guestPhone}</span>
                         </button>
                       )}
-                      <JourneyButton onClick={e => { e.stopPropagation(); setDetailsOrder(order); }} />
                     </div>
                   </div>
 
@@ -743,6 +789,32 @@ export default function OrdersPage() {
 
                 {/* Progress bar — active orders only */}
                 {isActive && <OrderProgress status={order.status} />}
+                <div className="flex items-center justify-between gap-2 px-4 py-3">
+                  <JourneyButton onClick={e => { e.stopPropagation(); setDetailsOrder(order); }} />
+                  <div className="flex items-center gap-1.5">
+                    {canManage && !TERMINAL.includes(order.status) && order.status !== 'out_for_delivery' && (['pending', 'confirmed'].includes(order.status) || canTerminate) && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setCancellationReason(''); setCancellingId(order.id); }}
+                        disabled={isUpdating}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Cancel
+                      </button>
+                    )}
+                    {canReschedule && order.status !== 'delivered' && (
+                      <button
+                        type="button"
+                        aria-label="Reschedule delivery"
+                        title="Reschedule delivery"
+                        onClick={e => { e.stopPropagation(); openReschedule(order); }}
+                        className="inline-flex items-center justify-center rounded-lg border border-violet-200 bg-violet-50 p-2 text-violet-700 transition-colors hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-900/20 dark:text-violet-300 dark:hover:bg-violet-900/30"
+                      >
+                        <CalendarClock className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
                 {['store_owner', 'store_manager'].includes(role || '') && order.status !== 'pending' && order.statusEvents?.length > 0 && (
                   <p className="px-4 pb-2 text-[10px] text-gray-500 dark:text-slate-400 break-words">
                     Current state set by {order.statusEvents[order.statusEvents.length - 1].actorName}
@@ -752,7 +824,7 @@ export default function OrdersPage() {
                 {/* Action bar */}
                 {order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'terminated' && (
                   <div className="px-4 pb-3 pt-1 flex items-center gap-2 flex-wrap">
-
+                    <>
                     {/* Batch select */}
                     {canDispatch && (order.status === 'confirmed' || order.status === 'preparing' || order.status === 'ready_to_pickup') && (
                       <button
@@ -907,7 +979,7 @@ export default function OrdersPage() {
                             {(isEarly || canTerminate) && <option value="out_of_stock">Out of stock</option>}
                             {(isEarly || canTerminate) && <option value="store_closed">Store closed</option>}
                             {order.status === 'pending' && canCancelOutsideArea && <option value="outside_area">Outside delivery area</option>}
-                            {(isEarly || canTerminate) && <option value="incorrect_address">Incorrect delivery address</option>}
+                            {(isEarly || canTerminate) && <option value="incorrect_address">Invalid address</option>}
                             {!isEarly && canTerminate && <option value="rider_unavailable">Rider unavailable</option>}
                             {!isEarly && canTerminate && <option value="technical_issue">Technical issue</option>}
                             {(isEarly || canTerminate) && <option value="other">Other</option>}
@@ -923,13 +995,10 @@ export default function OrdersPage() {
                           </button>
                         </div>
                       ) : (
-                        <button onClick={e => { e.stopPropagation(); setCancellationReason(''); setCancellingId(order.id); }} disabled={isUpdating}
-                          className="flex items-center gap-1 px-3 py-2.5 text-xs font-semibold rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50">
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Stop Order</span>
-                        </button>
+                        null
                       );
                     })()}
+                    </>
                   </div>
                 )}
 
@@ -1077,13 +1146,15 @@ export default function OrdersPage() {
                     <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">Customer · {new Date(detailsOrder.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</p>
                   </div>
                 </div>
-                {(detailsOrder.statusEvents || []).map((event: any, index: number) => (
+                {getJourneyEvents(detailsOrder).map((event: any, index: number, events: any[]) => (
                   <div key={`${event.createdAt}-${index}`} className="relative flex gap-3 pb-4 last:pb-0">
-                    {index < detailsOrder.statusEvents.length - 1 && <span className="absolute left-[9px] top-4 h-full w-px bg-gray-200 dark:bg-slate-600" />}
-                    <div className="z-10 flex w-5 justify-center"><span className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500" /></div>
+                    {index < events.length - 1 && <span className="absolute left-[9px] top-4 h-full w-px bg-gray-200 dark:bg-slate-600" />}
+                    <div className="z-10 flex w-5 justify-center"><span className={`mt-1 h-2.5 w-2.5 rounded-full ${event.type === 'delivery' ? 'bg-violet-500' : 'bg-emerald-500'}`} /></div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold capitalize text-gray-900 dark:text-white break-words">
-                        {event.toStatus.replaceAll('_', ' ')}
+                        {event.type === 'delivery'
+                          ? `Delivery rescheduled to ${new Date(event.scheduledFor).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}`
+                          : event.toStatus.replaceAll('_', ' ')}
                       </p>
                       <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400 break-words">
                         {event.actorName} · {new Date(event.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
@@ -1118,6 +1189,35 @@ export default function OrdersPage() {
           onConfirm={() => handleConfirmNextOpen(confirmNextOpenOrder)}
           onCancel={() => setConfirmNextOpenOrder(null)}
         />
+      )}
+
+      {rescheduleOrder && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-4 sm:items-center" onClick={() => setRescheduleOrder(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800" onClick={event => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"><CalendarClock className="h-5 w-5" /></span>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white">Reschedule delivery</h2>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-slate-400">Order #{rescheduleOrder.orderNumber}. The customer will receive a delivery update.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setRescheduleOrder(null)} disabled={updating === rescheduleOrder.id}
+                className="shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700"
+                aria-label="Close reschedule delivery" title="Close">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <label className="mt-5 block text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="reschedule-time">Delivery time</label>
+            <input id="reschedule-time" type="datetime-local" step="1800" value={rescheduleAt} onChange={event => setRescheduleAt(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-violet-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white" />
+            <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">Choose an available 30-minute store-hours slot today or tomorrow. All times are IST.</p>
+            <div className="mt-5">
+              <button type="button" onClick={handleReschedule} disabled={!rescheduleAt || updating === rescheduleOrder.id}
+                className="w-full rounded-xl bg-violet-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-50">{updating === rescheduleOrder.id ? 'Saving...' : 'Reschedule'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
