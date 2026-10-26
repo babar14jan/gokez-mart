@@ -11,7 +11,7 @@ export default function WhatIsGokezMartPage() {
     <main className="page-shell bg-gray-50 dark:bg-slate-900 font-sans">
       <PageHeader title={`What is ${BRAND_NAME}?`} />
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
-        <p className="text-sm font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 mb-2">{BRAND_SLOGAN}</p>
+        <p className="text-sm font-bold uppercase tracking-wide text-gokez-800 dark:text-gokez-400 mb-2">{BRAND_SLOGAN}</p>
         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-4">What is {BRAND_NAME}?</h1>
         <div className="space-y-5 text-sm text-gray-600 dark:text-slate-300 leading-relaxed">
           <p>{BRAND_DESCRIPTION}</p>
@@ -33,15 +33,15 @@ export default function WhatIsGokezMartPage() {
           <h2 className="text-lg font-bold text-gray-900 dark:text-white pt-2">Who runs {BRAND_NAME}</h2>
           <p>
             {BRAND_NAME} is a product of{' '}
-            <a href={PARENT_COMPANY_URL} className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
+            <a href={PARENT_COMPANY_URL} className="font-semibold text-gokez-800 dark:text-gokez-400 hover:underline">
               {PARENT_COMPANY}
             </a>
             , the company building focused technology products for everyday life in India.
           </p>
 
           <p>
-            Learn more <a href="/about/" className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">about {BRAND_NAME}</a>,
-            or <a href="/" className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">start shopping</a>.
+            Learn more <a href="/about/" className="font-semibold text-gokez-800 dark:text-gokez-400 hover:underline">about {BRAND_NAME}</a>,
+            or <a href="/" className="font-semibold text-gokez-800 dark:text-gokez-400 hover:underline">start shopping</a>.
           </p>
         </div>
       </div>

@@ -50,7 +50,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
             <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">Thank you!</p>
             <p className="text-sm text-gray-500 dark:text-slate-400">Your feedback helps us improve Gokez Mart for everyone.</p>
             <button onClick={() => window.history.back()}
-              className="mt-6 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl transition-colors">
+              className="mt-6 px-6 py-2.5 bg-gokez-700 hover:bg-gokez-800 text-white text-sm font-bold rounded-xl transition-colors">
               Back
             </button>
           </div>
@@ -90,7 +90,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
                   <button key={cat.value} onClick={() => setCategory(cat.value)}
                     className={`flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all ${
                       category === cat.value
-                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                        ? 'border-gokez-700 bg-gokez-50 dark:bg-gokez-950/20'
                         : 'border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600'
                     }`}>
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">{cat.label}</span>
@@ -108,7 +108,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
                 onChange={e => setMessage(e.target.value)}
                 placeholder="Share your experience in detail..."
                 rows={3}
-                className="w-full mt-2 px-3 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 resize-none transition-all"
+                className="w-full mt-2 px-3 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-gokez-700 focus:ring-2 focus:ring-gokez-700/20 resize-none transition-all"
               />
             </div>
 
@@ -117,7 +117,7 @@ export default function FeedbackPage({ storeId, orderId }: Props) {
             <button
               onClick={handleSubmit}
               disabled={!rating || !category || submitting}
-              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-sm">
+              className="w-full py-3.5 bg-gokez-700 hover:bg-gokez-800 text-white text-sm font-bold rounded-2xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-sm">
               {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</> : 'Submit Feedback'}
             </button>
           </>

@@ -4,12 +4,12 @@ import { authApi } from '../services/api';
 import { requestErrorMessage } from '../utils/networkError';
 import PageHeader from '../components/PageHeader';
 
-const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-gray-400';
+const inp = 'w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-gokez-700/20 focus:border-gokez-700 transition-all placeholder:text-gray-400';
 
 const STATUS_COLORS: Record<string, string> = {
   open:        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   in_progress: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  resolved:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  resolved:    'bg-gokez-100 text-gokez-800 dark:bg-gokez-950/30 dark:text-gokez-400',
   closed:      'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400',
 };
 
@@ -54,7 +54,7 @@ export default function GrievancePage() {
 
         {/* Submit form */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 p-4">
-          {submitted && <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs px-3 py-2 rounded-xl mb-3">✓ Grievance submitted successfully.</div>}
+          {submitted && <div className="bg-gokez-50 dark:bg-gokez-950/20 border border-gokez-100 dark:border-gokez-900 text-gokez-800 dark:text-gokez-400 text-xs px-3 py-2 rounded-xl mb-3">✓ Grievance submitted successfully.</div>}
           {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-xs px-3 py-2 rounded-xl mb-3">{error}</div>}
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
@@ -66,7 +66,7 @@ export default function GrievancePage() {
               <textarea value={description} onChange={e => setDescription(e.target.value)} className={`${inp} resize-none`} rows={4} placeholder="Describe your concern in detail..." required />
             </div>
             <button type="submit" disabled={submitting || !subject.trim() || !description.trim()}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
+              className="w-full py-3 bg-gokez-700 hover:bg-gokez-800 text-white text-sm font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all">
               {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</> : 'Submit Grievance'}
             </button>
           </form>
@@ -85,8 +85,8 @@ export default function GrievancePage() {
                   </div>
                   <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">{g.description}</p>
                   {g.response && (
-                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl px-3 py-2">
-                      <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 mb-0.5">Our Response</p>
+                    <div className="bg-gokez-50 dark:bg-gokez-950/20 border border-gokez-100 dark:border-gokez-900 rounded-xl px-3 py-2">
+                      <p className="text-[10px] font-semibold text-gokez-800 dark:text-gokez-400 mb-0.5">Our Response</p>
                       <p className="text-xs text-gray-700 dark:text-slate-300">{g.response}</p>
                     </div>
                   )}

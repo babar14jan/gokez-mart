@@ -204,7 +204,7 @@ export default function HomeCarousel() {
               <div
                 key={`${s.id}-${di}`}
                 ref={el => { itemRefs.current[di] = el; }}
-                className="relative flex-shrink-0 snap-center overflow-hidden rounded-2xl shadow-lg"
+                className="relative flex-shrink-0 snap-center overflow-hidden rounded-2xl shadow-card"
                 style={{ width: '90%', aspectRatio: '16/9', transform: 'scale(0.9)', opacity: 0.55 }}
               >
                 {/* Background — image or gradient */}
@@ -276,7 +276,7 @@ export default function HomeCarousel() {
           <div className="flex items-center justify-center gap-1.5 mt-2.5">
             {slides.map((_, i) => (
               <button key={i} onClick={() => goTo(i)} aria-label={`Go to slide ${i + 1}`}
-                className={`rounded-full transition-all duration-300 ${active === i ? 'w-5 h-1.5 bg-emerald-500' : 'w-1.5 h-1.5 bg-gray-300 dark:bg-slate-600'}`} />
+                className={`rounded-full transition-all duration-300 ${active === i ? 'h-1.5 w-5 bg-gokez-700 dark:bg-gokez-400' : 'h-1.5 w-1.5 bg-cream-300 dark:bg-slate-600'}`} />
             ))}
           </div>
         )}
@@ -291,8 +291,8 @@ export default function HomeCarousel() {
               <div
                 key={s.id}
                 onClick={() => goTo(i)}
-                className={`relative flex-shrink-0 overflow-hidden rounded-2xl shadow-md cursor-pointer transition-all ${
-                  active === i ? 'ring-2 ring-emerald-500 scale-[1.02]' : 'opacity-80 hover:opacity-100'
+                className={`relative flex-shrink-0 overflow-hidden rounded-2xl shadow-card cursor-pointer transition-all ${
+                  active === i ? 'ring-2 ring-gokez-500 ring-offset-2 ring-offset-cream-50 dark:ring-offset-slate-900' : 'opacity-80 hover:opacity-100'
                 }`}
                 style={{ width: 'calc(33.333% - 8px)', aspectRatio: '16/9' }}
               >
@@ -329,7 +329,7 @@ export default function HomeCarousel() {
                 )}
                 {/* Active indicator */}
                 {active === i && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gokez-700" />
                 )}
               </div>
             );

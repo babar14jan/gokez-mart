@@ -83,7 +83,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={this.reload}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors"
+              className="w-full py-3 rounded-xl bg-gokez-700 hover:bg-gokez-800 text-white font-semibold transition-colors"
             >
               Reload
             </button>

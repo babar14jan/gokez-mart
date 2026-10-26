@@ -303,7 +303,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   // is only ~34px tall.
   const GuestLink = () => (onGuest && showGuestLink) ? (
     <button type="button" onClick={handleGuest}
-      className="flex min-h-[44px] w-full items-center justify-center py-2 text-center text-[13px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors focus-visible:outline-none focus-visible:underline">
+      className="flex min-h-[44px] w-full items-center justify-center py-2 text-center text-[13px] font-bold text-gokez-700 hover:text-gokez-800 dark:text-gokez-400 dark:hover:text-gokez-300 transition-colors focus-visible:outline-none focus-visible:underline">
       Continue as guest →
     </button>
   ) : null;
@@ -318,7 +318,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
           {step === 'offer' && welcomeOffer ? (
             <>
               <div className="text-center mb-5">
-                <div className={`w-full h-24 rounded-2xl bg-gradient-to-br ${welcomeOffer.carousel_gradient || 'from-violet-500 via-purple-600 to-indigo-600'} flex flex-col items-center justify-center mb-4 relative overflow-hidden`}>
+                <div className={`w-full h-24 rounded-2xl bg-gradient-to-br ${welcomeOffer.carousel_gradient || 'from-gokez-600 via-gokez-700 to-gokez-900'} flex flex-col items-center justify-center mb-4 relative overflow-hidden`}>
                   <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10" />
                   {welcomeOffer.badge_text && <span className="text-[10px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full mb-1">{welcomeOffer.badge_text}</span>}
                   <p className="text-2xl font-black text-white drop-shadow">
@@ -345,7 +345,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             // button and no guest exit). It renders above whatever hosted the
             // flow, so the account page and the checkout overlay behave the same.
             <div className="fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900">
-              <div className="relative shrink-0 bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
+              <div className="relative shrink-0 bg-gradient-to-r from-[#09623a] to-[#087a43] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
                 <div className="h-14" />
               </div>
 
@@ -364,7 +364,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     onChange={e => setNewName(e.target.value)}
                     placeholder="Your full name *"
                     aria-invalid={Boolean(error)}
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-2xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 transition-all"
                     autoFocus={finePointer} />
                   <button type="submit" disabled={savingProfile || !newName.trim()} className={primaryBtn(Boolean(newName.trim()))}>
                     {savingProfile
@@ -472,7 +472,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     <span>{digits}</span>
                   </p>
                   <button type="button" onClick={() => { loginFlow.clear(); setStep('phone'); setOtp(''); setError(''); }}
-                    className="-my-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded px-2 text-xs font-bold text-emerald-700 underline underline-offset-2 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-emerald-400">
+                    className="-my-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded px-2 text-xs font-bold text-gokez-700 underline underline-offset-2 hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400">
                     Change number
                   </button>
                 </div>
@@ -487,13 +487,13 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   placeholder="6-digit OTP"
                   inputMode="numeric" autoComplete="one-time-code" maxLength={6}
                   aria-invalid={Boolean(error)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 transition-all"
                   autoFocus={finePointer} />
                 <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn(otp.length === 6)}>
                   {loading ? <Spinner /> : <>Verify</>}
                 </button>
                 <button type="button" onClick={handleResend} disabled={resendTimer > 0 || loading}
-                  className="flex min-h-[44px] w-full items-center justify-center rounded-2xl py-2 text-sm font-bold text-emerald-700 transition-colors hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:text-emerald-300">
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-2xl py-2 text-sm font-bold text-gokez-700 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gokez-400 dark:hover:text-gokez-300">
                   {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
                 </button>
                 <GuestLink />

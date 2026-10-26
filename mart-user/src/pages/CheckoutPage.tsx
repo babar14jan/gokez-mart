@@ -45,7 +45,7 @@ interface CheckoutPageProps {
   onLogin?: (campaign?: any) => void;
 }
 
-const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
+const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gokez-500/20 focus:border-gokez-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
 
 const PREFERENCES = [
   { value: 'within_15', label: '⚡ 10-15 mins', sub: 'Fastest' },
@@ -206,9 +206,8 @@ function formatOfferText(text: string): string {
    actually set, so an offer with no minimum and no expiry shows neither. */
 function offerDetailBits(c: OfferCampaign): string[] {
   const bits: string[] = [];
-  if (Number(c.min_order_amount) > 0) bits.push(`Min order \u20b9${money(c.min_order_amount)}`);
-  if (c.discount_type === 'percent' && Number(c.max_discount) > 0) bits.push(`up to \u20b9${money(c.max_discount)}`);
-  if (c.coupon_code) bits.push(`Code ${c.coupon_code}`);
+  if (Number(c.min_order_amount) > 0) bits.push(`Min order \u20b9${money(c.min_order_amount)} to avail`);
+  if (c.discount_type === 'percent' && Number(c.max_discount) > 0) bits.push(`up to \u20b9${money(c.max_discount)} off`);
   return bits;
 }
 
@@ -246,11 +245,11 @@ function OffersPanel(props: OffersPanelProps) {
 
   return (
     <div className={cardClass}>
-      <div className="px-4 py-3">
+      <div className="px-3 py-2.5">
         {showOffersHeader && (
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
+              <Tag className="w-4 h-4 text-gokez-500 dark:text-gokez-400 flex-shrink-0" />
               <div className="min-w-0">
                 <span className="block text-sm font-semibold text-gray-900 dark:text-white">Offers &amp; coupons</span>
               </div>
@@ -259,7 +258,7 @@ function OffersPanel(props: OffersPanelProps) {
         )}
 
         {campaigns.length > 0 && (
-          <div className="mt-3 space-y-2">
+          <div className="mt-2 space-y-1.5">
             {notice && (
               <p className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                 {notice}
@@ -274,27 +273,30 @@ function OffersPanel(props: OffersPanelProps) {
               const bits = offerDetailBits(c);
               const welcomeMessage = welcomeOfferMessage(c);
               const done = isApplied || isAppliedByCode;
+              const badgeText = c.badge_text && !/^new customer$/i.test(c.badge_text.trim()) ? c.badge_text : null;
               return (
                 <div key={c.id}
-                  className={`rounded-xl border px-3 py-2.5 transition-colors ${
-                    done ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20'
-                         : 'border-violet-200 bg-violet-50 dark:bg-violet-900/20 dark:border-violet-800'}`}>
+                  className={`rounded-xl border px-2.5 py-2 transition-colors ${
+                    done ? 'border-gokez-400 bg-gokez-50 dark:border-gokez-700 dark:bg-slate-900/60'
+                         : 'border-gokez-200 bg-gokez-50 dark:border-gokez-800 dark:bg-slate-900/60'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className={`text-xs font-bold break-words ${done ? 'text-emerald-700 dark:text-emerald-300' : 'text-violet-700 dark:text-violet-300'}`}>
-                        {c.badge_text ? `${c.badge_text} ` : ''}{c.title}
+                      <p className={`text-[11px] sm:text-xs leading-snug font-bold break-words ${done ? 'text-gokez-700 dark:text-gokez-200' : 'text-gokez-700 dark:text-gokez-200'}`}>
+                        {badgeText && (
+                          <span className="mr-1 inline-block rounded bg-gokez-100 px-1.5 py-0.5 align-middle text-[9px] font-bold uppercase tracking-wide text-gokez-800 dark:bg-gokez-900/40 dark:text-gokez-200">
+                            {badgeText}
+                          </span>
+                        )}
+                        {c.title}
+                        {bits.length > 0 && (
+                          <span className="text-[10px] font-medium text-gray-500 dark:text-slate-400"> · {bits.join(' · ')}</span>
+                        )}
                       </p>
-                      <p className={`text-[11px] mt-0.5 break-words ${done ? 'text-emerald-600 dark:text-emerald-400' : 'text-violet-600 dark:text-violet-400'}`}>
-                        {desc}
+                      <p className={`text-[10px] sm:text-[11px] leading-snug mt-0.5 break-words ${done ? 'text-gokez-700 dark:text-gokez-300' : 'text-gokez-700 dark:text-gokez-300'}`}>
+                        {desc.replace(/[.!?]+$/, '')}.
+                        {c.coupon_code && <span className="font-semibold"> Code: {c.coupon_code}</span>}
                       </p>
-                      {welcomeMessage && <p className="mt-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">{welcomeMessage}</p>}
-                      {bits.length > 0 && (
-                        <p className="text-[10px] mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 text-gray-500 dark:text-slate-400">
-                          {bits.map((b) => (
-                            <span key={b} className="after:content-['\00b7'] after:ml-1.5 last:after:content-['']">{b}</span>
-                          ))}
-                        </p>
-                      )}
+                      {welcomeMessage && <p className="mt-0.5 text-[10px] font-semibold leading-snug text-gokez-700 dark:text-gokez-200">{welcomeMessage}</p>}
                     </div>
                     {/* Explicit Apply. The old signed-in list applied the moment the
                         radio was touched, which read as the app grabbing a discount
@@ -302,10 +304,10 @@ function OffersPanel(props: OffersPanelProps) {
                     <button
                       type="button"
                       onClick={() => done ? (isAppliedByCode ? onClearCode() : onRemoveOffer()) : onApply(c)}
-                      className={`flex-shrink-0 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
-                        done ? 'text-emerald-700 hover:text-red-600 dark:text-emerald-300'
-                             : 'bg-violet-500 hover:bg-violet-600 text-white'}`}>
-                      {done ? 'Remove' : locked ? 'Apply & Save' : 'Apply'}
+                      className={`flex min-h-11 flex-shrink-0 items-center px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors ${
+                        done ? 'text-gokez-700 hover:text-red-600 dark:text-gokez-200'
+                             : 'bg-gokez-700 hover:bg-gokez-800 text-white'}`}>
+                      {done ? 'Remove' : 'Apply'}
                     </button>
                   </div>
                 </div>
@@ -331,7 +333,7 @@ function OffersPanel(props: OffersPanelProps) {
             )}
             {locked && (
               <button type="button" onClick={() => onApply(null as any)}
-                className="w-full py-2.5 text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 rounded-xl transition-colors">
+                className="w-full py-2.5 text-xs font-bold text-gokez-700 dark:text-gokez-200 bg-gokez-50 dark:bg-slate-900/60 hover:bg-gokez-100 dark:hover:bg-slate-900/80 rounded-xl transition-colors">
                 Log in for offers →
               </button>
             )}
@@ -345,17 +347,17 @@ function OffersPanel(props: OffersPanelProps) {
         <div className={showOffersHeader ? 'mt-3 border-t border-gray-100 pt-3 dark:border-slate-700' : ''}>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300">Have a coupon code?</label>
-            {appliedCode && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Applied</span>}
+            {appliedCode && <span className="text-[10px] font-bold text-gokez-700 dark:text-gokez-300">Applied</span>}
           </div>
           <div className="flex gap-2">
             <input type="text" value={appliedCode || codeInput} onChange={e => onCodeInput(e.target.value)} placeholder="Enter coupon code" disabled={Boolean(appliedCode)}
-              className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:cursor-not-allowed disabled:border-emerald-200 disabled:bg-emerald-50 disabled:text-emerald-700 dark:disabled:border-emerald-800 dark:disabled:bg-emerald-900/20 dark:disabled:text-emerald-300" />
+              className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-gokez-500 disabled:cursor-not-allowed disabled:border-gokez-200 disabled:bg-gokez-50 disabled:text-gokez-700 dark:disabled:border-gokez-800 dark:disabled:bg-slate-900/60 dark:disabled:text-gokez-200" />
             <button type="button" onClick={appliedCode ? onClearCode : onValidateCode} disabled={!appliedCode && (codeLoading || !codeInput.trim())}
-              className={`px-3 py-2 text-xs font-bold rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap ${appliedCode ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-300 dark:bg-red-900/20 dark:hover:bg-red-900/30' : 'text-white bg-violet-500 hover:bg-violet-600'}`}>
+              className={`px-3 py-2 text-xs font-bold rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap ${appliedCode ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-300 dark:bg-red-900/20 dark:hover:bg-red-900/30' : 'text-white bg-gokez-700 hover:bg-gokez-800'}`}>
               {appliedCode ? <X className="w-3 h-3" /> : codeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {appliedCode ? 'Remove' : 'Apply'}
             </button>
           </div>
-          {codeSuccess && <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400">{codeSuccess}</p>}
+          {codeSuccess && <p className="mt-1.5 text-xs text-gokez-700 dark:text-gokez-300">{codeSuccess}</p>}
           {codeError && <p className="mt-1.5 text-xs text-red-500">{codeError}</p>}
         </div>
         )}
@@ -1013,7 +1015,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   // permanently disabled Place Order button and no explanation.
   if (items.length === 0) {
     return (
-      <div className="page-shell bg-gray-50 dark:bg-slate-900 flex flex-col">
+      <div className="page-shell bg-cream-50 dark:bg-slate-900 flex flex-col">
         <PageHeader title="Checkout" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
@@ -1022,7 +1024,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
           <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Your cart is empty</h2>
           <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">Add a few items to start your order.</p>
           <button type="button" onClick={onHome}
-            className="w-full max-w-xs py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">
+            className="w-full max-w-xs py-3.5 bg-gokez-700 hover:bg-gokez-800 text-white font-bold rounded-2xl transition-all">
             Browse products
           </button>
         </div>
@@ -1031,7 +1033,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   }
 
   return (
-    <div className="page-shell bg-gray-50 dark:bg-slate-900">
+    <div className="page-shell bg-cream-50 dark:bg-slate-900">
       {/* Header */}
       <PageHeader title="My Cart" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
 
@@ -1054,11 +1056,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                     alt={item.productName}
                     className="w-12 h-12 rounded-xl flex-shrink-0"
                     imgClassName="object-cover"
-                    fallback={<div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0 text-xl">🥦</div>}
+                    fallback={<div className="w-12 h-12 rounded-xl bg-gokez-50 dark:bg-gokez-900/20 flex items-center justify-center flex-shrink-0 text-xl">🥦</div>}
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.productName}</p>
-                    <p className="text-xs text-gray-500">{item.unit} · ₹{item.price}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{item.unit} · ₹{item.price}</p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity - 1)} disabled={loading}
@@ -1069,7 +1071,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                     <span className="text-sm font-bold text-gray-900 dark:text-white w-5 text-center">{item.quantity}</span>
                     <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity + 1)} disabled={loading}
                       aria-disabled={loading}
-                      className="w-7 h-7 bg-emerald-500 text-white rounded-lg flex items-center justify-center disabled:opacity-40">
+                      className="w-7 h-7 bg-gokez-700 text-white rounded-lg flex items-center justify-center disabled:opacity-40">
                       <Plus className="w-3.5 h-3.5" strokeWidth={3.5} />
                     </button>
                   </div>
@@ -1089,22 +1091,22 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 delivery!" for a discount that never applied, and contradict
                 the "free on every order" line below the total. */}
             {freeAbove > 0 && deliveryCharge > 0 && (
-              <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 border-t border-emerald-100 dark:border-emerald-900">
+              <div className="px-4 py-2 bg-gokez-50 dark:bg-gokez-900/10 border-t border-gokez-100 dark:border-gokez-900">
                 {freeDeliveryUnlocked ? (
-                  <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                  <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-gokez-700 dark:text-gokez-400">
                     <span aria-hidden="true">🛵</span> You've unlocked FREE delivery!
                   </p>
                 ) : (
                   <>
-                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                    <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gokez-800 dark:text-gokez-300">
                       <span className="flex items-center gap-1">
                         <span aria-hidden="true">🛵</span> Free delivery at ₹{freeAbove.toFixed(0)}
                       </span>
                       <span>₹{freeDeliveryRemaining.toFixed(0)} away</span>
                     </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/40" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(freeDeliveryProgress * 100)} aria-label="Progress toward free delivery">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gokez-100 dark:bg-gokez-900/40" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(freeDeliveryProgress * 100)} aria-label="Progress toward free delivery">
                       <div
-                        className="h-full rounded-full bg-emerald-500 transition-[width] duration-300 ease-out"
+                        className="h-full rounded-full bg-gokez-500 transition-[width] duration-300 ease-out"
                         style={{ width: `${Math.max(6, freeDeliveryProgress * 100)}%` }}
                       />
                     </div>
@@ -1142,7 +1144,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 ))}
                 <div className="flex w-32 shrink-0">
                   <button type="button" onClick={onHome} disabled={loading}
-                    className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50 text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40 disabled:opacity-40">
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gokez-300 bg-gokez-50 text-gokez-700 transition-colors hover:border-gokez-400 hover:bg-gokez-100 dark:border-gokez-800 dark:bg-gokez-900/20 dark:text-gokez-400 dark:hover:bg-gokez-900/40 disabled:opacity-40">
                     <ChevronRight className="h-6 w-6" />
                     <span className="text-sm font-bold">View all</span>
                   </button>
@@ -1243,11 +1245,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                       <p className="text-[11px] text-gray-500 dark:text-slate-400">Your delivery details</p>
                     </div>
                   </div>
-                  {onLogin && <button type="button" onClick={() => onLogin()} title="Log in to use your saved details" className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:border-rose-300 hover:bg-rose-100 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:bg-rose-950/50">Log in</button>}
+                  {onLogin && <button type="button" onClick={() => onLogin()} title="Log in to use your saved details" className="shrink-0 rounded-lg border border-gokez-200 bg-gokez-50 px-2.5 py-1.5 text-xs font-semibold text-gokez-700 transition-colors hover:border-gokez-300 hover:bg-gokez-100 dark:border-gokez-900/70 dark:bg-gokez-950/30 dark:text-gokez-300 dark:hover:border-gokez-700 dark:hover:bg-gokez-950/50">Log in</button>}
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
-                    Name <span className="text-emerald-600" aria-hidden="true">*</span>
+                    Name <span className="text-gokez-700 dark:text-gokez-400" aria-hidden="true">*</span>
                   </label>
                   <input ref={guestNameInput} type="text" value={guestName} onChange={e => { setGuestName(e.target.value); if (validationField === 'name') setValidationField(null); }}
                     onBlur={() => { if (guestName.trim() && !isValidGuestName(guestName)) setValidationField('name'); }}
@@ -1256,7 +1258,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1 flex items-center gap-1">
-                    Phone number <span className="text-emerald-600" aria-hidden="true">*</span>
+                    Phone number <span className="text-gokez-700 dark:text-gokez-400" aria-hidden="true">*</span>
                   </label>
                   <input ref={guestPhoneInput} type="tel" inputMode="numeric" value={guestPhone}
                     onChange={e => { setGuestPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); if (validationField === 'phone') setValidationField(null); }}
@@ -1307,11 +1309,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 setShowPreferences(open => !open);
               }}
               className="w-full flex items-center gap-3 px-4 py-3 text-left">
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-4 h-4 text-emerald-600" />
+              <div className="w-9 h-9 rounded-xl bg-gokez-50 dark:bg-gokez-900/20 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-4 h-4 text-gokez-700 dark:text-gokez-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery Time</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">Delivery Time</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium">
                   {deliveryPreference === 'scheduled' && scheduledSlot
                     ? <>{slotLabel(schedule, scheduledSlot)}</>
@@ -1326,8 +1328,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
               <div className="border-t border-gray-100 dark:border-slate-700 p-3 space-y-2.5">
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => { setDeliveryPreference('within_15'); setScheduledSlot(null); }}
-                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold ${deliveryPreference === 'within_15' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
-                    Fastest Delivery <span className="block text-[10px] font-medium opacity-70">Delivered in 10-15 min</span>
+                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold ${deliveryPreference === 'within_15' ? 'border-gokez-500 bg-gokez-50 text-gokez-700 dark:border-gokez-600 dark:bg-slate-900/60 dark:text-gokez-200' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
+                    Fastest Delivery <span className="block text-[10px] font-medium opacity-70">10–15 mins</span>
                   </button>
                   <button type="button" disabled={availableScheduleDays.length === 0}
                     onClick={() => {
@@ -1342,32 +1344,32 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                       setScheduleDay(day.offset);
                       setScheduledSlot(existingDay ? scheduledSlot : day.slots[0]);
                     }}
-                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold disabled:cursor-not-allowed disabled:opacity-45 ${deliveryPreference === 'scheduled' ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
+                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold disabled:cursor-not-allowed disabled:opacity-45 ${deliveryPreference === 'scheduled' ? 'border-gokez-500 bg-gokez-50 text-gokez-700 dark:border-gokez-600 dark:bg-slate-900/60 dark:text-gokez-200' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
                     Schedule Delivery <span className="block text-[10px] font-medium opacity-70">Choose your preferred time</span>
                   </button>
                 </div>
                 {deliveryPreference === 'scheduled' && (
-                  <div className="space-y-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 p-2.5">
-                    {availableScheduleDays.length === 0 ? <p className="py-2 text-center text-xs font-medium text-violet-700 dark:text-violet-300">No delivery times are available today or tomorrow.</p> : <>
+                  <div className="space-y-2.5 rounded-xl border border-transparent bg-gokez-50 p-2.5 dark:border-slate-700 dark:bg-slate-900/50">
+                    {availableScheduleDays.length === 0 ? <p className="py-2 text-center text-xs font-medium text-gokez-700 dark:text-gokez-200">No delivery times are available today or tomorrow.</p> : <>
                       <div className="flex gap-2">
                         {availableScheduleDays.map(day => <button key={day.offset} type="button"
                           onClick={() => { setScheduleDay(day.offset); setScheduledSlot(day.slots.find(slot => schedulePeriod === 'all' || (schedulePeriod === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60)) ?? day.slots[0]); }}
-                          className={`flex-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold ${selectedSchedule?.offset === day.offset ? 'border-emerald-500 bg-white text-emerald-700 dark:bg-slate-800 dark:text-emerald-400' : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/60 dark:text-slate-300'}`}>{day.label}</button>)}
+                          className={`flex-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold ${selectedSchedule?.offset === day.offset ? 'border-gokez-500 bg-white text-gokez-700 dark:border-gokez-600 dark:bg-slate-700 dark:text-gokez-200' : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/80 dark:text-slate-300'}`}>{day.label}</button>)}
                       </div>
                       <div className="flex gap-1.5">
                         {(['all', 'am', 'pm'] as const).map(period => <button key={period} type="button" onClick={() => {
                           setSchedulePeriod(period);
                           const first = selectedSchedule?.slots.find(slot => period === 'all' || (period === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60));
                           if (first) setScheduledSlot(first);
-                        }} className={`flex-1 rounded-md py-1 text-[10px] font-bold uppercase ${schedulePeriod === period ? 'bg-violet-600 text-white' : 'bg-white/70 text-violet-700 dark:bg-slate-800 dark:text-violet-300'}`}>{period}</button>)}
+                        }} className={`flex-1 rounded-md py-1 text-[10px] font-bold uppercase ${schedulePeriod === period ? 'bg-gokez-700 text-white' : 'bg-white/70 text-gokez-700 dark:bg-slate-800 dark:text-gokez-300'}`}>{period}</button>)}
                       </div>
-                      {visibleScheduleSlots.length === 0 ? <p className="py-1 text-center text-xs text-violet-700 dark:text-violet-300">No {schedulePeriod.toUpperCase()} times for this day.</p> : <select value={scheduledSlot && scheduledSlot.offset === selectedSchedule?.offset ? `${scheduledSlot.offset}-${scheduledSlot.start}` : ''} onChange={event => {
+                      {visibleScheduleSlots.length === 0 ? <p className="py-1 text-center text-xs text-gokez-700 dark:text-gokez-200">No {schedulePeriod.toUpperCase()} times for this day.</p> : <select value={scheduledSlot && scheduledSlot.offset === selectedSchedule?.offset ? `${scheduledSlot.offset}-${scheduledSlot.start}` : ''} onChange={event => {
                         const slot = selectedSchedule?.slots.find(item => `${item.offset}-${item.start}` === event.target.value);
                         if (slot) setScheduledSlot(slot);
-                      }} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 dark:border-violet-800 dark:bg-slate-800 dark:text-white">
+                      }} className="w-full rounded-lg border border-gokez-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 dark:border-gokez-800 dark:bg-slate-800 dark:text-white">
                         {visibleScheduleSlots.map(slot => <option key={`${slot.offset}-${slot.start}`} value={`${slot.offset}-${slot.start}`}>{slotRange(slot)}</option>)}
                       </select>}
-                      {scheduledSlot && <p className="text-center text-[11px] font-semibold text-violet-700 dark:text-violet-300">Scheduled: {slotLabel(schedule, scheduledSlot)}</p>}
+                      {scheduledSlot && <p className="text-center text-[11px] font-semibold text-gokez-700 dark:text-gokez-200">Scheduled: {slotLabel(schedule, scheduledSlot)}</p>}
                     </>}
                   </div>
                 )}
@@ -1379,27 +1381,27 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
             {/* Delivery note */}
             <div className="relative flex items-center gap-3 px-4 py-3">
-              <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center flex-shrink-0">
-                <MessageCircle className="w-4 h-4 text-violet-600" />
+              <div className="w-9 h-9 rounded-xl bg-gokez-50 dark:bg-gokez-900/20 flex items-center justify-center flex-shrink-0">
+                <MessageCircle className="w-4 h-4 text-gokez-700 dark:text-gokez-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Delivery instruction</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">Delivery instruction</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{currentNote}</p>
               </div>
               <button type="button" onClick={() => setShowNoteMenu(open => !open)}
-                className="flex h-7 shrink-0 items-center rounded-lg border border-violet-600 bg-violet-600 px-2.5 text-[11px] font-bold text-white dark:border-violet-500 dark:bg-violet-600">
+                className="flex h-7 shrink-0 items-center rounded-lg border border-gokez-600 bg-gokez-700 px-2.5 text-[11px] font-bold text-white dark:border-gokez-500 dark:bg-gokez-700">
                 Change
               </button>
               {showNoteMenu && (
-                <div className="absolute right-4 top-[calc(100%-4px)] z-20 w-52 overflow-hidden rounded-lg border border-violet-100 bg-white py-1 shadow-lg dark:border-violet-900 dark:bg-slate-800">
+                <div className="absolute right-4 top-[calc(100%-4px)] z-20 w-52 overflow-hidden rounded-lg border border-gokez-100 bg-white py-1 shadow-lg dark:border-gokez-900 dark:bg-slate-800">
                   {NOTES.map(note => <button key={note} type="button" onClick={() => {
                     setDeliveryNote(note);
                     setShowCustomNote(false);
                     setShowNoteMenu(false);
-                  }} className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-violet-50 dark:text-slate-200 dark:hover:bg-violet-900/30">
+                  }} className="w-full px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gokez-50 dark:text-slate-200 dark:hover:bg-gokez-900/30">
                     {note}
                   </button>)}
-                  <button type="button" onClick={() => { setShowCustomNote(true); setShowNoteMenu(false); }} className="w-full border-t border-violet-100 px-3 py-2 text-left text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-900/30">
+                  <button type="button" onClick={() => { setShowCustomNote(true); setShowNoteMenu(false); }} className="w-full border-t border-gokez-100 px-3 py-2 text-left text-xs font-bold text-gokez-700 hover:bg-gokez-50 dark:border-gokez-900 dark:text-gokez-300 dark:hover:bg-gokez-900/30">
                     Write your own...
                   </button>
                 </div>
@@ -1437,15 +1439,15 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                   {actualDelivery === 0 && deliveryCharge > 0 && (
                     <span className="text-xs font-medium text-gray-400 line-through dark:text-slate-500">₹{deliveryCharge.toFixed(0)}</span>
                   )}
-                  <span className={actualDelivery === 0 ? 'text-emerald-600 font-semibold' : 'text-gray-900 dark:text-white'}>
+                  <span className={actualDelivery === 0 ? 'text-gokez-700 font-semibold dark:text-gokez-400' : 'text-gray-900 dark:text-white'}>
                     {actualDelivery === 0 ? 'FREE' : `₹${actualDelivery}`}
                   </span>
                 </span>
               </div>
               {displayedCampaignDiscount > 0 && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-emerald-600">🎉 {appliedCampaign?.title || 'Discount'}</span>
-                  <span className="text-emerald-600 font-semibold">-₹{displayedCampaignDiscount.toFixed(0)}</span>
+                  <span className="text-gokez-700 dark:text-gokez-400">🎉 {appliedCampaign?.title || 'Discount'}</span>
+                  <span className="text-gokez-700 font-semibold dark:text-gokez-400">-₹{displayedCampaignDiscount.toFixed(0)}</span>
                 </div>
               )}
               <div className="flex items-center justify-between border-t border-gray-100 pt-2.5 dark:border-slate-700">
@@ -1462,16 +1464,17 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       <div className="checkout-sticky-footer sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
         <div className="max-w-lg mx-auto">
           {/* Address row — the same control as the account page, opens the sheet */}
-          <div className="px-3 pt-2">
+          <div className="px-3 pt-1">
             <AddressButton
               address={checkoutAddress}
               error={validationField === 'address'}
               emptyLabel="No delivery address yet"
+              flat
               onClick={() => { track('checkout_address_started'); openAddressSheet(); }}
             />
           </div>
 
-          <div className="px-4 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
+          <div className="px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
             {!canCheckout && sub < minOrder && (
               <p className="text-xs font-medium text-red-600 dark:text-red-400 text-center mb-2" role="status">Add ₹{(minOrder - sub).toFixed(0)} more to reach the ₹{minOrder} minimum order.</p>
             )}
@@ -1480,7 +1483,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 total, stops a "FREE" delivery row from reading as a temporary
                 perk -- delivery is simply free on every order. */}
             {deliveryIsAlwaysFree && (
-              <p className="flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-center mb-2">
+              <p className="flex items-center justify-center gap-1.5 text-xs font-semibold text-gokez-700 dark:text-gokez-400 text-center mb-2">
                 <span aria-hidden="true">🛵</span> Delivery is free on every order
               </p>
             )}
@@ -1493,14 +1496,14 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
             <div className="flex items-center gap-3">
               <div className="w-16 flex-shrink-0 text-center">
-                <p className="text-[10px] text-gray-500 dark:text-slate-400">To pay</p>
+                <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">To pay</p>
                 {/* Keyed on the value so React replaces the node whenever the
                     amount changes; without this iOS WebKit keeps painting the
                     old string in the sticky layer (WebKit bug 209376). */}
                 <p key={payAmount} className="text-lg font-bold text-gray-900 dark:text-white">₹{payAmount.toFixed(0)}</p>
               </div>
               <button type="submit" form="checkout-form" disabled={loading || couponLoading || !canCheckout}
-                className="flex-1 h-14 bg-[#15803d] hover:bg-[#166534] text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-[#15803d] dark:text-white dark:hover:bg-[#166534]">
+                className="flex-1 h-14 bg-gokez-700 hover:bg-gokez-800 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-gokez-700 dark:text-white dark:hover:bg-gokez-800">
                 {loading || couponLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />

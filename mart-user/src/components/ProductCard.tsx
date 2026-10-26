@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Leaf } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { productLabelParts } from '../utils/productLabel';
@@ -26,40 +27,44 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
     ? Math.round(product.price - discountedPrice)
     : 0;
   const { primary: primaryName, secondary: secondaryName } = productLabelParts(product);
+  const openDetail = () => setShowDetail(true);
 
   return (
     <>
-      <div
-        className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
-        onClick={() => setShowDetail(true)}
-      >
-        {/* Image */}
-        <div className="relative bg-gray-50 dark:bg-slate-700 aspect-square overflow-hidden rounded-t-2xl">
+      <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0 dark:border-slate-700 dark:bg-slate-800">
+        <button
+          type="button"
+          onClick={openDetail}
+          aria-label={`View ${product.name}`}
+          className="absolute inset-0 z-0 cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gokez-500"
+        />
+        <div className="pointer-events-none relative z-10 aspect-square overflow-hidden bg-cream-100 dark:bg-slate-700">
           <SmartImage
             src={product.photoUrl}
             alt={product.name}
             className="h-full w-full"
-            imgClassName={`object-cover ${isOutOfStock ? 'opacity-40' : ''}`}
-            fallback={<div className="w-full h-full flex items-center justify-center text-4xl">🥦</div>}
+            imgClassName={`object-cover transition-transform duration-300 group-hover:scale-[1.03] ${isOutOfStock ? 'opacity-40' : ''}`}
+            fallback={
+              <div className="flex h-full w-full items-center justify-center bg-cream-50 text-gokez-300 dark:bg-slate-800 dark:text-slate-500">
+                <Leaf className="h-8 w-8" aria-hidden="true" />
+              </div>
+            }
           />
 
-          {/* Discount badge */}
           {savings > 0 && !isOutOfStock && (
-            <span className="absolute top-0 left-0 rounded-br-lg bg-red-500 px-2 py-1 text-[11px] font-extrabold text-white shadow-sm">
+            <span className="absolute left-1.5 top-1.5 rounded-full border border-saffron-600/45 bg-saffron-400 px-2 py-1 text-[10px] font-extrabold leading-none text-ink shadow-[0_1px_3px_rgba(111,59,19,0.28)]">
               {product.discountPercent}% OFF
             </span>
           )}
 
-          {/* Out of stock overlay */}
           {isOutOfStock && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-slate-800/70">
-              <span className="bg-gray-800 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">Out of Stock</span>
+            <div className="absolute inset-0 flex items-end justify-center bg-white/65 p-2 dark:bg-slate-800/65">
+              <span className="rounded-full bg-ink px-2.5 py-1 text-[10px] font-bold text-white">Out of stock</span>
             </div>
           )}
 
-          {/* ADD / qty — sits on the image corner so the full price row stays visible */}
           {!isOutOfStock && (
-            <div className="absolute bottom-0 right-[3px] z-10">
+            <div className="pointer-events-auto absolute bottom-1.5 right-1.5 z-20">
               <CartQuantityControl
                 variant="card"
                 quantity={qty}
@@ -71,33 +76,23 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
           )}
         </div>
 
-        {/* Info — fixed height name so all cards align */}
-        <div className="px-2 pt-1.5 pb-2 flex flex-col">
-          <div className="mb-1 leading-tight" style={{ minHeight: '2.2em' }}>
-            {/* Three lines, not two. The card is ~113px wide on a 390px phone,
-                which leaves ~97px of text — at 12px that is about 15 characters
-                a line, so "Fresh Yellow Capsicum (Peeli Shimla Mirch)" needs
-                three. Clamping at two cut the Hindi name off every real
-                product, which defeats the point of showing it. */}
-            <p className="line-clamp-3 text-[12px] font-semibold text-gray-900 dark:text-white">
-              {primaryName}
-              {/* The local (Hindi) name in brackets, at the same size and weight
-                  as the main name, so it reads as an alternate label for the
-                  same product instead of a muted subtitle. */}
-              {secondaryName && <span> ({secondaryName})</span>}
-            </p>
+        <div className="pointer-events-none flex flex-1 flex-col px-2.5 pb-2.5 pt-2">
+          <div className="mb-1 min-h-[2.7em]">
+            <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3] text-ink dark:text-white">{primaryName}</p>
+            {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
           </div>
-          <p className="text-[11px] font-semibold text-gray-600 dark:text-slate-300 leading-none">{product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}</p>
-          <div className="mt-auto flex flex-wrap items-baseline gap-x-1 pt-1.5">
-            <span className="text-sm font-extrabold leading-none text-gray-900 dark:text-white">₹{discountedPrice}</span>
+          <p className="text-[11px] font-medium leading-none text-gray-500 dark:text-slate-400">
+            {product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}
+          </p>
+          <div className="mt-auto flex flex-wrap items-baseline gap-x-1.5 pt-2">
+            <span className="text-base font-extrabold leading-none text-ink dark:text-white">₹{discountedPrice}</span>
             {savings > 0 && (
-              <span className="text-[11px] font-semibold text-gray-400 dark:text-slate-500 line-through leading-none">₹{product.price}</span>
+              <span className="text-[11px] font-semibold leading-none text-gray-400 line-through dark:text-slate-500">₹{product.price}</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Product detail bottom sheet */}
       {showDetail && (
         <ProductDetailSheet product={product} onClose={() => setShowDetail(false)} />
       )}

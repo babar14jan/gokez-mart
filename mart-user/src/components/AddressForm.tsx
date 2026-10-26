@@ -17,7 +17,7 @@ export interface AddressCoordinates {
 }
 
 const EMPTY_ADDRESS: AddressFields = { house: '', building: '', locality: '', landmark: '', city: '', pincode: '' };
-const inputClass = 'w-full px-3.5 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-[15px] text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-500 transition-all placeholder:text-gray-400 dark:placeholder:text-slate-400';
+const inputClass = 'w-full px-3.5 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-[15px] text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-gokez-700/25 focus:border-gokez-700 transition-all placeholder:text-gray-400 dark:placeholder:text-slate-400';
 
 // Round-tripping a saved line through the form must not fabricate, drop, or
 // shift segments. Only the trailing city + pincode are peeled off (when the
@@ -96,7 +96,7 @@ export default function AddressForm({ stored = null, initialLabel = 'Home', init
           Cancel
         </button>
         <button type="button" onClick={() => onSave(label, serializeAddress(fields), coordinates)} disabled={saving || !complete}
-          className="flex-1 py-3 text-[15px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+          className="flex-1 py-3 text-[15px] font-semibold text-white bg-gokez-700 hover:bg-gokez-800 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Saving...' : 'Save Address'}
         </button>

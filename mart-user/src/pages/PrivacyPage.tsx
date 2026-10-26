@@ -72,7 +72,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
                   ].map(([d, r]) => (
                     <tr key={d}>
                       <td className="px-4 py-2.5 text-gray-700 dark:text-slate-300">{d}</td>
-                      <td className="px-4 py-2.5 text-emerald-700 dark:text-emerald-400 font-semibold">{r}</td>
+                      <td className="px-4 py-2.5 text-gokez-800 dark:text-gokez-400 font-semibold">{r}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -89,7 +89,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
               <li>Request deletion of your account and data</li>
               <li>Withdraw consent for data processing</li>
             </ul>
-            <p className="mt-2">To exercise these rights, contact us at <a href="mailto:support@gokez.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">support@gokez.com</a>.</p>
+            <p className="mt-2">To exercise these rights, contact us at <a href="mailto:support@gokez.com" className="text-gokez-700 dark:text-gokez-400 hover:underline">support@gokez.com</a>.</p>
           </section>
 
           <section>
@@ -104,9 +104,9 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">10. Grievance Officer</h2>
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-4">
+            <div className="bg-gokez-50 dark:bg-gokez-950/20 border border-gokez-100 dark:border-gokez-900 rounded-xl p-4">
               <p className="font-semibold text-gray-800 dark:text-white mb-2">Gokez Technologies Pvt. Ltd.</p>
-              <p className="text-gray-600 dark:text-slate-400">Email: <a href="mailto:support@gokez.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">support@gokez.com</a></p>
+              <p className="text-gray-600 dark:text-slate-400">Email: <a href="mailto:support@gokez.com" className="text-gokez-700 dark:text-gokez-400 hover:underline">support@gokez.com</a></p>
               <p className="text-gray-600 dark:text-slate-400">Kolkata, West Bengal, India</p>
               <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">Please include your contact details and a clear description of your request. We will review and respond in accordance with applicable law.</p>
             </div>
