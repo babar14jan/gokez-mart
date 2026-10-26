@@ -97,6 +97,15 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               o.confirmed_next_open as "confirmedNextOpen",
               COALESCE((
                 SELECT json_agg(json_build_object(
+                  'eventType', de.event_type,
+                  'scheduledFor', de.scheduled_for,
+                  'actorName', de.actor_name,
+                  'createdAt', de.created_at
+                ) ORDER BY de.created_at ASC)
+                FROM mart_order_delivery_events de WHERE de.order_id = o.id
+              ), '[]') as "deliveryEvents",
+              COALESCE((
+                SELECT json_agg(json_build_object(
                   'fromStatus', e.from_status,
                   'toStatus', e.to_status,
                   'actorName', e.actor_name,
@@ -974,6 +983,55 @@ export class OrderService {
     });
 
     return order;
+  }
+
+  /**
+   * Set a customer-requested delivery window without changing the order's
+   * fulfillment status, payment, assignment, or inventory bookkeeping.
+   */
+  static async rescheduleDelivery(
+    id: string,
+    scheduledFor: Date,
+    actor: { id: string; username: string; role: string; storeId: string | null },
+  ) {
+    const order = await transaction(async client => {
+      const current = await client.query(
+        `SELECT o.id, o.status, o.store_id as "storeId", o.order_number as "orderNumber",
+                s.opening_hours as "openingHours"
+           FROM mart_orders o
+           LEFT JOIN mart_stores s ON s.id = o.store_id
+          WHERE o.id = $1 FOR UPDATE OF o`,
+        [id],
+      );
+      const existing = current.rows[0];
+      if (!existing) throw notFound('Order not found');
+      if (!['super_admin', 'store_owner'].includes(actor.role)) throw forbidden('Only store owners can reschedule deliveries');
+      if (actor.role !== 'super_admin' && actor.storeId !== existing.storeId) throw forbidden('Access denied');
+      if (existing.status === 'delivered') throw badRequest('Delivered orders cannot be rescheduled');
+      if (!isValidScheduledDelivery(existing.openingHours, scheduledFor)) {
+        throw badRequest('Choose an available delivery time today or tomorrow');
+      }
+
+      const updated = await client.query(
+        `UPDATE mart_orders
+            SET delivery_preference = 'scheduled',
+                scheduled_for = $1,
+                confirmed_next_open = false,
+                updated_at = NOW()
+          WHERE id = $2
+          RETURNING id, order_number as "orderNumber", status, store_id as "storeId",
+                    scheduled_for as "scheduledFor"`,
+        [scheduledFor.toISOString(), id],
+      );
+      await client.query(
+        `INSERT INTO mart_order_delivery_events (order_id, event_type, scheduled_for, actor_id, actor_name)
+         VALUES ($1, 'rescheduled', $2, $3, $4)`,
+        [id, scheduledFor.toISOString(), actor.id, actor.username],
+      );
+      return updated.rows[0];
+    });
+
+    return { ...order, scheduledForLabel: formatIstDateTime(order.scheduledFor) };
   }
 
   /**

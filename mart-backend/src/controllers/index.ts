@@ -832,6 +832,38 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
   res.json({ success: true, data: order });
 });
 
+export const adminRescheduleOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { scheduledFor } = req.body;
+  if (typeof scheduledFor !== 'string') {
+    res.status(400).json({ success: false, error: 'Choose a delivery time' }); return;
+  }
+  const order = await OrderService.rescheduleDelivery(req.params.id, new Date(scheduledFor), req.admin!);
+  const schedule = order.scheduledForLabel || 'the requested time';
+
+  ComplianceService.logAudit({
+    adminId: req.admin!.id,
+    username: req.admin!.username,
+    role: req.admin!.role,
+    action: 'order_delivery_rescheduled',
+    entityType: 'order',
+    entityId: order.id,
+    detail: `Order #${order.orderNumber} rescheduled for ${schedule}`,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent'),
+  });
+  PushService.notifyOrderRecipient(order.id, {
+    title: `Order #${order.orderNumber} delivery rescheduled`,
+    body: `As requested, your delivery has been rescheduled to ${schedule}.`,
+    url: '/orders',
+    tag: `order-${order.id}`,
+  }).catch(() => {});
+  emitOrderEvent({
+    type: 'order.updated',
+    order: { id: order.id, orderNumber: order.orderNumber, status: order.status, storeId: order.storeId },
+  });
+  res.json({ success: true, data: order });
+});
+
 
 // ── Confirm after-hours order for the next opening hours ────────────────────
 // The store was shut when the customer ordered, so instead of "start preparing"

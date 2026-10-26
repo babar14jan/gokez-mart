@@ -80,6 +80,16 @@ html, body { overscroll-behavior-y: none; }
   width: 58px;
 }
 
+/* Keep the larger centre control visually above the iOS bottom bar rather than
+   crowding the home-indicator area. The nav remains in flow, so its height and
+   touch layout stay stable. */
+@supports (-webkit-touch-callout: none) {
+  .nav-fresh-button {
+    position: relative;
+    top: -10px;
+  }
+}
+
 /* The checkout footer is a position:sticky child of the scrolling checkout
    overlay, so it shares the scroller with the cart list above it. Whenever the
    cart changes in the same frame as the "To pay" text changes, iOS WebKit
