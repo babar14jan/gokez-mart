@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
 import { Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
-import { storeApi, campaignApi, authApi } from '../services/api';
-import type { PublicSettings, Product, StoreOpeningHours } from '../services/api';
+import { storeApi, campaignApi, authApi, recommendationApi } from '../services/api';
+import type { PublicSettings, StoreOpeningHours, RecommendationResult } from '../services/api';
 import { useCustomerStore, type SavedAddress } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
+import { SHAPOORJI_ZONE } from '../store/zoneStore';
 import { type AddressCoordinates } from '../components/AddressForm';
 import AddressSheet from '../components/AddressSheet';
 import AddressButton from '../components/AddressButton';
@@ -16,19 +17,12 @@ import SmartImage from '../components/SmartImage';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 import { requestErrorMessage, isTransportFailure } from '../utils/networkError';
-import { isIOSDevice } from '../utils/isIOSDevice';
 import { useGuestAddressStore } from '../store/guestAddressStore';
 
 interface CheckoutPageProps {
   settings: PublicSettings;
   zoneName?: string;
   storeId?: string;
-  /**
-   * The storefront catalogue App has already loaded. Seeding "You may also like"
-   * from it means the row is present in the very first paint instead of popping
-   * in (and shoving the address + footer down) after a private fetch resolves.
-   */
-  catalog?: Product[];
   onBack: () => void;
   onHome: () => void;
   onSuccess: (orderNumber: string, preference: string, storeName?: string, savedAmount?: number, orderData?: any) => void;
@@ -366,7 +360,7 @@ function OffersPanel(props: OffersPanelProps) {
   );
 }
 
-export default function CheckoutPage({ settings, zoneName, storeId, catalog, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
+export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
   const finePointer = useFinePointer();
   const orderRequestKey = useRef(crypto.randomUUID());
   const guestNameInput = useRef<HTMLInputElement>(null);
@@ -381,46 +375,6 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile, setGuestProfile } = useCustomerAuthStore();
 
   useEffect(() => { if (isLoggedIn) loadAddresses(); }, [isLoggedIn]);
-
-  // "You may also like" — picked once when checkout opens and then held steady,
-  // so adding one of them to the cart never makes the row shuffle under the
-  // customer's thumb. Seeded synchronously from the catalogue App already has, so
-  // the row is part of the first paint and never appears late.
-  const [suggestions, setSuggestions] = useState<Product[]>(() => {
-    const cartIds = new Set(items.map(i => i.productId));
-    return (catalog || []).filter(p =>
-      p.availabilityStatus === 'available'
-      && p.isAvailable
-      && Boolean(p.categoryId && p.categoryName)
-      && !cartIds.has(p.id)
-    ).slice(0, 8);
-  });
-
-  // Fallback for the one case the storefront catalogue can't cover — landing on
-  // checkout without it (a shared/deep link). Fetched once; the seeded list above
-  // is left untouched otherwise.
-  useEffect(() => {
-    if (catalog && catalog.length > 0) return;
-    if (!storeId) return;
-    let cancelled = false;
-    storeApi.getProducts(undefined, storeId).then(r => {
-      if (cancelled) return;
-      const cartIds = new Set(useCartStore.getState().items.map(i => i.productId));
-      setSuggestions((r.data.data || []).filter(p =>
-        p.availabilityStatus === 'available'
-        && p.isAvailable
-        && Boolean(p.categoryId && p.categoryName)
-        && !cartIds.has(p.id)
-      ).slice(0, 8));
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [storeId, catalog]);
-
-  const visibleSuggestions = suggestions.filter(product =>
-    product.availabilityStatus === 'available'
-    && product.isAvailable
-    && Boolean(product.categoryId && product.categoryName)
-  );
 
   const defaultAddr = getDefaultAddress();
 
@@ -578,6 +532,34 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
 
   // Campaign / coupon
   const cartSubtotal = subtotal(); // early calc for useEffect
+
+  // "You may also like" — reactive: re-fetches whenever the cart changes so the
+  // row always reflects what the recommendation engine thinks is most relevant
+  // given the current basket and free-delivery gap.
+  const [suggestions, setSuggestions] = useState<RecommendationResult['products']>([]);
+
+  useEffect(() => {
+    const resolvedStoreId = storeId || SHAPOORJI_ZONE.storeId;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const cartItems = useCartStore.getState().items.map(i => ({ productId: i.productId }));
+      const resolvedGuestPhone = !isLoggedIn && isValidIndianMobile(guestPhone)
+        ? guestPhone.replace(/\D/g, '')
+        : undefined;
+      recommendationApi.get(resolvedStoreId, cartItems, cartSubtotal, resolvedGuestPhone).then(r => {
+        if (cancelled) return;
+        const data = r.data.data;
+        setSuggestions(data.products || []);
+      }).catch(() => {});
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [storeId, cartSubtotal, items.length, isLoggedIn, guestPhone]);
+
+  const visibleSuggestions = suggestions.filter(product =>
+    product.availabilityStatus === 'available'
+    && product.isAvailable
+    && Boolean(product.categoryId && product.categoryName)
+  );
   const [eligibleCampaigns, setEligibleCampaigns] = useState<any[]>([]);
   const [appliedCampaign, setLocalAppliedCampaign] = useState<any | null>(null);
   const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
@@ -1124,12 +1106,8 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
             </div>
           </div>
 
-          {/* ── You may also like ── */}
-          {/* Hidden on iOS: WebKit fails to repaint the sticky "To pay" bar after
-              an ADD tap here — the cart updates but the painted total stays stale
-              until the next touch, so iOS users see a wrong amount. Android and
-              desktop are unaffected. Never show a total we can't trust. */}
-          {!isIOSDevice() && visibleSuggestions.length > 0 && (
+          {/* ── You may also like / Add ₹X for free delivery ── */}
+          {visibleSuggestions.length > 0 && (
             <div>
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">You may also like</p>
               {/* No scroll-snap here: iOS Safari swallows taps on buttons inside a
@@ -1454,6 +1432,22 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
                 <span className="text-sm font-bold text-gray-900 dark:text-white">Total</span>
                 <span className="text-base font-extrabold text-gray-900 dark:text-white">₹{total.toFixed(0)}</span>
               </div>
+              {freeAbove > 0 && deliveryCharge > 0 && !freeDeliveryUnlocked && (
+                <div className="rounded-xl bg-gokez-50 dark:bg-gokez-900/10 px-3 py-2">
+                  <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gokez-800 dark:text-gokez-300">
+                    <span className="flex items-center gap-1">
+                      <span aria-hidden="true">🛵</span> Free delivery at ₹{freeAbove.toFixed(0)}
+                    </span>
+                    <span>₹{freeDeliveryRemaining.toFixed(0)} away</span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-gokez-100 dark:bg-gokez-900/40" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(freeDeliveryProgress * 100)} aria-label="Progress toward free delivery">
+                    <div
+                      className="h-full rounded-full bg-gokez-500 transition-[width] duration-300 ease-out"
+                      style={{ width: `${Math.max(6, freeDeliveryProgress * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1461,7 +1455,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, catalog, onB
       </form>
 
       {/* ── Sticky address + Place Order footer ── */}
-      <div className="checkout-sticky-footer sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
+      <div className="checkout-sticky-footer sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800" style={{ transform: 'translateZ(0)', willChange: 'transform' }}>
         <div className="max-w-lg mx-auto">
           {/* Address row — the same control as the account page, opens the sheet */}
           <div className="px-3 pt-1">

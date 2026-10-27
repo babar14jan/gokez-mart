@@ -421,6 +421,22 @@ export const suggestionApi = {
   }) => api.post<{ success: boolean; data: { id: string } }>('/suggestions', data),
 };
 
+// ── Recommendations ─────────────────────────────────────────────────────────
+export interface RecommendationResult {
+  mode: 'free_delivery' | 'discovery';
+  remainingForFreeDelivery: number;
+  freeDeliveryThreshold: number;
+  deliveryCharge: number;
+  products: Product[];
+}
+
+export const recommendationApi = {
+  get: (storeId: string, cartItems: Array<{ productId: string }>, cartSubtotal: number, guestPhone?: string) =>
+    api.post<{ success: boolean; data: RecommendationResult }>('/recommendations', {
+      storeId, cartItems, cartSubtotal, guestPhone: guestPhone || undefined,
+    }),
+};
+
 // ── Campaigns (public) ────────────────────────────────────────────────────────────────────────────────
 export const campaignApi = {
   /** Pre-login welcome teaser. Includes coupon-code offers; grants no authority. */
