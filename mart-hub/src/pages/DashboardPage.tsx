@@ -8,7 +8,7 @@ import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
 
-type Range = 'today' | '7d' | '30d' | 'custom' | 'all';
+type Range = 'today' | 'yesterday' | 'custom' | 'all';
 
 const ROLE_MESSAGES: Record<string, string> = {
   super_admin:    'Here\u2019s the overview across your stores.',
@@ -45,9 +45,8 @@ const toDateStr = (d: Date) =>
    local day instead of losing the early hours to a timezone shift. */
 function rangeBounds(r: Range, from: string, to: string): { start: Date | null; end: Date | null } {
   const now = new Date();
-  if (r === 'today') return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate()), end: null };
-  if (r === '7d')    return { start: new Date(now.getTime() - 7 * 86400000), end: null };
-  if (r === '30d')   return { start: new Date(now.getTime() - 30 * 86400000), end: null };
+  if (r === 'today')     return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate()), end: null };
+  if (r === 'yesterday') return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1), end: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999) };
   if (r === 'custom') return {
     start: from ? new Date(`${from}T00:00:00`) : null,
     end:   to   ? new Date(`${to}T23:59:59.999`) : null,
@@ -56,11 +55,10 @@ function rangeBounds(r: Range, from: string, to: string): { start: Date | null; 
 }
 
 const RANGES: { id: Range; label: string }[] = [
-  { id: 'today', label: 'Today' },
-  { id: '7d',    label: '7 Days' },
-  { id: '30d',   label: '30 Days' },
-  { id: 'all',   label: 'All' },
-  { id: 'custom',label: 'Custom' },
+  { id: 'today',     label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'all',       label: 'All' },
+  { id: 'custom',    label: 'Custom' },
 ];
 
 export default function DashboardPage() {
