@@ -22,6 +22,7 @@ router.put('/auth/addresses/:id',       authenticateCustomer, ctrl.customerUpdat
 router.delete('/auth/addresses/:id',    authenticateCustomer, ctrl.customerDeleteAddress);
 router.put('/auth/addresses/:id/default', authenticateCustomer, ctrl.customerSetDefaultAddress);
 // ── Public ────────────────────────────────────────────────────────────────────
+router.post('/recommendations',    authenticateCustomerIfPresent, ctrl.getRecommendations);
 router.get('/stores',              ctrl.getStores);
 router.get('/zones',               ctrl.getZones);
 router.get('/categories',          ctrl.getCategories);

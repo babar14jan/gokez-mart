@@ -30,6 +30,7 @@ import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.ser
 import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
 import { CatalogService } from '../services/catalog.service';
+import { RecommendationService } from '../services/recommendation.service';
 import { evaluateStoreOpen, parseIstLocalDateTime } from '../utils/storeHours';
 import { trackStream } from '../utils/sse';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
@@ -2399,4 +2400,35 @@ export const validateCouponCode = asyncHandler(async (req: CustomerRequest, res:
   } catch (e: any) {
     res.status(400).json({ success: false, error: e.message });
   }
+});
+
+// ── Cart-aware recommendations ────────────────────────────────────────────────
+// POST so the cart items are in the body, not a query string.
+// Reads free_delivery_above, delivery_charge and min_order_amount from the
+// existing Hub settings — never hardcoded.
+export const getRecommendations = asyncHandler(async (req: Request, res: Response) => {
+  const { storeId, cartItems, cartSubtotal, guestPhone } = req.body;
+  const resolvedStoreId = (storeId as string) || SHAPOORJI_ID;
+  if (!Array.isArray(cartItems)) {
+    res.status(400).json({ success: false, error: 'cartItems array required' }); return;
+  }
+  const subtotal = parseFloat(cartSubtotal) || 0;
+  const customerId = (req as any).customer?.id ?? null;
+  // A guest who has typed their phone gets history-based personalisation too.
+  // Validated to a 10-digit Indian mobile before use.
+  const cleanGuestPhone = typeof guestPhone === 'string'
+    ? guestPhone.replace(/\D/g, '')
+    : null;
+  const resolvedGuestPhone = !customerId && /^[6-9]\d{9}$/.test(cleanGuestPhone || '')
+    ? cleanGuestPhone
+    : null;
+  const result = await RecommendationService.getRecommendations(
+    resolvedStoreId,
+    cartItems,
+    subtotal,
+    customerId,
+    resolvedGuestPhone,
+  );
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, data: result });
 });
