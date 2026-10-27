@@ -3,10 +3,9 @@ import { AlertTriangle, Filter, Repeat2, TrendingDown, UserPlus } from 'lucide-r
 import { customerLeadsApi } from '../services/api';
 import type { FunnelRange, FunnelSummary } from '../services/api';
 
-const RANGES: Array<{ id: FunnelRange; label: string }> = [
+const RANGES: Array<{ id: FunnelRange | 'yesterday'; label: string }> = [
   { id: 'today', label: 'Today' },
-  { id: '7d', label: '7 days' },
-  { id: '30d', label: '30 days' },
+  { id: 'yesterday', label: 'Yesterday' },
   { id: 'all', label: 'All' },
   { id: 'custom', label: 'Custom' },
 ];
@@ -34,6 +33,16 @@ const todayInIst = () => {
   const parts = new Intl.DateTimeFormat('en', {
   timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+};
+
+const yesterdayInIst = () => {
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 86400000);
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(yesterday);
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
   return `${value('year')}-${value('month')}-${value('day')}`;
 };
@@ -112,10 +121,15 @@ const stopMax = Math.max(1, ...(canonical?.journey?.stopPoints ?? []).map(s => s
               if (item.id === 'custom' && (!from || !to)) {
                 const today = todayInIst();
                 setDates(today, today);
+              } else if (item.id === 'yesterday') {
+                const y = yesterdayInIst();
+                setDates(y, y);
+                setRange('custom' as FunnelRange);
+                return;
               }
-              setRange(item.id);
+              setRange(item.id as FunnelRange);
             }}
-              className={`min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors sm:flex-none ${range === item.id ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>
+              className={`min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors sm:flex-none ${item.id === 'yesterday' ? (range === 'custom' && from === yesterdayInIst() && to === yesterdayInIst() ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700') : (range === item.id ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700')}`}>
               {item.label}
             </button>
           ))}

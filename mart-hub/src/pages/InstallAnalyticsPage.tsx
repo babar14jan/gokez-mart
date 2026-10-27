@@ -2,12 +2,11 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Smartphone, MonitorSmartphone, CheckCircle, XCircle, HelpCircle, Trash2, Users, Share2 } from 'lucide-react';
 import { installAnalyticsApi } from '../services/api';
 
-type DateRange = 'today' | '7d' | '30d' | 'all' | 'custom';
+type DateRange = 'today' | 'yesterday' | 'all' | 'custom';
 
 const RANGES: { key: DateRange; label: string }[] = [
   { key: 'today', label: 'Today' },
-  { key: '7d', label: '7D' },
-  { key: '30d', label: '30D' },
+  { key: 'yesterday', label: 'Yesterday' },
   { key: 'all', label: 'All' },
   { key: 'custom', label: 'Custom' },
 ];
@@ -31,9 +30,12 @@ function rangeBounds(range: DateRange, customFrom: string, customTo: string): { 
   if (range === 'all') return {};
   if (range === 'custom') return { from: dayBound(customFrom, false), to: dayBound(customTo, true) };
   const now = new Date();
+  if (range === 'yesterday') {
+    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+    return { from: from.toISOString(), to: to.toISOString() };
+  }
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (range === '7d') from.setDate(from.getDate() - 6);
-  if (range === '30d') from.setDate(from.getDate() - 29);
   return { from: from.toISOString(), to: now.toISOString() };
 }
 
@@ -69,7 +71,7 @@ function StatCard({ label, value, sub, icon, gradient = 'from-emerald-400 to-eme
 }
 
 export default function InstallAnalyticsPage() {
-  const [range, setRange] = useState<DateRange>('7d');
+  const [range, setRange] = useState<DateRange>('today');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState<InstallSummary>(EMPTY);

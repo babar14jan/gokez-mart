@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck, ShoppingBag, Users, Search, X, ChevronDown,
-  TrendingUp, Repeat, UserPlus, ClipboardList,
+  TrendingUp, Repeat, UserPlus, ClipboardList, Calendar,
 } from 'lucide-react';
-import { customersApi, type CustomerSort, type CustomerStats } from '../services/api';
+import { customersApi, type CustomerSort, type CustomerStats, type SummaryRange } from '../services/api';
 import PageSkeleton from '../components/PageSkeleton';
 
 interface Customer {
@@ -29,6 +29,9 @@ interface CustomerPagination {
 
 const PAGE_SIZE = 50;
 
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const SORT_OPTIONS: { id: CustomerSort; label: string }[] = [
   { id: 'orders_desc', label: 'Most orders' },
   { id: 'spend_desc', label: 'Highest spend' },
@@ -40,6 +43,13 @@ const EMPTY_STATS: CustomerStats = {
   totalCustomers: 0, totalRevenue: 0, totalOrders: 0,
   repeatCustomers: 0, newCustomers: 0, avgOrders: 0,
 };
+
+const RANGES: { id: SummaryRange; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'all', label: 'All' },
+  { id: 'custom', label: 'Custom' },
+];
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -55,6 +65,9 @@ export default function CustomersPage() {
   const [stats, setStats] = useState<CustomerStats>(EMPTY_STATS);
   const [pagination, setPagination] = useState<CustomerPagination>({ offset: 0, total: 0, hasMore: false });
   const [error, setError] = useState('');
+  const [range, setRange] = useState<SummaryRange>('all');
+  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
+  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
 
   // Debounce the search text so we don't fire a request on every keystroke.
   useEffect(() => {
@@ -66,7 +79,7 @@ export default function CustomersPage() {
     let cancelled = false;
     setError('');
     setRefreshing(true);
-    customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: 0 })
+    customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: 0, range, from: range === 'custom' ? customFrom : undefined, to: range === 'custom' ? customTo : undefined })
       .then(r => {
         if (cancelled) return;
         setCustomers(r.data.data || []);
@@ -77,14 +90,14 @@ export default function CustomersPage() {
       .catch(() => { if (!cancelled) setError('Could not load customers. Please try again.'); })
       .finally(() => { if (!cancelled) { setRefreshing(false); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [activeTab, sort, debouncedSearch]);
+  }, [activeTab, sort, debouncedSearch, range, customFrom, customTo]);
 
   const loadMore = async () => {
     if (loadingMore || !pagination.hasMore) return;
     setLoadingMore(true);
     setError('');
     try {
-      const response = await customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: customers.length });
+      const response = await customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: customers.length, range, from: range === 'custom' ? customFrom : undefined, to: range === 'custom' ? customTo : undefined });
       setCustomers(current => [...current, ...(response.data.data || [])]);
       setCounts(response.data.counts || counts);
       setStats(response.data.stats || stats);
@@ -116,6 +129,33 @@ export default function CustomersPage() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500 dark:text-slate-400">Separate OTP-signed-in customers from direct guest checkout customers.</p>
+
+      {/* Date range tabs */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {RANGES.map(r => (
+          <button key={r.id} onClick={() => {
+            if (r.id === 'yesterday') { setRange('yesterday'); return; }
+            setRange(r.id);
+          }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              range === r.id || (r.id === 'yesterday' && range === 'yesterday')
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
+            }`}>
+            {r.id === 'custom' && <Calendar className="w-3 h-3" />}
+            {r.label}
+          </button>
+        ))}
+        {range === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+            <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
+            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+          </div>
+        )}
+      </div>
 
       {/* Analytics KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-stretch">

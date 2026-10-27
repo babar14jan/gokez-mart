@@ -6,12 +6,17 @@ import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
 
 type Tab = 'revenue' | 'orders' | 'products';
-type DateRange = 'today' | 'week' | 'month' | 'last_month' | 'all' | 'custom';
+type DateRange = 'today' | 'yesterday' | 'all' | 'custom';
 
 const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
 
 const mapDateRange = (r: DateRange): SummaryRange =>
-  r === 'today' ? 'today' : r === 'week' ? '7d' : r === 'month' ? '30d' : r === 'last_month' ? 'last_month' : r === 'all' ? 'all' : 'custom';
+  r === 'today' ? 'today' : r === 'all' ? 'all' : 'custom';
+
+function getYesterdayStr() {
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  return toDateStr(d);
+}
 
 const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, delivered: 0, cancelled: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
 
@@ -99,9 +104,7 @@ function DateSelector({ range, setRange, customFrom, setCustomFrom, customTo, se
 }) {
   const tabs: { id: DateRange; label: string }[] = [
     { id: 'today', label: 'Today' },
-    { id: 'week', label: '7D' },
-    { id: 'month', label: '30D' },
-    { id: 'last_month', label: 'Last Month' },
+    { id: 'yesterday', label: 'Yesterday' },
     { id: 'all', label: 'All' },
     { id: 'custom', label: 'Custom' },
   ];
@@ -131,11 +134,9 @@ function getDateBounds(range: DateRange, customFrom: string, customTo: string): 
     const end = new Date(start.getTime() + 86400000 - 1);
     return { start, end };
   }
-  if (range === 'week') return { start: new Date(now.getTime() - 7 * 86400000), end: null };
-  if (range === 'month') return { start: new Date(now.getTime() - 30 * 86400000), end: null };
-  if (range === 'last_month') {
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+  if (range === 'yesterday') {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const end = new Date(start.getTime() + 86400000 - 1);
     return { start, end };
   }
   if (range === 'custom' && customFrom && customTo) {
@@ -168,20 +169,18 @@ function getDays(range: DateRange, customFrom: string, customTo: string): Date[]
 
 
 // ── Revenue Tab ───────────────────────────────────────────────────────────────
-function RevenueTab({ orders }: { orders: any[] }) {
-  const [range, setRange] = useState<DateRange>('month');
-  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
-  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; range: DateRange; customFrom: string; customTo: string }) {
   const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
   const paramsRef = useLatestParams(range, customFrom, customTo);
 
   const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
+    const yesterday = getYesterdayStr();
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
-      from: p.customFrom || undefined,
-      to: p.customTo || undefined,
+      from: p.range === 'yesterday' ? yesterday : (p.customFrom || undefined),
+      to: p.range === 'yesterday' ? yesterday : (p.customTo || undefined),
     }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
   }, [paramsRef]);
@@ -226,8 +225,6 @@ function RevenueTab({ orders }: { orders: any[] }) {
 
   return (
     <div className="space-y-6">
-      <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
-
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <SummaryCard label="Delivered Revenue" value={`₹${Math.round(totalRevenue).toLocaleString('en-IN')}`} sub={`${delivered.length} delivered orders`} icon={<Wallet className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
         <SummaryCard label="Avg Order Value" value={`₹${summary.avgOrderValue.toFixed(0)}`} sub="per delivered order" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
@@ -288,20 +285,18 @@ function RevenueTab({ orders }: { orders: any[] }) {
 
 
 // ── Orders Tab ────────────────────────────────────────────────────────────────
-function OrdersTab({ orders }: { orders: any[] }) {
-  const [range, setRange] = useState<DateRange>('month');
-  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
-  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; range: DateRange; customFrom: string; customTo: string }) {
   const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
   const paramsRef = useLatestParams(range, customFrom, customTo);
 
   const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
+    const yesterday = getYesterdayStr();
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
-      from: p.customFrom || undefined,
-      to: p.customTo || undefined,
+      from: p.range === 'yesterday' ? yesterday : (p.customFrom || undefined),
+      to: p.range === 'yesterday' ? yesterday : (p.customTo || undefined),
     }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
   }, [paramsRef]);
@@ -346,8 +341,6 @@ function OrdersTab({ orders }: { orders: any[] }) {
 
   return (
     <div className="space-y-6">
-      <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
-
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <SummaryCard label="Total Orders" value={summary.placed} sub="in selected period" icon={<ShoppingBag className="w-4 h-4" />} gradient="from-slate-500 to-slate-600" />
         <SummaryCard label="Delivered" value={summary.delivered} sub={`${completionRate}% completion`} icon={<CheckCircle className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
@@ -404,10 +397,7 @@ function OrdersTab({ orders }: { orders: any[] }) {
 
 
 // ── Products Tab ──────────────────────────────────────────────────────────────
-function ProductsTab({ orders, products }: { orders: any[]; products: any[] }) {
-  const [range, setRange] = useState<DateRange>('month');
-  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
-  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+function ProductsTab({ orders, products, range, customFrom, customTo }: { orders: any[]; products: any[]; range: DateRange; customFrom: string; customTo: string }) {
 
   // Units and revenue count only successfully delivered orders, so the figures
   // reflect products actually sold rather than baskets cancelled after checkout.
@@ -439,8 +429,6 @@ function ProductsTab({ orders, products }: { orders: any[]; products: any[] }) {
 
   return (
     <div className="space-y-6">
-      <DateSelector range={range} setRange={setRange} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} />
-
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="page-card">
           <div className="page-card-header">
@@ -494,6 +482,9 @@ export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('revenue');
   const [data, setData] = useState({ orders: [], products: [] });
   const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<DateRange>('today');
+  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
+  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
 
   useEffect(() => {
     Promise.all([
@@ -529,9 +520,16 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {tab === 'revenue'   && <RevenueTab   orders={data.orders} />}
-      {tab === 'orders'    && <OrdersTab    orders={data.orders} />}
-      {tab === 'products'  && <ProductsTab  orders={data.orders} products={data.products} />}
+      {/* Single shared date filter — synced across all tabs */}
+      <DateSelector
+        range={range} setRange={setRange}
+        customFrom={customFrom} setCustomFrom={setCustomFrom}
+        customTo={customTo} setCustomTo={setCustomTo}
+      />
+
+      {tab === 'revenue'   && <RevenueTab   orders={data.orders} range={range} customFrom={customFrom} customTo={customTo} />}
+      {tab === 'orders'    && <OrdersTab    orders={data.orders} range={range} customFrom={customFrom} customTo={customTo} />}
+      {tab === 'products'  && <ProductsTab  orders={data.orders} products={data.products} range={range} customFrom={customFrom} customTo={customTo} />}
     </div>
   );
 }
