@@ -20,7 +20,7 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
 
   return (
     <nav className="mobile-bottom-nav relative z-40 border-t border-gray-200 bg-[#f7f8fa] dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto flex h-16 max-w-lg items-stretch justify-between px-5">
+      <div className="mx-auto flex h-16 max-w-lg items-center justify-between px-5">
         {tabs.map(({ id, label, Icon }, index) => {
           const isActive = active === id;
           return (
@@ -30,9 +30,9 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
                   type="button"
                   onClick={onOpenSearch}
                   aria-label="Fresh products"
-                  className="flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
+                  className="-mt-4 flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
                 >
-                  <img src="/fresh_icon.webp" alt="" width={48} height={48} {...{ fetchpriority: 'high' }} decoding="async" className="nav-veg-icon object-contain" />
+                  <img src="/fresh_icon.webp" alt="" width={52} height={52} {...{ fetchpriority: 'high' }} decoding="async" className="nav-veg-icon object-contain" />
                 </button>
               )}
               <button

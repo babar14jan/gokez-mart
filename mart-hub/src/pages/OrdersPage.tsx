@@ -15,7 +15,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
 
-type DateRange = 'today' | 'week' | 'month' | 'custom' | 'all';
+type DateRange = 'today' | 'yesterday' | 'custom' | 'all';
 type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
 
 const toDateStr = (d: Date) =>
@@ -121,8 +121,7 @@ const STATUS_TABS: { id: StatusFilter; label: string; dot: string }[] = [
 
 const DATE_TABS: { id: DateRange; label: string }[] = [
   { id: 'today', label: 'Today' },
-  { id: 'week',  label: '7 Days' },
-  { id: 'month', label: '30 Days' },
+  { id: 'yesterday',  label: 'Yesterday' },
   { id: 'all',   label: 'All' },
   { id: 'custom',label: 'Custom' },
 ];
@@ -441,8 +440,7 @@ export default function OrdersPage() {
     const now = new Date();
     const start =
       dateRange === 'today'  ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) :
-      dateRange === 'week'   ? new Date(now.getTime() - 7 * 86400000) :
-      dateRange === 'month'  ? new Date(now.getTime() - 30 * 86400000) :
+      dateRange === 'yesterday' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1) :
       dateRange === 'custom' && customFrom ? new Date(`${customFrom}T00:00:00`) : null;
     // Custom end is the whole local day, so a single-day pick isn't cut off at
     // 00:00 and a range ending "today" includes today's orders.
