@@ -32,6 +32,8 @@ const PAGE_SIZE = 50;
 const toDateStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+const yesterdayStr = () => toDateStr(new Date(new Date().setDate(new Date().getDate() - 1)));
+
 const SORT_OPTIONS: { id: CustomerSort; label: string }[] = [
   { id: 'orders_desc', label: 'Most orders' },
   { id: 'spend_desc', label: 'Highest spend' },
@@ -44,7 +46,9 @@ const EMPTY_STATS: CustomerStats = {
   repeatCustomers: 0, newCustomers: 0, avgOrders: 0,
 };
 
-const RANGES: { id: SummaryRange; label: string }[] = [
+type CustomerRange = SummaryRange | 'yesterday';
+
+const RANGES: { id: CustomerRange; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'yesterday', label: 'Yesterday' },
   { id: 'all', label: 'All' },
@@ -65,9 +69,16 @@ export default function CustomersPage() {
   const [stats, setStats] = useState<CustomerStats>(EMPTY_STATS);
   const [pagination, setPagination] = useState<CustomerPagination>({ offset: 0, total: 0, hasMore: false });
   const [error, setError] = useState('');
-  const [range, setRange] = useState<SummaryRange>('all');
+  const [range, setRange] = useState<CustomerRange>('all');
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+
+  // 'yesterday' isn't a SummaryRange; the API takes 'custom' plus explicit from/to.
+  const rangeParams = () => ({
+    range: range === 'yesterday' ? 'custom' : range,
+    from: range === 'yesterday' ? yesterdayStr() : range === 'custom' ? customFrom : undefined,
+    to: range === 'yesterday' ? yesterdayStr() : range === 'custom' ? customTo : undefined,
+  });
 
   // Debounce the search text so we don't fire a request on every keystroke.
   useEffect(() => {
@@ -79,7 +90,7 @@ export default function CustomersPage() {
     let cancelled = false;
     setError('');
     setRefreshing(true);
-    customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: 0, range, from: range === 'custom' ? customFrom : undefined, to: range === 'custom' ? customTo : undefined })
+    customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: 0, ...rangeParams() })
       .then(r => {
         if (cancelled) return;
         setCustomers(r.data.data || []);
@@ -97,7 +108,7 @@ export default function CustomersPage() {
     setLoadingMore(true);
     setError('');
     try {
-      const response = await customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: customers.length, range, from: range === 'custom' ? customFrom : undefined, to: range === 'custom' ? customTo : undefined });
+      const response = await customersApi.getAll({ identity: activeTab, search: debouncedSearch, sort, limit: PAGE_SIZE, offset: customers.length, ...rangeParams() });
       setCustomers(current => [...current, ...(response.data.data || [])]);
       setCounts(response.data.counts || counts);
       setStats(response.data.stats || stats);
@@ -135,7 +146,7 @@ export default function CustomersPage() {
         {RANGES.map(r => (
           <button key={r.id} onClick={() => setRange(r.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              range === r.id || (r.id === 'yesterday' && range === 'yesterday')
+              range === r.id
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
             }`}>
