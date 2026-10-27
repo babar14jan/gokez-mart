@@ -215,7 +215,7 @@ export interface CustomerStats {
 }
 
 export const customersApi = {
-  getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; search?: string; sort?: CustomerSort; limit?: number; offset?: number }) =>
+  getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; search?: string; sort?: CustomerSort; limit?: number; offset?: number; range?: SummaryRange; from?: string; to?: string }) =>
     api.get('/admin/customers', { params }),
   getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number }, opts?: FetchOpts) =>
     api.get('/admin/analytics/customers', { params, fresh: opts?.fresh }),
