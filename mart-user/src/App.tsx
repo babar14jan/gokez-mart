@@ -1261,7 +1261,6 @@ export default function App() {
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
-              catalog={products}
               onBack={handleCheckoutClose}
               onHome={() => { setCatalogSearchOpen(false); setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
@@ -1276,7 +1275,6 @@ export default function App() {
               settings={settings}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
-              catalog={products}
               onBack={handleCheckoutClose}
               onHome={() => { setCatalogSearchOpen(false); setCheckoutActive(false); setView('home'); }}
               onLogin={(campaign?: any) => handleCheckoutLogin(campaign)}
