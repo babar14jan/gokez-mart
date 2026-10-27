@@ -133,10 +133,7 @@ export default function CustomersPage() {
       {/* Date range tabs */}
       <div className="flex items-center gap-2 flex-wrap">
         {RANGES.map(r => (
-          <button key={r.id} onClick={() => {
-            if (r.id === 'yesterday') { setRange('yesterday'); return; }
-            setRange(r.id);
-          }}
+          <button key={r.id} onClick={() => setRange(r.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               range === r.id || (r.id === 'yesterday' && range === 'yesterday')
                 ? 'bg-emerald-500 text-white shadow-sm'
