@@ -108,7 +108,13 @@ export default function DashboardPage() {
     const custom = range === 'custom';
     if (custom && (!customFrom || !customTo)) return;
     const id = ++reqId.current;
-    const params = { storeId: getActiveStoreId(), range, from: custom ? customFrom : undefined, to: custom ? customTo : undefined };
+    const yesterday = toDateStr(new Date(new Date().setDate(new Date().getDate() - 1)));
+    const params = {
+      storeId: getActiveStoreId(),
+      range: (range === 'yesterday' ? 'custom' : range) as import('../services/api').SummaryRange,
+      from: range === 'yesterday' ? yesterday : (custom ? customFrom : undefined),
+      to: range === 'yesterday' ? yesterday : (custom ? customTo : undefined),
+    };
     ordersApi.getSummary(params, { fresh })
       .then(r => { if (id === reqId.current) setSummary(r.data.data); })
       .catch(() => {});
