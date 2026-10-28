@@ -1127,7 +1127,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
           {/* ── You may also like / Add ₹X for free delivery ── */}
           {visibleSuggestions.length > 0 && (
-            <div>
+            <div className="suggestions-enter">
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">You may also like</p>
               {/* No scroll-snap here: iOS Safari swallows taps on buttons inside a
                   snap-mandatory horizontal scroller (the ADD tap never becomes a

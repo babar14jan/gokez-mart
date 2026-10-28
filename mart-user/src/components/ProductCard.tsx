@@ -6,6 +6,7 @@ import { productLabelParts } from '../utils/productLabel';
 import ProductDetailSheet from './ProductDetailSheet';
 import CartQuantityControl from './CartQuantityControl';
 import SmartImage from './SmartImage';
+import { useFinePointer } from '../utils/useFinePointer';
 
 interface ProductCardProps {
   product: Product;
@@ -21,6 +22,11 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
   const qty = cartItem?.quantity || 0;
   const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
   const [showDetail, setShowDetail] = useState(false);
+  // Touch devices emulate :hover on tap and keep it until the next tap, which
+  // made the card lift/zoom while pressing ADD and snap back on release — the
+  // "shake"/"blink" feedback. Only apply hover motion where a real pointer can
+  // hover; touch keeps the original press-to-scale feel.
+  const finePointer = useFinePointer();
 
   const discountedPrice = product.discountPercent > 0
     ? Math.round(product.price * (1 - product.discountPercent / 100))
@@ -33,7 +39,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
 
   return (
     <>
-      <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0 dark:border-slate-700 dark:bg-slate-800">
+      <div className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card transition-[transform,box-shadow] duration-200 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 ${finePointer ? 'hover:-translate-y-0.5 hover:shadow-lift' : ''}`}>
         <button
           type="button"
           onClick={openDetail}
@@ -45,7 +51,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
             src={product.photoUrl}
             alt={product.name}
             className="h-full w-full"
-            imgClassName={`object-cover transition-transform duration-300 group-hover:scale-[1.03] ${isOutOfStock ? 'opacity-40' : ''}`}
+            imgClassName={`object-cover ${finePointer ? 'transition-transform duration-300 group-hover:scale-[1.03]' : ''} ${isOutOfStock ? 'opacity-40' : ''}`}
             fallback={
               <div className="flex h-full w-full items-center justify-center bg-cream-50 text-gokez-300 dark:bg-slate-800 dark:text-slate-500">
                 <Leaf className="h-8 w-8" aria-hidden="true" />

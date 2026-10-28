@@ -59,6 +59,17 @@ html, body { overscroll-behavior-y: none; }
   animation: sheet-enter 240ms ease-out both;
 }
 
+/* Recommendation cards arrive after their fetch resolves; ease them in instead
+   of popping into the checkout layout. Neutralised by the reduced-motion rule. */
+@keyframes suggestions-enter {
+  from { opacity: 0; transform: translateY(0.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.suggestions-enter {
+  animation: suggestions-enter 320ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
