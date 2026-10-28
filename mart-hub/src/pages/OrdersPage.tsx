@@ -723,8 +723,10 @@ export default function OrdersPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-shrink-0">
-                      {!TERMINAL.includes(order.status) && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {TERMINAL.includes(order.status) ? (
+                        <JourneyButton onClick={e => { e.stopPropagation(); setDetailsOrder(order); }} />
+                      ) : (
                         <button onClick={e => { e.stopPropagation(); window.open(`tel:${order.guestPhone}`); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
                           <Phone className="w-3.5 h-3.5" />
@@ -789,6 +791,7 @@ export default function OrdersPage() {
 
                 {/* Progress bar — active orders only */}
                 {isActive && <OrderProgress status={order.status} />}
+                {!TERMINAL.includes(order.status) && (
                 <div className="flex items-center justify-between gap-2 px-4 py-3">
                   <JourneyButton onClick={e => { e.stopPropagation(); setDetailsOrder(order); }} />
                   <div className="flex items-center gap-1.5">
@@ -815,6 +818,7 @@ export default function OrdersPage() {
                     )}
                   </div>
                 </div>
+                )}
                 {['store_owner', 'store_manager'].includes(role || '') && order.status !== 'pending' && order.statusEvents?.length > 0 && (
                   <p className="px-4 pb-2 text-[10px] text-gray-500 dark:text-slate-400 break-words">
                     Current state set by {order.statusEvents[order.statusEvents.length - 1].actorName}

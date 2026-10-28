@@ -3,6 +3,23 @@ import { readTrackingTokens } from '../utils/guestTracking';
 
 const SW_URL = '/sw.js';
 
+// Some browsers (notably in-app webviews and PWAs whose worker failed to
+// activate) never resolve `serviceWorker.ready`, and iOS can leave the native
+// permission promise pending indefinitely. Without a ceiling the "Enable"
+// button sits on "Turning on..." forever, so every async step gets a deadline.
+const SUBSCRIBE_TIMEOUT_MS = 20000;
+const PERMISSION_TIMEOUT_MS = 30000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -90,8 +107,11 @@ export async function getLocationPermission(): Promise<'granted' | 'denied' | 'p
 // Request notification permission and subscribe
 export async function requestNotificationPermission(): Promise<'granted' | 'denied' | 'default'> {
   if (!('Notification' in window)) return 'denied';
-  const permission = await Notification.requestPermission();
-  return permission;
+  return withTimeout(
+    Notification.requestPermission(),
+    PERMISSION_TIMEOUT_MS,
+    'Notification permission request timed out',
+  );
 }
 
 // Subscribe to push after permission granted.
@@ -114,14 +134,22 @@ export async function subscribeToPush(): Promise<boolean> {
     const publicKey = keyRes.data.data.publicKey;
     if (!publicKey) return false;
 
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await withTimeout(
+      navigator.serviceWorker.ready,
+      SUBSCRIBE_TIMEOUT_MS,
+      'Service worker did not become ready',
+    );
     const existing = await reg.pushManager.getSubscription();
     if (existing) await existing.unsubscribe();
 
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
-    });
+    const sub = await withTimeout(
+      reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+      }),
+      SUBSCRIBE_TIMEOUT_MS,
+      'Push subscription timed out',
+    );
 
     if (authed) {
       await api.post('/push/subscribe/customer', sub.toJSON());

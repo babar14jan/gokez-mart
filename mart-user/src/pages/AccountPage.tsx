@@ -5,7 +5,7 @@ import { authApi, suggestionApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
-import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription } from '../services/push';
+import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription, isPushSupported } from '../services/push';
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
@@ -50,8 +50,12 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const selectedZone = useZoneStore(s => s.selectedZone);
   const locationBusy = useZoneStore(s => s.locating);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
+  const [notificationPermission, setNotificationPermission] = useState(
+    isPushSupported() ? getNotificationPermission() : 'unsupported',
+  );
   const [notificationSubscribed, setNotificationSubscribed] = useState(false);
+  const [notificationsBusy, setNotificationsBusy] = useState(false);
+  const [notificationNotice, setNotificationNotice] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
   // Offered on phones until the app is actually installed to the home screen.
@@ -165,7 +169,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   }, [suggestOpen]);
 
   useEffect(() => {
-    const refreshNotificationPermission = () => setNotificationPermission(getNotificationPermission());
+    const refreshNotificationPermission = () => setNotificationPermission(
+      isPushSupported() ? getNotificationPermission() : 'unsupported',
+    );
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') refreshNotificationPermission();
     };
@@ -241,18 +247,55 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     // Tapping the toggle is the "direct enable" path: request permission (or
     // skip the prompt if already granted) and subscribe this device. Guests and
     // members both register for real; subscribeToPush picks the right endpoint.
-    if (notificationPermission === 'granted') {
-      if (notificationSubscribed) {
-        await unsubscribeFromPush();
-        setNotificationSubscribed(false);
-      } else {
-        setNotificationSubscribed(await subscribeToPush());
+    // Every step is guarded so a hung worker or a dismissed prompt can never
+    // leave the switch stuck half-way (which previously needed a second tap).
+    if (notificationsBusy) return;
+    setNotificationsBusy(true);
+    setNotificationNotice('');
+
+    const subscribeWithRetry = async () => {
+      // First attempt can fail while a freshly registered worker is settling or
+      // right after the permission dialog closes; one quiet retry makes the
+      // single tap reliable without asking the customer to toggle again.
+      let subscribed = await subscribeToPush();
+      if (!subscribed) {
+        await new Promise(resolve => setTimeout(resolve, 700));
+        subscribed = await subscribeToPush();
       }
-      return;
+      setNotificationSubscribed(subscribed);
+      if (!subscribed) {
+        setNotificationNotice('Could not enable updates on this device. Please try again.');
+      }
+    };
+
+    try {
+      if (notificationPermission === 'granted') {
+        if (notificationSubscribed) {
+          await unsubscribeFromPush();
+          setNotificationSubscribed(false);
+        } else {
+          await subscribeWithRetry();
+        }
+        return;
+      }
+      if (!isPushSupported()) {
+        setNotificationPermission('unsupported');
+        return;
+      }
+      const permission = await requestNotificationPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        await subscribeWithRetry();
+      } else if (permission === 'denied') {
+        setNotificationNotice('Notifications are blocked. Enable them in your browser settings.');
+      } else {
+        setNotificationNotice('Notifications were not enabled. Try again when you are ready.');
+      }
+    } catch {
+      setNotificationNotice('Turning on notifications took too long. Please try again.');
+    } finally {
+      setNotificationsBusy(false);
     }
-    const permission = await requestNotificationPermission();
-    setNotificationPermission(permission);
-    if (permission === 'granted') setNotificationSubscribed(await subscribeToPush());
   };
 
   const handleShareApp = async () => {
@@ -662,11 +705,14 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             <Bell className="w-4 h-4 text-gokez-500 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <span className="text-[15px] font-semibold text-ink dark:text-slate-200">Order notifications</span>
-              <p className="text-[12px] text-gray-500 dark:text-slate-400">
-                {notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
-                 notificationPermission === 'denied' ? 'Blocked - enable in browser settings' :
-                 notificationPermission === 'unsupported' ? 'Not supported on this browser' :
-                 'Get delivery and order status alerts'}
+              <p className={`text-[12px] ${notificationNotice ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-slate-400'}`}>
+                {notificationsBusy
+                  ? (notificationSubscribed ? 'Turning off…' : 'Turning on…')
+                  : notificationNotice ||
+                    (notificationPermission === 'granted' ? (notificationSubscribed ? 'On - delivery and order alerts' : 'Permission granted - enable alerts') :
+                     notificationPermission === 'denied' ? 'Blocked - enable in browser settings' :
+                     notificationPermission === 'unsupported' ? 'Not supported on this browser' :
+                     'Get delivery and order status alerts')}
               </p>
             </div>
             {notificationPermission === 'denied' ? (
@@ -675,7 +721,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-700 px-2 py-1 rounded-lg">N/A</span>
             ) : (
               <button onClick={handleOrderNotifications} role="switch" aria-checked={notificationSubscribed} aria-label="Toggle order notifications"
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${notificationSubscribed ? 'bg-gokez-700' : 'bg-gray-200 dark:bg-slate-600'}`}>
+                disabled={notificationsBusy}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${notificationSubscribed ? 'bg-gokez-700' : 'bg-gray-200 dark:bg-slate-600'}`}>
                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${notificationSubscribed ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             )}
