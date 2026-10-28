@@ -78,6 +78,12 @@ export function isPushSupported(): boolean {
     && 'PushManager' in window;
 }
 
+// A subscribe cycle briefly unsubscribes the old endpoint before creating the
+// new one. If the success screen checks for a subscription during that window it
+// sees none and wrongly offers the "keep track of this order" prompt to a device
+// that is already enabled. Share the in-flight work so the check can wait for it.
+let inFlightSubscription: Promise<boolean> | null = null;
+
 /**
  * True when this browser already holds an active push subscription. Used so the
  * "keep track of your order" popup never asks a device that is already
@@ -85,6 +91,11 @@ export function isPushSupported(): boolean {
  * yet have no subscription (e.g. a fresh install, or a cleared endpoint).
  */
 export async function hasActivePushSubscription(): Promise<boolean> {
+  if (inFlightSubscription) {
+    try {
+      if (await inFlightSubscription) return true;
+    } catch { /* fall through to the live check */ }
+  }
   try {
     if (!('serviceWorker' in navigator)) return false;
     const reg = await navigator.serviceWorker.getRegistration();
@@ -121,7 +132,17 @@ export async function requestNotificationPermission(): Promise<'granted' | 'deni
 // holds; the backend then pushes to that device for those orders. Registering
 // the guest tokens only happens when the device already holds them (i.e. it has
 // placed or tracked an order), so permission alone never creates a row.
-export async function subscribeToPush(): Promise<boolean> {
+export function subscribeToPush(): Promise<boolean> {
+  if (inFlightSubscription) return inFlightSubscription;
+  const pending = doSubscribeToPush();
+  inFlightSubscription = pending;
+  pending.finally(() => {
+    if (inFlightSubscription === pending) inFlightSubscription = null;
+  }).catch(() => { /* doSubscribeToPush never rejects */ });
+  return pending;
+}
+
+async function doSubscribeToPush(): Promise<boolean> {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
     if (Notification.permission !== 'granted') return false;

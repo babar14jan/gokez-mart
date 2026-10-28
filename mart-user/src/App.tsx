@@ -6,7 +6,7 @@ import type { Category, Product, PublicSettings, HomeSection } from './services/
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
 import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore';
-import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported, hasActivePushSubscription } from './services/push';
+import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported } from './services/push';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
 import StoreClosedCard from './components/StoreClosedCard';
@@ -842,28 +842,19 @@ export default function App() {
 
   useEffect(() => {
     // Offer order updates after a successful order, to guests as well as
-    // members. Show it while push is supported and only when the device is not
-    // already set up for order pushes:
-    //   • permission undecided ('default')            → ask
-    //   • permission granted but no live subscription  → ask (e.g. new install)
-    //   • permission blocked ('denied') or unsupported → never (can't be undone
-    //     in-app; a dead-end popup is worse than none)
+    // members. Only ask when permission is still undecided:
+    //   • 'default'                    → ask
+    //   • 'granted' (toggle already on) → never prompt; the effect above silently
+    //     re-registers the new order token for this device
+    //   • 'denied' or unsupported       → never (can't be undone in-app; a
+    //     dead-end popup is worse than none)
     // No cooling period on the first show; "Not now" is what starts it.
     if (!successData || !isPushSupported()) return;
-    const permission = getNotificationPermission();
-    if (permission !== 'default' && permission !== 'granted') return;
+    if (getNotificationPermission() !== 'default') return;
     if (!isPermissionPromptDue(ORDER_NOTIFICATION_PROMPT_KEY)) return;
 
-    let cancelled = false;
-    (async () => {
-      // Already subscribed: nothing to ask. If granted but not subscribed, fall
-      // through and prompt so the device can be re-registered.
-      if (permission === 'granted' && await hasActivePushSubscription()) return;
-      if (cancelled) return;
-      setPermissionPrompt('order-notifications');
-      setOrderNotificationError('');
-    })();
-    return () => { cancelled = true; };
+    setPermissionPrompt('order-notifications');
+    setOrderNotificationError('');
   }, [isLoggedIn, successData]);
 
   useEffect(() => {
