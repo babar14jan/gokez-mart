@@ -59,6 +59,17 @@ html, body { overscroll-behavior-y: none; }
   animation: sheet-enter 240ms ease-out both;
 }
 
+/* Recommendation cards arrive after their fetch resolves; ease them in instead
+   of popping into the checkout layout. Neutralised by the reduced-motion rule. */
+@keyframes suggestions-enter {
+  from { opacity: 0; transform: translateY(0.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.suggestions-enter {
+  animation: suggestions-enter 320ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -76,8 +87,8 @@ html, body { overscroll-behavior-y: none; }
 /* The centre Fresh icon stays fully contained inside the fixed-height
    navigation row, clear of both the top border and lower safe-area padding. */
 .nav-veg-icon {
-  height: 52px;
-  width: 52px;
+  height: 54px;
+  width: 54px;
 }
 
 /* The checkout footer is a position:sticky child of the scrolling checkout

@@ -6,7 +6,7 @@ import type { Category, Product, PublicSettings, HomeSection } from './services/
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
 import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore';
-import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported, hasActivePushSubscription } from './services/push';
+import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported } from './services/push';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
 import StoreClosedCard from './components/StoreClosedCard';
@@ -842,28 +842,19 @@ export default function App() {
 
   useEffect(() => {
     // Offer order updates after a successful order, to guests as well as
-    // members. Show it while push is supported and only when the device is not
-    // already set up for order pushes:
-    //   • permission undecided ('default')            → ask
-    //   • permission granted but no live subscription  → ask (e.g. new install)
-    //   • permission blocked ('denied') or unsupported → never (can't be undone
-    //     in-app; a dead-end popup is worse than none)
+    // members. Only ask when permission is still undecided:
+    //   • 'default'                    → ask
+    //   • 'granted' (toggle already on) → never prompt; the effect above silently
+    //     re-registers the new order token for this device
+    //   • 'denied' or unsupported       → never (can't be undone in-app; a
+    //     dead-end popup is worse than none)
     // No cooling period on the first show; "Not now" is what starts it.
     if (!successData || !isPushSupported()) return;
-    const permission = getNotificationPermission();
-    if (permission !== 'default' && permission !== 'granted') return;
+    if (getNotificationPermission() !== 'default') return;
     if (!isPermissionPromptDue(ORDER_NOTIFICATION_PROMPT_KEY)) return;
 
-    let cancelled = false;
-    (async () => {
-      // Already subscribed: nothing to ask. If granted but not subscribed, fall
-      // through and prompt so the device can be re-registered.
-      if (permission === 'granted' && await hasActivePushSubscription()) return;
-      if (cancelled) return;
-      setPermissionPrompt('order-notifications');
-      setOrderNotificationError('');
-    })();
-    return () => { cancelled = true; };
+    setPermissionPrompt('order-notifications');
+    setOrderNotificationError('');
   }, [isLoggedIn, successData]);
 
   useEffect(() => {
@@ -894,17 +885,29 @@ export default function App() {
       // skip the native prompt, which would resolve instantly anyway, and go
       // straight to subscribing this device.
       if (getNotificationPermission() !== 'granted') {
+        if (!isPushSupported()) {
+          // The browser exposes Notification but not PushManager, or the PWA
+          // worker is unavailable. Nothing can be enabled here, so stop before
+          // the native prompt and record the "not now" cooldown.
+          dismissPermissionPrompt();
+          return;
+        }
         const permission = await requestNotificationPermission();
         if (permission !== 'granted') {
-          dismissPermissionPrompt();
+          if (permission === 'denied') dismissPermissionPrompt();
+          else setOrderNotificationError('Notifications were not enabled. You can try again any time.');
           return;
         }
       }
       if (await subscribeToPush()) {
         dismissPermissionPrompt();
       } else {
-        setOrderNotificationError('We could not turn on order updates. Check your connection and try again.');
+        setOrderNotificationError('We could not turn on order updates on this device. Check your connection and try again.');
       }
+    } catch {
+      // A hung/blocked worker or permission prompt must never leave the card
+      // spinning forever; surface a retryable error instead.
+      setOrderNotificationError('Turning on order updates took too long. Please try again.');
     } finally {
       setEnablingOrderNotifications(false);
     }
@@ -968,17 +971,15 @@ export default function App() {
           </div>
 
           {permissionPrompt === 'order-notifications' && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">
-              <div className="flex gap-3">
-                <BellRing className="mt-0.5 h-5 w-5 flex-none text-emerald-600 dark:text-emerald-400" />
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Keep track of this order</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">Allow order updates for preparation and delivery. Promotional messages stay off.</p>
-                  {orderNotificationError && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{orderNotificationError}</p>}
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={enableOrderNotifications} disabled={enablingOrderNotifications} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">{enablingOrderNotifications ? 'Turning on...' : 'Enable'}</button>
-                    <button onClick={dismissPermissionPrompt} disabled={enablingOrderNotifications} className="rounded-xl px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-emerald-900/40">Not now</button>
-                  </div>
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-center dark:border-blue-800 dark:bg-blue-900/20">
+              <div className="flex flex-col items-center">
+                <BellRing className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <h3 className="mt-2 text-sm font-bold text-gray-900 dark:text-white">Keep track of this order</h3>
+                <p className="mt-1 max-w-sm text-xs leading-relaxed text-gray-600 dark:text-slate-300">Allow order updates for preparation and delivery. Promotional messages stay off.</p>
+                {orderNotificationError && <p className="mt-2 max-w-sm text-xs font-medium text-red-600 dark:text-red-400">{orderNotificationError}</p>}
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <button onClick={enableOrderNotifications} disabled={enablingOrderNotifications} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{enablingOrderNotifications ? 'Turning on...' : 'Enable'}</button>
+                  <button onClick={dismissPermissionPrompt} disabled={enablingOrderNotifications} className="rounded-xl px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-blue-900/40">Not now</button>
                 </div>
               </div>
             </div>

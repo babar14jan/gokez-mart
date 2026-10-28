@@ -3,6 +3,23 @@ import { readTrackingTokens } from '../utils/guestTracking';
 
 const SW_URL = '/sw.js';
 
+// Some browsers (notably in-app webviews and PWAs whose worker failed to
+// activate) never resolve `serviceWorker.ready`, and iOS can leave the native
+// permission promise pending indefinitely. Without a ceiling the "Enable"
+// button sits on "Turning on..." forever, so every async step gets a deadline.
+const SUBSCRIBE_TIMEOUT_MS = 20000;
+const PERMISSION_TIMEOUT_MS = 30000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -61,6 +78,12 @@ export function isPushSupported(): boolean {
     && 'PushManager' in window;
 }
 
+// A subscribe cycle briefly unsubscribes the old endpoint before creating the
+// new one. If the success screen checks for a subscription during that window it
+// sees none and wrongly offers the "keep track of this order" prompt to a device
+// that is already enabled. Share the in-flight work so the check can wait for it.
+let inFlightSubscription: Promise<boolean> | null = null;
+
 /**
  * True when this browser already holds an active push subscription. Used so the
  * "keep track of your order" popup never asks a device that is already
@@ -68,6 +91,11 @@ export function isPushSupported(): boolean {
  * yet have no subscription (e.g. a fresh install, or a cleared endpoint).
  */
 export async function hasActivePushSubscription(): Promise<boolean> {
+  if (inFlightSubscription) {
+    try {
+      if (await inFlightSubscription) return true;
+    } catch { /* fall through to the live check */ }
+  }
   try {
     if (!('serviceWorker' in navigator)) return false;
     const reg = await navigator.serviceWorker.getRegistration();
@@ -90,8 +118,11 @@ export async function getLocationPermission(): Promise<'granted' | 'denied' | 'p
 // Request notification permission and subscribe
 export async function requestNotificationPermission(): Promise<'granted' | 'denied' | 'default'> {
   if (!('Notification' in window)) return 'denied';
-  const permission = await Notification.requestPermission();
-  return permission;
+  return withTimeout(
+    Notification.requestPermission(),
+    PERMISSION_TIMEOUT_MS,
+    'Notification permission request timed out',
+  );
 }
 
 // Subscribe to push after permission granted.
@@ -101,7 +132,17 @@ export async function requestNotificationPermission(): Promise<'granted' | 'deni
 // holds; the backend then pushes to that device for those orders. Registering
 // the guest tokens only happens when the device already holds them (i.e. it has
 // placed or tracked an order), so permission alone never creates a row.
-export async function subscribeToPush(): Promise<boolean> {
+export function subscribeToPush(): Promise<boolean> {
+  if (inFlightSubscription) return inFlightSubscription;
+  const pending = doSubscribeToPush();
+  inFlightSubscription = pending;
+  pending.finally(() => {
+    if (inFlightSubscription === pending) inFlightSubscription = null;
+  }).catch(() => { /* doSubscribeToPush never rejects */ });
+  return pending;
+}
+
+async function doSubscribeToPush(): Promise<boolean> {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
     if (Notification.permission !== 'granted') return false;
@@ -114,14 +155,22 @@ export async function subscribeToPush(): Promise<boolean> {
     const publicKey = keyRes.data.data.publicKey;
     if (!publicKey) return false;
 
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await withTimeout(
+      navigator.serviceWorker.ready,
+      SUBSCRIBE_TIMEOUT_MS,
+      'Service worker did not become ready',
+    );
     const existing = await reg.pushManager.getSubscription();
     if (existing) await existing.unsubscribe();
 
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
-    });
+    const sub = await withTimeout(
+      reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as BufferSource,
+      }),
+      SUBSCRIBE_TIMEOUT_MS,
+      'Push subscription timed out',
+    );
 
     if (authed) {
       await api.post('/push/subscribe/customer', sub.toJSON());

@@ -3,7 +3,7 @@ import { useFinePointer } from '../utils/useFinePointer';
 import { Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi, recommendationApi } from '../services/api';
-import type { PublicSettings, StoreOpeningHours, RecommendationResult } from '../services/api';
+import type { PublicSettings, StoreOpeningHours, RecommendationResult, Product } from '../services/api';
 import { useCustomerStore, type SavedAddress } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -537,6 +537,11 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   // row always reflects what the recommendation engine thinks is most relevant
   // given the current basket and free-delivery gap.
   const [suggestions, setSuggestions] = useState<RecommendationResult['products']>([]);
+  // The recommendation API excludes everything already in the cart, so the card
+  // a shopper just tapped would vanish before they could add a second unit from
+  // it. Keep the most recently added card pinned in the row; it is replaced (and
+  // the previous one drops out) only when ADD is tapped on a different card.
+  const [pinnedSuggestion, setPinnedSuggestion] = useState<Product | null>(null);
 
   useEffect(() => {
     const resolvedStoreId = storeId || SHAPOORJI_ZONE.storeId;
@@ -555,11 +560,25 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [storeId, cartSubtotal, items.length, isLoggedIn, guestPhone]);
 
-  const visibleSuggestions = suggestions.filter(product =>
-    product.availabilityStatus === 'available'
-    && product.isAvailable
-    && Boolean(product.categoryId && product.categoryName)
-  );
+  // Drop the pin once its product is no longer in the cart (qty reduced to 0),
+  // so an emptied card doesn't linger forever.
+  useEffect(() => {
+    if (pinnedSuggestion && !items.some(i => i.productId === pinnedSuggestion.id)) {
+      setPinnedSuggestion(null);
+    }
+  }, [items, pinnedSuggestion]);
+
+  const visibleSuggestions = useMemo(() => {
+    const cartIds = new Set(items.map(i => i.productId));
+    const available = suggestions.filter(product =>
+      product.availabilityStatus === 'available'
+      && product.isAvailable
+      && Boolean(product.categoryId && product.categoryName)
+      && product.id !== pinnedSuggestion?.id
+      && !cartIds.has(product.id)
+    );
+    return pinnedSuggestion ? [pinnedSuggestion, ...available] : available;
+  }, [suggestions, pinnedSuggestion, items]);
   const [eligibleCampaigns, setEligibleCampaigns] = useState<any[]>([]);
   const [appliedCampaign, setLocalAppliedCampaign] = useState<any | null>(null);
   const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
@@ -1108,7 +1127,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
 
           {/* ── You may also like / Add ₹X for free delivery ── */}
           {visibleSuggestions.length > 0 && (
-            <div>
+            <div className="suggestions-enter">
               <p className="text-sm font-bold text-gray-900 dark:text-white mb-2 px-1">You may also like</p>
               {/* No scroll-snap here: iOS Safari swallows taps on buttons inside a
                   snap-mandatory horizontal scroller (the ADD tap never becomes a
@@ -1117,7 +1136,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
                 {visibleSuggestions.map(product => (
                   <div key={product.id} className="w-32 shrink-0">
-                    <ProductCard product={product} disabled={loading} />
+                    <ProductCard product={product} disabled={loading} onAdd={() => setPinnedSuggestion(product)} />
                   </div>
                 ))}
                 <div className="flex w-32 shrink-0">
