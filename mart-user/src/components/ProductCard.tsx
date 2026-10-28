@@ -11,9 +11,11 @@ interface ProductCardProps {
   product: Product;
   /** Freezes the ADD/qty control (used while an order is being placed). */
   disabled?: boolean;
+  /** Called after the cart is updated from this card's ADD/+ control. */
+  onAdd?: () => void;
 }
 
-export default function ProductCard({ product, disabled = false }: ProductCardProps) {
+export default function ProductCard({ product, disabled = false, onAdd }: ProductCardProps) {
   const { items, addItem, updateQty } = useCartStore();
   const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
   const qty = cartItem?.quantity || 0;
@@ -69,7 +71,7 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
                 variant="card"
                 quantity={qty}
                 disabled={disabled}
-                onAdd={() => addItem(product, product.unit, discountedPrice)}
+                onAdd={() => { addItem(product, product.unit, discountedPrice); onAdd?.(); }}
                 onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
               />
             </div>

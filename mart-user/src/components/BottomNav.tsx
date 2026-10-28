@@ -45,9 +45,6 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
                 <span className={`whitespace-nowrap text-[12px] font-semibold ${isActive ? 'font-bold' : ''}`}>
                   {label}
                 </span>
-                {isActive && (
-                  <span className="absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full bg-gokez-700 dark:bg-gokez-400" />
-                )}
               </button>
             </Fragment>
           );

@@ -444,7 +444,9 @@ export default function OrdersPage() {
       dateRange === 'custom' && customFrom ? new Date(`${customFrom}T00:00:00`) : null;
     // Custom end is the whole local day, so a single-day pick isn't cut off at
     // 00:00 and a range ending "today" includes today's orders.
-    const end = dateRange === 'custom' && customTo ? new Date(`${customTo}T23:59:59.999`) : null;
+    const end =
+      dateRange === 'yesterday' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999) :
+      dateRange === 'custom' && customTo ? new Date(`${customTo}T23:59:59.999`) : null;
     return { start, end };
   }, [dateRange, customFrom, customTo]);
 
