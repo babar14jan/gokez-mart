@@ -87,8 +87,8 @@ html, body { overscroll-behavior-y: none; }
 /* The centre Fresh icon stays fully contained inside the fixed-height
    navigation row, clear of both the top border and lower safe-area padding. */
 .nav-veg-icon {
-  height: 52px;
-  width: 52px;
+  height: 54px;
+  width: 54px;
 }
 
 /* The checkout footer is a position:sticky child of the scrolling checkout
