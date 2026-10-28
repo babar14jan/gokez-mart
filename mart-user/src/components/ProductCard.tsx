@@ -6,19 +6,27 @@ import { productLabelParts } from '../utils/productLabel';
 import ProductDetailSheet from './ProductDetailSheet';
 import CartQuantityControl from './CartQuantityControl';
 import SmartImage from './SmartImage';
+import { useFinePointer } from '../utils/useFinePointer';
 
 interface ProductCardProps {
   product: Product;
   /** Freezes the ADD/qty control (used while an order is being placed). */
   disabled?: boolean;
+  /** Called after the cart is updated from this card's ADD/+ control. */
+  onAdd?: () => void;
 }
 
-export default function ProductCard({ product, disabled = false }: ProductCardProps) {
+export default function ProductCard({ product, disabled = false, onAdd }: ProductCardProps) {
   const { items, addItem, updateQty } = useCartStore();
   const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
   const qty = cartItem?.quantity || 0;
   const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
   const [showDetail, setShowDetail] = useState(false);
+  // Touch devices emulate :hover on tap and keep it until the next tap, which
+  // made the card lift/zoom while pressing ADD and snap back on release — the
+  // "shake"/"blink" feedback. Only apply hover motion where a real pointer can
+  // hover; touch keeps the original press-to-scale feel.
+  const finePointer = useFinePointer();
 
   const discountedPrice = product.discountPercent > 0
     ? Math.round(product.price * (1 - product.discountPercent / 100))
@@ -31,7 +39,7 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
 
   return (
     <>
-      <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0 dark:border-slate-700 dark:bg-slate-800">
+      <div className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card transition-[transform,box-shadow] duration-200 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 ${finePointer ? 'hover:-translate-y-0.5 hover:shadow-lift' : ''}`}>
         <button
           type="button"
           onClick={openDetail}
@@ -43,7 +51,7 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
             src={product.photoUrl}
             alt={product.name}
             className="h-full w-full"
-            imgClassName={`object-cover transition-transform duration-300 group-hover:scale-[1.03] ${isOutOfStock ? 'opacity-40' : ''}`}
+            imgClassName={`object-cover ${finePointer ? 'transition-transform duration-300 group-hover:scale-[1.03]' : ''} ${isOutOfStock ? 'opacity-40' : ''}`}
             fallback={
               <div className="flex h-full w-full items-center justify-center bg-cream-50 text-gokez-300 dark:bg-slate-800 dark:text-slate-500">
                 <Leaf className="h-8 w-8" aria-hidden="true" />
@@ -52,7 +60,7 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
           />
 
           {savings > 0 && !isOutOfStock && (
-            <span className="absolute left-1.5 top-1.5 rounded-full border border-saffron-600/45 bg-saffron-400 px-2 py-1 text-[10px] font-extrabold leading-none text-ink shadow-[0_1px_3px_rgba(111,59,19,0.28)]">
+            <span className="absolute left-1.5 top-1.5 rounded-full border border-red-700/40 bg-red-600 px-2 py-1 text-[10px] font-extrabold leading-none text-white shadow-[0_1px_3px_rgba(127,29,29,0.35)]">
               {product.discountPercent}% OFF
             </span>
           )}
@@ -69,14 +77,14 @@ export default function ProductCard({ product, disabled = false }: ProductCardPr
                 variant="card"
                 quantity={qty}
                 disabled={disabled}
-                onAdd={() => addItem(product, product.unit, discountedPrice)}
+                onAdd={() => { addItem(product, product.unit, discountedPrice); onAdd?.(); }}
                 onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
               />
             </div>
           )}
         </div>
 
-        <div className="pointer-events-none flex flex-1 flex-col px-2.5 pb-2.5 pt-2">
+        <div className="pointer-events-none flex flex-1 flex-col bg-gray-50 px-2.5 pb-2.5 pt-2 dark:bg-slate-800">
           <div className="mb-1 min-h-[2.7em]">
             <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3] text-ink dark:text-white">{primaryName}</p>
             {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
