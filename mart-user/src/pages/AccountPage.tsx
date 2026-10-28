@@ -486,7 +486,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
           <div className="min-w-0">
               <p className="text-sm font-semibold text-center text-gray-500 dark:text-slate-400">Log in or sign up to access your complete account.</p>
-              <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-gokez-700 px-3 text-sm font-semibold text-white transition-colors hover:bg-gokez-800 dark:bg-gokez-700 dark:hover:bg-gokez-800">Continue login</button>
+              <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-black px-3 text-sm font-semibold text-white transition-colors hover:bg-gray-900 dark:bg-gokez-700 dark:hover:bg-gokez-800">Continue login</button>
           </div>
         </div>
         )}

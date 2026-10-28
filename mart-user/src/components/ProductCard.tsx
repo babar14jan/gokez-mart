@@ -60,7 +60,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
           />
 
           {savings > 0 && !isOutOfStock && (
-            <span className="absolute left-1.5 top-1.5 rounded-full border border-saffron-600/45 bg-saffron-400 px-2 py-1 text-[10px] font-extrabold leading-none text-ink shadow-[0_1px_3px_rgba(111,59,19,0.28)]">
+            <span className="absolute left-1.5 top-1.5 rounded-full border border-red-700/40 bg-red-600 px-2 py-1 text-[10px] font-extrabold leading-none text-white shadow-[0_1px_3px_rgba(127,29,29,0.35)]">
               {product.discountPercent}% OFF
             </span>
           )}
@@ -84,7 +84,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
           )}
         </div>
 
-        <div className="pointer-events-none flex flex-1 flex-col px-2.5 pb-2.5 pt-2">
+        <div className="pointer-events-none flex flex-1 flex-col bg-gray-50 px-2.5 pb-2.5 pt-2 dark:bg-slate-800">
           <div className="mb-1 min-h-[2.7em]">
             <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3] text-ink dark:text-white">{primaryName}</p>
             {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
