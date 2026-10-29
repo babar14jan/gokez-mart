@@ -27,6 +27,8 @@ interface FunnelPanelProps {
   to?: string;
   onRangeChange?: (range: FunnelRange) => void;
   onDateRangeChange?: (from: string, to: string) => void;
+  /** Render only the data; the parent supplies its own compact date filter. */
+  hideControls?: boolean;
 }
 
 const todayInIst = () => {
@@ -47,7 +49,7 @@ const yesterdayInIst = () => {
   return `${value('year')}-${value('month')}-${value('day')}`;
 };
 
-export default function FunnelPanel({ range: controlledRange, from: controlledFrom, to: controlledTo, onRangeChange, onDateRangeChange }: FunnelPanelProps) {
+export default function FunnelPanel({ range: controlledRange, from: controlledFrom, to: controlledTo, onRangeChange, onDateRangeChange, hideControls }: FunnelPanelProps) {
   const [internalRange, setInternalRange] = useState<FunnelRange>('today');
   const [internalFrom, setInternalFrom] = useState(todayInIst);
   const [internalTo, setInternalTo] = useState(todayInIst);
@@ -115,28 +117,30 @@ const stopMax = Math.max(1, ...(canonical?.journey?.stopPoints ?? []).map(s => s
           <Filter className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Customer journey</h2>
         </div>
-        <div className="inline-flex w-full rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40 sm:w-auto">
-          {RANGES.map(item => (
-            <button key={item.id} type="button" onClick={() => {
-              if (item.id === 'custom' && (!from || !to)) {
-                const today = todayInIst();
-                setDates(today, today);
-              } else if (item.id === 'yesterday') {
-                const y = yesterdayInIst();
-                setDates(y, y);
-                setRange('custom' as FunnelRange);
-                return;
-              }
-              setRange(item.id as FunnelRange);
-            }}
-              className={`min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors sm:flex-none ${item.id === 'yesterday' ? (range === 'custom' && from === yesterdayInIst() && to === yesterdayInIst() ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700') : (range === item.id ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700')}`}>
-              {item.label}
-            </button>
-          ))}
-        </div>
+        {!hideControls && (
+          <div className="inline-flex w-full rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40 sm:w-auto">
+            {RANGES.map(item => (
+              <button key={item.id} type="button" onClick={() => {
+                if (item.id === 'custom' && (!from || !to)) {
+                  const today = todayInIst();
+                  setDates(today, today);
+                } else if (item.id === 'yesterday') {
+                  const y = yesterdayInIst();
+                  setDates(y, y);
+                  setRange('custom' as FunnelRange);
+                  return;
+                }
+                setRange(item.id as FunnelRange);
+              }}
+                className={`min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors sm:flex-none ${item.id === 'yesterday' ? (range === 'custom' && from === yesterdayInIst() && to === yesterdayInIst() ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700') : (range === item.id ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700')}`}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {range === 'custom' && (
+      {!hideControls && range === 'custom' && (
         <div className="mb-3 flex flex-wrap items-end gap-2">
           <label className="text-xs font-medium text-gray-600 dark:text-slate-300">From
             <input type="date" value={from} max={to} onChange={event => setDates(event.target.value, to)} className="mt-1 block rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />

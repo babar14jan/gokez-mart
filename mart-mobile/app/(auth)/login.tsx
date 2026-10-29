@@ -314,6 +314,8 @@ export default function LoginScreen() {
               placeholder="------"
               placeholderTextColor={colors.gray400}
               keyboardType="number-pad"
+              autoComplete="sms-otp"
+              textContentType="oneTimeCode"
               maxLength={6}
               value={otp}
               onChangeText={t => { setOtp(t.replace(/\D/g, '')); setError(''); }}

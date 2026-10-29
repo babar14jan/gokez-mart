@@ -129,28 +129,41 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
 // Shared IST-window builder for the analytics summaries. Mirrors the windowing
 // used by the funnel/lead utilities so KPI cards agree with the rest of the
 // backend reports.
-function buildOrderWindow(range: string, from?: string, to?: string, storeId?: string | null): { where: string; params: unknown[] } {
+//
+// `column` lets callers window on a different timestamp (e.g. delivered_at),
+// and `startIndex` keeps placeholder numbering correct when the caller has
+// already bound earlier parameters in the same statement.
+export function buildOrderWindow(
+  range: string,
+  from?: string,
+  to?: string,
+  storeId?: string | null,
+  opts?: { column?: string; startIndex?: number },
+): { where: string; clause: string; params: unknown[] } {
+  const column = opts?.column || 'o.created_at';
+  const startIndex = opts?.startIndex || 1;
   const params: unknown[] = [];
   const clauses: string[] = [];
-  const at = (index: number) => `$${index}`;
+  const at = () => `$${startIndex + params.length}`;
   if (range === 'custom' && from && to) {
-    clauses.push(`o.created_at >= ((${at(params.length + 1)}::date)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
+    clauses.push(`${column} >= ((${at()}::date)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
     params.push(from);
-    clauses.push(`o.created_at < (((${at(params.length + 1)}::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
+    clauses.push(`${column} < (((${at()}::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
     params.push(to);
   } else if (range === 'today') {
-    clauses.push(`o.created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
+    clauses.push(`${column} >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
   } else if (range === '7d' || range === '30d') {
-    clauses.push(`o.created_at >= ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') - (${range === '7d' ? 6 : 29}::int * INTERVAL '1 day'))`);
+    clauses.push(`${column} >= ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') - (${range === '7d' ? 6 : 29}::int * INTERVAL '1 day'))`);
   } else if (range === 'last_month') {
-    clauses.push(`o.created_at >= (date_trunc('month', (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 month') AT TIME ZONE 'Asia/Kolkata')`);
-    clauses.push(`o.created_at < (date_trunc('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
+    clauses.push(`${column} >= (date_trunc('month', (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 month') AT TIME ZONE 'Asia/Kolkata')`);
+    clauses.push(`${column} < (date_trunc('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
   }
   if (storeId) {
-    clauses.push(`o.store_id = ${at(params.length + 1)}`);
+    clauses.push(`o.store_id = ${at()}`);
     params.push(storeId);
   }
-  return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', params };
+  const clause = clauses.join(' AND ');
+  return { where: clause ? `WHERE ${clause}` : '', clause, params };
 }
 
 export class OrderService {

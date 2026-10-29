@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Save, User, Mail, Phone, Shield, Clock } from 'lucide-react';
-import { api } from '../services/api';
+import { Loader2, Save, User, Mail, Phone, Shield, Clock, QrCode, ChevronRight } from 'lucide-react';
+import { api, settingsApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { getActiveStoreId } from '../utils/store';
 
 const inp = 'w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 text-gray-900 dark:text-white placeholder:text-gray-500 transition-all';
 
@@ -24,6 +25,32 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const [qrLoaded, setQrLoaded] = useState(false);
+
+  // Store-tagged staff collect payments. Super admins have no store of their own.
+  const isStoreUser = !!role && role !== 'super_admin';
+
+  useEffect(() => {
+    if (!qrUrl) return;
+    const img = new Image();
+    img.onload = () => setQrLoaded(true);
+    img.src = qrUrl;
+  }, [qrUrl]);
+
+  useEffect(() => {
+    // Store-tagged users resolve the QR for their own store.
+    if (!isStoreUser) { setQrUrl(null); return; }
+    settingsApi.getAll(getActiveStoreId()).then(r => {
+      const settingsList = r.data.data || [];
+      const qrEnabled = settingsList.find((s: any) => s.key === 'upi_qr_enabled')?.value === 'true'
+                     || settingsList.find((s: any) => s.key === 'phonepay_enabled')?.value === 'true';
+      const qr = settingsList.find((s: any) => s.key === 'phonepay_qr_url');
+      if (qrEnabled && qr?.value) setQrUrl(qr.value);
+      else setQrUrl(null);
+    }).catch(() => {});
+  }, [isStoreUser]);
 
   useEffect(() => {
     api.get('/admin/me').then(r => {
@@ -87,6 +114,21 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Payment QR button — store-tagged users only */}
+      {isStoreUser && qrUrl && (
+        <button onClick={() => setShowQr(true)}
+          className="w-full flex items-center gap-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+            <QrCode className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">Payment QR</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Show this to collect payment</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        </button>
+      )}
+
       {/* Edit form */}
       <div className="page-card">
         <div className="page-card-header">
@@ -147,6 +189,29 @@ export default function ProfilePage() {
           </button>
         </form>
       </div>
+
+      {/* QR Payment Modal */}
+      {showQr && qrUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm"
+          onClick={() => setShowQr(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center"
+            onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">Payment QR Code</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Show this to the customer to collect payment</p>
+            {qrLoaded ? (
+              <img src={qrUrl} alt="Payment QR" className="w-full max-w-[220px] mx-auto rounded-2xl border border-gray-100 dark:border-slate-700" />
+            ) : (
+              <div className="w-[220px] h-[220px] mx-auto rounded-2xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            <button onClick={() => setShowQr(false)}
+              className="mt-5 w-full py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 text-sm font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

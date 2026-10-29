@@ -191,6 +191,24 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     } finally { setLoading(false); }
   };
 
+  const handlePasteOtp = async () => {
+    try {
+      if (!navigator.clipboard?.readText) throw new Error('Clipboard unavailable');
+      const text = await navigator.clipboard.readText();
+      // Grab an exact 6-digit run so a copied phone number or order id in the
+      // same message cannot be mistaken for the code.
+      const match = text.match(/(?:^|\D)(\d{6})(?!\d)/);
+      if (!match) {
+        setError('No 6-digit OTP found on the clipboard.');
+        return;
+      }
+      setOtp(match[1]);
+      setError('');
+    } catch {
+      setError('Could not read the clipboard. Press and hold the OTP field, then choose Paste.');
+    }
+  };
+
   const handleResend = async () => {
     if (resendTimer > 0) return;
     setLoading(true); setError(''); setOtp('');
@@ -481,14 +499,21 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
               <form onSubmit={handleVerifyOtp} className="mt-3 space-y-2">
                 <ErrorNote id="login-error" />
                 <label htmlFor="login-otp" className="sr-only">6-digit verification code</label>
-                <input
-                  id="login-otp" name="otp" type="tel" value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
-                  placeholder="6-digit OTP"
-                  inputMode="numeric" autoComplete="one-time-code" maxLength={6}
-                  aria-invalid={Boolean(error)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 transition-all"
-                  autoFocus={finePointer} />
+                <div className="relative">
+                  <input
+                    id="login-otp" name="otp" type="tel" value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
+                    placeholder="6-digit OTP"
+                    inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                    aria-invalid={Boolean(error)}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-16 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 transition-all"
+                    autoFocus={finePointer} />
+                  <button
+                    type="button" onClick={handlePasteOtp} aria-label="Paste OTP from clipboard"
+                    className="absolute right-1 top-1/2 flex min-h-[44px] -translate-y-1/2 items-center rounded-xl px-3 text-xs font-bold text-gokez-700 transition-colors hover:bg-gokez-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-300 dark:hover:bg-slate-600/50">
+                    Paste
+                  </button>
+                </div>
                 <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn(otp.length === 6)}>
                   {loading ? <Spinner /> : <>Verify</>}
                 </button>
