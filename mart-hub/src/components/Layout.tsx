@@ -3,14 +3,13 @@ import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useThemeStore } from '../store/themeStore';
 import {
   LayoutDashboard, Package, Image as ImageIcon,
-  Users, Settings, Shield, QrCode, Boxes, UserPlus,
+  Users, Settings, Shield, Boxes, UserPlus,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
   Store, ShoppingBasket, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
-import { storesApi, settingsApi, authApi } from '../services/api';
-import { getActiveStoreId } from '../utils/store';
+import { storesApi, authApi } from '../services/api';
 import { useHeaderAction } from '../store/headerActionStore';
 import LiveOrderToasts from './LiveOrderToasts';
 
@@ -82,39 +81,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // than the full super-admin nav (previously `role || 'super_admin'`).
   const userRole = isKnownRole(role) ? (role as string) : '';
   const NAV = userRole ? NAV_ALL.filter(item => item.roles.includes(userRole)) : [];
-  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [showQr, setShowQr] = useState(false);
-  const [qrLoaded, setQrLoaded] = useState(false);
-
-  // Preload QR image as soon as URL is available
-  useEffect(() => {
-    if (!qrUrl) return;
-    const img = new Image();
-    img.onload = () => setQrLoaded(true);
-    img.src = qrUrl;
-  }, [qrUrl]);
+  const [stores, setStores] = useState<{ id: string; name: string; address?: string | null }[]>([]);
+  const [storeName, setStoreName] = useState('');
+  const [storeAddress, setStoreAddress] = useState('');
   const [activeStoreId, setActiveStoreId] = useState<string>(
     localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-0000-000000000001'
   );
 
   useEffect(() => {
     if (!username) return;
-    if (isSuperAdmin()) {
-      // super_admin — load all stores for selector
-      storesApi.getAll().then(r => setStores((r.data.data || []).filter((s: any) => s.isActive))).catch(() => {});
-    } else {
+    // Store name lives on mart_stores (migration 094 removed the duplicate
+    // settings key), so resolve it from the store list for every role.
+    storesApi.getAll().then(r => {
+      const all = r.data.data || [];
+      if (isSuperAdmin()) {
+        const active = all.filter((s: any) => s.isActive);
+        setStores(active);
+        setActiveStoreId(prev => {
+          if (!active.length || active.some((s: any) => s.id === prev)) return prev;
+          localStorage.setItem('mart_admin_active_store', active[0].id);
+          return active[0].id;
+        });
+      } else {
+        const ownStoreId = storeId || localStorage.getItem('mart_admin_active_store');
+        const own = all.find((s: any) => s.id === ownStoreId) || all[0];
+        if (own?.name) setStoreName(own.name);
+        if (own?.address) setStoreAddress(own.address);
+      }
+    }).catch(() => {});
+    if (!isSuperAdmin()) {
       setActiveStoreId(storeId || localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-0000-000000000001');
     }
-    // Fetch QR URL for payment collection
-    settingsApi.getAll(getActiveStoreId()).then(r => {
-      const settingsList = r.data.data || [];
-      const qrEnabled = settingsList.find((s: any) => s.key === 'upi_qr_enabled')?.value === 'true'
-                     || settingsList.find((s: any) => s.key === 'phonepay_enabled')?.value === 'true';
-      const qr = settingsList.find((s: any) => s.key === 'phonepay_qr_url');
-      if (qrEnabled && qr?.value) setQrUrl(qr.value);
-      else setQrUrl(null);
-    }).catch(() => {});
   }, [username, storeId]);
 
   const handleStoreChange = (id: string) => {
@@ -159,6 +156,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
 
+
+  const activeStoreName = storeName || stores.find(s => s.id === activeStoreId)?.name || '';
+  const activeStoreAddress = storeAddress || stores.find(s => s.id === activeStoreId)?.address || '';
 
   const SidebarLinks = ({ onNav }: { onNav?: () => void }) => (
     <nav className="flex-1 overflow-y-auto py-3 space-y-0.5">
@@ -232,35 +232,49 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className={`min-h-screen transition-all duration-300 ${collapsed ? 'lg:pl-[90px]' : 'lg:pl-[200px]'}`}>
 
         {/* Sticky header */}
-        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-[#0f172a] dark:bg-[#18191a] border-b border-gray-100 dark:border-slate-800 shadow-sm">
+        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#FFC400] to-[#FFF6B5] dark:bg-none dark:bg-[#18191a] dark:border-b dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
               {['/change-password', '/settings', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <div className="flex items-center gap-1 -ml-1 min-w-0">
                   <button onClick={() => navigate(-1)}
-                    className="p-2 rounded-xl hover:bg-white/10 transition-colors flex-shrink-0">
-                    <ChevronLeft className="w-5 h-5 text-slate-300" />
+                    className="p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">
+                    <ChevronLeft className="w-5 h-5 text-gray-900 dark:text-slate-300" />
                   </button>
-                  <span className="text-base font-bold text-white truncate">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+                  <span className="text-base font-bold text-gray-900 dark:text-white truncate">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
                 </div>
               ) : pathname === '/' ? (
-                <div className="flex flex-col items-start flex-shrink-0">
-                  <picture>
-                    <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
-                    <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" width="384" height="256" className="h-9 w-36 object-contain object-left" />
-                  </picture>
-                  <p className="text-[6px] sm:text-[8px] font-bold uppercase text-white tracking-wide leading-tight -mt-1 whitespace-nowrap">
-                    Your Store <span className="align-middle">&bull;</span> Now Online
-                  </p>
+                <div className="flex min-w-0 flex-col items-start">
+                  <span className="max-w-[48vw] truncate text-base font-extrabold leading-tight tracking-tight text-gray-900 dark:text-white">
+                    {activeStoreName}
+                  </span>
+                  {activeStoreAddress && (
+                    <p className="max-w-[48vw] truncate text-[9px] sm:text-[10px] font-medium text-gray-800 dark:text-slate-300 leading-tight">
+                      {activeStoreAddress}
+                    </p>
+                  )}
                 </div>
               ) : (
-                <span className="text-base font-bold text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+                <span className="text-base font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
               )}
             </div>
 
-            {/* Desktop header — page title only */}
-            <span className="hidden lg:block text-base font-bold text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+            {/* Desktop header — store name + address on home, else page title */}
+            {pathname === '/' ? (
+              <div className="hidden lg:flex min-w-0 flex-col">
+                <span className="max-w-[360px] truncate text-base font-bold text-gray-900 dark:text-white">
+                  {activeStoreName || PAGE_TITLES[pathname] || 'Gokez Hub'}
+                </span>
+                {activeStoreAddress && (
+                  <span className="max-w-[360px] truncate text-[10px] font-medium text-gray-800 dark:text-slate-300 leading-tight">
+                    {activeStoreAddress}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="hidden lg:block text-base font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+            )}
 
             <div className="flex-1" />
 
@@ -272,35 +286,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
             )}
 
-            {/* Store selector — super_admin only */}
-            {!storeId && stores.length > 1 && (
+            {/* Store selector — super_admin only.
+                Desktop (lg+): stays in the header on every page, unchanged.
+                Mobile: shown only on the More page (/more), where it's smaller;
+                removed from the mobile header on all other routes. */}
+            {isSuperAdmin() && stores.length > 1 && (
               <select
                 value={activeStoreId}
-                onChange={e => handleStoreChange(e.target.value)}
-                className="text-xs border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-1.5 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 focus:outline-none focus:border-emerald-500 font-semibold"
+                onChange={e => { if (e.target.value) handleStoreChange(e.target.value); }}
+                aria-label="Select active store"
+                className={`${pathname === '/more' ? '' : 'hidden lg:block'} appearance-none max-w-[34vw] lg:max-w-[42vw] text-[11px] lg:text-xs border border-black/15 dark:border-slate-600 rounded-xl px-2.5 py-1 lg:px-3 lg:py-1.5 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-300 focus:outline-none focus:border-gray-900 dark:focus:border-emerald-500 font-semibold`}
               >
+                {/* "Select store" is only the empty-state placeholder; the control
+                    is driven by activeStoreId so it shows the selected store name. */}
+                <option value="" disabled>Select store</option>
                 {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-            )}
-
-            {/* QR button — always rightmost on mobile */}
-            {qrUrl && (
-              <button onClick={() => setShowQr(true)}
-                className="lg:hidden p-2 rounded-xl text-slate-300 hover:bg-white/10 transition-colors flex-shrink-0">
-                <QrCode className="w-5 h-5" />
-              </button>
             )}
 
             {/* Desktop user dropdown — hidden on mobile */}
             <div className="hidden lg:block relative">
               <button onClick={() => setUserMenuOpen(o => !o)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-white/10 transition-colors">
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white text-[10px] font-bold flex items-center justify-center">
                   {(name || username || 'A').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-semibold text-white leading-none">{name || username}</p>
-                  <p className="text-[10px] text-slate-300 capitalize leading-none mt-0.5">{role?.replace('_', ' ')}</p>
+                  <p className="text-xs font-semibold text-gray-900 dark:text-white leading-none">{name || username}</p>
+                  <p className="text-[10px] text-gray-700 dark:text-slate-300 capitalize leading-none mt-0.5">{role?.replace('_', ' ')}</p>
                 </div>
               </button>
 
@@ -320,12 +333,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
                       <KeyRound className="w-4 h-4 text-gray-500" /> Change Password
                     </Link>
-                    {qrUrl && (
-                      <button onClick={() => { setShowQr(true); setUserMenuOpen(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700">
-                        <QrCode className="w-4 h-4 text-gray-500" /> Payment QR
-                      </button>
-                    )}
                     <div className="flex items-center gap-3 px-4 py-2.5">
                       {isDark ? <Moon className="w-4 h-4 text-gray-500" /> : <Sun className="w-4 h-4 text-gray-500" />}
                       <span className="text-sm text-gray-700 dark:text-slate-300 flex-1">Dark Mode</span>
@@ -379,29 +386,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </nav>
-
-      {/* QR Payment Modal */}
-      {showQr && qrUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm"
-          onClick={() => setShowQr(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center"
-            onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">Payment QR Code</p>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">Show this to the customer to collect payment</p>
-            {qrLoaded ? (
-              <img src={qrUrl} alt="Payment QR" className="w-full max-w-[220px] mx-auto rounded-2xl border border-gray-100 dark:border-slate-700" />
-            ) : (
-              <div className="w-[220px] h-[220px] mx-auto rounded-2xl bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
-            <button onClick={() => setShowQr(false)}
-              className="mt-5 w-full py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 text-sm font-semibold rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

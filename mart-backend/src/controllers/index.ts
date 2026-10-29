@@ -7,7 +7,7 @@ import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
 import { ProductService, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
-import { OrderService } from '../services/order.service';
+import { OrderService, buildOrderWindow } from '../services/order.service';
 import { SettingsService } from '../services/settings.service';
 import { ZoneService } from '../services/zone.service';
 import { StoreService } from '../services/store.service';
@@ -948,6 +948,19 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
   // Empty pattern keeps the search clause a no-op while avoiding a null param.
   const searchPattern = search ? `%${search}%` : '';
+  // Date range uses the same vocabulary and IST boundaries as the other
+  // reports. 'yesterday' is folded into custom by the hub, so it never arrives.
+  const range = req.query.range === 'today' || req.query.range === '7d'
+    || req.query.range === '30d' || req.query.range === 'last_month'
+    || req.query.range === 'custom'
+    ? req.query.range
+    : 'all';
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
+  }
+  const ranged = range !== 'all';
   // Counts and money come live from the order rows: completed (delivered) and
   // cancelled (any side, any reason, terminated included) are kept apart, and
   // spend only counts delivered orders. Materialised mart_customers counters
@@ -966,50 +979,47 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
     SELECT 1 FROM mart_customer_leads l
     WHERE l.customer_id = c.id AND l.verified_at IS NOT NULL
   ) THEN 'signed_in' ELSE 'guest_checkout' END`;
-  const [customers, counts, stats] = await Promise.all([
-    query(
-      `WITH classified AS (
-         SELECT c.id, c.phone, c.name, c.address, c.created_at,
-                ${identitySql} as "identityType",
-                NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
-         FROM mart_customers c
-       ), order_agg AS (
-         SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS ckey,
-                COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS "completedOrders",
-                COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS "canceledOrders",
-                COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS "totalSpent"
+
+  // Each query binds its own placeholders, so the window builder is told where
+  // its parameters start.
+  const listWindow = buildOrderWindow(range, from, to, null, { startIndex: 5 });
+  const countWindow = buildOrderWindow(range, from, to, null, { startIndex: 4 });
+  const statsWindow = buildOrderWindow(range, from, to, null, { startIndex: 1 });
+  const newWindow = buildOrderWindow(range, from, to, null, {
+    column: 'fd.first_delivered_at',
+    startIndex: 1 + statsWindow.params.length,
+  });
+
+  const statsSql = ranged
+    ? `WITH window_orders AS (
+         SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
+                o.status, o.total
          FROM mart_orders o
          LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+         ${statsWindow.where}
+       ), first_deliveries AS (
+         SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
+                MIN(o.delivered_at) AS first_delivered_at
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+         WHERE o.status = 'delivered'
          GROUP BY 1
+       ), activity AS (
+         SELECT w.phone,
+                COUNT(*) FILTER (WHERE w.status = 'delivered')::int AS delivered_orders,
+                COALESCE(SUM(w.total) FILTER (WHERE w.status = 'delivered'), 0)::float AS delivered_revenue
+         FROM window_orders w
+         WHERE w.phone IS NOT NULL
+         GROUP BY w.phone
        )
-       SELECT c.id, c.phone, c.name, c.address, c.created_at as "createdAt", c."identityType",
-              COALESCE(a."completedOrders", 0)::int AS "completedOrders",
-              COALESCE(a."canceledOrders", 0)::int AS "canceledOrders",
-              (COALESCE(a."completedOrders", 0) + COALESCE(a."canceledOrders", 0))::int AS "orderCount",
-              COALESCE(a."totalSpent", 0)::float AS "totalSpent"
-       FROM classified c
-       LEFT JOIN order_agg a ON a.ckey = c.ckey
-       WHERE ($1 = 'all' OR c."identityType" = $1)
-         AND ($4 = '' OR c.name ILIKE $4 OR c.phone ILIKE $4)
-       ORDER BY ${orderBy}
-       LIMIT $2 OFFSET $3`,
-      [identity, limit, offset, searchPattern]
-    ),
-    query<{ total: number; signedIn: number; guestCheckout: number; filtered: number }>(
-      `WITH classified AS (
-         SELECT c.name, c.phone, ${identitySql} as "identityType"
-         FROM mart_customers c
-       )
-       SELECT COUNT(*)::int as total,
-              COUNT(*) FILTER (WHERE "identityType" = 'signed_in')::int as "signedIn",
-              COUNT(*) FILTER (WHERE "identityType" = 'guest_checkout')::int as "guestCheckout",
-              COUNT(*) FILTER (WHERE ($1 = 'all' OR "identityType" = $1)
-                                 AND ($2 = '' OR name ILIKE $2 OR phone ILIKE $2))::int as filtered
-       FROM classified`,
-      [identity, searchPattern]
-    ),
-    query<{ totalCustomers: number; totalRevenue: number; totalOrders: number; repeatCustomers: number; newCustomers: number }>(
-      `WITH phone_orders AS (
+       SELECT COUNT(*)::int AS "totalCustomers",
+              COALESCE(SUM(a.delivered_revenue), 0)::float AS "totalRevenue",
+              COALESCE(SUM(a.delivered_orders), 0)::int AS "totalOrders",
+              COUNT(*) FILTER (WHERE NOT (${newWindow.clause || 'FALSE'}))::int AS "repeatCustomers",
+              COUNT(*) FILTER (WHERE ${newWindow.clause || 'FALSE'})::int AS "newCustomers"
+       FROM activity a
+       JOIN first_deliveries fd ON fd.phone = a.phone`
+    : `WITH phone_orders AS (
          SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
                 o.status, o.total, o.created_at, o.delivered_at
          FROM mart_orders o
@@ -1034,7 +1044,65 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
               COALESCE(SUM(delivered_orders), 0)::int AS "totalOrders",
               COUNT(*) FILTER (WHERE is_returning)::int AS "repeatCustomers",
               COUNT(*) FILTER (WHERE NOT is_returning AND first_delivered_at >= now() - interval '30 days')::int AS "newCustomers"
-       FROM customers`
+       FROM customers`;
+
+  const [customers, counts, stats] = await Promise.all([
+    query(
+      `WITH classified AS (
+         SELECT c.id, c.phone, c.name, c.address, c.created_at,
+                ${identitySql} as "identityType",
+                NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
+         FROM mart_customers c
+       ), order_agg AS (
+         SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS ckey,
+                COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS "completedOrders",
+                COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS "canceledOrders",
+                COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS "totalSpent"
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+         ${listWindow.where}
+         GROUP BY 1
+       )
+       SELECT c.id, c.phone, c.name, c.address, c.created_at as "createdAt", c."identityType",
+              COALESCE(a."completedOrders", 0)::int AS "completedOrders",
+              COALESCE(a."canceledOrders", 0)::int AS "canceledOrders",
+              (COALESCE(a."completedOrders", 0) + COALESCE(a."canceledOrders", 0))::int AS "orderCount",
+              COALESCE(a."totalSpent", 0)::float AS "totalSpent"
+       FROM classified c
+       LEFT JOIN order_agg a ON a.ckey = c.ckey
+       WHERE ($1 = 'all' OR c."identityType" = $1)
+         AND ($4 = '' OR c.name ILIKE $4 OR c.phone ILIKE $4)
+         AND (${ranged ? 'a.ckey IS NOT NULL' : 'TRUE'})
+       ORDER BY ${orderBy}
+       LIMIT $2 OFFSET $3`,
+      [identity, limit, offset, searchPattern, ...listWindow.params]
+    ),
+    query<{ total: number; signedIn: number; guestCheckout: number; filtered: number }>(
+      `WITH classified AS (
+         SELECT c.name, c.phone, ${identitySql} as "identityType",
+                NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
+         FROM mart_customers c
+       ), active AS (
+         SELECT DISTINCT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS ckey
+         FROM mart_orders o
+         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+         ${countWindow.where}
+       )
+       SELECT COUNT(*) FILTER (WHERE $3 = 'all' OR a.ckey IS NOT NULL)::int as total,
+              COUNT(*) FILTER (WHERE "identityType" = 'signed_in'
+                                 AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as "signedIn",
+              COUNT(*) FILTER (WHERE "identityType" = 'guest_checkout'
+                                 AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as "guestCheckout",
+              COUNT(*) FILTER (WHERE ($1 = 'all' OR "identityType" = $1)
+                                 AND ($2 = '' OR name ILIKE $2 OR phone ILIKE $2)
+                                 AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as filtered
+       FROM classified c
+       LEFT JOIN active a ON a.ckey = c.ckey`,
+      [identity, searchPattern, range, ...countWindow.params]
+    ),
+    query<{ totalCustomers: number; totalRevenue: number; totalOrders: number; repeatCustomers: number; newCustomers: number }>(
+      statsSql,
+      ranged ? [...statsWindow.params, ...newWindow.params] : []
     ),
   ]);
   const count = counts.rows[0] || { total: 0, signedIn: 0, guestCheckout: 0, filtered: 0 };

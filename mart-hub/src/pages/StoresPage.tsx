@@ -36,37 +36,57 @@ export default function StoresPage() {
     openingHours: DEFAULT_HOURS as any,
   });
 
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [teamByStore, setTeamByStore] = useState<Record<string, any[]>>({});
   const [credModal, setCredModal] = useState<{ store: MartStore; manager: any } | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPwd, setResettingPwd] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState<MartStore | null>(null);
 
-  const load = () => Promise.all([storesApi.getAll(), usersApi.getAll()]).then(([sr, ur]) => {
-    setStores(sr.data.data || []);
-    setAllUsers(ur.data.data || []);
-    setLoading(false);
-  });
+  const load = async () => {
+    try {
+      const sr = await storesApi.getAll();
+      const storeList = sr.data.data || [];
+      setStores(storeList);
+      const teams: Record<string, any[]> = {};
+      await Promise.all(storeList.map(async (s: MartStore) => {
+        try {
+          const tr = await teamApi.getStoreTeam(s.id);
+          teams[s.id] = tr.data.data || [];
+        } catch {
+          teams[s.id] = [];
+        }
+      }));
+      setTeamByStore(teams);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => { load(); }, []);
 
-  const getStoreManager = (storeId: string) =>
-    allUsers.find((u: any) => u.storeId === storeId && u.role === 'store_owner');
+  const getStoreManager = (storeId: string) => {
+    const team = teamByStore[storeId] || [];
+    return team.find((u: any) => u.role === 'store_owner') || team.find((u: any) => u.role === 'store_manager') || team[0] || null;
+  };
 
   const handleResetPassword = async (userId: string) => {
-    if (!newPassword || newPassword.length < 6) { alert('Min 6 characters'); return; }
+    if (!newPassword || newPassword.length < 6) { window.alert('Min 6 characters'); return; }
     setResettingPwd(true);
     try {
       await usersApi.update(userId, { password: newPassword });
-      alert('Password updated successfully');
+      window.alert('Password updated successfully');
       setNewPassword('');
-    } catch { alert('Failed to reset password'); }
+    } catch { window.alert('Failed to reset password'); }
     finally { setResettingPwd(false); }
   };
 
-  const copyCredentials = (manager: any, password?: string) => {
-    const text = `Gokez Hub Login\nURL: https://hub.gokez.com\nUsername: ${manager.username}${password ? `\nPassword: ${password}` : ''}`;
-    navigator.clipboard.writeText(text);
+  const copyCredentials = async (manager: any, password?: string) => {
+    const text = `Gokez Hub Login\nURL: ${window.location.origin}\nUsername: ${manager.username}${password ? `\nPassword: ${password}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt('Copy login details', text);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -119,7 +139,7 @@ export default function StoresPage() {
     try {
       const res = await productsApi.uploadPhoto(file);
       setForm(f => ({ ...f, logoUrl: res.data.data.url }));
-    } catch { alert('Upload failed'); } finally { setUploading(false); }
+    } catch {       window.alert('Upload failed'); } finally { setUploading(false); }
   };
 
   const handleSave = async () => {
@@ -144,12 +164,16 @@ export default function StoresPage() {
         return;
       }
       setShowModal(false); await load();
-    } catch { alert('Failed to save store'); } finally { setSaving(false); }
+    } catch { window.alert('Failed to save store'); } finally { setSaving(false); }
   };
 
   const toggleLive = async (s: MartStore) => {
-    await storesApi.update(s.id, { isLive: !s.isLive } as any);
-    await load();
+    try {
+      await storesApi.update(s.id, { isLive: !s.isLive } as any);
+      await load();
+    } catch (e: any) {
+      window.alert(e?.response?.data?.error || 'Failed to update store status');
+    }
   };
 
   const handleDeactivate = async (storeId: string) => {
@@ -561,7 +585,7 @@ export default function StoresPage() {
                       }
                       setShowModal(false); await load();
                     } catch (e: any) {
-                      alert(e?.response?.data?.error || 'Failed to assign manager');
+                      window.alert(e?.response?.data?.error || 'Failed to assign manager');
                     } finally { setSaving(false); }
                   }}
                   className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">

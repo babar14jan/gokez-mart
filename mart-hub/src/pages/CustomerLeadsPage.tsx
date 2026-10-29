@@ -1,8 +1,33 @@
 import { useEffect, useState } from 'react';
-import { Download, Phone, Users } from 'lucide-react';
+import { Calendar, Download, Phone, Users } from 'lucide-react';
 import { customerLeadsApi, type FunnelRange } from '../services/api';
 import FunnelPanel from '../components/FunnelPanel';
 import { useAuthStore } from '../store/authStore';
+
+type LeadRange = FunnelRange | 'yesterday';
+
+const RANGES: { id: LeadRange; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'all', label: 'All' },
+  { id: 'custom', label: 'Custom' },
+];
+
+const todayInIst = () => {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+};
+
+const yesterdayInIst = () => {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date(Date.now() - 86400000));
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+};
 
 interface Lead {
   id: string;
@@ -22,8 +47,8 @@ export default function CustomerLeadsPage() {
   const canAccessLeads = isSuperAdmin();
 
   const [range, setRange] = useState<FunnelRange>('today');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  const [customFrom, setCustomFrom] = useState(todayInIst);
+  const [customTo, setCustomTo] = useState(todayInIst);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -40,7 +65,12 @@ export default function CustomerLeadsPage() {
     setError('');
     // Only "OTP not completed" prospects belong here. Verified customers and
     // checkout-only contacts are customers, and already live on the Customers page.
-    customerLeadsApi.getAll('unverified', range, customFrom || undefined, customTo || undefined)
+    customerLeadsApi.getAll(
+      'unverified',
+      range,
+      range === 'custom' ? customFrom || undefined : undefined,
+      range === 'custom' ? customTo || undefined : undefined,
+    )
       .then(response => {
         setLeads(response.data.data || []);
         setTotal(response.data.counts?.unverified ?? 0);
@@ -48,6 +78,26 @@ export default function CustomerLeadsPage() {
       .catch(() => setError('Could not load leads. Please try again.'))
       .finally(() => setLoading(false));
   }, [range, customFrom, customTo, canAccessLeads]);
+
+  const handleRangeClick = (id: LeadRange) => {
+    if (id === 'yesterday') {
+      const yesterday = yesterdayInIst();
+      setCustomFrom(yesterday);
+      setCustomTo(yesterday);
+      setRange('custom');
+      return;
+    }
+    if (id === 'custom' && (!customFrom || !customTo)) {
+      const today = todayInIst();
+      setCustomFrom(today);
+      setCustomTo(today);
+    }
+    setRange(id as FunnelRange);
+  };
+
+  const isRangeActive = (id: LeadRange) => id === 'yesterday'
+    ? range === 'custom' && customFrom === yesterdayInIst() && customTo === yesterdayInIst()
+    : range === id;
 
   const downloadMarketingCsv = async () => {
     setDownloading(true);
@@ -67,27 +117,49 @@ export default function CustomerLeadsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-sm text-gray-500 dark:text-slate-400">
-            Shoppers who entered their number but never verified OTP. Prospects, not customers — see the Customers page for verified and guest buyers. Times are India time.
-          </p>
-        </div>
+    <div className="space-y-3">
+      {/* Compact date filter + marketing download, same pattern as the other pages */}
+      <div className="flex flex-wrap items-center gap-2">
+        {RANGES.map(r => (
+          <button key={r.id} type="button" onClick={() => handleRangeClick(r.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              isRangeActive(r.id)
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
+            }`}>
+            {r.id === 'custom' && <Calendar className="w-3 h-3" />}
+            {r.label}
+          </button>
+        ))}
+        {range === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customFrom} max={customTo} onChange={e => setCustomFrom(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+            <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
+            <input type="date" value={customTo} min={customFrom} max={todayInIst()} onChange={e => setCustomTo(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+          </div>
+        )}
+        <div className="flex-1" />
         <button
           type="button"
           onClick={downloadMarketingCsv}
           disabled={downloading}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Download verified customers who granted marketing consent as CSV"
           aria-label="Download verified customers who granted marketing consent as CSV"
         >
-          <Download className="h-4 w-4" aria-hidden="true" />
-          {downloading ? 'Preparing CSV...' : 'Marketing list'}
-          <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">Verified + consented</span>
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+          {downloading ? 'Preparing...' : 'Marketing list'}
         </button>
       </div>
 
+      <p className="text-xs text-gray-500 dark:text-slate-400">
+        Shoppers who entered their number but never verified OTP. Prospects, not customers — see the Customers page for verified and guest buyers. Times are India time.
+      </p>
+
       <FunnelPanel
+        hideControls
         range={range}
         from={customFrom}
         to={customTo}
@@ -146,7 +218,6 @@ export default function CustomerLeadsPage() {
           </div>
         </>
       )}
-      <p className="text-xs text-gray-500 dark:text-slate-400">The download includes only verified customers who granted marketing consent.</p>
     </div>
   );
 }
