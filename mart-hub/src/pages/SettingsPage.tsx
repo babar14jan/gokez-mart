@@ -222,7 +222,7 @@ export default function SettingsPage() {
       setSavedValues(vals);
       if (vals.phonepay_qr_url) setQrPreview(vals.phonepay_qr_url);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   /**

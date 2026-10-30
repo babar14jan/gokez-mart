@@ -1,6 +1,7 @@
 import { query, transaction } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 import { badRequest } from '../utils/apiError';
+import { ZoneService } from './zone.service';
 
 export interface MartProduct {
   id: string;
@@ -162,6 +163,78 @@ export class ProductService {
       params
     );
     return result.rows;
+  }
+
+  /**
+   * Combined catalog of every store tagged in a zone. The union is deduped
+   * per product: when two stores in one zone list the same product, the zone
+   * head's listing wins (deterministic, and the head is the store the customer
+   * already sees as the face of the zone). Every row carries the store id
+   * that fulfils it so an order line knows where it comes from.
+   */
+  static async findAllForZone(zoneId: string, filters?: {
+    categoryId?: string;
+    excludeHidden?: boolean;
+    activeCategoryOnly?: boolean;
+  }): Promise<Array<MartProduct & { storeId: string; storeName: string }>> {
+    const zone = await ZoneService.findById(zoneId);
+    if (!zone) return [];
+    const storeIds: string[] = zone.stores?.length
+      ? zone.stores.map(s => s.id)
+      : (zone.primaryStoreId ? [zone.primaryStoreId] : []);
+    if (!storeIds.length) return [];
+    const conditions: string[] = [`sp.store_id = ANY($1)`];
+    const params: unknown[] = [storeIds];
+    let i = 2;
+    if (filters?.categoryId) {
+      conditions.push(`p.category_id = $${i++}`);
+      params.push(filters.categoryId);
+    }
+    if (filters?.excludeHidden) {
+      conditions.push(`sp.availability_status != 'hidden'`);
+    }
+    if (filters?.activeCategoryOnly) {
+      conditions.push(`p.category_id IS NOT NULL`);
+      conditions.push(`c.is_active = true`);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const result = await query<MartProduct & { storeId: string; storeName: string }>(
+      `SELECT p.id, p.category_id as "categoryId", c.name as "categoryName",
+             p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
+             p.description, p.photo_url as "photoUrl",
+             p.weight_options as "weightOptions",
+             sp.price::float, sp.unit,
+             sp.approx_weight as "approxWeight",
+             sp.discount_percent::float as "discountPercent",
+             sp.is_available as "isAvailable",
+             sp.availability_status as "availabilityStatus",
+             p.is_bundle as "isBundle",
+             sp.sort_order as "sortOrder",
+             sp.stock_quantity::float as "stockQuantity",
+             sp.low_stock_threshold::float as "lowStockThreshold",
+             sp.stock_unit as "stockUnit",
+             p.created_at as "createdAt", p.updated_at as "updatedAt",
+             sp.store_id as "storeId", s.name as "storeName"
+       FROM mart_products p
+       JOIN mart_store_products sp ON sp.product_id = p.id
+       JOIN mart_stores s ON s.id = sp.store_id
+       LEFT JOIN mart_categories c ON c.id = p.category_id
+       ${where}
+       ORDER BY
+         CASE WHEN sp.availability_status = 'out_of_stock' THEN 1 ELSE 0 END ASC,
+         sp.sort_order ASC, p.name ASC`,
+      params
+    );
+    // For each product keep exactly one row: the head store's listing when it
+    // lists the product, otherwise any member store's.
+    const primaryId = zone.primaryStoreId;
+    const bestById = new Map<string, MartProduct & { storeId: string; storeName: string }>();
+    for (const row of result.rows) {
+      const existing = bestById.get(row.id);
+      if (!existing) { bestById.set(row.id, row); continue; }
+      if (row.storeId === primaryId && existing.storeId !== primaryId) bestById.set(row.id, row);
+    }
+    return Array.from(bestById.values());
   }
 
   static async findById(id: string, storeId?: string): Promise<MartProduct | null> {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Users, Plus, X, Loader2, Search, UserPlus, CheckCircle, Pencil, Store } from 'lucide-react';
-import { teamApi } from '../services/api';
+import { teamApi, zonesApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PageSkeleton from '../components/PageSkeleton';
@@ -26,6 +26,8 @@ type ModalMode = 'search' | 'create';
 export default function TeamPage() {
   const storeId = getActiveStoreId();
   const [team, setTeam] = useState<any[]>([]);
+  const [zones, setZones] = useState<any[]>([]);
+  const [selectedZoneId, setSelectedZoneId] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [mode, setMode] = useState<ModalMode>('search');
@@ -39,12 +41,24 @@ export default function TeamPage() {
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<any | null>(null);
 
+  const loadZones = async () => {
+    try {
+      const r = await zonesApi.getAll(storeId);
+      const zs = r.data.data || [];
+      setZones(zs);
+      if (!selectedZoneId && zs.length) setSelectedZoneId(zs[0].id);
+    } catch {}
+  };
+
+  const zoneStoreId = zones.find(z => z.id === selectedZoneId)?.primaryStoreId || storeId;
+
   const load = async () => {
-    try { const r = await teamApi.getStoreTeam(storeId); setTeam(r.data.data || []); }
+    try { const r = await teamApi.getStoreTeam(zoneStoreId); setTeam(r.data.data || []); }
     catch {} finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { loadZones(); }, []);
+  useEffect(() => { setLoading(true); load(); }, [selectedZoneId]);
 
   const handlePhoneSearch = async () => {
     if (!phone.trim()) return;
@@ -61,10 +75,10 @@ export default function TeamPage() {
     setSaving(true);
     try {
       if (foundUser) {
-        await teamApi.addMember(storeId, { adminId: foundUser.id, role: selectedRole });
+        await teamApi.addMember(zoneStoreId, { adminId: foundUser.id, role: selectedRole });
       } else {
         if (!newUser.username || !newUser.password) return;
-        await teamApi.addMember(storeId, { ...newUser, role: selectedRole });
+        await teamApi.addMember(zoneStoreId, { ...newUser, role: selectedRole });
       }
       setShowModal(false); setPhone(''); setFoundUser(null); setNotFound(false);
       setNewUser({ username: '', password: '', name: '', phone: '', email: '' });
@@ -74,17 +88,17 @@ export default function TeamPage() {
   };
 
   const handleUpdateRole = async (member: any, role: string) => {
-    try { await teamApi.updateMember(storeId, member.adminId, { role }); await load(); }
+    try { await teamApi.updateMember(zoneStoreId, member.adminId, { role }); await load(); }
     catch { alert('Failed to update role'); }
   };
 
   const handleToggleActive = async (member: any) => {
-    try { await teamApi.updateMember(storeId, member.adminId, { isActive: !member.assignmentActive }); await load(); }
+    try { await teamApi.updateMember(zoneStoreId, member.adminId, { isActive: !member.assignmentActive }); await load(); }
     catch { alert('Failed to update'); }
   };
 
   const handleRemove = async (member: any) => {
-    try { await teamApi.removeMember(storeId, member.adminId); await load(); }
+    try { await teamApi.removeMember(zoneStoreId, member.adminId); await load(); }
     catch { alert('Failed to remove'); }
     finally { setConfirmRemove(null); }
   };
@@ -93,8 +107,15 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500 dark:text-slate-400">{team.length} member{team.length !== 1 ? 's' : ''} in your store</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Zone</label>
+          <select value={selectedZoneId} onChange={e => setSelectedZoneId(e.target.value)}
+            className="text-xs border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-1.5 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 focus:outline-none focus:border-emerald-500">
+            {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+          </select>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-slate-400">{team.length} member{team.length !== 1 ? 's' : ''} in this zone</p>
         <button onClick={() => { setShowModal(true); setMode('search'); setPhone(''); setFoundUser(null); setNotFound(false); }} className="btn-primary">
           <Plus className="w-4 h-4" /> Add Member
         </button>

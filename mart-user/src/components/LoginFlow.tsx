@@ -17,12 +17,6 @@ export interface LoginFlowProps {
   onGuest?: () => void;
   variant?: 'modal' | 'page';
   /**
-   * The overlay has no other way out, so it needs the guest escape inline. A page
-   * host that renders its own "Continue as guest" must switch this off, or the
-   * customer sees the same action twice.
-   */
-  showGuestLink?: boolean;
-  /**
    * Reports the visible step so a host that renders its OWN guest exit can emit
    * login_abandoned for the right step. AccountPage does exactly that, and without
    * this its button would silently drop the event the hub funnel counts.
@@ -67,7 +61,7 @@ export type Step = 'phone' | 'otp' | 'profile' | 'offer';
  * cancels its py-6 instead. Everything else -- steps, OTP, analytics and the guest
  * exit -- is identical.
  */
-export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', showGuestLink = true, onStepChange, onNavigateLegal, showPhoneHeading = true, backSignal }: LoginFlowProps) {
+export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest, variant = 'modal', onStepChange, onNavigateLegal, showPhoneHeading = true, backSignal }: LoginFlowProps) {
   const isModal = variant === 'modal';
   // See useFinePointer: auto-focusing a field on a phone opens the keyboard on
   // arrival and the browser scrolls to it, which is the page shake we are avoiding.
@@ -96,6 +90,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   const [welcomeOffer, setWelcomeOffer] = useState<any | null>(null);
   const [resendTimer, setResendTimer] = useState(() => restoredFlow ? Math.max(0, Math.ceil((restoredFlow.resendAvailableAt - Date.now()) / 1000)) : 0);
   const [newName, setNewName] = useState('');
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   // A new customer's verified token, held until the mandatory name (and any
   // welcome offer) is done. We deliberately do NOT commit the login at OTP
   // verification: committing flips `isLoggedIn`, which unmounts this flow on the
@@ -147,6 +142,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (otp.length !== 6) { setError('Enter the 6-digit OTP'); return; }
     setLoading(true); setError('');
     try {
@@ -188,25 +184,8 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
       });
       if (!err?.response) setError('No internet connection. Please try again.');
       else setError(err?.response?.data?.error || 'Invalid OTP. Try again.');
+      setOtp('');
     } finally { setLoading(false); }
-  };
-
-  const handlePasteOtp = async () => {
-    try {
-      if (!navigator.clipboard?.readText) throw new Error('Clipboard unavailable');
-      const text = await navigator.clipboard.readText();
-      // Grab an exact 6-digit run so a copied phone number or order id in the
-      // same message cannot be mistaken for the code.
-      const match = text.match(/(?:^|\D)(\d{6})(?!\d)/);
-      if (!match) {
-        setError('No 6-digit OTP found on the clipboard.');
-        return;
-      }
-      setOtp(match[1]);
-      setError('');
-    } catch {
-      setError('Could not read the clipboard. Press and hold the OTP field, then choose Paste.');
-    }
   };
 
   const handleResend = async () => {
@@ -220,6 +199,44 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
       if (!err?.response) setError('No internet connection. Please try again.');
       else setError(err?.response?.data?.error || 'Failed to resend OTP.');
     } finally { setLoading(false); }
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    if (!digit) return;
+    const chars = otp.padEnd(6, '').split('');
+    chars[index] = digit;
+    const nextOtp = chars.join('').slice(0, 6);
+    setOtp(nextOtp);
+    const nextIndex = Math.min(index + 1, 5);
+    otpRefs.current[nextIndex]?.focus();
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Backspace') return;
+    if ((otp[index] ?? '') !== '') return;
+    e.preventDefault();
+    const prevIndex = Math.max(0, index - 1);
+    const chars = otp.padEnd(6, '').split('');
+    chars[index] = '';
+    setOtp(chars.join('').slice(0, 6));
+    otpRefs.current[prevIndex]?.focus();
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>, index: number) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!text) return;
+    const chars = Array(6).fill('');
+    const start = index;
+    for (let i = 0; i < 6; i++) {
+      const charIndex = start + i;
+      if (charIndex >= 6) break;
+      chars[charIndex] = text[i] ?? '';
+    }
+    setOtp(chars.join('').slice(0, 6));
+    const nextIndex = Math.min(6, start + text.length);
+    otpRefs.current[Math.max(0, nextIndex - 1)]?.focus();
   };
 
   // Commits the staged new-customer login. Runs only once the mandatory name (and
@@ -315,16 +332,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   ) : null;
 
   const Spinner = () => <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />;
-
-  // This is now the only way out of the login flow on every step, so it carries
-  // the 44px WCAG 2.2 target floor the cross used to provide: py-2 on 13px text
-  // is only ~34px tall.
-  const GuestLink = () => (onGuest && showGuestLink) ? (
-    <button type="button" onClick={handleGuest}
-      className="flex min-h-[44px] w-full items-center justify-center py-2 text-center text-[13px] font-bold text-gokez-700 hover:text-gokez-800 dark:text-gokez-400 dark:hover:text-gokez-300 transition-colors focus-visible:outline-none focus-visible:underline">
-      Continue as guest →
-    </button>
-  ) : null;
 
   const primaryBtn = (enabled = true) =>
     `flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[17px] font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800 ${enabled
@@ -465,7 +472,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 <button type="submit" disabled={loading || !phoneValid} className={primaryBtn(phoneValid)}>
                   {loading ? <Spinner /> : <>Continue with OTP</>}
                 </button>
-                <GuestLink />
               </form>
 
               <p className="!mt-1 text-center text-[11px] leading-snug text-gray-500 dark:text-slate-400">
@@ -481,47 +487,39 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 <h2 id="login-title" className="text-[19px] font-bold leading-tight text-slate-900 dark:text-white">
                   OTP Verification
                 </h2>
-                <p className="mx-auto mt-1 max-w-[22rem] text-center text-[11px] text-slate-500 dark:text-slate-400">
-                  We'll call you with a 6-digit code
-                </p>
-                <div className="mt-2 flex flex-col items-center gap-0.5 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  <p className="flex flex-wrap items-center justify-center gap-2">
-                    <span className="text-slate-600 dark:text-slate-300">Sent to</span>
-                    <span>{digits}</span>
-                  </p>
-                  <button type="button" onClick={() => { loginFlow.clear(); setStep('phone'); setOtp(''); setError(''); }}
-                    className="-my-2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded px-2 text-xs font-bold text-gokez-700 underline underline-offset-2 hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400">
-                    Change number
-                  </button>
-                </div>
               </div>
 
               <form onSubmit={handleVerifyOtp} className="mt-3 space-y-2">
                 <ErrorNote id="login-error" />
                 <label htmlFor="login-otp" className="sr-only">6-digit verification code</label>
-                <div className="relative">
-                  <input
-                    id="login-otp" name="otp" type="tel" value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
-                    placeholder="6-digit OTP"
-                    inputMode="numeric" autoComplete="one-time-code" maxLength={6}
-                    aria-invalid={Boolean(error)}
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-16 text-center text-xl font-bold tracking-[0.45em] text-slate-900 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 transition-all"
-                    autoFocus={finePointer} />
-                  <button
-                    type="button" onClick={handlePasteOtp} aria-label="Paste OTP from clipboard"
-                    className="absolute right-1 top-1/2 flex min-h-[44px] -translate-y-1/2 items-center rounded-xl px-3 text-xs font-bold text-gokez-700 transition-colors hover:bg-gokez-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-300 dark:hover:bg-slate-600/50">
-                    Paste
-                  </button>
+                <div className="flex items-center justify-center gap-2 sm:gap-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <input
+                      key={i}
+                      ref={el => { otpRefs.current[i] = el; }}
+                      id={i === 0 ? 'login-otp' : `login-otp-${i}`}
+                      name={i === 0 ? 'otp' : `otp-${i}`}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={otp[i] ?? ''}
+                      onChange={e => handleOtpChange(i, e.target.value)}
+                      onKeyDown={e => handleOtpKeyDown(i, e)}
+                      onPaste={e => handleOtpPaste(e, i)}
+                      autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                      aria-invalid={Boolean(error)}
+                      className="h-12 w-12 rounded-xl border bg-white text-center text-xl font-bold text-slate-900 focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 dark:bg-slate-700/60 dark:text-white dark:border-slate-600 sm:h-14 sm:w-14"
+                      autoFocus={finePointer && i === 0}
+                    />
+                  ))}
                 </div>
                 <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn(otp.length === 6)}>
-                  {loading ? <Spinner /> : <>Verify</>}
+                  {loading ? <Spinner /> : <>Continue</>}
                 </button>
                 <button type="button" onClick={handleResend} disabled={resendTimer > 0 || loading}
                   className="flex min-h-[44px] w-full items-center justify-center rounded-2xl py-2 text-sm font-bold text-gokez-700 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gokez-400 dark:hover:text-gokez-300">
                   {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
                 </button>
-                <GuestLink />
               </form>
             </>
           )}

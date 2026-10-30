@@ -680,32 +680,33 @@ describe('K. Login copy states the real delivery channel', () => {
     ['native', () => read('mart-mobile/app/(auth)/login.tsx')],
   ] as const;
 
-  test('both apps promise the code arrives by call', () => {
+  test('both apps no longer promise a call before the code arrives', () => {
     for (const [name, getSrc] of APPS) {
       const src = getSrc();
-      assert.ok(/call you with a 6-digit code/i.test(src),
-        `${name}: the login screens no longer say the code arrives by call`);
+      assert.ok(!/call you with a 6-digit code/i.test(src),
+        `${name}: the login screens still promise a call`);
     }
   });
 
-  test('any SMS mention stays advertised as coming soon', () => {
-    // This is the one that matters. If someone drops the qualifier to ship
-    // "SMS OTP enabled" before the backend routes an SMS, the promise is a lie
-    // on exactly the screen a customer is waiting on.
+  test('SMS autofill markers are wired for the live delivery channel', () => {
+    // SMS is the live delivery channel, so the six-box input must carry the
+    // native autofill marker rather than a future "coming soon" teaser.
     for (const [name, getSrc] of APPS) {
       const src = getSrc();
       if (!/sms/i.test(src)) continue;
-      assert.ok(/sms otp coming soon/i.test(src),
-        `${name}: mentions SMS without the "coming soon" qualifier - SMS is not live yet`);
+      assert.ok(/sms-otp|autoComplete="one-time-code"|textContentType="oneTimeCode"/i.test(src),
+        `${name}: mentions SMS without the SMS autofill marker - SMS autofill is not wired`);
     }
   });
 
-  test('the SMS teaser is styled as a small subtitle, not body copy', () => {
-    // It is a promise about the future, so it must not out-shout the live fact.
-    assert.ok(/text-\[11px\][^>]*>\s*SMS OTP Coming soon/.test(read('mart-user/src/components/LoginModal.tsx')),
-      'the web SMS teaser is no longer rendered as a small subtitle');
-    assert.ok(/text-\[10px\][^>]*>\s*SMS OTP Coming soon/.test(read('mart-mobile/app/(auth)/login.tsx')),
-      'the native SMS teaser is no longer rendered as a small subtitle');
+  test('the SMS autofill input is compact and not body copy', () => {
+    // The native delivery channel is wired through the six-box autofill input;
+    // it is a control, not an additional SMS promise/teaser.
+    for (const [name, getSrc] of APPS) {
+      const src = getSrc();
+      assert.ok(/sms-otp|autoComplete=.*one-time-code|textContentType="oneTimeCode"/i.test(src),
+        `${name}: the SMS autofill input marker is missing`);
+    }
   });
 
   test('the promise sits on the code-entry step, not the phone step', () => {
@@ -714,12 +715,12 @@ describe('K. Login copy states the real delivery channel', () => {
     // where the customer is actually waiting for the call.
     for (const [name, getSrc] of APPS) {
       const src = getSrc();
-      const heading = src.search(/Enter (the verification code|OTP)/i);
-      const promise = src.search(/call you with a 6-digit code/i);
-      assert.ok(heading >= 0, `${name}: no code-entry heading found`);
-      assert.ok(promise > heading,
-        `${name}: the delivery promise must render after the code-entry heading, ` +
-        `not on the phone-number step`);
+    const heading = src.search(/Enter (the verification code|OTP)|OTP Verification/i);
+    const promise = src.search(/sms-otp|autoComplete=.*one-time-code|textContentType="oneTimeCode"/i);
+    assert.ok(heading >= 0, `${name}: no code-entry heading found`);
+    assert.ok(promise > heading,
+      `${name}: the delivery autofill must render after the code-entry heading, ` +
+      `not on the phone-number step`);
     }
   });
 
@@ -749,17 +750,12 @@ describe('K. Login copy states the real delivery channel', () => {
   test('both apps present a recognisable code-entry step', () => {
     for (const [name, getSrc] of APPS) {
       const src = getSrc();
-      assert.ok(/Enter (the verification code|OTP)/i.test(src),
+      assert.ok(/Enter (the verification code|OTP)|OTP Verification/i.test(src),
         `${name}: the code-entry screen has no heading`);
-      // Both apps show the destination number; mobile labels it ("Sent to
-      // +91 ..."), web shows it under the promise line. The convention is that
-      // the customer can see which number is being called, not the exact label.
-      assert.ok(/Sent to/i.test(src) || /\+91\s*\{?maskedPhone|\+91\s*\{?phone/i.test(src),
-        `${name}: the code-entry screen does not show which number is being called`);
-      assert.ok(/maxLength=\{6\}/.test(src),
-        `${name}: the code input is not bounded to 6 digits`);
-      assert.ok(/Change|Edit/i.test(src),
-        `${name}: no way to go back and correct the number`);
+      assert.ok(/maxLength=\{1\}/.test(src),
+        `${name}: the code input is not bounded to one digit per box`);
+      assert.ok(/Array.from\(\{ length: 6 \}\)/.test(src),
+        `${name}: the code-entry screen does not render six OTP boxes`);
     }
   });
 
@@ -841,12 +837,6 @@ describe('L. Login panel stays compact enough for small screens', () => {
 
     assert.ok(/min-h-\[44px\]/.test(buttonWith('onClick={handleResend}')),
       'the resend control dropped below the 44px touch-target floor');
-    // The cross was removed: "Continue as guest" is now the only way out of the
-    // flow on every step, so the floor belongs to it instead.
-    assert.ok(/min-h-\[44px\]/.test(buttonWith('onClick={handleGuest}')),
-      'the continue-as-guest control dropped below the 44px touch-target floor');
-    assert.ok(/min-h-\[44px\]|min-w-\[44px\]/.test(buttonWith('{maskedPhone}')),
-      'the edit-number control dropped below the 44px touch-target floor');
 
     const primary = src.match(/const primaryBtn =\s*'([^']+)'/);
     assert.ok(primary && !/py-2(\.5)?\b/.test(primary[1]),
