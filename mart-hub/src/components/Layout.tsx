@@ -3,10 +3,10 @@ import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useThemeStore } from '../store/themeStore';
 import {
   LayoutDashboard, Package, Image as ImageIcon,
-  Users, Settings, Shield, Boxes, UserPlus,
+  Users, Shield, Boxes, UserPlus,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
-  Store, ShoppingBasket, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb,
+  Store, ShoppingBasket, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb, MapPin,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, authApi } from '../services/api';
@@ -33,9 +33,8 @@ export const NAV_ALL = [
   { label: 'Carousel',           href: '/carousel',            icon: ImageIcon,       roles: ['super_admin'] },
   { label: 'Home Page',          href: '/home-sections',       icon: LayoutTemplate,  roles: ['super_admin', 'store_owner'] },
   { label: 'My Deliveries',      href: '/delivery',            icon: Truck,           roles: ['delivery_staff', 'staff'] },
-  { label: 'My Team',            href: '/team',                icon: Users,           roles: ['super_admin', 'store_owner'] },
-  { label: 'Settings',           href: '/settings',            icon: Settings,        roles: ['super_admin', 'store_owner', 'store_manager'] },
-  { label: 'Stores',             href: '/stores',              icon: Store,           roles: ['super_admin'] },
+  { label: 'Stores',             href: '/stores',              icon: Store,           roles: ['super_admin', 'store_owner'] },
+  { label: 'Zones',              href: '/zones',               icon: MapPin,          roles: ['super_admin'] },
   { label: 'Subscriptions',      href: '/subscriptions',       icon: CreditCard,      roles: ['super_admin'] },
   { label: 'Store Requests',     href: '/store-applications',  icon: Inbox,           roles: ['super_admin'] },
   { label: 'Users',              href: '/users',               icon: UserCog,         roles: ['super_admin'] },
@@ -137,18 +136,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const PAGE_TITLES: Record<string, string> = {
     '/': 'Dashboard', '/orders': 'Orders', '/products': 'Products',
     '/categories': 'Categories', '/customers': 'Customers',
-    '/analytics': 'Analytics', '/settings': 'Settings',
-    '/inventory': 'Inventory',
+    '/analytics': 'Analytics', '/inventory': 'Inventory',
     '/profile': 'My Profile', '/change-password': 'Change Password',
-    '/stores': 'Stores', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
+    '/stores': 'Stores', '/zones': 'Zones', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Requests',
     '/catalog': 'Catalog',
     '/feedback': 'Feedback',
     '/campaigns': 'Campaigns',
     '/carousel': 'Carousel Manager',
     '/home-sections': 'Home Page',
-    '/team': 'My Team',
-    '/delivery': 'My Deliveries',
+      '/delivery': 'My Deliveries',
     '/customer-leads': 'Leads',
     '/suggestions': 'Product Suggestions',
     '/install-analytics': 'Installs',
@@ -236,7 +233,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/settings', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/team', '/delivery', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
+              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <div className="flex items-center gap-1 -ml-1 min-w-0">
                   <button onClick={() => navigate(-1)}
                     className="p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">

@@ -347,13 +347,13 @@ export interface FetchOpts { fresh?: boolean }
 export const storeApi = {
   getCategories: (opts?: FetchOpts) =>
     api.get<{ success: boolean; data: Category[] }>('/categories', { fresh: opts?.fresh }),
-  getProducts: (categoryId?: string, storeId?: string, opts?: FetchOpts) =>
+  getProducts: (categoryId?: string, storeId?: string, opts?: FetchOpts, zoneId?: string) =>
     api.get<{ success: boolean; data: Product[] }>('/products', {
-      params: { ...(categoryId ? { categoryId } : {}), ...(storeId ? { storeId } : {}) },
+      params: { ...(categoryId ? { categoryId } : {}), ...(storeId ? { storeId } : {}), ...(zoneId ? { zoneId } : {}) },
       fresh: opts?.fresh,
     }),
-  getSettings: (storeId?: string, opts?: FetchOpts) => api.get<{ success: boolean; data: PublicSettings }>('/settings/public', {
-    params: storeId ? { storeId } : {},
+  getSettings: (storeId?: string, opts?: FetchOpts, zoneId?: string) => api.get<{ success: boolean; data: PublicSettings }>('/settings/public', {
+    params: { ...(storeId ? { storeId } : {}), ...(zoneId ? { zoneId } : {}) },
     fresh: opts?.fresh,
   }),
   getHomeSections: (storeId?: string, opts?: FetchOpts) =>
@@ -365,9 +365,9 @@ export const storeApi = {
    * A tiny fingerprint of the whole public catalog. The catalog poll compares
    * this and skips the four heavy fetches entirely when nothing changed.
    */
-  getCatalogStamp: (storeId?: string) =>
+  getCatalogStamp: (storeId?: string, zoneId?: string) =>
     api.get<{ success: boolean; data: { stamp: string } }>('/catalog/stamp', {
-      params: storeId ? { storeId } : {},
+      params: { ...(storeId ? { storeId } : {}), ...(zoneId ? { zoneId } : {}) },
     }),
   getZones: () => api.get<{ success: boolean; data: MartZone[] }>('/zones'),
   placeOrder: (data: {

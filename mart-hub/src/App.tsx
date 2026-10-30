@@ -19,13 +19,13 @@ const OrdersPage = lazyWithRetry(() => import('./pages/OrdersPage'));
 const CustomersPage = lazyWithRetry(() => import('./pages/CustomersPage'));
 const CustomerLeadsPage = lazyWithRetry(() => import('./pages/CustomerLeadsPage'));
 const SuggestionsPage = lazyWithRetry(() => import('./pages/SuggestionsPage'));
-const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'));
 const AnalyticsPage = lazyWithRetry(() => import('./pages/AnalyticsPage'));
 const InstallAnalyticsPage = lazyWithRetry(() => import('./pages/InstallAnalyticsPage'));
 
 const ProfilePage = lazyWithRetry(() => import('./pages/ProfilePage'));
 const ChangePasswordPage = lazyWithRetry(() => import('./pages/ChangePasswordPage'));
 const StoresPage = lazyWithRetry(() => import('./pages/StoresPage'));
+const ZonesPage = lazyWithRetry(() => import('./pages/ZonesPage'));
 const SubscriptionsPage = lazyWithRetry(() => import('./pages/SubscriptionsPage'));
 const UsersPage = lazyWithRetry(() => import('./pages/UsersPage'));
 const CompliancePage = lazyWithRetry(() => import('./pages/CompliancePage'));
@@ -35,7 +35,6 @@ const MerchantTermsPage = lazyWithRetry(() => import('./pages/MerchantTermsPage'
 const LandingPage = lazyWithRetry(() => import('./pages/LandingPage'));
 const StoreApplicationsPage = lazyWithRetry(() => import('./pages/StoreApplicationsPage'));
 const CatalogPage = lazyWithRetry(() => import('./pages/CatalogPage'));
-const TeamPage = lazyWithRetry(() => import('./pages/TeamPage'));
 const DeliveryPage = lazyWithRetry(() => import('./pages/DeliveryPage'));
 const InventoryPage = lazyWithRetry(() => import('./pages/InventoryPage'));
 const FeedbackPage = lazyWithRetry(() => import('./pages/FeedbackPage'));
@@ -86,9 +85,9 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/install-analytics', '/settings', '/stores', '/subscriptions', '/store-applications', '/catalog', '/team', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
-  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/settings', '/catalog', '/team', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
-  store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/settings', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
+  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
+  store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
   staff:           ['/', '/orders', '/products', '/inventory', '/delivery', '/profile', '/change-password', '/more'],
 };
@@ -159,8 +158,9 @@ export default function App() {
         <Route path="/suggestions"      element={<ProtectedRoute path="/suggestions"><SuggestionsPage /></ProtectedRoute>} />
         <Route path="/analytics"       element={<ProtectedRoute path="/analytics"><AnalyticsPage /></ProtectedRoute>} />
         <Route path="/install-analytics" element={<ProtectedRoute path="/install-analytics"><InstallAnalyticsPage /></ProtectedRoute>} />
-        <Route path="/settings"        element={<ProtectedRoute path="/settings"><SettingsPage /></ProtectedRoute>} />
+        <Route path="/settings"        element={<Navigate to="/stores" replace />} />
         <Route path="/stores"          element={<ProtectedRoute path="/stores"><StoresPage /></ProtectedRoute>} />
+        <Route path="/zones"           element={<ProtectedRoute path="/zones"><ZonesPage /></ProtectedRoute>} />
         <Route path="/subscriptions"   element={<ProtectedRoute path="/subscriptions"><SubscriptionsPage /></ProtectedRoute>} />
         <Route path="/users"           element={<ProtectedRoute path="/users"><UsersPage /></ProtectedRoute>} />
         <Route path="/compliance"      element={<ProtectedRoute path="/compliance"><CompliancePage /></ProtectedRoute>} />
@@ -173,7 +173,7 @@ export default function App() {
         <Route path="/landing"          element={<LandingPage />} />
         <Route path="/store-applications" element={<ProtectedRoute path="/store-applications"><StoreApplicationsPage /></ProtectedRoute>} />
         <Route path="/catalog"            element={<ProtectedRoute path="/catalog"><CatalogPage /></ProtectedRoute>} />
-        <Route path="/team"              element={<ProtectedRoute path="/team"><TeamPage /></ProtectedRoute>} />
+        <Route path="/team"              element={<Navigate to="/stores" replace />} />
         <Route path="/delivery"          element={<ProtectedRoute path="/delivery"><DeliveryPage /></ProtectedRoute>} />
         <Route path="/inventory"         element={<ProtectedRoute path="/inventory"><InventoryPage /></ProtectedRoute>} />
         <Route path="/feedback"          element={<ProtectedRoute path="/feedback"><FeedbackPage /></ProtectedRoute>} />

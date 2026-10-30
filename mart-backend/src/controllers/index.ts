@@ -31,7 +31,7 @@ import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
 import { CatalogService } from '../services/catalog.service';
 import { RecommendationService } from '../services/recommendation.service';
-import { evaluateStoreOpen, parseIstLocalDateTime } from '../utils/storeHours';
+import { evaluateStoreOpen, parseIstLocalDateTime, type StoreOpenState } from '../utils/storeHours';
 import { trackStream } from '../utils/sse';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
@@ -88,7 +88,22 @@ export const getCategories = asyncHandler(async (_req: Request, res: Response) =
 });
 
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
-  const { categoryId, storeId } = req.query;
+  const { categoryId, storeId, zoneId } = req.query;
+  res.set('Cache-Control', 'no-store');
+  // A multi-store zone serves the merged catalog of every tagged store, deduped
+  // per product with the zone head's listing winning ties.
+  if (zoneId) {
+    const zone = await ZoneService.findById(zoneId as string);
+    if (zone) {
+      const products = await ProductService.findAllForZone(zoneId as string, {
+        categoryId: categoryId as string,
+        excludeHidden: true,
+        activeCategoryOnly: true,
+      });
+      res.json({ success: true, data: products });
+      return;
+    }
+  }
   const resolvedStoreId = (storeId as string) || SHAPOORJI_ID;
   const settings = await SettingsService.getPublic(resolvedStoreId);
   const products = await ProductService.findAll({
@@ -98,7 +113,6 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     activeCategoryOnly: true,
     onlyFulfillableBundles: settings.inventory_tracking === 'true' && settings.auto_out_of_stock === 'on_zero',
   });
-  res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: products });
 });
 
@@ -113,27 +127,58 @@ export const getProduct = asyncHandler(async (req: Request, res: Response) => {
 export const getPublicSettings = asyncHandler(async (req: Request, res: Response) => {
   const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
   const settings = await SettingsService.getPublic(storeId);
+  // A multi-store zone presents its head store as the face of the zone and
+  // answers open/close from the zone's own hours + zone settings. The store
+  // path below is the legacy single-store behaviour.
+  let openState: StoreOpenState | null = null;
+  let effectiveHours: Record<string, unknown> | null = null;
+  let nameOverride: string | null = null;
+  let addressOverride: string | null = null;
+  let zoneName: string | null = null;
+  const zoneId = req.query.zoneId as string | undefined;
+  if (zoneId) {
+    const zone = await ZoneService.findById(zoneId);
+    if (zone) {
+      openState = await ZoneService.getOpenState(zone.id);
+      effectiveHours = zone.openingHours as Record<string, unknown> | null;
+      nameOverride = zone.primaryStore?.name ?? null;
+      addressOverride = zone.primaryStore?.address ?? null;
+      zoneName = zone.name;
+    }
+  }
   // Open/closed is computed here rather than in the browser so there is exactly
   // one implementation of the schedule, and so the answer cannot depend on the
   // customer's device clock or timezone. The storefront re-fetches at
   // nextOpenAt to pick up the change instead of re-deriving it locally.
   const store = await StoreService.findById(storeId);
-  const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
-  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
+  if (!zoneId && !openState) {
+    const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
+    openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
+  }
   // Store name and address have a single source of truth: mart_stores (edited on
   // the hub Stores page). They used to live in mart_settings too, which let the
   // storefront show a different name/address from receipts. Overlay the store
   // record so the storefront, receipts and tracking all read the same values.
+  // A zone's head store overrides again so the customer sees the zone face.
   const merged = {
     ...settings,
-    store_name: store?.name ?? settings.store_name ?? '',
-    store_address: store?.address ?? settings.store_address ?? '',
+    store_name: nameOverride ?? store?.name ?? settings.store_name ?? '',
+    store_address: addressOverride ?? store?.address ?? settings.store_address ?? '',
   };
   // The raw schedule rides along so the storefront can offer scheduled delivery
   // slots that run open→close on the store's own clock (IST), rather than
   // guessing a window. Null when the store posts no hours.
   res.set('Cache-Control', 'no-store');
-  res.json({ success: true, data: { ...merged, openState, openingHours: store?.openingHours ?? null } });
+  res.json({
+    success: true,
+    data: {
+      ...merged,
+      openState,
+      openingHours: effectiveHours ?? store?.openingHours ?? null,
+      zoneId: zoneId ?? null,
+      zoneName,
+    },
+  });
 });
 
 /**
@@ -148,9 +193,13 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
  */
 export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) => {
   const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
+  const zoneId = req.query.zoneId as string | undefined;
+  const zone = zoneId ? await ZoneService.findById(zoneId) : null;
   const [dbStamp, settings, store] = await Promise.all([
-    CatalogService.getStamp(storeId),
-    SettingsService.getPublic(storeId),
+    zone
+      ? CatalogService.getZoneStamp(zoneId as string)
+      : CatalogService.getStamp(storeId),
+    SettingsService.getPublic(zone?.primaryStoreId ?? storeId),
     StoreService.findById(storeId),
   ]);
   // The scheduled closure has to be part of this, not just the weekly hours:
@@ -158,11 +207,17 @@ export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) 
   // its open state without anything in the database being touched, so without
   // it here the storefront would never refetch and the banner would never
   // appear or disappear.
-  const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
-  const openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
+  let openState: StoreOpenState | null = null;
+  if (zone) {
+    openState = await ZoneService.getOpenState(zone.id);
+  }
+  if (!openState) {
+    const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
+    openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
+  }
   const boundary = openState.isOpen ? openState.closesAt : openState.nextOpenAt;
   res.set('Cache-Control', 'no-store');
-  res.json({ success: true, data: { stamp: `${dbStamp}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}:${openState.closedUntilLabel ?? '-'}` } });
+  res.json({ success: true, data: { stamp: `${dbStamp}:${zoneId ? 'z' : 's'}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}:${openState.closedUntilLabel ?? '-'}` } });
 });
 
 export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {
@@ -335,6 +390,11 @@ export const trackGuestOrdersByTokens = asyncHandler(async (req: Request, res: R
 
 export const getZones = asyncHandler(async (_req: Request, res: Response) => {
   const zones = await ZoneService.findAll(true);
+  // Attach each zone's live open/close state (zone hours + zone settings,
+  // falling back to the head store's) so the storefront never re-derives it.
+  for (const zone of zones) {
+    zone.openState = await ZoneService.getOpenState(zone.id);
+  }
   res.json({ success: true, data: zones });
 });
 
@@ -1266,6 +1326,38 @@ export const adminDeleteZone = asyncHandler(async (req: AdminRequest, res: Respo
   res.json({ success: true, message: 'Zone deleted' });
 });
 
+/** Replace the tagged stores of a zone. Body: { storeIds: string[] } */
+export const adminZoneTagStores = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeIds = Array.isArray(req.body?.storeIds) ? req.body.storeIds : [];
+  const zone = await ZoneService.tagStores(req.params.id, storeIds);
+  if (!zone) { res.status(404).json({ success: false, error: 'Zone not found' }); return; }
+  res.json({ success: true, data: zone });
+});
+
+/** Set the zone head (primary store). Body: { storeId } */
+export const adminZoneSetPrimary = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = req.body?.storeId;
+  if (typeof storeId !== 'string' || !storeId) {
+    res.status(400).json({ success: false, error: 'storeId is required' }); return;
+  }
+  const zone = await ZoneService.setPrimaryStore(req.params.id, storeId);
+  if (!zone) { res.status(404).json({ success: false, error: 'Zone not found' }); return; }
+  res.json({ success: true, data: zone });
+});
+
+/** Read the zone-scoped open/close settings. */
+export const adminGetZoneSettings = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const settings = await ZoneService.getSettings(req.params.id);
+  res.json({ success: true, data: settings });
+});
+
+/** Write zone-scoped open/close settings. Body: a subset of ZONE_SETTING_KEYS. */
+export const adminUpdateZoneSettings = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const values = typeof req.body === 'object' && req.body ? req.body : {};
+  await ZoneService.updateSettings(req.params.id, values);
+  res.json({ success: true, message: 'Zone settings updated' });
+});
+
 // ── Admin store controllers (super_admin only) ────────────────────────────────
 
 export const adminGetStores = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -1615,13 +1707,25 @@ export const guestCancelOrder = asyncHandler(async (req: CustomerRequest, res: R
 
 export const adminGetUsers = asyncHandler(async (_req: AdminRequest, res: Response) => {
   const result = await query(
-    `SELECT id, username, name, email, phone, role,
-            store_id as "storeId",
-            is_active as "isActive",
-            last_login_at as "lastLoginAt",
-            created_at as "createdAt"
-     FROM mart_admins
-     ORDER BY role ASC, name ASC`
+    `SELECT a.id, a.username, a.name, a.email, a.phone, a.role,
+            a.store_id as "storeId",
+            s.name as "storeName",
+            z.id as "zoneId",
+            z.name as "zoneName",
+            z.primary_store_id as "zoneHeadStoreId",
+            (z.primary_store_id = a.store_id) as "isZoneHead",
+            (EXISTS (SELECT 1 FROM mart_zone_stores zs WHERE zs.zone_id = z.id AND zs.store_id = a.store_id)) as "isZoneMember",
+            a.is_active as "isActive",
+            a.last_login_at as "lastLoginAt",
+            a.created_at as "createdAt"
+     FROM mart_admins a
+     LEFT JOIN mart_stores s ON s.id = a.store_id
+     LEFT JOIN mart_zones z ON z.id = (
+       SELECT mz.id FROM mart_zones mz
+       WHERE mz.primary_store_id = a.store_id OR mz.store_id = a.store_id
+       LIMIT 1
+     )
+     ORDER BY a.role ASC, a.name ASC`
   );
   res.json({ success: true, data: result.rows });
 });

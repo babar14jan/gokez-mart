@@ -39,4 +39,36 @@ export class CatalogService {
     );
     return result.rows[0]?.stamp ?? '';
   }
+
+  /**
+   * Fingerprint of a multi-store zone's combined catalog. The zone's own row,
+   * its membership and its open-state settings ride along: retagging stores,
+   * or editing the zone's open-state settings, must invalidate the storefront
+   * cache exactly the way an edit to a single store's catalog does.
+   */
+  static async getZoneStamp(zoneId: string): Promise<string> {
+    const result = await query<{ stamp: string | null }>(
+      `SELECT md5(concat_ws('|',
+        (SELECT count(*) || ':' || COALESCE(max(p.updated_at)::text, '-') FROM mart_products p),
+        (SELECT count(*) || ':' || COALESCE(max(p.updated_at)::text, '-')
+           FROM mart_store_products p WHERE p.store_id IN (
+             SELECT s.store_id FROM mart_zone_stores s WHERE s.zone_id = $1)
+           OR p.store_id = (SELECT z.primary_store_id FROM mart_zones z WHERE z.id = $1)),
+        (SELECT count(*) || ':' || COALESCE(max(p.created_at)::text, '-')
+           FROM mart_bundle_components p WHERE p.store_id IN (
+             SELECT s.store_id FROM mart_zone_stores s WHERE s.zone_id = $1)
+           OR p.store_id = (SELECT z.primary_store_id FROM mart_zones z WHERE z.id = $1)),
+        (SELECT count(*) || ':' || COALESCE(max(c.updated_at)::text, '-') FROM mart_categories c),
+        (SELECT COALESCE(max(z.updated_at)::text, '-') FROM mart_zones z WHERE z.id = $1),
+        (SELECT count(*) || ':' || COALESCE(max(zs.updated_at)::text, '-') FROM mart_zone_settings zs WHERE zs.zone_id = $1),
+        (SELECT count(*) || ':' || COALESCE(max(zs.created_at)::text, '-') FROM mart_zone_stores zs WHERE zs.zone_id = $1),
+        (SELECT count(*) || ':' || COALESCE(max(o.updated_at)::text, '-')
+           FROM mart_orders o WHERE o.store_id IN (
+             SELECT s.store_id FROM mart_zone_stores s WHERE s.zone_id = $1)
+           OR o.store_id = (SELECT z.primary_store_id FROM mart_zones z WHERE z.id = $1))
+      )) AS stamp`,
+      [zoneId]
+    );
+    return result.rows[0]?.stamp ?? '';
+  }
 }

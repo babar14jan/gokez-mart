@@ -70,6 +70,7 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const otpRefs = useRef<Array<any>>([]);
 
   const startResendTimer = () => {
     setResendTimer(30);
@@ -95,6 +96,7 @@ export default function LoginScreen() {
   };
 
   const handleVerifyOtp = async () => {
+    if (loading) return;
     if (otp.length !== 6) { setError('Enter the 6-digit OTP'); return; }
     setLoading(true); setError('');
     try {
@@ -108,6 +110,7 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Invalid OTP. Try again.');
+      setOtp('');
     } finally { setLoading(false); }
   };
 
@@ -122,6 +125,31 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   };
 
+  const setOtpDigit = (index: number, digit: string) => {
+    const chars = otp.padEnd(6, '').split('');
+    chars[index] = digit;
+    setOtp(chars.join('').slice(0, 6));
+  };
+
+  const handleOtpChangeText = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    if (!digit) return;
+    setOtpDigit(index, digit);
+    const nextIndex = Math.min(index + 1, 5);
+    otpRefs.current[nextIndex]?.focus?.();
+  };
+
+  const handleOtpKeyPress = (index: number, e: any) => {
+    const key = e?.nativeEvent?.key;
+    if (key !== 'Backspace') return;
+    if (otp[index] ?? '') return;
+    const prevIndex = Math.max(0, index - 1);
+    const chars = otp.padEnd(6, '').split('');
+    chars[index] = '';
+    setOtp(chars.join('').slice(0, 6));
+    otpRefs.current[prevIndex]?.focus?.();
+  };
+
   const handleSaveProfile = async () => {
     if (!newName.trim()) { setError('Please enter your name'); return; }
     setSaving(true); setError('');
@@ -132,10 +160,6 @@ export default function LoginScreen() {
     } catch {
       setError('Failed to save. Please try again.');
     } finally { setSaving(false); }
-  };
-
-  const handleGuest = () => {
-    router.back();
   };
 
   const version = '1.0.0';
@@ -195,15 +219,6 @@ export default function LoginScreen() {
             >
               <Ionicons name="call-outline" size={20} color="#fff" />
               <Text style={{ fontSize: 16, fontFamily: 'Inter-SemiBold', color: '#fff' }}>Continue with Phone</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{ height: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}
-              onPress={handleGuest}
-            >
-              <Text style={{ fontSize: 14, fontFamily: 'Inter-Medium', color: colors.primary }}>
-                Continue as Guest →
-              </Text>
             </TouchableOpacity>
 
             <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray400, textAlign: 'center', lineHeight: 18, marginBottom: 24 }}>
@@ -279,25 +294,10 @@ export default function LoginScreen() {
         {step === 'otp' && (
           <>
             <Text style={{ fontSize: 24, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 6 }}>
-              Enter OTP
+              OTP Verification
             </Text>
-            <View className="flex-row items-center mb-6">
-              <Text className="text-sm" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>
-                Sent to <Text className="font-semibold" style={{ fontFamily: 'Inter-SemiBold', color: colors.gray700 }}>+91 {phone}</Text>
-              </Text>
-              <TouchableOpacity onPress={() => { setStep('phone'); setOtp(''); setError(''); }} className="ml-2">
-                <Text className="text-xs font-semibold" style={{ color: colors.primary, fontFamily: 'Inter-SemiBold' }}>Change</Text>
-              </TouchableOpacity>
-            </View>
-
             <View className="rounded-xl px-3 py-2.5 mb-4" style={{ backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.gray200 }}>
-              <View className="flex-row items-center gap-1.5">
-                <Ionicons name="call-outline" size={14} color={colors.primary} />
-                <Text className="flex-1 text-xs leading-5" style={{ fontFamily: 'Inter-SemiBold', color: colors.primaryDark }}>
-                  We'll call you with a 6-digit code
-                </Text>
-              </View>
-              <Text className="mt-1 text-[10px] leading-4" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>
+              <Text className="text-[10px] leading-4" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>
                 Do not share this code with anyone.
               </Text>
             </View>
@@ -308,19 +308,26 @@ export default function LoginScreen() {
               </View>
             )}
 
-            <TextInput
-              className="rounded-2xl h-14 text-center text-2xl font-bold mb-4"
-              style={{ fontFamily: 'Inter-Bold', letterSpacing: 12, borderWidth: 1, borderColor: colors.gray200, backgroundColor: colors.gray50, color: colors.gray900 }}
-              placeholder="------"
-              placeholderTextColor={colors.gray400}
-              keyboardType="number-pad"
-              autoComplete="sms-otp"
-              textContentType="oneTimeCode"
-              maxLength={6}
-              value={otp}
-              onChangeText={t => { setOtp(t.replace(/\D/g, '')); setError(''); }}
-              autoFocus
-            />
+            <View className="flex-row items-center justify-center mb-4" style={{ gap: 8 }}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <TextInput
+                  key={i}
+                  ref={el => { otpRefs.current[i] = el; }}
+                  className="rounded-xl h-14 w-12 text-center text-2xl font-bold"
+                  style={{ fontFamily: 'Inter-Bold', borderWidth: 1, borderColor: colors.gray200, backgroundColor: colors.gray50, color: colors.gray900 }}
+                  placeholder={i === 0 ? '------' : String(i + 1)}
+                  placeholderTextColor={colors.gray400}
+                  keyboardType="number-pad"
+                  autoComplete={i === 0 ? 'sms-otp' : 'off'}
+                  textContentType={i === 0 ? 'oneTimeCode' : 'none'}
+                  maxLength={1}
+                  value={otp[i] ?? ''}
+                  onChangeText={t => handleOtpChangeText(i, t)}
+                  onKeyPress={e => handleOtpKeyPress(i, e)}
+                  autoFocus={i === 0}
+                />
+              ))}
+            </View>
 
             <TouchableOpacity
               className="h-14 rounded-2xl items-center justify-center mb-4"
@@ -330,7 +337,7 @@ export default function LoginScreen() {
             >
               {loading
                 ? <ActivityIndicator color="#fff" />
-                : <Text className="text-white text-base font-bold" style={{ fontFamily: 'Inter-Bold' }}>Verify & Sign In</Text>
+                : <Text className="text-white text-base font-bold" style={{ fontFamily: 'Inter-Bold' }}>Continue</Text>
               }
             </TouchableOpacity>
 

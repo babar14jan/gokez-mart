@@ -26,8 +26,8 @@ describe('Store name/address have a single source of truth', () => {
 
   test('the public settings endpoint overlays the store record for name/address', () => {
     const src = read('controllers/index.ts');
-    assert.match(src, /store_name:\s*store\?\.name/);
-    assert.match(src, /store_address:\s*store\?\.address/);
+    assert.match(src, /store_name:\s*nameOverride \?\? store\?\.name/);
+    assert.match(src, /store_address:\s*addressOverride \?\? store\?\.address/);
   });
 
   test('the WhatsApp message name comes from the order store snapshot, not settings', () => {

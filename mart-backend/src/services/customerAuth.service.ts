@@ -49,7 +49,10 @@ export class CustomerAuthService {
     const apiKey = process.env.TWO_FACTOR_API_KEY;
     if (!apiKey) throw new Error('SMS service not configured');
 
-    const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/91${cleaned}/AUTOGEN2`;
+    // Phone goes in as the bare 10-digit number (the provider adds the
+    // country code itself); AUTOGEN + Login_OTP template delivers an
+    // auto-generated 6-digit code whose value is returned in the response.
+    const url = `${TWO_FACTOR_BASE}/${apiKey}/SMS/${cleaned}/AUTOGEN/Login_OTP`;
     // The SMS provider is on the critical path of a customer signing in, so it
     // gets the most generous of the outbound budgets — but it still must not
     // be able to hang the request indefinitely.
@@ -101,8 +104,28 @@ export class CustomerAuthService {
     if (process.env.NODE_ENV !== 'production') {
       verified = otp === '123456' || otp === row.otp;
     } else {
-      // Verify against stored OTP (returned by AUTOGEN2)
-      verified = otp === row.otp;
+      // Prefer the code the provider echoed back with the send (data.OTP) —
+      // verified locally, no second call. The AUTOGEN/Login_OTP response does
+      // not include the code (only Status + the Details session UUID), so when
+      // row.otp is empty we fall back to asking 2Factor to verify against that
+      // session — the endpoint that existed before local verify was attempted.
+      if (row.otp) {
+        verified = otp === row.otp;
+      } else {
+        const apiKey = process.env.TWO_FACTOR_API_KEY;
+        if (apiKey && row.session_id) {
+          try {
+            const vRes = await fetch(
+              `${TWO_FACTOR_BASE}/${apiKey}/SMS/VERIFY/${row.session_id}/${otp}`,
+              { signal: timeoutSignal(OUTBOUND_TIMEOUTS.otpSms) }
+            );
+            const vData: any = await vRes.json();
+            verified = vData.Status === 'Success';
+          } catch {
+            verified = false; // provider unreachable — treat as a failed attempt
+          }
+        }
+      }
     }
 
     if (!verified) {
