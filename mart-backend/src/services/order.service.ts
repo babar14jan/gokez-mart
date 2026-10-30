@@ -30,6 +30,9 @@ export interface OrderItem {
    *  trusted from the client. */
   mrp?: number;
   quantity: number;
+  /** Store that actually fulfils this line in a multi-store zone. */
+  storeId?: string | null;
+  storeName?: string | null;
 }
 
 export interface CreateOrderDto {
@@ -85,6 +88,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
               o.delivery_sequence as "deliverySequence",
               o.batch_id as "batchId",
               COALESCE((SELECT s.name FROM mart_stores s WHERE s.id = o.store_id), o.fulfilled_by) as "fulfilledBy",
+              o.fulfilled_by_detail as "fulfilledByDetail",
               (SELECT s.name FROM mart_stores s WHERE s.id = o.store_id) as "storeName",
               (SELECT s.address FROM mart_stores s WHERE s.id = o.store_id) as "storeAddress",
               -- Closure fields: staff need to know an order was taken after
@@ -123,7 +127,9 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.order_number as "orderNumber", o.g
                 'price', oi.price::float,
                 'quantity', oi.quantity,
                 'total', oi.total::float,
-                'photoUrl', p.photo_url
+                'photoUrl', p.photo_url,
+                'storeId', oi.store_id,
+                'storeName', (SELECT s.name FROM mart_stores s WHERE s.id = oi.store_id)
               )) as items`;
 
 // Shared IST-window builder for the analytics summaries. Mirrors the windowing
@@ -299,23 +305,55 @@ export class OrderService {
       const bundleComponentsByProduct = new Map<string, Array<{
         productId: string; name: string; unit: string; quantity: number;
       }>>();
+
+      // Multi-store zone: an order placed against the zone head may contain lines
+      // that are listed by any tagged store. Resolve each line against the store
+      // that actually lists it (preferring the head when both do), so the price
+      // and stock come from the right place and the line remembers its origin.
+      const zoneRows = await client.query(
+        `SELECT id FROM mart_zones WHERE primary_store_id = $1 OR store_id = $1 LIMIT 1`,
+        [data.storeId]
+      ) as { rows: Array<{ id: string }> };
+      const zoneId = zoneRows.rows[0]?.id;
+      let memberStoreIds: string[] = [data.storeId];
+      if (zoneId) {
+        const memberRows = await client.query(
+          `SELECT store_id FROM mart_zone_stores WHERE zone_id = $1`, [zoneId]
+        ) as { rows: Array<{ store_id: string }> };
+        memberStoreIds = Array.from(new Set([data.storeId, ...memberRows.rows.map(r => r.store_id)]));
+      }
+
       for (const item of data.items) {
         if (productIds.has(item.productId)) throw badRequest('Each product can only be included once per order');
         productIds.add(item.productId);
-        const product = await client.query(
-            `SELECT p.name, p.is_bundle as "isBundle", sp.price::float AS price,
+        const productResult = await client.query(
+            `SELECT sp.store_id as "storeId", s.name as "storeName",
+                    p.name, p.is_bundle as "isBundle", sp.price::float AS price,
               sp.discount_percent::float AS "discountPercent", sp.unit,
               sp.is_available as "isAvailable", sp.availability_status as "availabilityStatus"
            FROM mart_store_products sp
            JOIN mart_products p ON p.id = sp.product_id
-           WHERE sp.store_id = $1 AND sp.product_id = $2
+           JOIN mart_stores s ON s.id = sp.store_id
+           WHERE sp.store_id = ANY($1) AND sp.product_id = $2
            FOR SHARE`,
-          [data.storeId, item.productId]
+          [memberStoreIds, item.productId]
         );
-        const catalogItem = product.rows[0] as {
-          name: string; isBundle: boolean; price: number; discountPercent: number; unit: string;
-          isAvailable: boolean; availabilityStatus: string;
-        } | undefined;
+        const listings = productResult.rows as Array<{
+          storeId: string; storeName: string; name: string; isBundle: boolean; price: number;
+          discountPercent: number; unit: string; isAvailable: boolean; availabilityStatus: string;
+        }>;
+        const chosenListing = listings.find(l => l.storeId === data.storeId) || listings[0];
+        const catalogItem = chosenListing ? {
+          name: chosenListing.name,
+          isBundle: chosenListing.isBundle,
+          price: chosenListing.price,
+          discountPercent: chosenListing.discountPercent,
+          unit: chosenListing.unit,
+          isAvailable: chosenListing.isAvailable,
+          availabilityStatus: chosenListing.availabilityStatus,
+          storeId: chosenListing.storeId,
+          storeName: chosenListing.storeName,
+        } : undefined;
         if (!catalogItem || catalogItem.unit !== item.unit || (enforceInventoryAvailability
           && (!catalogItem.isAvailable || catalogItem.availabilityStatus !== 'available'))) {
           throw badRequest('One or more products are unavailable or have changed');
@@ -334,7 +372,7 @@ export class OrderService {
              JOIN mart_products p ON p.id = bc.component_product_id
              WHERE bc.store_id = $1 AND bc.bundle_product_id = $2
              FOR SHARE`,
-            [data.storeId, item.productId]
+            [catalogItem.storeId, item.productId]
           );
           if (components.rows.length < 2) throw badRequest('This combo is no longer available');
           const componentRows = components.rows as Array<{
@@ -353,6 +391,8 @@ export class OrderService {
           price: effectivePrice,
           mrp: catalogItem.price,
           quantity: item.quantity,
+          storeId: catalogItem.storeId,
+          storeName: catalogItem.storeName,
         });
       }
       const subtotal = resolvedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -464,8 +504,15 @@ export class OrderService {
       // are read together because store_open is a manual override that wins over
       // the posted hours, and the two produce different reasons.
       const closureRows = await client.query(
-        `SELECT s.opening_hours, sv.value AS store_open
+        `SELECT COALESCE(z.opening_hours, s.opening_hours) AS opening_hours,
+                COALESCE(zs_open.value, sv.value) AS store_open,
+                COALESCE(zs_from.value, cf.value) AS store_closed_from,
+                COALESCE(zs_until.value, cu.value) AS store_closed_until
            FROM mart_stores s
+           LEFT JOIN mart_zones z ON z.id = (SELECT id FROM mart_zones WHERE primary_store_id = s.id OR store_id = s.id LIMIT 1)
+           LEFT JOIN mart_zone_settings zs_open ON zs_open.zone_id = z.id AND zs_open.key = 'store_open'
+           LEFT JOIN mart_zone_settings zs_from ON zs_from.zone_id = z.id AND zs_from.key = 'store_closed_from'
+           LEFT JOIN mart_zone_settings zs_until ON zs_until.zone_id = z.id AND zs_until.key = 'store_closed_until'
            LEFT JOIN mart_settings sv ON sv.store_id = s.id AND sv.key = 'store_open'
            LEFT JOIN mart_settings cf ON cf.store_id = s.id AND cf.key = 'store_closed_from'
            LEFT JOIN mart_settings cu ON cu.store_id = s.id AND cu.key = 'store_closed_until'
@@ -553,10 +600,10 @@ export class OrderService {
         const orderItemId = uuidv4();
         await client.query(
           `INSERT INTO mart_order_items
-             (id, order_id, product_id, product_name, unit, price, quantity, total)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (id, order_id, product_id, product_name, unit, price, quantity, total, store_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [orderItemId, orderId, item.productId, item.productName, item.unit,
-           item.price, item.quantity, item.price * item.quantity]
+           item.price, item.quantity, item.price * item.quantity, item.storeId ?? data.storeId]
         );
         const components = bundleComponentsByProduct.get(item.productId) || [];
         for (const component of components) {
@@ -567,6 +614,14 @@ export class OrderService {
             [orderItemId, component.productId, component.name, component.unit, component.quantity]
           );
         }
+      }
+
+      const fulfilledByDetail = Array.from(new Set(resolvedItems.map(item => item.storeName).filter(Boolean))).join(', ');
+      if (fulfilledByDetail) {
+        await client.query(
+          `UPDATE mart_orders SET fulfilled_by_detail = $1 WHERE id = $2`,
+          [fulfilledByDetail, orderId]
+        );
       }
 
       if (campaign) {
@@ -671,25 +726,25 @@ export class OrderService {
   private static async getInventoryItemsForOrder(orderId: string, client?: any) {
     const db = client || { query };
     const result = await db.query(
-      `SELECT product_id as "productId", unit as "sellingUnit", SUM(quantity)::float AS quantity
+      `SELECT product_id as "productId", store_id as "storeId", unit as "sellingUnit", SUM(quantity)::float AS quantity
        FROM (
-         SELECT oi.product_id, oi.unit, oi.quantity::numeric AS quantity
+         SELECT oi.product_id, oi.store_id, oi.unit, oi.quantity::numeric AS quantity
          FROM mart_order_items oi
          WHERE oi.order_id = $1
            AND NOT EXISTS (
              SELECT 1 FROM mart_order_item_bundle_components bc WHERE bc.order_item_id = oi.id
            )
          UNION ALL
-         SELECT bc.component_product_id AS product_id, bc.unit,
+         SELECT bc.component_product_id AS product_id, oi.store_id, bc.unit,
                 (oi.quantity * bc.quantity_per_bundle)::numeric AS quantity
          FROM mart_order_items oi
          JOIN mart_order_item_bundle_components bc ON bc.order_item_id = oi.id
          WHERE oi.order_id = $1
        ) inventory_items
-       GROUP BY product_id, unit`,
+       GROUP BY product_id, store_id, unit`,
       [orderId]
     );
-    return result.rows as Array<{ productId: string; sellingUnit: string; quantity: number }>;
+    return result.rows as Array<{ productId: string; storeId: string | null; sellingUnit: string; quantity: number }>;
   }
 
   static async reverseCampaignRedemption(orderId: string, reason: string, client?: any): Promise<void> {
@@ -835,7 +890,7 @@ export class OrderService {
     const params: unknown[] = [];
     let i = 1;
 
-    if (filters?.storeId) { conditions.push(`o.store_id = $${i++}`); params.push(filters.storeId); }
+    if (filters?.storeId) { conditions.push(`(o.store_id = $${i} OR EXISTS (SELECT 1 FROM mart_order_items oi2 WHERE oi2.order_id = o.id AND oi2.store_id = $${i}))`); params.push(filters.storeId); i++; }
     if (filters?.status)  { conditions.push(`o.status = $${i++}`);   params.push(filters.status); }
     if (filters?.phone)   { conditions.push(`o.guest_phone = $${i++}`); params.push(filters.phone); }
 

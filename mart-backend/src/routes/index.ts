@@ -62,6 +62,10 @@ router.get('/admin/zones',         authenticate, ctrl.adminGetZones);
 router.post('/admin/zones',        authenticate, ctrl.adminCreateZone);
 router.put('/admin/zones/:id',     authenticate, ctrl.adminUpdateZone);
 router.delete('/admin/zones/:id',  authenticate, ctrl.adminDeleteZone);
+router.post('/admin/zones/:id/stores',     authenticate, requireSuperAdmin, ctrl.adminZoneTagStores);
+router.put('/admin/zones/:id/primary',     authenticate, requireSuperAdmin, ctrl.adminZoneSetPrimary);
+router.get('/admin/zones/:id/settings',    authenticate, ctrl.adminGetZoneSettings);
+router.put('/admin/zones/:id/settings',    authenticate, requireSuperAdmin, ctrl.adminUpdateZoneSettings);
 
 // ── Admin products ────────────────────────────────────────────────────────────
 router.get('/admin/products',          authenticate, ctrl.adminGetProducts);     // ?storeId=

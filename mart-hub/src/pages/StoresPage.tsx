@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, X, Loader2, Store, Clock, Upload, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
-import { storesApi, productsApi, usersApi, teamApi } from '../services/api';
+import { Plus, Pencil, X, Loader2, Store, Upload, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
+import { storesApi, productsApi, usersApi, teamApi, zonesApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
@@ -8,8 +8,6 @@ import PageSkeleton from '../components/PageSkeleton';
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-const DAY_LABELS: Record<string, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
-
 const DEFAULT_HOURS = Object.fromEntries(DAYS.map(d => [d, { open: '09:00', close: '21:00', closed: false }]));
 
 interface MartStore {
@@ -19,7 +17,7 @@ interface MartStore {
   monthlyFee: number; estimatedDelivery?: string;
 }
 
-type Tab = 'details' | 'hours' | 'revenue' | 'manager';
+type Tab = 'details' | 'revenue' | 'manager';
 
 export default function StoresPage() {
   const [stores, setStores] = useState<MartStore[]>([]);
@@ -37,6 +35,12 @@ export default function StoresPage() {
   });
 
   const [teamByStore, setTeamByStore] = useState<Record<string, any[]>>({});
+  const [zones, setZones] = useState<any[]>([]);
+  const [selectedZoneId, setSelectedZoneId] = useState('');
+  const [zoneTeam, setZoneTeam] = useState<any[]>([]);
+  const [editingMember, setEditingMember] = useState<any | null>(null);
+  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', role: 'staff', isActive: true, password: '' });
+  const [savingMember, setSavingMember] = useState(false);
   const [credModal, setCredModal] = useState<{ store: MartStore; manager: any } | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPwd, setResettingPwd] = useState(false);
@@ -62,7 +66,65 @@ export default function StoresPage() {
       setLoading(false);
     }
   };
+  const zoneStoreId = zones.find(z => z.id === selectedZoneId)?.primaryStoreId || editing?.id || '';
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (zoneStoreId) loadZoneTeam(zoneStoreId); }, [zoneStoreId]);
+
+
+  const loadZonesForStore = async (storeId: string) => {
+    try {
+      const r = await zonesApi.getAll(storeId);
+      const zs = r.data.data || [];
+      setZones(zs);
+      if (zs.length && !selectedZoneId) setSelectedZoneId(zs[0].id);
+    } catch {
+      setZones([]);
+    }
+  };
+
+  const loadZoneTeam = async (storeId: string) => {
+    if (!storeId) { setZoneTeam([]); return; }
+    try {
+      const r = await teamApi.getStoreTeam(storeId);
+      setZoneTeam(r.data.data || []);
+    } catch {
+      setZoneTeam([]);
+    }
+  };
+
+  const openEditMember = (member: any) => {
+    setEditingMember(member);
+    setMemberForm({
+      name: member.name || '',
+      email: member.email || '',
+      phone: member.phone || '',
+      role: member.role || 'staff',
+      isActive: member.isActive !== false,
+      password: '',
+    });
+  };
+
+  const saveMember = async () => {
+    if (!editingMember) return;
+    setSavingMember(true);
+    try {
+      const payload: any = {
+        name: memberForm.name.trim() || null,
+        email: memberForm.email.trim() || null,
+        phone: memberForm.phone.trim() || null,
+        role: memberForm.role,
+        isActive: memberForm.isActive,
+      };
+      if (memberForm.password.trim()) payload.password = memberForm.password.trim();
+      await usersApi.update(editingMember.adminId, payload);
+      setEditingMember(null);
+      await load();
+    } catch (e: any) {
+      window.alert(e?.response?.data?.error || 'Failed to update staff member');
+    } finally {
+      setSavingMember(false);
+    }
+  };
 
   const getStoreManager = (storeId: string) => {
     const team = teamByStore[storeId] || [];
@@ -120,6 +182,7 @@ export default function StoresPage() {
     setNewManager({ username: '', password: '', name: '', phone: '' });
     setManagerMode('search'); setCreatedStoreId(null);
     setTab('details'); setShowModal(true);
+    setZones([]); setSelectedZoneId(''); setZoneTeam([]);
   };
 
   const openEdit = (s: MartStore) => {
@@ -131,6 +194,8 @@ export default function StoresPage() {
       openingHours: s.openingHours || DEFAULT_HOURS,
     });
     setTab('details'); setShowModal(true);
+    setZones([]); setSelectedZoneId(''); setZoneTeam([]);
+    loadZonesForStore(s.id);
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,7 +217,6 @@ export default function StoresPage() {
         supportPhone: form.supportPhone.trim() || undefined,
         logoUrl: form.logoUrl || undefined,
         monthlyFee: parseFloat(form.monthlyFee) || 0,
-        openingHours: form.openingHours,
         estimatedDelivery: form.estimatedDelivery.trim(),
       };
       if (editing) await storesApi.update(editing.id, data);
@@ -161,6 +225,7 @@ export default function StoresPage() {
         setCreatedStoreId(res.data.data.id);
         setTab('manager');
         setSaving(false);
+        loadZonesForStore(res.data.data.id);
         return;
       }
       setShowModal(false); await load();
@@ -181,9 +246,6 @@ export default function StoresPage() {
     await load();
   };
 
-  const updateHours = (day: string, field: string, value: any) => {
-    setForm(f => ({ ...f, openingHours: { ...f.openingHours, [day]: { ...f.openingHours[day], [field]: value } } }));
-  };
 
   if (loading) return <PageSkeleton />;
 
@@ -366,7 +428,7 @@ export default function StoresPage() {
 
             {/* Tabs */}
             <div className="flex border-b border-gray-100 dark:border-slate-700 flex-shrink-0 px-1">
-              {([['details', 'Details', Store], ['hours', 'Hours', Clock], ['revenue', 'Plan', CheckCircle], ['manager', 'Manager', User]] as const).map(([id, label, Icon]) => (
+              {([['details', 'Details', Store], ['revenue', 'Plan', CheckCircle], ['manager', 'Staff', User]] as const).map(([id, label, Icon]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors border-b-2 ${
                     tab === id
@@ -438,33 +500,6 @@ export default function StoresPage() {
                 </>
               )}
 
-              {/* ── Hours tab ── */}
-              {tab === 'hours' && (
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mb-3">Toggle off for closed days.</p>
-                  {DAYS.map(day => (
-                    <div key={day} className="flex items-center gap-3 py-2 border-b border-gray-50 dark:border-slate-700 last:border-0">
-                      <span className="text-xs font-bold text-gray-700 dark:text-slate-300 w-8">{DAY_LABELS[day]}</span>
-                      <button type="button" onClick={() => updateHours(day, 'closed', !form.openingHours[day]?.closed)}
-                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${!form.openingHours[day]?.closed ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}>
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${!form.openingHours[day]?.closed ? 'translate-x-4' : 'translate-x-0'}`} />
-                      </button>
-                      {!form.openingHours[day]?.closed ? (
-                        <div className="flex items-center gap-2 flex-1">
-                          <input type="time" value={form.openingHours[day]?.open || '09:00'} onChange={e => updateHours(day, 'open', e.target.value)}
-                            className="flex-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
-                          <span className="text-xs text-gray-500">–</span>
-                          <input type="time" value={form.openingHours[day]?.close || '21:00'} onChange={e => updateHours(day, 'close', e.target.value)}
-                            className="flex-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
-                        </div>
-                      ) : (
-                        <span className="text-xs text-red-400 font-semibold">Closed</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
               {/* ── Revenue tab ── */}
               {tab === 'revenue' && (
                 <div className="space-y-4">
@@ -486,6 +521,33 @@ export default function StoresPage() {
               {/* ── Manager tab ── */}
               {tab === 'manager' && (
                 <div className="space-y-4">
+                  {zones.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Zone</label>
+                      <select value={selectedZoneId} onChange={e => setSelectedZoneId(e.target.value)} className={inp}>
+                        {zones.map((z: any) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {zoneStoreId && zoneTeam.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Mapped staff</p>
+                      <div className="divide-y divide-gray-100 dark:divide-slate-700 rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+                        {zoneTeam.map((member: any) => (
+                          <div key={member.adminId} className="flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-slate-800">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 dark:text-white">{member.name || member.username}</p>
+                              <p className="text-[10px] text-gray-500 dark:text-slate-400">@{member.username} · {String(member.role).replace(/_/g, ' ')}{member.assignmentActive === false ? ' · inactive' : ''}</p>
+                            </div>
+                            <button onClick={() => openEditMember(member)}
+                              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400">
+                              Edit details
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {createdStoreId && (
                     <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-emerald-500" />
@@ -574,7 +636,7 @@ export default function StoresPage() {
                 <button
                   disabled={saving || (managerMode === 'search' && !selectedManager) || (managerMode === 'create' && (!newManager.username || !newManager.password))}
                   onClick={async () => {
-                    const storeId = createdStoreId || editing?.id;
+                    const storeId = zoneStoreId || createdStoreId || editing?.id;
                     if (!storeId) return;
                     setSaving(true);
                     try {
@@ -601,6 +663,61 @@ export default function StoresPage() {
           </div>
         </div>
       )}
+    {editingMember && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-800">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Edit Staff — {editingMember.username}</h2>
+            <button onClick={() => setEditingMember(null)} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Full Name</label>
+              <input type="text" value={memberForm.name} onChange={e => setMemberForm(f => ({ ...f, name: e.target.value }))} className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Email</label>
+              <input type="email" value={memberForm.email} onChange={e => setMemberForm(f => ({ ...f, email: e.target.value }))} className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Phone</label>
+              <input type="tel" value={memberForm.phone} onChange={e => setMemberForm(f => ({ ...f, phone: e.target.value }))} className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Role</label>
+              <select value={memberForm.role} onChange={e => setMemberForm(f => ({ ...f, role: e.target.value }))} className={inp}>
+                <option value="store_owner">Store Owner</option>
+                <option value="store_manager">Store Manager</option>
+                <option value="staff">Staff</option>
+                <option value="delivery_staff">Delivery Staff</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">New Password (optional)</label>
+              <input type="password" value={memberForm.password} onChange={e => setMemberForm(f => ({ ...f, password: e.target.value }))} className={inp} placeholder="Leave blank to keep current" />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm text-gray-700 dark:text-slate-300">Active</label>
+              <button type="button" onClick={() => setMemberForm(f => ({ ...f, isActive: !f.isActive }))}
+                className={'relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors ' + (memberForm.isActive ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600')}>
+                <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ' + (memberForm.isActive ? 'translate-x-4' : 'translate-x-0')} />
+              </button>
+            </div>
+          </div>
+          <div className="mt-5 flex gap-2">
+            <button onClick={() => setEditingMember(null)} className="flex-1 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300">
+              Cancel
+            </button>
+            <button onClick={saveMember} disabled={savingMember}
+              className="flex-1 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">
+              {savingMember ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

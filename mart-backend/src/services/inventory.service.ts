@@ -93,7 +93,7 @@ export class InventoryService {
   static async deductForOrder(
     orderId: string,
     storeId: string,
-    items: Array<{ productId: string; quantity: number; sellingUnit: string }>,
+    items: Array<{ productId: string; quantity: number; sellingUnit: string; storeId?: string | null }>,
     autoOutOfStock: boolean,
     lowStockThreshold: number,
     transactionClient?: any
@@ -102,9 +102,13 @@ export class InventoryService {
     const results = [];
 
     for (const item of items) {
+      // Multi-store zone: each line is deducted against the store that lists
+      // it (item.storeId), falling back to the order's store for legacy rows
+      // that predate per-line store attribution.
+      const lineStoreId = item.storeId || storeId;
       const alreadyDeducted = await client.query(
         `SELECT 1 FROM mart_inventory_log WHERE product_id = $1 AND store_id = $2 AND reference_id = $3 AND reason = 'order_deducted'`,
-        [item.productId, storeId, orderId]
+        [item.productId, lineStoreId, orderId]
       );
       if (alreadyDeducted.rows.length) continue;
       const cur: { rows: Array<{
@@ -119,7 +123,7 @@ export class InventoryService {
          FROM mart_store_products sp
          JOIN mart_products p ON p.id = sp.product_id
          WHERE sp.product_id = $1 AND sp.store_id = $2 FOR UPDATE OF sp`,
-        [item.productId, storeId]
+        [item.productId, lineStoreId]
       );
       const row = cur.rows[0];
       if (!row || row.stock_quantity === null || !row.stock_unit) continue;
@@ -143,14 +147,14 @@ export class InventoryService {
         `UPDATE mart_store_products
          SET stock_quantity = $1, availability_status = $2, is_available = $3, updated_at = NOW()
          WHERE product_id = $4 AND store_id = $5`,
-        [newQty, newStatus, newStatus === 'available', item.productId, storeId]
+        [newQty, newStatus, newStatus === 'available', item.productId, lineStoreId]
       );
 
       await client.query(
         `INSERT INTO mart_inventory_log
            (product_id, store_id, change_qty, reason, reference_id)
          VALUES ($1, $2, $3, 'order_deducted', $4)`,
-        [item.productId, storeId, -deduction, orderId]
+        [item.productId, lineStoreId, -deduction, orderId]
       );
 
       results.push({ productId: item.productId, newQty, wentOutOfStock, isLow });

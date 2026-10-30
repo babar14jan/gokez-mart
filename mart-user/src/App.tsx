@@ -159,7 +159,7 @@ export default function App() {
   });
   const [checkoutActive, setCheckoutActive] = useState(false);
   // The bottom tabs move `view` without pushing history. Tapping Account from any
-  // tab opens the login page, and "Continue as guest" from there exits to Home
+  // tab opens the login page, and the guest escape from there exits to Home
   // rather than bouncing back to the tab it was opened from (e.g. Categories).
   // Mirrored in state because writing sessionStorage alone does not re-render,
   // which made "Not now" look like it did nothing.
@@ -341,8 +341,9 @@ export default function App() {
   // it, the strip under the header keeps it in view without blocking
   // anything.
   useEffect(() => {
-    if (openState?.isOpen !== false) return;
-    setClosedCard(true);
+    // The card must follow the live open state: a store that is open now must
+    // not keep showing a stale "closed" card from an earlier fallback load.
+    setClosedCard(openState?.isOpen === false);
   }, [openState?.isOpen, openState?.closedReason, openState?.closedUntilLabel]);
 
   // The ONE fetch path for the home catalogue (categories, products, settings and
@@ -358,11 +359,11 @@ export default function App() {
   // real download.
   const catalogStampRef = useRef<string | null>(null);
 
-  const fetchCatalogBundle = useCallback(async (storeId?: string, fresh = false, isCancelled?: () => boolean) => {
+  const fetchCatalogBundle = useCallback(async (storeId?: string, zoneId?: string, fresh = false, isCancelled?: () => boolean) => {
     const [catRes, prodRes, settingsRes, sectionsRes] = await Promise.all([
       storeApi.getCategories({ fresh }),
-      storeApi.getProducts(undefined, storeId, { fresh }),
-      storeApi.getSettings(storeId, { fresh }),
+      storeApi.getProducts(undefined, storeId, { fresh }, zoneId),
+      storeApi.getSettings(storeId, { fresh }, zoneId),
       storeApi.getHomeSections(storeId, { fresh }),
     ]);
     // A store switch (or Try Again) started a newer load while this one was in
@@ -385,14 +386,14 @@ export default function App() {
     setCatalogError(null);
   }, []);
 
-  const refreshCatalog = useCallback(async (storeId?: string, opts?: { force?: boolean }) => {
+  const refreshCatalog = useCallback(async (storeId?: string, zoneId?: string, opts?: { force?: boolean }) => {
     // The stamp is always read BEFORE the body, forced or not: a stamp stored
     // after the body could be newer than it and would silently swallow one
     // change until the following one. Reading first means a mid-flight change
     // only costs one redundant refresh next cycle.
     let stamp: string | null = null;
     try {
-      const r = await storeApi.getCatalogStamp(storeId);
+      const r = await storeApi.getCatalogStamp(storeId, zoneId);
       stamp = r.data.data?.stamp ?? null;
       // Nothing changed since the last full load — skip the heavy download.
       if (!opts?.force && stamp !== null && stamp === catalogStampRef.current) return;
@@ -401,7 +402,7 @@ export default function App() {
       // real refresh rather than leaving the catalogue stuck.
       stamp = null;
     }
-    await fetchCatalogBundle(storeId, true);
+    await fetchCatalogBundle(storeId, zoneId, true);
     catalogStampRef.current = stamp;
   }, [fetchCatalogBundle]);
 
@@ -465,7 +466,7 @@ export default function App() {
       pullDistance.current = 0;
       setPullDistanceVisible(0);
       const startedAt = Date.now();
-      refreshCatalog(activeStoreId, { force: true })
+      refreshCatalog(activeStoreId, selectedZone?.id, { force: true })
         .then(() => setRefreshNotice(null))
         .catch(() => setRefreshNotice(
           navigator.onLine
@@ -655,12 +656,12 @@ export default function App() {
     // change. Losing that race just costs one redundant full download at the
     // first poll.
     let bodyDone = false;
-    const stampPromise = storeApi.getCatalogStamp(activeStoreId)
+    const stampPromise = storeApi.getCatalogStamp(activeStoreId, selectedZone?.id)
       .then(r => {
         if (!cancelled && !bodyDone) catalogStampRef.current = r.data.data?.stamp ?? null;
       })
       .catch(() => {});
-    const bodyPromise = fetchCatalogBundle(activeStoreId, true, () => cancelled).then(() => {
+    const bodyPromise = fetchCatalogBundle(activeStoreId, selectedZone?.id, true, () => cancelled).then(() => {
       bodyDone = true;
     }).catch(() => {
       bodyDone = true;
@@ -688,7 +689,7 @@ export default function App() {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [activeStoreId, catalogRequest, fetchCatalogBundle]);
+  }, [activeStoreId, selectedZone?.id, catalogRequest, fetchCatalogBundle]);
 
   // Silent refresh — a stamp check for the current store every 3 mins, and on
   // resume/focus. Installed PWAs freeze timers while backgrounded and iOS
@@ -704,7 +705,7 @@ export default function App() {
       const now = Date.now();
       if (!force && now - lastRefresh < 15_000) return;
       lastRefresh = now;
-      try { await refreshCatalog(selectedZone?.storeId, { force }); } catch {}
+      try { await refreshCatalog(selectedZone?.storeId, selectedZone?.id, { force }); } catch {}
     };
     const onResume = () => { if (document.visibilityState === 'visible') refresh(); };
     // Reconnect is a hard signal that the catalogue may be stale: refresh at once
@@ -740,7 +741,7 @@ export default function App() {
       try {
         // fresh: the open/closed flip has no DB write, so the cache may hold the
         // pre-boundary settings; this must reach the server.
-        const srRes = await storeApi.getSettings(activeStoreId, { fresh: true });
+        const srRes = await storeApi.getSettings(activeStoreId, { fresh: true }, selectedZone?.id);
         setSettings(srRes.data.data || DEFAULT_SETTINGS);
         catalogStampRef.current = null; // stamp is pre-boundary; re-adopt on next poll
       } catch {}

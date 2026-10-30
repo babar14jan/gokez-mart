@@ -354,9 +354,15 @@ export const zonesApi = {
   getAll: (storeId?: string) => api.get('/admin/zones', { params: storeId ? { storeId } : {} }),
   create: (data: { name: string; lat: number; lng: number; radiusKm: number; storeId?: string }) =>
     api.post('/admin/zones', data),
-  update: (id: string, data: Partial<{ name: string; lat: number; lng: number; radiusKm: number; isActive: boolean }>) =>
+  update: (id: string, data: Partial<{ name: string; lat: number; lng: number; radiusKm: number; isActive: boolean; openingHours: any }>) =>
     api.put(`/admin/zones/${id}`, data),
   delete: (id: string) => api.delete(`/admin/zones/${id}`),
+  /** Replace the zone's tagged stores. */
+  tagStores: (id: string, storeIds: string[]) => api.post(`/admin/zones/${id}/stores`, { storeIds }),
+  /** Set the zone head (the store the customer app sees as the zone's face). */
+  setPrimary: (id: string, storeId: string) => api.put(`/admin/zones/${id}/primary`, { storeId }),
+  getSettings: (id: string) => api.get(`/admin/zones/${id}/settings`),
+  updateSettings: (id: string, values: Record<string, string>) => api.put(`/admin/zones/${id}/settings`, values),
 };
 
 // ── Stores ────────────────────────────────────────────────────────────────────

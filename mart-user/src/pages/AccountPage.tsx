@@ -375,9 +375,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const [loginBackSignal, setLoginBackSignal] = useState(0);
 
   const leaveAsGuest = () => {
-    // The flow's own GuestLink tracks this itself, but showGuestLink is off here,
-    // so without emitting it here every abandonment from this page would be
-    // invisible in the hub funnel.
+    // The guest escape is keyboard-only now, but it still has to report the
+    // abandonment or the hub funnel would miss it on this page.
     if (loginStep.current === 'phone' || loginStep.current === 'otp') {
       track('login_abandoned', { step: loginStep.current, reason: 'guest' });
     }
@@ -406,10 +405,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   );
 
   if (!isLoggedIn && accountLoginOpen) {
-    // The phone step gets the tall green hero. The OTP step gets a slim green app
-    // bar with a back chevron: the chevron is page chrome (it lives outside the
-    // flow and nudges it back via loginBackSignal). Profile/offer stay plain pale
-    // green with a header-height gap at the top.
+    // The phone step gets the tall green hero. The OTP step is plain white with a
+    // slim app bar and back chevron (page chrome that nudges the flow back via
+    // loginBackSignal). Profile/offer stay plain pale green.
     const showBrandHeader = loginStepView === 'phone';
     const showOtpHeader = loginStepView === 'otp';
     return (
@@ -450,30 +448,33 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           />
         )}
         {showBrandHeader && (
-          <div className="flex flex-col items-center px-6 pt-7 text-center">
-            <img
-              src="/mart_brand_new.webp"
-              alt="Gokez Mart"
-              width={384}
-              height={256}
-              className="-mb-3 h-[54px] w-auto object-contain"
-            />
-            <p className="mt-0 text-[clamp(9px,calc(4vw-6px),29px)] font-bold leading-tight text-slate-900 dark:text-white">{BRAND_SLOGAN}</p>
-            <p
-              className="mt-[80px] text-center font-black leading-none tracking-tight text-[clamp(12px,3.75vw,28px)] text-slate-900 dark:text-white"
-              style={{ marginTop: '5lh' }}
-            >
-              From your Neighbourhood Store to your door
-            </p>
-            <h1 className="mt-3 text-[15px] font-black leading-tight text-slate-500 dark:text-slate-400">Log in or sign up</h1>
+          <div className="text-center">
+            <div className="relative flex flex-col items-center overflow-hidden bg-[linear-gradient(180deg,#4ade80_0%,#86efac_16%,#d1fae5_42%,#ecfdf5_68%,#fef9c3_100%)] px-6 pb-4 pt-[41px] dark:bg-slate-900 dark:bg-none">
+              <img
+                src="/mart_brand_new.webp"
+                alt="Gokez Mart"
+                width={384}
+                height={256}
+                className="-mb-3 h-[62px] w-auto object-contain"
+              />
+              <p className="mt-0 text-[clamp(9px,calc(4vw-6px),29px)] font-bold leading-tight text-slate-900 dark:text-white">{BRAND_SLOGAN}</p>
+              <p
+                className="mt-4 bg-gradient-to-r from-emerald-600 via-amber-500 to-rose-500 bg-clip-text text-center font-black leading-none tracking-tight text-transparent text-[clamp(12px,3.75vw,28px)]"
+              >
+                From your neighbourhood store to your door
+              </p>
+            </div>
+            <h1 className="mt-3 text-[15px] font-black leading-tight text-gray-600 dark:text-gray-300">Log in or sign up</h1>
           </div>
         )}
         <div className={`relative w-full overflow-hidden ${
           showBrandHeader
             ? 'bg-white sm:mx-auto sm:max-w-sm sm:rounded-3xl sm:shadow-xl dark:bg-slate-800'
-            : 'sm:mx-auto sm:max-w-sm'
+            : showOtpHeader
+              ? 'flex-1 sm:mx-auto sm:max-w-sm'
+              : 'sm:mx-auto sm:max-w-sm'
         }`}>
-          <div className={showBrandHeader ? "px-5 pb-6 pt-1 space-y-4" : showOtpHeader ? "px-5 pb-6 pt-6 space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
+          <div className={showBrandHeader ? "px-5 pb-6 pt-1 space-y-4" : showOtpHeader ? "px-5 pb-6 pt-[44px] space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
 <LoginFlow
               variant="page"
               showPhoneHeading={false}
@@ -483,17 +484,13 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               // overlay, so setting it here would turn any reload of /account
               // mid-login into the checkout modal, and it would label the name
               // step "Continue to Checkout" when this page actually navigates to
-              // postLoginPath (/orders).
-              // Only the guest exit is stood down: the page renders its own
-              // "Continue as guest" link below, so the flow's copy is switched off
-              // to avoid showing the same action twice. The hero image is NOT --
-              // the flow supplies it, so both hosts share one login visual.
-              showGuestLink={false}
+              // postLoginPath (/orders). The hero image is supplied by the flow
+              // so both hosts share one login visual.
               onStepChange={(s) => { loginStep.current = s; setLoginStepView(s); }}
               onNavigateLegal={(path) => { closeLogin(); navigate(path); }}
-              // The page owns the guest exit (the flow's own is switched off above), so it
-              // has to do the flow's cleanup itself. LoginFlow.handleGuest normally
-              // calls loginFlow.clear() before leaving; without that, a shopper who
+              // Escape is the only guest exit here, so the page has to do the
+              // flow's cleanup itself. LoginFlow.handleGuest normally calls
+              // loginFlow.clear() before leaving; without that, a shopper who
               // abandons login here leaves an unexpired OTP flow in sessionStorage,
               // which App reads on next boot and turns into a surprise modal.
               onGuest={leaveAsGuest}
@@ -508,14 +505,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               }}
               onClose={closeLogin}
             />
-            {!isLoggedIn && <div className="text-center">
-              <button
-                onClick={leaveAsGuest}
-                className="text-[13px] font-semibold text-gokez-700 dark:text-gokez-400 hover:text-gokez-700 dark:hover:text-gokez-300 transition-colors"
-              >
-                Continue as guest →
-              </button>
-            </div>}
           </div>
         </div>
       </div>

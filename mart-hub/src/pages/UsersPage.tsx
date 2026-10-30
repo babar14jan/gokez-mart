@@ -28,6 +28,9 @@ const EMPTY_FORM = { username: '', password: '', name: '', email: '', phone: '',
 interface AdminUser {
   id: string; username: string; name: string | null; email: string | null;
   phone: string | null; role: string; storeId: string | null;
+  storeName: string | null;
+  zoneId: string | null; zoneName: string | null; zoneHeadStoreId: string | null;
+  isZoneHead: boolean; isZoneMember: boolean;
   isActive: boolean; lastLoginAt: string | null; createdAt: string;
 }
 
@@ -37,6 +40,7 @@ export default function UsersPage() {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [userStores, setUserStores] = useState<Record<string, any[]>>({});
   const [storeFilter, setStoreFilter] = useState<string>('all');
+  const [zoneFilter, setZoneFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -115,9 +119,16 @@ export default function UsersPage() {
     setConfirmRemoveStore(null); await load();
   };
 
-  const filteredUsers = storeFilter === 'all'
-    ? users
-    : users.filter(u => u.storeId === storeFilter || (userStores[u.id] || []).some((s: any) => s.id === storeFilter));
+  const zones = Array.from(new Map(users
+    .filter(u => u.zoneId)
+    .map(u => [u.zoneId as string, { id: u.zoneId as string, name: u.zoneName || 'Zone' }]))
+    .values());
+
+  const filteredUsers = users.filter(u => {
+    if (storeFilter !== 'all' && !(u.storeId === storeFilter || (userStores[u.id] || []).some((s: any) => s.id === storeFilter))) return false;
+    if (zoneFilter !== 'all' && u.zoneId !== zoneFilter) return false;
+    return true;
+  });
 
   const storeName = (id: string | null) => stores.find(s => s.id === id)?.name || '—';
 
@@ -136,6 +147,13 @@ export default function UsersPage() {
               <option key={s.id} value={s.id}>{s.name} ({users.filter(u => u.storeId === s.id || (userStores[u.id] || []).some((us: any) => us.id === s.id)).length})</option>
             ))}
           </select>
+          <select value={zoneFilter} onChange={e => setZoneFilter(e.target.value)}
+            className="text-xs border border-gray-200 dark:border-slate-600 rounded-xl px-3 py-1.5 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-300 focus:outline-none focus:border-emerald-500">
+            <option value="all">All Zones ({users.filter(u => u.zoneId).length})</option>
+            {zones.map(z => (
+              <option key={z.id} value={z.id}>{z.name} ({users.filter(u => u.zoneId === z.id).length})</option>
+            ))}
+          </select>
         </div>
         <button onClick={openCreate} className="btn-primary"><Plus className="w-4 h-4" /> Add User</button>
       </div>
@@ -143,10 +161,11 @@ export default function UsersPage() {
       <div className="page-card">
         {/* Desktop header */}
         <div className="hidden sm:grid grid-cols-12 gap-3 px-4 py-2.5 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-          <div className="col-span-3">User</div>
+          <div className="col-span-2">User</div>
           <div className="col-span-2">Role</div>
           <div className="col-span-2">Store</div>
-          <div className="col-span-3">Contact</div>
+          <div className="col-span-2">Zone</div>
+          <div className="col-span-2">Contact</div>
           <div className="col-span-1">Last Login</div>
           <div className="col-span-1"></div>
         </div>
@@ -166,7 +185,7 @@ export default function UsersPage() {
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ROLE_COLORS[u.role] || ROLE_COLORS.staff}`}>{u.role.replace(/_/g, ' ')}</span>
                   {!u.isActive && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">Inactive</span>}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-slate-400">@{u.username} · {storeName(u.storeId)}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">@{u.username} · {u.storeName || storeName(u.storeId)}{u.zoneName ? ` · ${u.zoneName}${u.isZoneHead ? ' (head)' : u.isZoneMember ? ' (member)' : ''}` : ''}</p>
               </div>
               <div className="flex gap-1">
                 {u.id !== currentUserId && (
@@ -184,7 +203,7 @@ export default function UsersPage() {
               </div>
             </div>
             {/* Desktop */}
-            <div className="hidden sm:block col-span-3">
+            <div className="hidden sm:block col-span-2">
               <p className={`text-xs font-semibold ${u.isActive ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-slate-400 line-through'}`}>{u.name || u.username}</p>
               <p className="text-[10px] text-gray-500 dark:text-slate-400">@{u.username}</p>
             </div>
@@ -208,10 +227,24 @@ export default function UsersPage() {
                   ))}
                 </div>
               ) : (
-                <span className="text-xs text-gray-600 dark:text-slate-400">{storeName(u.storeId)}</span>
+                <div>
+                  <span className="text-xs text-gray-600 dark:text-slate-400">{u.storeName || storeName(u.storeId)}</span>
+                  {u.zoneName && <p className="text-[10px] text-gray-500 dark:text-slate-400">{u.zoneName}{u.isZoneHead ? ' · head' : u.isZoneMember ? ' · member' : ''}</p>}
+                </div>
               )}
             </div>
-            <div className="hidden sm:block col-span-3 text-xs text-gray-500 dark:text-slate-400">{u.phone || u.email || '—'}</div>
+            <div className="hidden sm:block col-span-2">
+              {u.zoneName ? (
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-xs text-gray-600 dark:text-slate-400">{u.zoneName}</span>
+                  {u.isZoneHead && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">Head</span>}
+                  {u.isZoneMember && !u.isZoneHead && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Member</span>}
+                </div>
+              ) : (
+                <span className="text-xs text-gray-500 dark:text-slate-400">—</span>
+              )}
+            </div>
+            <div className="hidden sm:block col-span-2 text-xs text-gray-500 dark:text-slate-400">{u.phone || u.email || '—'}</div>
             <div className="hidden sm:block col-span-1 text-[10px] text-gray-500 dark:text-slate-400">
               {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'Never'}
             </div>
