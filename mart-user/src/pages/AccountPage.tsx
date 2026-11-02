@@ -447,8 +447,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           />
         )}
         {showBrandHeader && (
-          <div className="text-center">
-            <div className="overflow-hidden bg-white dark:bg-slate-900">
+          <div className="w-full text-center sm:mx-auto sm:max-w-sm">
+            <div className="overflow-hidden bg-white dark:bg-slate-900 sm:rounded-3xl">
               <img
                 src="/login_banner.webp"
                 alt="Gokez Mart - Shop Local. Support Local."

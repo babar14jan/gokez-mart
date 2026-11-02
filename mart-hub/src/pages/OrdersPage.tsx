@@ -12,6 +12,7 @@ import { useAuthStore } from '../store/authStore';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PartialDeliveryDialog from '../components/PartialDeliveryDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
 
@@ -159,7 +160,8 @@ function deliveryDuration(order: any): { minutes: number; color: string } | null
 function getJourneyEvents(order: any) {
   const statusEvents = (order.statusEvents || []).map((event: any) => ({ ...event, type: 'status' }));
   const deliveryEvents = (order.deliveryEvents || []).map((event: any) => ({ ...event, type: 'delivery' }));
-  return [...statusEvents, ...deliveryEvents]
+  const adjustments = (order.adjustments || []).map((event: any) => ({ ...event, type: 'adjustment' }));
+  return [...statusEvents, ...deliveryEvents, ...adjustments]
     .sort((first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime());
 }
 
@@ -271,6 +273,7 @@ export default function OrdersPage() {
   const [confirmNextOpenOrder, setConfirmNextOpenOrder] = useState<any | null>(null);
   const [rescheduleOrder, setRescheduleOrder] = useState<any | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState('');
+  const [partialOpen, setPartialOpen] = useState(false);
 
   const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
@@ -481,13 +484,18 @@ export default function OrdersPage() {
 
   const filteredOrders = useMemo(() => {
     const { start, end } = dateBounds;
+    const query = search.trim();
     return allOrders.filter(o => {
       const created = new Date(o.createdAt);
-      if (start && created < start) return false;
-      if (end   && created > end)   return false;
+      // A search is an explicit "find this order" action, so it must reach
+      // older orders too — the date tab stays a browsing filter only.
+      if (!query) {
+        if (start && created < start) return false;
+        if (end   && created > end)   return false;
+      }
       if (statusFilter && o.status !== statusFilter) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
+      if (query) {
+        const q = query.toLowerCase();
         // Match what the row actually shows (real name, or the phone fallback for
         // placeholder names), plus the phone, order identifiers, and any part of
         // the delivery address.
@@ -605,6 +613,17 @@ export default function OrdersPage() {
             </button>
           )}
         </div>
+
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setPartialOpen(true)}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+            title="Correct a partially delivered order">
+            <Package className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Partial delivery</span>
+          </button>
+        )}
       </div>
 
       {/* Order cards */}
@@ -1299,15 +1318,25 @@ export default function OrdersPage() {
                 {getJourneyEvents(detailsOrder).map((event: any, index: number, events: any[]) => (
                   <div key={`${event.createdAt}-${index}`} className="relative flex gap-3 pb-4 last:pb-0">
                     {index < events.length - 1 && <span className="absolute left-[9px] top-4 h-full w-px bg-gray-200 dark:bg-slate-600" />}
-                    <div className="z-10 flex w-5 justify-center"><span className={`mt-1 h-2.5 w-2.5 rounded-full ${event.type === 'delivery' ? 'bg-violet-500' : 'bg-emerald-500'}`} /></div>
+                    <div className="z-10 flex w-5 justify-center"><span className={`mt-1 h-2.5 w-2.5 rounded-full ${
+                      event.type === 'delivery' ? 'bg-violet-500' : event.type === 'adjustment' ? 'bg-amber-500' : 'bg-emerald-500'
+                    }`} /></div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold capitalize text-gray-900 dark:text-white break-words">
                         {event.type === 'delivery'
                           ? `Delivery rescheduled to ${new Date(event.scheduledFor).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\b(AM|PM)\b/, meridiem => meridiem.toLowerCase())}`
-                          : event.toStatus.replaceAll('_', ' ')}
+                          : event.type === 'adjustment'
+                            ? `Partial delivery · ${event.reason || 'Adjusted'}`
+                            : event.toStatus.replaceAll('_', ' ')}
                       </p>
+                      {event.type === 'adjustment' && (
+                        <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400 break-words">
+                          {event.productName} ({event.unit}): {event.previousQuantity} → {event.deliveredQuantity}
+                          {event.removedQuantity > 0 ? ` · ${event.removedQuantity} removed · ₹${Number(event.removedAmount).toFixed(2)} off` : ''}
+                        </p>
+                      )}
                       <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400 break-words">
-                        {event.actorName} · {new Date(event.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                        {event.type === 'adjustment' ? event.adjustedByName : event.actorName} · {new Date(event.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                       </p>
                     </div>
                   </div>
@@ -1368,6 +1397,13 @@ export default function OrdersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {partialOpen && (
+        <PartialDeliveryDialog
+          onClose={() => setPartialOpen(false)}
+          onSaved={() => load(true)}
+        />
       )}
     </div>
   );

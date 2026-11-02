@@ -976,7 +976,7 @@ export const adminDeleteCategory = asyncHandler(async (req: AdminRequest, res: R
 // ── Admin order controllers ───────────────────────────────────────────────────
 
 export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { status, phone, limit, offset } = req.query;
+  const { status, phone, q, limit, offset } = req.query;
   const isSuperAdmin = req.admin!.role === 'super_admin';
   const isHeadStoreViewer = !isSuperAdmin && await isHeadStore(req.admin!.storeId);
   const canManageMaster = isSuperAdmin || isHeadStoreViewer;
@@ -985,6 +985,7 @@ export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Respon
     storeId,
     status: status as string,
     phone: phone as string,
+    search: typeof q === 'string' ? q : undefined,
     limit: limit ? parseInt(limit as string) : 50,
     offset: offset ? parseInt(offset as string) : 0,
     // Non-super admins see the whole order only when their store is the head
@@ -1395,6 +1396,73 @@ export const adminUpdateOrderFulfilment = asyncHandler(async (req: AdminRequest,
     },
   });
   res.json({ success: true, data: fulfilment });
+});
+
+// Correct an order after a partial delivery. The admin picks the quantity that
+// actually arrived for each line; the service removes the rest, recalculates the
+// order money, returns any stock for an already-delivered order, and writes an
+// audit row so the original quantity is never lost.
+export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { adjustments, reason, paymentMethod } = req.body;
+  if (!Array.isArray(adjustments) || adjustments.length === 0) {
+    res.status(400).json({ success: false, error: 'Choose at least one item to adjust' }); return;
+  }
+  if (paymentMethod !== undefined && paymentMethod !== 'cod' && paymentMethod !== 'upi') {
+    res.status(400).json({ success: false, error: 'Choose a valid payment mode' }); return;
+  }
+  const normalized = adjustments.map((entry: any) => {
+    const rawQuantity = entry?.deliveredQuantity;
+    const deliveredQuantity = Number(rawQuantity);
+    const orderItemId = String(entry?.orderItemId || '');
+    const quantityIsValid = (typeof rawQuantity === 'number' || typeof rawQuantity === 'string')
+      && Number.isInteger(deliveredQuantity) && deliveredQuantity >= 0;
+    if (!orderItemId || !quantityIsValid) {
+      throw badRequest('Each adjustment needs a valid order item and delivered quantity');
+    }
+    return { orderItemId, deliveredQuantity };
+  });
+
+  const result = await OrderService.adjustItems(
+    req.params.id,
+    normalized,
+    typeof reason === 'string' ? reason.trim() : '',
+    req.admin!,
+    paymentMethod
+  );
+
+  ComplianceService.logAudit({
+    adminId: req.admin!.id,
+    username: req.admin!.username,
+    role: req.admin!.role,
+    action: 'order_items_adjusted',
+    entityType: 'order',
+    entityId: result.id,
+    detail: `Order #${result.orderNumber}: ${result.adjustedItems} line(s) adjusted, ₹${result.removedTotal.toFixed(2)} removed, new total ₹${result.total.toFixed(2)}, payment ${result.paymentMethod}${reason ? ` — ${reason}` : ''}`,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent'),
+  });
+
+  if (result.status === 'delivered') {
+    PushService.notifyOrderRecipient(result.id, {
+      title: `Order #${result.orderNumber} updated`,
+      body: `An item we could not deliver was removed. Your updated total is ₹${result.total.toFixed(0)}.`,
+      url: '/orders',
+      tag: `order-${result.id}`,
+    }).catch(() => {});
+  }
+
+  emitOrderEvent({
+    type: 'order.updated',
+    order: {
+      id: result.id,
+      orderNumber: result.orderNumber,
+      status: result.status,
+      storeId: result.storeId,
+      total: result.total,
+    },
+  });
+
+  res.json({ success: true, data: result });
 });
 
 export const adminRescheduleOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
