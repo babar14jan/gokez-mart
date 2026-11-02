@@ -13,9 +13,8 @@ import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 import {
   ActiveOrderCard, ClosedOrderCard, DeliveredOrderCard,
-  ALL_CLOSED, STATUS_LABELS,
-  isRecentlyDelivered, hasActiveOrder, formatDateTime,
 } from '../components/OrderCards';
+import { ALL_CLOSED, STATUS_LABELS, isRecentlyDelivered, hasActiveOrder, formatDateTime } from '../utils/orderStatus';
 import PageHeader from '../components/PageHeader';
 import SmartImage from '../components/SmartImage';
 
@@ -472,10 +471,23 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     if (pollRef.current) clearInterval(pollRef.current);
     const hasLive = orders.some(o => !ALL_CLOSED.includes(o.status));
     if (hasLive) {
-      pollRef.current = setInterval(() => {
+      const refreshLiveOrders = () => {
         if (isLoggedIn) fetchOrders(true);
         else fetchGuestOrders(true);
-      }, 10000);
+      };
+      pollRef.current = setInterval(() => {
+        refreshLiveOrders();
+      }, isLoggedIn ? 3000 : 5000);
+      const refreshOnReturn = () => {
+        if (document.visibilityState === 'visible') refreshLiveOrders();
+      };
+      window.addEventListener('focus', refreshOnReturn);
+      document.addEventListener('visibilitychange', refreshOnReturn);
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        window.removeEventListener('focus', refreshOnReturn);
+        document.removeEventListener('visibilitychange', refreshOnReturn);
+      };
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps

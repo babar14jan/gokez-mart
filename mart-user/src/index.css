@@ -288,6 +288,17 @@ html, body { overscroll-behavior-y: none; }
     padding-bottom: 1rem;
   }
 
+  /* In the modal this element is a direct child of the vertical flex host, so
+     auto margin keeps it at the footer. The keyboard needs it near the form. */
+  .login-privacy-note {
+    margin-top: auto;
+    padding-top: 0.75rem;
+  }
+
+  .kb-open .login-privacy-note {
+    display: none;
+  }
+
   .login-art {
     max-height: 100svh;
     transition: max-height 200ms ease-out;

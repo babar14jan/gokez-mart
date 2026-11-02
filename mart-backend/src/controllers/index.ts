@@ -37,8 +37,80 @@ import { trackStream } from '../utils/sse';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
 import { badRequest, forbidden } from '../utils/apiError';
+import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
+
+async function autoConfirmOrder(id: string): Promise<void> {
+  try {
+    const order = await OrderService.autoConfirmPending(id);
+    if (!order) return;
+
+    PushService.notifyOrderRecipient(order.id, {
+      title: `Order #${order.orderNumber} update`,
+      body: `✅ Order #${order.orderNumber} confirmed. We're preparing your order.`,
+      url: '/orders',
+      tag: `order-${order.id}`,
+    }).catch(() => {});
+    const fulfilmentStores = await query<{ storeId: string }>(
+      `SELECT DISTINCT store_id as "storeId"
+         FROM mart_order_items
+        WHERE order_id = $1 AND store_id IS NOT NULL`,
+      [order.id]
+    );
+    emitOrderEvent({
+      type: 'order.updated',
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: 'confirmed',
+        storeId: order.storeId,
+        storeIds: fulfilmentStores.rows.map(row => row.storeId),
+      },
+    });
+  } catch (error) {
+    console.error(`[orders] automatic confirmation failed for ${id}:`, error);
+  }
+}
+
+async function autoStartPreparingOrder(id: string): Promise<void> {
+  try {
+    const order = await OrderService.autoStartPreparing(id);
+    if (!order) return;
+
+    PushService.notifyOrderRecipient(order.id, {
+      title: `Order #${order.orderNumber} update`,
+      body: `Order #${order.orderNumber} is being prepared.`,
+      url: '/orders',
+      tag: `order-${order.id}`,
+    }).catch(() => {});
+    const fulfilmentStores = await query<{ storeId: string }>(
+      `SELECT DISTINCT store_id as "storeId"
+         FROM mart_order_items
+        WHERE order_id = $1 AND store_id IS NOT NULL`,
+      [order.id]
+    );
+    emitOrderEvent({
+      type: 'order.updated',
+      order: {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: 'preparing',
+        storeId: order.storeId,
+        storeIds: fulfilmentStores.rows.map(row => row.storeId),
+      },
+    });
+  } catch (error) {
+    console.error(`[orders] automatic preparation failed for ${id}:`, error);
+  }
+}
+
+/** Recover automatic order transitions that were due during a process restart. */
+export async function recoverAutomaticOrderTransitions(): Promise<void> {
+  const { pendingIds, confirmedIds } = await OrderService.getOverdueAutomaticTransitions();
+  await Promise.all(pendingIds.map(autoConfirmOrder));
+  await Promise.all(confirmedIds.map(autoStartPreparingOrder));
+}
 
 type PreparedImage = { buffer: Buffer; extension: string; mimeType: string };
 
@@ -351,11 +423,11 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
   }
-  const cleanPhone = String(guestPhone).replace(/\D/g, '');
+  const cleanPhone = normalizeCustomerPhone(guestPhone);
   if (normalizedName.length < 2 || normalizedName.length > 80 || !/\p{L}/u.test(normalizedName)) {
     res.status(400).json({ success: false, error: 'Enter a valid name' }); return;
   }
-  if (!/^\d{10}$/.test(cleanPhone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  if (!isValidCustomerPhone(cleanPhone)) { res.status(400).json({ success: false, error: 'Enter a valid 10-digit mobile number' }); return; }
   if (req.customer && req.customer.phone !== cleanPhone) {
     res.status(400).json({ success: false, error: 'Use your verified phone number to place this order' }); return;
   }
@@ -442,6 +514,8 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
         storeIds: fulfilmentStores.rows.map(row => row.storeId),
       },
     });
+    setTimeout(() => { void autoConfirmOrder(result.orderId); }, 2000);
+    setTimeout(() => { void autoStartPreparingOrder(result.orderId); }, 3 * 60 * 1000);
   }
   res.status(201).json({ success: true, data: result });
 });
@@ -1996,8 +2070,8 @@ export const customerUpdateProfile = asyncHandler(async (req: CustomerRequest, r
  * order. Only an unverified phone is touched — see CustomerAuthService for why.
  */
 export const saveGuestDetails = asyncHandler(async (req: Request, res: Response) => {
-  const phone = typeof req.body.phone === 'string' ? req.body.phone.replace(/\D/g, '') : '';
-  if (!/^\d{10}$/.test(phone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  const phone = normalizeCustomerPhone(req.body.phone);
+  if (!isValidCustomerPhone(phone)) { res.status(400).json({ success: false, error: 'Enter a valid 10-digit mobile number' }); return; }
   const address = typeof req.body.address === 'string' ? req.body.address.trim() : '';
   if (address.length < 10 || address.length > 500) { res.status(400).json({ success: false, error: 'Enter a complete delivery address' }); return; }
   const name = typeof req.body.name === 'string' ? req.body.name.trim().replace(/\s+/g, ' ') : '';
@@ -3081,10 +3155,8 @@ export const getRecommendations = asyncHandler(async (req: Request, res: Respons
   const customerId = (req as any).customer?.id ?? null;
   // A guest who has typed their phone gets history-based personalisation too.
   // Validated to a 10-digit Indian mobile before use.
-  const cleanGuestPhone = typeof guestPhone === 'string'
-    ? guestPhone.replace(/\D/g, '')
-    : null;
-  const resolvedGuestPhone = !customerId && /^\d{10}$/.test(cleanGuestPhone || '')
+  const cleanGuestPhone = normalizeCustomerPhone(guestPhone);
+  const resolvedGuestPhone = !customerId && isValidCustomerPhone(cleanGuestPhone)
     ? cleanGuestPhone
     : null;
   const result = await RecommendationService.getRecommendations(

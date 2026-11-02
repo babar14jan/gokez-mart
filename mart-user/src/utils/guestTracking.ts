@@ -8,7 +8,8 @@
  * boundary in the tree, blanks the whole screen.
  */
 
-const STORAGE_KEY = 'guest_tracking_tokens';
+const STORAGE_KEY = 'guest_tracking_tokens_v2';
+const LEGACY_STORAGE_KEY = 'guest_tracking_tokens';
 const MAX_TOKENS = 10;
 
 export function readTrackingTokens(): string[] {
@@ -26,6 +27,7 @@ export function readTrackingTokens(): string[] {
 
 export function saveTrackingToken(token: string): void {
   try {
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     const tokens = readTrackingTokens();
     if (tokens.includes(token)) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...tokens, token].slice(-MAX_TOKENS)));
@@ -37,5 +39,6 @@ export function saveTrackingToken(token: string): void {
 export function clearTrackingTokens(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {}
 }

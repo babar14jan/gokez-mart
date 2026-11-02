@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useCustomerStore } from './customerStore';
 import { clearHttpCache } from '../services/httpCache';
+import { clearTrackingTokens } from '../utils/guestTracking';
 
 interface CustomerAuthState {
   token: string | null;
@@ -33,6 +34,10 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
       isPhoneVerified: false,
 
       login: (token, customer) => {
+        // Guest tracking belongs only to an anonymous device session. Once a
+        // customer account is used, its order history must never reappear after
+        // logout on a shared browser.
+        clearTrackingTokens();
         // Reset any previously-loaded address book — a different customer is now signed in.
         useCustomerStore.setState({ addresses: [], addressesLoaded: false });
         // The HTTP cache is auth-blind (keys are method+url+params only), so the
@@ -67,6 +72,7 @@ export const useCustomerAuthStore = create<CustomerAuthState>()(
       })),
 
       logout: () => {
+        clearTrackingTokens();
         useCustomerStore.setState({ addresses: [], addressesLoaded: false });
         // Same as login: nothing authenticated may stay cached after sign-out.
         clearHttpCache();
