@@ -9,6 +9,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const jwtSecret = process.env.MART_JWT_SECRET;
 const configuredOrigins = (process.env.MART_CORS_ORIGIN || (isProduction ? '' : 'http://localhost:5177,http://localhost:5178'))
   .split(',').map(origin => origin.trim()).filter(Boolean);
+const publicApiUrl = (process.env.MART_PUBLIC_API_URL || (isProduction ? '' : `http://localhost:${process.env.PORT || '3004'}/api/v1`)).replace(/\/$/, '');
 
 if (isProduction) {
   if (!jwtSecret || jwtSecret === 'mart-dev-secret-change-in-production' || jwtSecret === 'change_this_in_production' || jwtSecret.length < 32) {
@@ -43,6 +44,10 @@ export const config = {
   },
   cors: {
     origins: configuredOrigins,
+  },
+  urls: {
+    publicApi: publicApiUrl,
+    customerApp: process.env.MART_CUSTOMER_APP_URL || configuredOrigins[0] || 'http://localhost:5177',
   },
   vapid: {
     publicKey:  process.env.VAPID_PUBLIC_KEY  || '',

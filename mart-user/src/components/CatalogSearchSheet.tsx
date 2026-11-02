@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, ShoppingCart } from 'lucide-react';
+import { RefreshCw, X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
@@ -16,6 +16,7 @@ interface CatalogSearchSheetProps {
   autoFocus?: boolean;
   onClose: () => void;
   onOpenCart: () => void;
+  onRefresh: () => Promise<void>;
 }
 
 /**
@@ -37,9 +38,15 @@ function matchScore(product: Product, query: string): number {
   return 7;
 }
 
-export default function CatalogSearchSheet({ categories, products, searchPrompt, autoFocus = true, onClose, onOpenCart }: CatalogSearchSheetProps) {
+export default function CatalogSearchSheet({ categories, products, searchPrompt, autoFocus = true, onClose, onOpenCart, onRefresh }: CatalogSearchSheetProps) {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const pullStart = useRef<{ x: number; y: number } | null>(null);
+  const pullDistanceRef = useRef(0);
+  const refreshingRef = useRef(false);
   const totalItems = useCartStore(s => s.totalItems());
   const { ref: inputRef, dismiss: dismissKeyboard, onKeyDown: handleKeyDown, onSurfaceClick: handleSurfaceClick } = useKeyboardDismiss();
   const query = search.trim().toLowerCase();
@@ -92,6 +99,63 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
     setCategoryId(current => current === id ? null : id);
     setSearch('');
   };
+
+  useEffect(() => {
+    const resultsElement = resultsRef.current;
+    if (!resultsElement) return;
+
+    const cancelPull = () => {
+      pullStart.current = null;
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      if (refreshingRef.current || event.touches.length !== 1 || resultsElement.scrollTop !== 0) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
+      const touch = event.touches[0];
+      pullStart.current = { x: touch.clientX, y: touch.clientY };
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const start = pullStart.current;
+      const touch = event.touches[0];
+      if (!start || !touch) return;
+      const deltaY = touch.clientY - start.y;
+      const deltaX = Math.abs(touch.clientX - start.x);
+      if (deltaY <= 0 || deltaX > Math.max(16, deltaY * 0.6)) {
+        cancelPull();
+        return;
+      }
+      event.preventDefault();
+      pullDistanceRef.current = Math.min(deltaY, 76);
+      setPullDistance(pullDistanceRef.current);
+    };
+    const onTouchEnd = () => {
+      const shouldRefresh = pullDistanceRef.current >= 76;
+      cancelPull();
+      if (!shouldRefresh || refreshingRef.current) return;
+      refreshingRef.current = true;
+      setRefreshing(true);
+      const startedAt = Date.now();
+      onRefresh().catch(() => undefined).finally(() => {
+        window.setTimeout(() => {
+          refreshingRef.current = false;
+          setRefreshing(false);
+        }, Math.max(0, 450 - (Date.now() - startedAt)));
+      });
+    };
+
+    resultsElement.addEventListener('touchstart', onTouchStart, { passive: true });
+    resultsElement.addEventListener('touchmove', onTouchMove, { passive: false });
+    resultsElement.addEventListener('touchend', onTouchEnd);
+    resultsElement.addEventListener('touchcancel', cancelPull);
+    return () => {
+      resultsElement.removeEventListener('touchstart', onTouchStart);
+      resultsElement.removeEventListener('touchmove', onTouchMove);
+      resultsElement.removeEventListener('touchend', onTouchEnd);
+      resultsElement.removeEventListener('touchcancel', cancelPull);
+    };
+  }, [onRefresh]);
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Search products" onClick={handleSurfaceClick}>
@@ -164,7 +228,14 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
           )}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900" onScroll={dismissKeyboard}>
+        <div ref={resultsRef} className="relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-white px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900" onScroll={dismissKeyboard}>
+          {(refreshing || pullDistance > 0) && (
+            <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2" style={{ opacity: refreshing ? 1 : Math.min(1, pullDistance / 40) }} aria-live="polite">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md ring-1 ring-black/5 dark:bg-slate-800/90 dark:ring-white/10">
+                <RefreshCw className={`h-4 w-4 text-emerald-600 dark:text-emerald-300 ${refreshing || pullDistance >= 76 ? 'animate-spin' : ''}`} style={refreshing || pullDistance >= 76 ? undefined : { transform: `rotate(${pullDistance * 4}deg)` }} aria-hidden="true" />
+              </div>
+            </div>
+          )}
           {/* Initial state (empty query): browse categories. */}
           {!query && categoriesWithProducts.length > 1 && (
             <section className="mb-5">

@@ -53,8 +53,9 @@ export default function TermsPage({ embed = false }: { embed?: boolean } = {}) {
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">6. Cancellations & Refunds</h2>
             <ul className="list-disc list-inside space-y-1.5">
-              <li>Orders can be cancelled before they are confirmed by the store</li>
-              <li>Once an order is confirmed or out for delivery, cancellation may not be possible</li>
+              <li>Orders can be cancelled until preparation begins</li>
+              <li>Scheduled orders can be cancelled until 30 minutes before the scheduled delivery time</li>
+              <li>After the cancellation window closes, contact the merchant or support for help</li>
               <li>Refunds, replacements and payment reversals for goods are handled by the merchant that received the payment. Gokez may help route a support request but does not promise or process a merchant refund</li>
               <li>For damaged or incorrect items, contact the merchant promptly using the order support details. You may also contact <a href="mailto:support@gokez.com" className="text-gokez-700 dark:text-gokez-400 hover:underline">support@gokez.com</a> for platform support</li>
             </ul>

@@ -369,6 +369,72 @@ export const zonesApi = {
   updateSettings: (id: string, values: Record<string, string>) => api.put(`/admin/zones/${id}/settings`, values),
 };
 
+export type PromotionType = 'new_product' | 'combo' | 'offer' | 'back_in_stock' | 'we_miss_you' | 'custom';
+export type PromotionStatus = 'draft' | 'sending' | 'sent' | 'cancelled';
+export type AudienceCohort = 'recent_purchaser' | 'winback_7' | 'winback_15' | 'winback_30' | 'first_order_followup' | 'repeat_buyer';
+
+export interface PromotionAudienceRules {
+  cohorts: AudienceCohort[];
+}
+
+export interface PromotionAudienceExclusions {
+  notConsented: number;
+  noSubscription: number;
+  cohortMismatch: number;
+  sentPromotionLast7d: number;
+  activeOrder: number;
+  recentDelivery: number;
+  recentCancellationOrFailure: number;
+  lateDeliverySuppression: number;
+}
+
+export interface PromotionPreview {
+  recipients: number;
+  subscriptions: number;
+  exclusions: PromotionAudienceExclusions;
+}
+
+export interface Promotion {
+  id: string;
+  type: PromotionType;
+  title: string;
+  body: string;
+  image_url: string | null;
+  destination_url: string;
+  zone_ids: string[] | null;
+  audience_rules: PromotionAudienceRules | null;
+  status: PromotionStatus;
+  scheduled_at: string | null;
+  created_at: string;
+  sent_at: string | null;
+  recipient_count: number;
+  delivery_count: number;
+  fail_count: number;
+  clickCount: number;
+  deliveredCount?: number;
+}
+
+export interface PromotionInput {
+  type: PromotionType;
+  title: string;
+  body: string;
+  imageUrl?: string | null;
+  destinationUrl: string;
+  zoneIds?: string[] | null;
+  audienceRules?: PromotionAudienceRules;
+  scheduledAt?: string | null;
+}
+
+export const promotionsApi = {
+  getAll: () => api.get<{ success: boolean; data: Promotion[] }>('/admin/promotions'),
+  create: (data: PromotionInput) => api.post<{ success: boolean; data: Promotion }>('/admin/promotions', data),
+  update: (id: string, data: Partial<PromotionInput>) => api.put<{ success: boolean; data: Promotion }>(`/admin/promotions/${id}`, data),
+  delete: (id: string) => api.delete(`/admin/promotions/${id}`),
+  preview: (id: string) => api.post<{ success: boolean; data: PromotionPreview }>(`/admin/promotions/${id}/preview`),
+  test: (id: string) => api.post<{ success: boolean; data: { sent: number; failed: number } }>(`/admin/promotions/${id}/test`),
+  send: (id: string) => api.post<{ success: boolean; data: { sent: number; failed: number; recipients: number } }>(`/admin/promotions/${id}/send`),
+};
+
 // ── Stores ────────────────────────────────────────────────────────────────────
 export const storesApi = {
   getAll: () => api.get('/admin/stores'),

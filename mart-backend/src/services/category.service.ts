@@ -1,10 +1,25 @@
 import { query } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
+import { badRequest } from '../utils/apiError';
+
+export const PRODUCT_PREFIX_PATTERN = /^[A-Z]{2,6}$/;
+
+export function normalizeProductPrefix(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw badRequest('Product prefix is required');
+  }
+  const productPrefix = value.trim().toUpperCase();
+  if (!PRODUCT_PREFIX_PATTERN.test(productPrefix)) {
+    throw badRequest('Product prefix must be 2 to 6 letters');
+  }
+  return productPrefix;
+}
 
 export interface MartCategory {
   id: string;
   name: string;
   slug: string;
+  productPrefix: string;
   icon: string | null;
   sortOrder: number;
   isActive: boolean;
@@ -15,7 +30,7 @@ export class CategoryService {
   static async findAll(activeOnly = false): Promise<MartCategory[]> {
     const where = activeOnly ? `WHERE c.is_active = true` : '';
     const result = await query<MartCategory>(
-      `SELECT c.id, c.name, c.slug, c.icon, c.sort_order as "sortOrder",
+      `SELECT c.id, c.name, c.slug, c.product_prefix as "productPrefix", c.icon, c.sort_order as "sortOrder",
               c.is_active as "isActive",
               COUNT(p.id)::int as "productCount"
        FROM mart_categories c
@@ -30,11 +45,12 @@ export class CategoryService {
 
   static async create(data: Partial<MartCategory>): Promise<MartCategory> {
     const id = uuidv4();
+    const productPrefix = normalizeProductPrefix(data.productPrefix);
     const result = await query<MartCategory>(
-      `INSERT INTO mart_categories (id, name, slug, icon, sort_order)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, name, slug, icon, sort_order as "sortOrder", is_active as "isActive"`,
-      [id, data.name, data.slug, data.icon || null, data.sortOrder || 0]
+      `INSERT INTO mart_categories (id, name, slug, product_prefix, icon, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, slug, product_prefix as "productPrefix", icon, sort_order as "sortOrder", is_active as "isActive"`,
+      [id, data.name, data.slug, productPrefix, data.icon || null, data.sortOrder || 0]
     );
     return result.rows[0];
   }
@@ -46,6 +62,16 @@ export class CategoryService {
 
     if (data.name !== undefined) { fields.push(`name = $${i++}`); params.push(data.name); }
     if (data.slug !== undefined) { fields.push(`slug = $${i++}`); params.push(data.slug); }
+    if (data.productPrefix !== undefined) {
+      const productCount = await query<{ count: string }>(
+        `SELECT COUNT(*)::TEXT as count FROM mart_products WHERE category_id = $1`, [id]
+      );
+      if (Number(productCount.rows[0].count) > 0) {
+        throw badRequest('Product prefix cannot change after products exist for this category');
+      }
+      fields.push(`product_prefix = $${i++}`);
+      params.push(normalizeProductPrefix(data.productPrefix));
+    }
     if (data.icon !== undefined) { fields.push(`icon = $${i++}`); params.push(data.icon); }
     if (data.sortOrder !== undefined) { fields.push(`sort_order = $${i++}`); params.push(data.sortOrder); }
     if (data.isActive !== undefined) { fields.push(`is_active = $${i++}`); params.push(data.isActive); }
@@ -56,7 +82,7 @@ export class CategoryService {
 
     const result = await query<MartCategory>(
       `UPDATE mart_categories SET ${fields.join(', ')} WHERE id = $${i}
-       RETURNING id, name, slug, icon, sort_order as "sortOrder", is_active as "isActive"`,
+       RETURNING id, name, slug, product_prefix as "productPrefix", icon, sort_order as "sortOrder", is_active as "isActive"`,
       params
     );
     return result.rows[0] || null;

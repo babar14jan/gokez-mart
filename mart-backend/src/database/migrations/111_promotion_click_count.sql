@@ -1,0 +1,2 @@
+ALTER TABLE mart_promotions
+  ADD COLUMN IF NOT EXISTS click_count INTEGER NOT NULL DEFAULT 0;
