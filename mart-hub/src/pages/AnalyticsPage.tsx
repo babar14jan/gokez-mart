@@ -228,7 +228,7 @@ function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; ra
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <SummaryCard label="Delivered Revenue" value={`₹${Math.round(totalRevenue).toLocaleString('en-IN')}`} sub={`${delivered.length} delivered orders`} icon={<Wallet className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
         <SummaryCard label="Avg Order Value" value={`₹${summary.avgOrderValue.toFixed(0)}`} sub="per delivered order" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
-        <SummaryCard label="Online Payment Share" value={`${onlinePct}%`} sub={`COD ₹${Math.round(codRevenue).toLocaleString('en-IN')} · Online ₹${Math.round(onlineRevenue).toLocaleString('en-IN')}`} icon={<Smartphone className="w-4 h-4" />} gradient="from-violet-500 to-violet-600" />
+        <SummaryCard label="Online Payment Share" value={`${onlinePct}%`} sub={`App (Cash) ₹${Math.round(codRevenue).toLocaleString('en-IN')} · Online ₹${Math.round(onlineRevenue).toLocaleString('en-IN')}`} icon={<Smartphone className="w-4 h-4" />} gradient="from-violet-500 to-violet-600" />
         <SummaryCard label="Peak Revenue Day" value={`₹${peakDay.value.toLocaleString('en-IN')}`} sub={peakDay.fullLabel} icon={<Calendar className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
       </div>
 

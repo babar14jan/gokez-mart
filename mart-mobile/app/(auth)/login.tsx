@@ -125,17 +125,17 @@ export default function LoginScreen() {
     } finally { setLoading(false); }
   };
 
-  const setOtpDigit = (index: number, digit: string) => {
-    const chars = otp.padEnd(6, '').split('');
-    chars[index] = digit;
-    setOtp(chars.join('').slice(0, 6));
-  };
-
   const handleOtpChangeText = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, '').slice(-1);
-    if (!digit) return;
-    setOtpDigit(index, digit);
-    const nextIndex = Math.min(index + 1, 5);
+    const digits = value.replace(/\D/g, '');
+    if (!digits) return;
+    const start = digits.length > 1 ? 0 : index;
+    const chars = otp.split('');
+    while (chars.length < 6) chars.push('');
+    for (let i = 0; i < digits.length && start + i < 6; i++) {
+      chars[start + i] = digits[i];
+    }
+    setOtp(chars.join('').slice(0, 6));
+    const nextIndex = Math.min(start + digits.length, 5);
     otpRefs.current[nextIndex]?.focus?.();
   };
 
@@ -320,7 +320,7 @@ export default function LoginScreen() {
                   keyboardType="number-pad"
                   autoComplete={i === 0 ? 'sms-otp' : 'off'}
                   textContentType={i === 0 ? 'oneTimeCode' : 'none'}
-                  maxLength={1}
+                  maxLength={i === 0 ? 6 : 1}
                   value={otp[i] ?? ''}
                   onChangeText={t => handleOtpChangeText(i, t)}
                   onKeyPress={e => handleOtpKeyPress(i, e)}

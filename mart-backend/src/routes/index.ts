@@ -70,6 +70,7 @@ router.put('/admin/zones/:id/settings',    authenticate, requireSuperAdmin, ctrl
 // ── Admin products ────────────────────────────────────────────────────────────
 router.get('/admin/products',          authenticate, ctrl.adminGetProducts);     // ?storeId=
 router.post('/admin/products',         authenticate, ctrl.adminCreateProduct);
+router.get('/admin/products/:id/components', authenticate, ctrl.adminGetProductBundleComponents);
 router.put('/admin/products/:id',      authenticate, ctrl.adminUpdateProduct);
 router.delete('/admin/products/:id',   authenticate, ctrl.adminDeleteProduct);
 
@@ -95,8 +96,15 @@ router.delete('/admin/users/:id', authenticate, requireSuperAdmin, ctrl.adminDel
 router.get('/admin/orders',            authenticate, ctrl.adminGetOrders);       // ?storeId=
 router.get('/admin/analytics/summary', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetAnalyticsSummary); // ?range=&from=&to=&storeId=
 router.get('/admin/analytics/customers', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetCustomerAggregates); // ?range=&from=&to=&storeId=&top=
+router.get('/admin/daily-sales',          authenticate, ctrl.adminGetDailySales);         // ?mode=today|yesterday|month|all|custom&from=&to=&storeId=
+router.get('/admin/daily-sales/day',      authenticate, ctrl.adminGetDailySalesDay);     // ?date=&storeId=
+router.get('/admin/daily-sales/entries',  authenticate, ctrl.adminListOfflineSales);     // ?date=&storeId=
+router.post('/admin/daily-sales/entries', authenticate, ctrl.adminAddOfflineSale);      // {date, productId, quantity, paymentMethod, notes, storeId}
+router.put('/admin/daily-sales/entries/:id', authenticate, ctrl.adminUpdateOfflineSale); // {date, productId, quantity, paymentMethod, notes}
+router.delete('/admin/daily-sales/entries/:id', authenticate, ctrl.adminDeleteOfflineSale); // ?storeId=
 router.get('/admin/events',              authenticate, ctrl.adminOrderStream);       // SSE live order stream
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
+router.put('/admin/orders/:id/fulfilments/:storeId', authenticate, ctrl.adminUpdateOrderFulfilment);
 router.put('/admin/orders/:id/reschedule', authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminRescheduleOrder);
 router.put('/admin/orders/:id/confirm-next-open', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminConfirmNextOpen);
 router.put("/admin/orders/:id/terminate", authenticate, ctrl.adminTerminateOrder);// ── Admin customers ───────────────────────────────────────────────────────────
@@ -196,6 +204,9 @@ router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctr
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
 router.get('/admin/inventory',                          authenticate, ctrl.adminGetInventory);
+router.get('/admin/inventory/stores',                   authenticate, ctrl.adminGetInventoryStores);
+router.get('/admin/inventory/settings',                 authenticate, ctrl.adminGetInventorySettings);
+router.put('/admin/inventory/settings',                 authenticate, ctrl.adminUpdateInventorySettings);
 router.post('/admin/inventory/bulk-restock',            authenticate, ctrl.adminBulkRestock);
 router.post('/admin/inventory/:productId/restock',      authenticate, ctrl.adminRestockProduct);
 router.put('/admin/inventory/:productId/stock',         authenticate, ctrl.adminSetProductStock);

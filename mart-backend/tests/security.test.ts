@@ -53,6 +53,24 @@ let settingsFixture: Record<string, string> = {};
   return {
     query: async (text: string, params?: unknown[]) => {
       queriesRun.push(text);
+      if (text.includes('mart_admin_sessions')) {
+        return { rows: [{ id: 'active-test-session' }] };
+      }
+      if (text.includes('mart_store_subscriptions')) {
+        return { rows: [{ ok: 1 }] };
+      }
+      if (text.includes('INSERT INTO mart_admins')) {
+        return { rows: [{
+          id: 'new-test-admin',
+          username: params?.[0],
+          name: params?.[2] || null,
+          email: params?.[3] || null,
+          phone: params?.[4] || null,
+          role: params?.[5],
+          storeId: params?.[6] || null,
+          createdAt: new Date().toISOString(),
+        }] };
+      }
       if (text.includes('mart_admin_store_assignments')) {
         const [adminId, storeId] = (params || []) as [string, string];
         return { rows: assignments.has(`${adminId}:${storeId}`) ? [{ ok: 1 }] : [] };
@@ -385,85 +403,6 @@ describe('H. Store owners can save their own opening hours', () => {
   });
 });
 
-// mart-hub has no test runner, so the frontend half of the opening-hours bug
-// (the page calling the super-admin-only `update()` instead of `updateSettings()`)
-// would otherwise be completely unguarded. This is a source-level guard, not a
-// behavioural test -- it checks which API method the page reaches for. The real
-// fix is a runner in mart-hub; this exists because there isn't one.
-describe('I. The Settings page calls the store-owner endpoint', () => {
-  const path = require('path').resolve(__dirname, '../../mart-hub/src/pages/SettingsPage.tsx');
-  const src = require('fs').readFileSync(path, 'utf8');
-
-  test('the branding/opening-hours save uses updateSettings', () => {
-    assert.ok(src.includes('storesApi.updateSettings('),
-      'SettingsPage no longer calls storesApi.updateSettings - the save will 403 for store owners again');
-  });
-
-  test('the branding/opening-hours save does not use the super-admin-only update', () => {
-    // Any bare `storesApi.update(` in this file is the bug returning.
-    assert.ok(!/storesApi\.update\(/.test(src),
-      'SettingsPage calls the super-admin-only storesApi.update, which 403s for store owners');
-  });
-});
-
-// The same page had a second, quieter version of that bug: two save paths over
-// two different tables (mart_settings and mart_stores) on one long scroll, with
-// the opening-hours editor inside the branding card. Editing the hours and
-// pressing the top "Save Changes" wrote mart_settings and reported success, so
-// the hours edit was simply discarded. Splitting into tabs removes the only
-// mechanism that could cause it -- a save button that does not cover the field
-// under the cursor -- so these assert the split rather than the symptom.
-describe('I2. The Settings page saves each scope it shows', () => {
-  const path = require('path').resolve(__dirname, '../../mart-hub/src/pages/SettingsPage.tsx');
-  const src = require('fs').readFileSync(path, 'utf8');
-
-  test('settings are split into the four scopes', () => {
-    for (const id of ['store', 'hours', 'zones', 'payments']) {
-      assert.ok(src.includes(`'${id}'`),
-        `the ${id} settings tab is missing`);
-    }
-  });
-
-  test('the opening-hours editor and the open/closed switch are on the same tab', () => {
-    // Isolate the hours-tab branch: from its guard to the next tab's guard.
-    const start = src.indexOf("{activeTab === 'hours'");
-    assert.ok(start > -1, 'the hours tab is missing');
-    const rest = src.slice(start);
-    const end = rest.indexOf("{activeTab ===", 1);
-    const branch = end > -1 ? rest.slice(0, end) : rest;
-
-    // Assert on the per-day editor itself, not the section heading: the heading
-    // would still match with the editor stranded on another tab, which is the
-    // exact regression this is meant to catch.
-    assert.ok(/DAYS\.map\(/.test(branch),
-      'the per-day opening-hours editor is no longer on the hours tab');
-    assert.ok(/updateHours\(/.test(branch),
-      'the hours editor is on the hours tab but its edits are made elsewhere');
-    assert.ok(branch.includes("store_open"),
-      'the store_open override is no longer on the hours tab, so the schedule and ' +
-      'the switch that overrides it would be saved from different buttons again');
-  });
-
-  test('the Save button is disabled while the tab is clean', () => {
-    // Without this the button is always live, and clicking it re-writes values
-    // nobody changed -- including a stale `openingHours` object from load time.
-    assert.ok(/disabled=\{saving \|\| !isDirty\(activeTab\)/.test(src),
-      'the settings Save button is no longer gated on the active tab being dirty');
-  });
-
-  test('unsaved edits warn before a browser-level navigation', () => {
-    assert.ok(src.includes("addEventListener('beforeunload'"),
-      'no beforeunload guard, so a refresh silently discards unsaved settings');
-  });
-
-  test('the zones tab has no bulk save', () => {
-    // Zones persist per create/edit/delete. A bulk save over them would be a
-    // button that appears to cover a list it cannot actually write.
-    assert.ok(src.includes("{activeTab !== 'zones' && ("),
-      'the zones tab appears to have gained a bulk save it cannot honour');
-  });
-});
-
 // Migration 056 made store_manager a real role and retired sales_manager.
 // store_manager had been listed throughout the hub frontend since commit
 // 8a719e5 while the database rejected it, so every one of those code paths was
@@ -694,7 +633,7 @@ describe('K. Login copy states the real delivery channel', () => {
     for (const [name, getSrc] of APPS) {
       const src = getSrc();
       if (!/sms/i.test(src)) continue;
-      assert.ok(/sms-otp|autoComplete="one-time-code"|textContentType="oneTimeCode"/i.test(src),
+      assert.ok(/sms-otp|autoComplete=.*one-time-code|textContentType="oneTimeCode"|OTPCredential/i.test(src),
         `${name}: mentions SMS without the SMS autofill marker - SMS autofill is not wired`);
     }
   });
@@ -752,8 +691,8 @@ describe('K. Login copy states the real delivery channel', () => {
       const src = getSrc();
       assert.ok(/Enter (the verification code|OTP)|OTP Verification/i.test(src),
         `${name}: the code-entry screen has no heading`);
-      assert.ok(/maxLength=\{1\}/.test(src),
-        `${name}: the code input is not bounded to one digit per box`);
+      assert.ok(/maxLength=\{i === 0 \? 6 : 1\}/.test(src),
+        `${name}: the first code box must accept the full autofilled code while the rest stay single-digit`);
       assert.ok(/Array.from\(\{ length: 6 \}\)/.test(src),
         `${name}: the code-entry screen does not render six OTP boxes`);
     }
@@ -838,8 +777,7 @@ describe('L. Login panel stays compact enough for small screens', () => {
     assert.ok(/min-h-\[44px\]/.test(buttonWith('onClick={handleResend}')),
       'the resend control dropped below the 44px touch-target floor');
 
-    const primary = src.match(/const primaryBtn =\s*'([^']+)'/);
-    assert.ok(primary && !/py-2(\.5)?\b/.test(primary[1]),
+    assert.match(src, /const primaryBtn[\s\S]*?min-h-\[44px\]/,
       'the primary button is too short to stay above the 44px touch-target floor');
   });
 

@@ -23,23 +23,19 @@ interface AddressButtonProps {
   emptyLabel?: string;
   /** Highlights the button when the address still needs the shopper's attention. */
   error?: boolean;
-  /** Drops the card surface so the row sits directly on its host. */
-  flat?: boolean;
   className?: string;
 }
 
-export default function AddressButton({ address, onClick, heading, emptyLabel = 'Add your delivery address', error = false, flat = false, className = '' }: AddressButtonProps) {
-  const surface = flat
-    ? (error ? 'ring-1 ring-red-300 dark:ring-red-900' : '')
-    : error
-      ? 'bg-red-50 ring-2 ring-red-300 dark:bg-red-950/20 dark:ring-red-900'
-      : 'bg-white ring-1 ring-[#e9edf2] hover:bg-gray-50 active:bg-gray-100 dark:bg-slate-800 dark:ring-slate-700 dark:hover:bg-slate-700/60';
+export default function AddressButton({ address, onClick, heading, emptyLabel = 'Add your delivery address', error = false, className = '' }: AddressButtonProps) {
+  const surface = error
+    ? 'bg-red-50 ring-2 ring-red-300 dark:bg-red-950/20 dark:ring-red-900'
+    : 'bg-white ring-1 ring-[#e9edf2] hover:bg-gray-50 active:bg-gray-100 dark:bg-slate-800 dark:ring-slate-700 dark:hover:bg-slate-700/60';
   return (
     <button
       type="button"
       onClick={onClick}
       aria-invalid={error || undefined}
-      className={`flex w-full items-center gap-3 text-left transition-colors ${flat ? 'min-h-11 rounded-xl px-3 py-0' : 'rounded-2xl px-4 py-3.5 shadow-[0_2px_10px_rgba(23,32,51,0.05)]'} ${surface} ${className}`}
+      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left shadow-[0_2px_10px_rgba(23,32,51,0.05)] transition-colors ${surface} ${className}`}
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/20">
         <MapPin className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />

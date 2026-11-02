@@ -36,11 +36,9 @@ describe('Store name/address have a single source of truth', () => {
     assert.doesNotMatch(src, /storeName:\s*settings\.store_name/);
   });
 
-  test('the hub Settings page no longer edits store_name/store_address', () => {
-    const src = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'pages', 'SettingsPage.tsx'), 'utf8');
-    // The editable tab/group key lists must not include the protected keys.
-    const tabsBlock = src.slice(src.indexOf('const TABS'), src.indexOf('const FIELD_META'));
-    assert.doesNotMatch(tabsBlock, /'store_name'/);
-    assert.doesNotMatch(tabsBlock, /'store_address'/);
+  test('the active Stores page owns store identity without the retired Settings page', () => {
+    const src = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'pages', 'StoresPage.tsx'), 'utf8');
+    assert.match(src, /name: form\.name\.trim\(\)/);
+    assert.doesNotMatch(src, /estimatedDelivery/);
   });
 });

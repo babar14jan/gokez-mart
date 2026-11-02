@@ -124,6 +124,7 @@ api.interceptors.response.use(
 export const authApi = {
   login: (username: string, password: string) =>
     api.post('/admin/login', { username, password }),
+  getMe: () => api.get('/admin/me', { fresh: true }),
   // Revokes this device's session server-side (mart_admin_sessions). Called on
   // manual logout so the session ends for real instead of lingering until the
   // JWT expires; failures are ignored — the local sign-out always proceeds.
@@ -134,8 +135,9 @@ export const authApi = {
 export const productsApi = {
   getAll: (storeId?: string, opts?: FetchOpts) => api.get('/admin/products', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),
   create: (data: any) => api.post('/admin/products', data),
+  getBundleComponents: (id: string, storeId?: string) => api.get(`/admin/products/${id}/components`, { params: storeId ? { storeId } : {} }),
   update: (id: string, data: any) => api.put(`/admin/products/${id}`, data),
-  delete: (id: string) => api.delete(`/admin/products/${id}`),
+  delete: (id: string, storeId?: string) => api.delete(`/admin/products/${id}`, { params: storeId ? { storeId } : {} }),
   uploadPhoto: (file: File, maxDimension?: number) => {
     const form = new FormData();
     form.append('photo', file);
@@ -181,6 +183,8 @@ export const ordersApi = {
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi') =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
+  updateFulfilment: (id: string, storeId: string, status: 'prepared' | 'delivered') =>
+    api.put(`/admin/orders/${id}/fulfilments/${storeId}`, { status }),
   reschedule: (id: string, scheduledFor: string) =>
     api.put(`/admin/orders/${id}/reschedule`, { scheduledFor }),
   // Acknowledge an after-hours order for delivery at the next opening hours
@@ -414,9 +418,9 @@ export const complianceApi = {
 export const catalogApi = {
   getAll: (params?: { categoryId?: string; search?: string }) =>
     api.get('/admin/catalog', { params }),
-  create: (data: { name: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; categoryId?: string }) =>
+  create: (data: { name: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; categoryId?: string }) =>
     api.post('/admin/catalog', data),
-  update: (id: string, data: { name?: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; categoryId?: string }) =>
+  update: (id: string, data: { name?: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; categoryId?: string }) =>
     api.put(`/admin/catalog/${id}`, data),
   delete: (id: string) => api.delete(`/admin/catalog/${id}`),
   bulkAddToStore: (productIds: string[], storeId?: string) =>
@@ -424,6 +428,10 @@ export const catalogApi = {
 };
 // ── Inventory ────────────────────────────────────────────────────────────────
 export const inventoryApi = {
+  getStores:  () => api.get('/admin/inventory/stores'),
+  getSettings: (storeId?: string) => api.get('/admin/inventory/settings', { params: storeId ? { storeId } : {} }),
+  updateSettings: (data: { inventoryTracking?: boolean; autoOutOfStock?: boolean; lowStockThreshold?: number }, storeId?: string) =>
+    api.put('/admin/inventory/settings', data, { params: storeId ? { storeId } : {} }),
   getAll:     (storeId?: string, opts?: FetchOpts) => api.get('/admin/inventory', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),
   bulkRestock: (items: Array<{ productId: string; qty: number; stockUnit: string }>, note: string, storeId?: string, idempotencyKey?: string) =>
     api.post('/admin/inventory/bulk-restock', { items, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
@@ -494,4 +502,61 @@ export const homeSectionsApi = {
   duplicate: (storeId: string, id: string) => api.post("/admin/home-sections/" + id + "/duplicate", {}, { params: { storeId } }),
   delete: (storeId: string, id: string) => api.delete("/admin/home-sections/" + id, { params: { storeId } }),
   reorder: (storeId: string, ids: string[]) => api.post("/admin/home-sections/reorder", { ids }, { params: { storeId } }),
+};
+
+// Daily sales ledger. App figures are computed live by the backend from
+// mart_orders; offline counter sales are itemised rows (one per product sold).
+export interface DailySalesDay {
+  date: string;
+  storeId: string | null;
+  ordersPlaced: number;
+  ordersCancelled: number;
+  subtotalValue: number;
+  couponDeduction?: number;
+  orderValueAfterCoupon: number;
+  codValue: number;
+  upiValue: number;
+  offlineCash: number;
+  offlineUpi: number;
+  offlineTotal: number;
+  offlineEntryCount: number;
+  totalDaySales: number;
+  hasManualEntry: boolean;
+}
+
+export interface OfflineSale {
+  id: string;
+  date: string;
+  storeId: string;
+  productId: string | null;
+  productName: string;
+  unit: string;
+  unitPrice: number;
+  quantity: number;
+  total: number;
+  paymentMethod: 'cash' | 'upi';
+  notes: string | null;
+  recordedBy: { id: string; username: string; name: string | null } | null;
+  createdAt: string;
+}
+
+export type DailySalesMode = "today" | "yesterday" | "month" | "all" | "custom";
+
+export const dailySalesApi = {
+  getDay: (date: string, storeId?: string, opts?: FetchOpts) =>
+    api.get("/admin/daily-sales/day", { params: { date, storeId }, fresh: opts?.fresh }),
+  getRange: (params: { mode: DailySalesMode; from?: string; to?: string; storeId?: string }, opts?: FetchOpts) =>
+    api.get("/admin/daily-sales", { params, fresh: opts?.fresh }),
+  getEntries: (date: string, storeId?: string, opts?: FetchOpts) =>
+    api.get("/admin/daily-sales/entries", { params: { date, storeId }, fresh: opts?.fresh }),
+  addEntry: (data: {
+    date: string; productId: string; quantity: number;
+    paymentMethod: 'cash' | 'upi'; notes?: string | null; storeId?: string;
+  }) => api.post("/admin/daily-sales/entries", data),
+  updateEntry: (data: {
+    id: string; date: string; productId: string; quantity: number;
+    paymentMethod: 'cash' | 'upi'; notes?: string | null; storeId?: string;
+  }) => api.put(`/admin/daily-sales/entries/${data.id}`, data),
+  removeEntry: (id: string, storeId?: string) =>
+    api.delete(`/admin/daily-sales/entries/${id}`, { params: { storeId } }),
 };

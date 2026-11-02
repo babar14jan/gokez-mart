@@ -129,7 +129,7 @@ export default function CheckoutScreen() {
   const cartProductIds = new Set(items.map(i => i.productId));
 
   useEffect(() => {
-    storeApi.getSettings(selectedZone?.storeId).then(r => setSettings(r.data.data)).catch(() => {});
+    storeApi.getSettings(selectedZone?.storeId, selectedZone?.id).then(r => setSettings(r.data.data)).catch(() => {});
     if (selectedZone?.storeId) {
       campaignApi.getEligible(sub, selectedZone.storeId).then(r => {
         const list = r.data.data ?? [];
@@ -138,7 +138,7 @@ export default function CheckoutScreen() {
         if (auto && !appliedCamp) applyDiscount(auto, sub);
       }).catch(() => {});
     }
-    storeApi.getProducts(undefined, selectedZone?.storeId).then(r => {
+    storeApi.getProducts(undefined, selectedZone?.storeId, selectedZone?.id).then(r => {
       const all = r.data.data.filter(p => p.availabilityStatus === 'available' && !cartProductIds.has(p.id));
       const cartCatIds = new Set(items.map(i => {
         const p = r.data.data.find((x: Product) => x.id === i.productId);
@@ -281,10 +281,11 @@ export default function CheckoutScreen() {
         deliveryNote: customNote.trim() || note,
         paymentMethod: payment,
         storeId: selectedZone?.storeId,
+        zoneId: selectedZone?.id,
         zoneName: selectedZone?.name,
         campaignId: appliedCouponCode ? undefined : appliedCamp?.id,
         couponCode: appliedCouponCode || undefined,
-        items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity })),
+        items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, sourceStoreId: i.sourceStoreId })),
       });
       clearCart();
       const orderId = res.data.data?.id;

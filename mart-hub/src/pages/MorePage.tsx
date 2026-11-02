@@ -6,7 +6,7 @@ import {
   Pencil, X, Loader2, Save, Mail, Phone, Bell, QrCode,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
-import { NAV_ALL, BOTTOM_NAV } from '../components/Layout';
+import { NAV_ALL, NAV_SECTIONS, BOTTOM_NAV } from '../components/Layout';
 import { useThemeStore } from '../store/themeStore';
 import { api, authApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
@@ -32,7 +32,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 }
 
 export default function MorePage() {
-  const { username, name, email, phone, role, logout, setProfile } = useAuthStore();
+  const { username, name, email, phone, role, canAccessDailySales, logout, setProfile } = useAuthStore();
   const { isDark, toggle } = useThemeStore();
   const navigate = useNavigate();
   const displayName = name || username || 'Admin';
@@ -169,8 +169,16 @@ export default function MorePage() {
   const roleKey = isKnownRole(role) ? (role as string) : '';
   const bottomHrefs = new Set((roleKey && BOTTOM_NAV[roleKey]) ? BOTTOM_NAV[roleKey].map(t => t.href) : []);
   const extraLinks = roleKey
-    ? NAV_ALL.filter(item => item.roles.includes(roleKey) && !bottomHrefs.has(item.href))
+    ? NAV_ALL.filter(item =>
+        item.roles.includes(roleKey) &&
+        !bottomHrefs.has(item.href) &&
+        (item.href !== '/daily-sales' || roleKey === 'super_admin' || canAccessDailySales === true)
+      )
     : [];
+  const extraLinkSections = NAV_SECTIONS.map(section => ({
+    section,
+    items: extraLinks.filter(item => item.section === section),
+  })).filter(({ items }) => items.length > 0);
 
   return (
     <div className="max-w-lg mx-auto space-y-4 pb-6">
@@ -262,10 +270,10 @@ export default function MorePage() {
       )}
 
       {/* Role-specific links */}
-      {extraLinks.length > 0 && (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-4 pt-3 pb-1">Manage</p>
-          {extraLinks.map(({ label, href, icon: Icon }) => (
+      {extraLinkSections.map(({ section, items }) => (
+        <div key={section} className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider px-4 pt-3 pb-1">{section}</p>
+          {items.map(({ label, href, icon: Icon }) => (
             <button key={href} onClick={() => navigate(href)}
               className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-t border-gray-50 dark:border-slate-700">
               <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -274,7 +282,7 @@ export default function MorePage() {
             </button>
           ))}
         </div>
-      )}
+      ))}
 
       {/* Account */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden">

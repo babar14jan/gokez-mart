@@ -70,6 +70,16 @@ const STATUS_LABELS: Record<string, string> = {
 
 const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
 
+const FULFILMENT_LABELS: Record<string, string> = {
+  pending: 'Waiting to prepare', prepared: 'Preparing', delivered: 'Ready for Pickup', cancelled: 'Cancelled',
+};
+const FULFILMENT_COLORS: Record<string, string> = {
+  pending: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300',
+  prepared: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  delivered: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  cancelled: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+};
+
 // Human labels for mart_orders.cancellation_reason. Covers both the customer's
 // self-service reasons (CUSTOMER_CANCEL_REASONS on the API) and the reasons
 // staff pick when they stop an order, so a cancelled order always explains why.
@@ -228,6 +238,7 @@ export default function OrdersPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [fulfilmentUpdating, setFulfilmentUpdating] = useState<string | null>(null);
   const [batchSelected, setBatchSelected] = useState<string[]>([]);
   const [batching, setBatching] = useState(false);
   const [terminating, setTerminating] = useState<string | null>(null);
@@ -436,6 +447,24 @@ export default function OrdersPage() {
     } finally { setUpdating(null); }
   };
 
+  const updateFulfilment = async (
+    order: any,
+    status: 'prepared' | 'delivered',
+    storeId?: string,
+  ) => {
+    const targetStoreId = storeId || order.fulfilment?.storeId || getActiveStoreId();
+    const key = `${order.id}:${targetStoreId}`;
+    setFulfilmentUpdating(key);
+    try {
+      await ordersApi.updateFulfilment(order.id, targetStoreId, status);
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Could not update this store');
+    } finally {
+      setFulfilmentUpdating(null);
+    }
+  };
+
   const dateBounds = useMemo(() => {
     const now = new Date();
     const start =
@@ -594,6 +623,18 @@ export default function OrdersPage() {
             const isUpdating = updating === order.id;
             const totalItems = (order.items || []).reduce((s: number, i: any) => s + i.quantity, 0);
             const staleMin = getStaleMinutes(order);
+            const canManageMaster = order.canManageMaster !== false;
+            const isMemberView = !canManageMaster;
+            const fulfilment = order.fulfilment;
+            const storeFulfilments: any[] = Array.isArray(order.storeFulfilments) ? order.storeFulfilments : [];
+            const memberStoreFulfilments = order.storeId
+              ? storeFulfilments.filter(f => f.storeId !== order.storeId)
+              : [];
+            const pendingFulfilments = memberStoreFulfilments.filter(f => f.status === 'pending');
+            const canMarkPrepared = isMemberView && fulfilment?.status === 'pending'
+              && ['pending', 'confirmed', 'preparing'].includes(order.status);
+            const canMarkDelivered = isMemberView && fulfilment?.status === 'prepared'
+              && ['pending', 'confirmed', 'preparing'].includes(order.status);
             // The next-opening promise only holds until fulfilment actually
             // starts. While the order is still pending/confirmed nothing is
             // being prepared, so the promise is the honest state; once preparing
@@ -641,6 +682,16 @@ export default function OrdersPage() {
                       <span className="text-[10px] text-gray-500 dark:text-slate-400 flex items-center gap-1 whitespace-nowrap">
                         <Clock className="w-3 h-3" />{timeStr}
                       </span>
+                      {isMemberView && (
+                        <span className="text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">
+                          Your store&apos;s items
+                        </span>
+                      )}
+                      {isMemberView && fulfilment && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${FULFILMENT_COLORS[fulfilment.status] || FULFILMENT_COLORS.pending}`}>
+                          Your store: {FULFILMENT_LABELS[fulfilment.status] || fulfilment.status}
+                        </span>
+                      )}
                       {order.status !== 'delivered' && (
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600'}`}>
                           {STATUS_LABELS[order.status] || order.status}
@@ -705,9 +756,9 @@ export default function OrdersPage() {
                           </span>
                         )}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0" title={isMemberView ? 'Your items subtotal' : 'Order total'}>
                       <IndianRupee className="w-3.5 h-3.5 text-gray-900 dark:text-white" />
-                      <span className="text-base font-bold text-gray-900 dark:text-white">{order.total}</span>
+                      <span className="text-base font-bold text-gray-900 dark:text-white">{isMemberView ? order.viewerSubtotal : order.total}</span>
                     </div>
                   </div>
 
@@ -819,6 +870,47 @@ export default function OrdersPage() {
                   </div>
                 </div>
                 )}
+                {canManageMaster && memberStoreFulfilments.length > 0 && (
+                  <div className="px-4 pb-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Member store fulfilment</span>
+                    {memberStoreFulfilments.map((f: any) => {
+                      const key = `${order.id}:${f.storeId}`;
+                      const isSaving = fulfilmentUpdating === key;
+                      const canPrepare = f.status === 'pending' && ['pending', 'confirmed', 'preparing'].includes(order.status);
+                      const canDeliver = f.status === 'prepared' && ['pending', 'confirmed', 'preparing'].includes(order.status);
+                      return (
+                        <span key={f.storeId} className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${FULFILMENT_COLORS[f.status] || ''}`}>
+                          {f.storeName}: {FULFILMENT_LABELS[f.status] || f.status}
+                          {canPrepare && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); updateFulfilment(order, 'prepared', f.storeId); }}
+                              disabled={isSaving}
+                              className="ml-1 underline decoration-dotted underline-offset-2 disabled:opacity-50"
+                            >
+                              {isSaving ? 'Saving…' : 'Start preparing'}
+                            </button>
+                          )}
+                          {canDeliver && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); updateFulfilment(order, 'delivered', f.storeId); }}
+                              disabled={isSaving}
+                              className="ml-1 underline decoration-dotted underline-offset-2 disabled:opacity-50"
+                            >
+                              {isSaving ? 'Saving…' : 'Ready for pickup'}
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
+                    {order.status === 'preparing' && pendingFulfilments.length > 0 && (
+                      <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                        {pendingFulfilments.length} store{pendingFulfilments.length === 1 ? '' : 's'} still waiting to prepare
+                      </span>
+                    )}
+                  </div>
+                )}
                 {['store_owner', 'store_manager'].includes(role || '') && order.status !== 'pending' && order.statusEvents?.length > 0 && (
                   <p className="px-4 pb-2 text-[10px] text-gray-500 dark:text-slate-400 break-words">
                     Current state set by {order.statusEvents[order.statusEvents.length - 1].actorName}
@@ -828,6 +920,7 @@ export default function OrdersPage() {
                 {/* Action bar */}
                 {order.status !== 'delivered' && order.status !== 'cancelled' && order.status !== 'terminated' && (
                   <div className="px-4 pb-3 pt-1 flex items-center gap-2 flex-wrap">
+                    {canManageMaster ? (
                     <>
                     {/* Batch select */}
                     {canDispatch && (order.status === 'confirmed' || order.status === 'preparing' || order.status === 'ready_to_pickup') && (
@@ -1003,6 +1096,42 @@ export default function OrdersPage() {
                       );
                     })()}
                     </>
+                    ) : (
+                      <div className="flex flex-1 items-center gap-2 flex-wrap">
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${FULFILMENT_COLORS[fulfilment?.status] || FULFILMENT_COLORS.pending}`}>
+                          Your store: {FULFILMENT_LABELS[fulfilment?.status] || 'Waiting to prepare'}
+                        </span>
+                        {canMarkPrepared && (
+                          <button
+                            onClick={e => { e.stopPropagation(); updateFulfilment(order, 'prepared'); }}
+                            disabled={fulfilmentUpdating === `${order.id}:${fulfilment?.storeId}`}
+                            className="flex-1 min-w-[132px] py-2.5 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 rounded-xl disabled:opacity-50"
+                          >
+                            Start Preparing
+                          </button>
+                        )}
+                        {canMarkDelivered && (
+                          <button
+                            onClick={e => { e.stopPropagation(); updateFulfilment(order, 'delivered'); }}
+                            disabled={fulfilmentUpdating === `${order.id}:${fulfilment?.storeId}`}
+                            className="flex-1 min-w-[132px] py-2.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50"
+                          >
+                            Ready for Pickup
+                          </button>
+                        )}
+                        {!canMarkPrepared && !canMarkDelivered && (
+                          <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                            {fulfilment?.status === 'pending' && order.status === 'ready_to_pickup'
+                              ? 'Preparation is locked — the head store marked the order ready.'
+                              : fulfilment?.status === 'prepared' && order.status === 'ready_to_pickup'
+                                ? 'Waiting for the head store to start delivery.'
+                                : fulfilment?.status === 'delivered'
+                                  ? 'Your store has marked its items ready for pickup.'
+                                  : 'No action needed from your store right now.'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1012,7 +1141,9 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-1.5">
                     <Package className="w-3.5 h-3.5" />
                     <span>
-                      {totalItems} item{totalItems !== 1 ? 's' : ''} · ₹{order.subtotal} + ₹{order.deliveryCharge} delivery
+                      {isMemberView
+                        ? `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.viewerSubtotal} (your items)`
+                        : `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.subtotal} + ₹${order.deliveryCharge} delivery`}
                       {Number(order.campaignDiscount) > 0 ? ` − ₹${order.campaignDiscount} offer` : ''}
                     </span>
                   </div>
@@ -1045,9 +1176,23 @@ export default function OrdersPage() {
                     ))}
                     <div className="pt-2 border-t border-gray-100 dark:border-slate-600 space-y-1">
                       {(() => {
+                        if (isMemberView) {
+                          return (
+                            <>
+                              <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">
+                                <span>Your items</span>
+                                <span>₹{order.viewerSubtotal}</span>
+                              </div>
+                              <p className="text-[10px] text-gray-500 dark:text-slate-400">
+                                Customer totals and delivery are managed by the head store.
+                              </p>
+                            </>
+                          );
+                        }
                         const itemSavings = Number(order.itemSavings) || 0;
                         const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
                         const campaignDiscount = Number(order.campaignDiscount) || 0;
+                        const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
                         const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
                         return (
                           <>
@@ -1075,10 +1220,10 @@ export default function OrdersPage() {
                                 <span>{order.deliveryCharge === 0 ? <span className="font-semibold text-emerald-600 dark:text-emerald-400">FREE</span> : `₹${order.deliveryCharge}`}</span>
                               </span>
                             </div>
-                            {campaignDiscount > 0 && (
+                            {hasCampaign && (
                               <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
                                 <span>{order.couponCodeUsed ? `Coupon ${order.couponCodeUsed}` : 'Offer discount'}</span>
-                                <span>-₹{order.campaignDiscount}</span>
+                                {campaignDiscount > 0 && <span>-₹{order.campaignDiscount}</span>}
                               </div>
                             )}
                             <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">

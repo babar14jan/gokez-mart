@@ -3,6 +3,7 @@ import { MapPin, ChevronDown, Check, Store, ShoppingCart, LayoutGrid, Package, U
 import { useCartStore } from '../store/cartStore';
 import { useZoneStore, type ZoneAction } from '../store/zoneStore';
 import AccountGreeting from './AccountGreeting';
+import ConfirmDialog from './ConfirmDialog';
 
 type View = 'home' | 'categories' | 'orders' | 'account';
 
@@ -26,7 +27,9 @@ const navItems = [
 
   export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, onSearchOpen, searchPrompt }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
+  const [pendingZone, setPendingZone] = useState<(typeof zones)[number] | null>(null);
   const totalItems = useCartStore(s => s.totalItems());
+  const clearCart = useCartStore(s => s.clearCart);
   // Delivery-area state is shared app-wide via the zone store, so the navbar
   // picker, the Account page toggle and the catalog loader always stay in sync.
   const zones = useZoneStore(s => s.zones);
@@ -34,8 +37,20 @@ const navItems = [
   const locationBusy = useZoneStore(s => s.locating);
 
   const selectZone = (zone: (typeof zones)[number]) => {
+    if (zone.id !== selectedZone?.id && totalItems > 0) {
+      setPendingZone(zone);
+      setZoneOpen(false);
+      return;
+    }
     useZoneStore.getState().chooseZone(zone);
     setZoneOpen(false);
+  };
+
+  const confirmZoneChange = () => {
+    if (!pendingZone) return;
+    clearCart();
+    useZoneStore.getState().chooseZone(pendingZone);
+    setPendingZone(null);
   };
 
   const ZoneDropdown = () => {
@@ -117,6 +132,7 @@ const navItems = [
   };
 
   return (
+    <>
     <header className="sticky top-0 z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a]">
 
       {/* Row 1 — 56px (3.5rem), the same app-bar height as PageHeader, the
@@ -167,5 +183,17 @@ const navItems = [
         </div>
       )}
     </header>
+    {pendingZone && (
+      <ConfirmDialog
+        title="Change delivery area?"
+        message={`Your cart was built for ${selectedZone?.name || 'the current area'}. Switching to ${pendingZone.name} will clear it because products and prices can differ by area.`}
+        confirmLabel="Change and clear cart"
+        cancelLabel="Keep current area"
+        danger={false}
+        onConfirm={confirmZoneChange}
+        onCancel={() => setPendingZone(null)}
+      />
+    )}
+    </>
   );
 }

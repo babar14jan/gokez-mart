@@ -156,7 +156,10 @@ export default function ZonesPage() {
     try {
       await zonesApi.update(settingsZone.id, { openingHours: zoneHours });
       const payload: Record<string, string> = {};
-      for (const k of ['store_open','store_closed_from','store_closed_until','store_closed_greeting','store_closed_message']) {
+      for (const k of [
+        'store_open', 'store_closed_from', 'store_closed_until', 'store_closed_greeting', 'store_closed_message',
+        'estimated_delivery', 'delivery_charge', 'free_delivery_above', 'min_order_amount',
+      ]) {
         if (zoneValues[k] !== undefined) payload[k] = zoneValues[k];
       }
       if (Object.keys(payload).length) await zonesApi.updateSettings(settingsZone.id, payload);
@@ -399,6 +402,36 @@ export default function ZonesPage() {
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Message (optional)</label>
                 <textarea value={zoneValues['store_closed_message'] || ''}
                   onChange={e => setZoneValues(v => ({ ...v, store_closed_message: e.target.value.slice(0, 200) }))} rows={3} className={inp + ' resize-y'} />
+              </div>
+
+              <div className="space-y-3 border-t border-gray-100 pt-4 dark:border-slate-700">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Delivery policy</p>
+                  <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">Applies to every order delivered in this zone, including products supplied by tagged member stores.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Estimated delivery</label>
+                  <input type="text" value={zoneValues['estimated_delivery'] || ''}
+                    onChange={e => setZoneValues(v => ({ ...v, estimated_delivery: e.target.value.slice(0, 40) }))}
+                    placeholder="e.g. 10-15 mins" className={inp} />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Delivery fee (₹)</label>
+                    <input type="number" min="0" value={zoneValues['delivery_charge'] || ''}
+                      onChange={e => setZoneValues(v => ({ ...v, delivery_charge: e.target.value }))} className={inp} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Free above (₹)</label>
+                    <input type="number" min="0" value={zoneValues['free_delivery_above'] || ''}
+                      onChange={e => setZoneValues(v => ({ ...v, free_delivery_above: e.target.value }))} className={inp} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300">Minimum order (₹)</label>
+                    <input type="number" min="0" value={zoneValues['min_order_amount'] || ''}
+                      onChange={e => setZoneValues(v => ({ ...v, min_order_amount: e.target.value }))} className={inp} />
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2 border-t border-gray-100 dark:border-slate-700 pt-4">

@@ -4,8 +4,9 @@ import {
   AlertTriangle, CheckCircle, ChevronDown, ChevronUp,
   History, ArrowDownCircle, Plus, Search,
 } from 'lucide-react';
-import { inventoryApi, settingsApi } from '../services/api';
+import { inventoryApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
+import { useAuthStore } from '../store/authStore';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
 
@@ -61,6 +62,8 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
+  const [enablingTracking, setEnablingTracking] = useState(false);
+  const [inventoryPolicy, setInventoryPolicy] = useState({ autoOutOfStock: true, lowStockThreshold: '' });
   const [editMode, setEditMode] = useState(false);
   const [editRows, setEditRows] = useState<Record<string, EditRow>>({});
   const [note, setNote] = useState('');
@@ -73,25 +76,62 @@ export default function InventoryPage() {
   const [history, setHistory] = useState<LogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  const storeId = getActiveStoreId();
+  const { role } = useAuthStore();
+  const canManageTracking = role === 'super_admin' || role === 'store_owner' || role === 'store_manager';
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(() => getActiveStoreId());
+  const [manageableStores, setManageableStores] = useState<Array<{ id: string; name: string; address?: string | null; isOwn?: boolean }>>([]);
+  const canSwitchStores = role !== 'super_admin' && manageableStores.length > 1;
+  const selectedStore = manageableStores.find(s => s.id === selectedStoreId);
+  // A zone head may manage stock for member stores even when that store's own
+  // tracking switch is off, so the list is not hidden in that case.
+  const managingMemberStore = canSwitchStores && selectedStore != null && !selectedStore.isOwn;
+
+  useEffect(() => {
+    if (role === 'super_admin') return;
+    inventoryApi.getStores().then(r => {
+      const list = r.data.data || [];
+      setManageableStores(list);
+      setSelectedStoreId(prev => {
+        if (list.some((s: any) => s.id === prev)) return prev;
+        const own = list.find((s: any) => s.isOwn)?.id;
+        return own || list[0]?.id || prev;
+      });
+    }).catch(() => {});
+  }, [role]);
 
   const load = async (fresh = false) => {
-    const [inv, sets] = await Promise.all([
-      inventoryApi.getAll(storeId, { fresh }),
-      settingsApi.getAll(storeId, { fresh }),
+    const [inv, meta] = await Promise.all([
+      inventoryApi.getAll(selectedStoreId, { fresh }),
+      inventoryApi.getSettings(selectedStoreId),
     ]);
     setItems([...(inv.data.data || [])]);
-    const settingsArr: { key: string; value: string }[] = sets.data.data || [];
-    setTrackingEnabled(settingsArr.find(s => s.key === 'inventory_tracking')?.value === 'true');
+    setTrackingEnabled(Boolean(meta.data.data?.inventoryTracking));
+    setInventoryPolicy({
+      autoOutOfStock: meta.data.data?.autoOutOfStock !== false,
+      lowStockThreshold: meta.data.data?.lowStockThreshold == null ? '' : String(meta.data.data.lowStockThreshold),
+    });
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [selectedStoreId]);
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') load(true); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, []);
+  }, [selectedStoreId]);
+
+  const enableInventoryTracking = async () => {
+    setEnablingTracking(true);
+    try {
+      await inventoryApi.updateSettings({ inventoryTracking: true }, selectedStoreId);
+      setTrackingEnabled(true);
+      await load(true);
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Could not enable inventory tracking');
+    } finally {
+      setEnablingTracking(false);
+    }
+  };
 
   const sorted = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -107,6 +147,7 @@ export default function InventoryPage() {
   const tracked  = items.filter(i => i.stockQuantity !== null);
   const outCount = items.filter(i => stockStatus(i) === 'out').length;
   const lowCount = items.filter(i => stockStatus(i) === 'low').length;
+  const activeLowStockThreshold = Number(inventoryPolicy.lowStockThreshold || DEFAULT_LOW_THRESHOLD);
 
   const enterEditMode = () => {
     const rows: Record<string, EditRow> = {};
@@ -120,6 +161,16 @@ export default function InventoryPage() {
 
   const cancelEdit = () => { setEditMode(false); setEditRows({}); setNote(''); };
 
+  const handleStoreChange = (id: string) => {
+    if (id === selectedStoreId) return;
+    cancelEdit();
+    setHistoryItem(null);
+    setHistory([]);
+    setSearchQuery('');
+    setLoading(true);
+    setSelectedStoreId(id);
+  };
+
   const handleSaveAll = async () => {
     const toSave = Object.entries(editRows)
       .filter(([, row]) => row.qty !== '' && !isNaN(parseFloat(row.qty)) && parseFloat(row.qty) !== 0)
@@ -129,7 +180,7 @@ export default function InventoryPage() {
 
     setSaving(true);
     try {
-      await inventoryApi.bulkRestock(toSave, note, storeId, crypto.randomUUID());
+      await inventoryApi.bulkRestock(toSave, note, selectedStoreId, crypto.randomUUID());
       setEditMode(false);
       setEditRows({});
       setNote('');
@@ -143,7 +194,7 @@ export default function InventoryPage() {
     setHistoryItem(item);
     setHistoryLoading(true);
     try {
-      const res = await inventoryApi.getHistory(item.productId, storeId);
+      const res = await inventoryApi.getHistory(item.productId, selectedStoreId);
       setHistory(res.data.data || []);
     } finally { setHistoryLoading(false); }
   };
@@ -152,51 +203,71 @@ export default function InventoryPage() {
 
   if (loading) return <PageSkeleton />;
 
-  if (!trackingEnabled) return (
+  if (!trackingEnabled && !managingMemberStore) return (
     <div className="flex flex-col items-center justify-center h-64 text-center gap-3">
       <Package className="w-12 h-12 text-gray-200 dark:text-slate-700" />
-      <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">Inventory tracking is off</p>
-      <p className="text-xs text-gray-500 dark:text-slate-400">Enable it in Settings → Inventory to start tracking stock.</p>
+      <p className="text-sm font-semibold text-gray-500 dark:text-slate-400">Inventory tracking is disabled</p>
+      <p className="text-xs text-gray-500 dark:text-slate-400">Enable it here to record stock and keep product availability up to date.</p>
+      {canManageTracking ? (
+        <button type="button" onClick={enableInventoryTracking} disabled={enablingTracking}
+          className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">
+          {enablingTracking && <Loader2 className="h-4 w-4 animate-spin" />}
+          Enable inventory tracking
+        </button>
+      ) : (
+        <p className="text-xs text-gray-500 dark:text-slate-400">Ask a store owner or manager to enable it.</p>
+      )}
     </div>
   );
 
   return (
     <div className="space-y-4">
 
-      {/* Search bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-        <input
-          type="text" value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search inventory..."
-          className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
-        />
-        {searchQuery && (
-          <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-            <X className="w-4 h-4 text-gray-500 hover:text-gray-700" />
-          </button>
-        )}
-      </div>
+      {/* Zone-head store picker — a head store owner manages the stock of
+          every store tagged into its active zone. Other roles see no picker. */}
+      {canSwitchStores && (
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 flex-shrink-0">Zone store</span>
+          <select
+            value={selectedStoreId}
+            onChange={e => handleStoreChange(e.target.value)}
+            aria-label="Select store to manage inventory for"
+            className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-gray-900 dark:text-white focus:outline-none cursor-pointer"
+          >
+            {manageableStores.map(s => (
+              <option key={s.id} value={s.id}>{s.name}{s.isOwn ? ' — Head store' : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 px-3 py-2 text-center">
-          <p className="text-base font-bold text-gray-900 dark:text-white">{tracked.length}</p>
-          <p className="text-[10px] text-gray-500 dark:text-slate-400">Tracked</p>
+      {!trackingEnabled && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <span>Inventory tracking is disabled for this store. Restocks still update its stock.</span>
+          {canManageTracking && (
+            <button type="button" onClick={enableInventoryTracking} disabled={enablingTracking}
+              className="shrink-0 font-semibold underline underline-offset-2 disabled:opacity-50">
+              {enablingTracking ? 'Enabling...' : 'Enable'}
+            </button>
+          )}
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-100 dark:border-amber-900/30 px-3 py-2 text-center">
-          <p className="text-base font-bold text-amber-600 dark:text-amber-400">{lowCount}</p>
-          <p className="text-[10px] text-gray-500 dark:text-slate-400">Low Stock <span className="text-gray-400">(≤{DEFAULT_LOW_THRESHOLD})</span></p>
+      )}
+
+      {/* Inventory KPIs */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="kpi-card h-full cursor-default p-3">
+          <div className="flex items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"><Package className="h-4 w-4" /></span><div className="min-w-0"><p className="text-lg font-bold leading-none text-gray-900 dark:text-white">{tracked.length}</p><p className="mt-1 text-[10px] font-semibold text-gray-500 dark:text-slate-400">Tracked</p></div></div>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-red-100 dark:border-red-900/30 px-3 py-2 text-center">
-          <p className="text-base font-bold text-red-600 dark:text-red-400">{outCount}</p>
-          <p className="text-[10px] text-gray-500 dark:text-slate-400">Out of Stock</p>
+        <div className="kpi-card h-full cursor-default border-amber-200 p-3 hover:border-amber-300 dark:border-amber-900/50">
+          <div className="flex items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0"><p className="text-lg font-bold leading-none text-amber-600 dark:text-amber-400">{lowCount}</p><p className="mt-1 truncate text-[10px] font-semibold text-gray-500 dark:text-slate-400">Low stock ≤{activeLowStockThreshold}</p></div></div>
+        </div>
+        <div className="kpi-card h-full cursor-default border-red-200 p-3 hover:border-red-300 dark:border-red-900/50">
+          <div className="flex items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"><ArrowDownCircle className="h-4 w-4" /></span><div className="min-w-0"><p className="text-lg font-bold leading-none text-red-600 dark:text-red-400">{outCount}</p><p className="mt-1 text-[10px] font-semibold text-gray-500 dark:text-slate-400">Out of stock</p></div></div>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {!editMode ? (
           <>
             <button onClick={() => setSortLowFirst(v => !v)}
@@ -208,7 +279,11 @@ export default function InventoryPage() {
               {sortLowFirst ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               Low Stock First
             </button>
-            <div className="flex-1" />
+            <div className="relative min-w-[180px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+              <input type="text" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search inventory..." className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-9 pr-8 text-xs text-gray-900 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+              {searchQuery && <button onClick={() => setSearchQuery('')} aria-label="Clear inventory search" className="absolute right-2 top-1/2 -translate-y-1/2"><X className="h-3.5 w-3.5 text-gray-500 hover:text-gray-700" /></button>}
+            </div>
             <button onClick={enterEditMode}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
               <Pencil className="w-3.5 h-3.5" /> Update Stock

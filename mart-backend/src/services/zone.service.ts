@@ -2,6 +2,7 @@ import { query } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 import { evaluateStoreOpen, type StoreOpenState } from '../utils/storeHours';
 import { badRequest, conflict, notFound } from '../utils/apiError';
+import { SettingsService } from './settings.service';
 
 export interface ZoneStoreRef {
   id: string;
@@ -47,6 +48,7 @@ const ZONE_SELECT = `SELECT z.id, z.store_id as "storeId", z.name, z.lat::float,
 export const ZONE_SETTING_KEYS = [
   'store_open', 'store_closed_from', 'store_closed_until',
   'store_closed_message', 'store_closed_greeting',
+  'estimated_delivery', 'delivery_charge', 'free_delivery_above', 'min_order_amount',
 ];
 
 export class ZoneService {
@@ -271,6 +273,22 @@ export class ZoneService {
         [zoneId, key, String(value)]
       );
     }
+  }
+
+  /** Zone delivery policy overrides its head store's legacy settings. */
+  static async getEffectiveSettings(zoneId: string): Promise<{ zone: MartZone; settings: Record<string, string> } | null> {
+    const zone = await this.findById(zoneId);
+    if (!zone?.primaryStoreId) return null;
+    const [headSettings, zoneSettings] = await Promise.all([
+      SettingsService.getPublic(zone.primaryStoreId),
+      this.getSettings(zoneId),
+    ]);
+    const overrides = Object.fromEntries(
+      ZONE_SETTING_KEYS
+        .filter(key => zoneSettings[key] !== undefined)
+        .map(key => [key, zoneSettings[key]])
+    );
+    return { zone, settings: { ...headSettings, ...overrides } };
   }
 
   /**
