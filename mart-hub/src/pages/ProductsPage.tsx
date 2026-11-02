@@ -20,7 +20,7 @@ function formatStock(qty: number, unit: string): string {
 }
 
 interface Product {
-  id: string; name: string; categoryId: string | null; categoryName: string;
+  id: string; productCode: string; name: string; categoryId: string | null; categoryName: string;
   localName: string | null;
   searchAliases: string[];
   price: number; unit: string; discountPercent: number;
@@ -135,7 +135,7 @@ export default function ProductsPage() {
   const { toasts, show: showToast } = useToast();
 
   // Catalog browser state
-  interface CatalogItem { id: string; name: string; localName: string | null; searchAliases: string[]; photoUrl: string | null; categoryId: string | null; categoryName: string | null; categoryIcon: string | null; }
+  interface CatalogItem { id: string; productCode: string; name: string; localName: string | null; searchAliases: string[]; description: string | null; photoUrl: string | null; categoryId: string | null; categoryName: string | null; categoryIcon: string | null; }
   const [showCatalogBrowser, setShowCatalogBrowser] = useState(false);
   const [catalogBrowserMode, setCatalogBrowserMode] = useState<'single' | 'bulk'>('single');
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -160,7 +160,7 @@ export default function ProductsPage() {
   const catalogFiltered = useMemo(() => catalogItems.filter(p => {
     const matchCat = catalogCat === 'all' || p.categoryId === catalogCat;
     const query = catalogSearch.trim().toLowerCase();
-    const matchSearch = !query || p.name.toLowerCase().includes(query) || (p.localName || '').toLowerCase().includes(query)
+    const matchSearch = !query || p.productCode.toLowerCase().includes(query) || p.name.toLowerCase().includes(query) || (p.localName || '').toLowerCase().includes(query)
       || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(query));
     return matchCat && matchSearch;
   }), [catalogItems, catalogCat, catalogSearch]);
@@ -243,7 +243,7 @@ export default function ProductsPage() {
     // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      list = list.filter(p => p.name.toLowerCase().includes(q) || (p.localName || '').toLowerCase().includes(q)
+      list = list.filter(p => p.productCode.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || (p.localName || '').toLowerCase().includes(q)
         || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q)));
     }
 
@@ -511,7 +511,9 @@ export default function ProductsPage() {
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 dark:text-white break-words">{p.name}</p>
+          <p className="text-[10px] font-medium tabular-nums text-indigo-600 dark:text-indigo-300">{p.productCode}</p>
           {p.localName && <p className="text-xs text-gray-500 dark:text-slate-400 break-words">{p.localName}</p>}
+          {p.description && <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400 line-clamp-1">{p.description}</p>}
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
             <span className="text-xs text-gray-500 dark:text-slate-400">{p.unit} · ₹{p.price}</span>
             {p.discountPercent > 0 && (
@@ -583,7 +585,7 @@ export default function ProductsPage() {
         <input
           type="text" value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search products..."
+          placeholder="Search products or code..."
           className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
         />
         {searchQuery && (
@@ -927,6 +929,10 @@ export default function ProductsPage() {
               </div>
 
               <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Product Code</label>
+                <input type="text" value={editing?.productCode || ''} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60 font-mono`} />
+              </div>
+              <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Name *</label>
                   <span className={`text-[10px] font-semibold ${form.name.length >= 26 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.name.length}/26</span>
@@ -1130,7 +1136,7 @@ export default function ProductsPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input type="text" value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)}
-                  placeholder="Search..." autoFocus
+                  placeholder="Search by name or code..." autoFocus
                   className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500" />
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -1184,7 +1190,9 @@ export default function ProductsPage() {
                         </div>
                         <div className="p-1.5">
                           <p className="text-[11px] font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight">{item.name}</p>
+                          <p className="mt-0.5 text-[10px] font-medium tabular-nums text-indigo-600 dark:text-indigo-300">{item.productCode}</p>
                           {item.localName && <p className="text-[10px] text-gray-500 truncate">{item.localName}</p>}
+                          {item.description && <p className="mt-0.5 text-[10px] leading-snug text-gray-500 dark:text-slate-400 line-clamp-2">{item.description}</p>}
                         </div>
                       </div>
                     );

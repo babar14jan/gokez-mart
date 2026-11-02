@@ -4,10 +4,6 @@ import { useUpdateStore } from '../store/updateStore';
 import { markSplashSwapPending, clearSplashSwapPending, hideSplash } from '../utils/splash';
 
 const POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
-// After an update is detected, apply it once the customer either goes to the
-// background (dropdown to another app / lock / tab switch) or stays inactive
-// on this screen for a full minute. An active customer is never interrupted.
-const QUIET_MS = 60 * 1000;
 // How long the launch splash may be held for a swap that is not going through.
 // A swap that cannot happen (offline) must not leave the customer staring at
 // a splash forever, so the hold is bounded and the app is shown regardless.
@@ -101,27 +97,17 @@ export function useAppUpdate() {
       return;
     }
     reloadRequested = true;
+    // Deliberately retain local/session storage, cookies, and IndexedDB so
+    // persisted customer authentication and guest details survive this reload.
     window.location.reload();
   };
 
-  // Stage an update: don't reload now, wait for a quiet moment. Interaction
-  // keeps the idle timer reset so browsing/checkout is never interrupted.
+  // Stage a silent update until the customer takes the app to the background.
   const stageUpdate = () => {
     if (reloadRequested || updatePending) return;
     updatePending = true;
 
-    let idle: ReturnType<typeof setTimeout> | null = null;
-    const armIdle = () => {
-      if (idle) clearTimeout(idle);
-      idle = setTimeout(() => requestReload(), QUIET_MS);
-    };
-    armIdle();
-    const onActivity = () => { if (!reloadRequested) armIdle(); };
     const onHidden = () => { if (document.visibilityState === 'hidden') requestReload(); };
-    window.addEventListener('pointerdown', onActivity, { passive: true });
-    window.addEventListener('keydown', onActivity);
-    window.addEventListener('wheel', onActivity, { passive: true });
-    window.addEventListener('touchstart', onActivity, { passive: true });
     document.addEventListener('visibilitychange', onHidden);
   };
 
@@ -224,7 +210,7 @@ export function useAppUpdate() {
 
       // Record the new id so a later poll cannot trigger the same swap twice.
       currentVersion.current = v;
-      // force = land the new build now; silent = wait for a quiet moment.
+      // force = land the new build now; silent = wait for the app to be hidden.
       if (updateMode === 'force') forceSwap();
       else stageUpdate();
     } catch {}

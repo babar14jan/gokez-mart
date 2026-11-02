@@ -14,8 +14,21 @@ export interface PushPayload {
   title: string;
   body: string;
   icon?: string;
+  image?: string;
   url?: string;
   tag?: string;
+}
+
+export interface PushSubscriptionForDelivery {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushDeliveryOutcome<T extends PushSubscriptionForDelivery> {
+  subscription: T;
+  success: boolean;
+  error: string | null;
 }
 
 export class PushService {
@@ -154,32 +167,43 @@ export class PushService {
   }
 
   private static async sendToSubscriptions(
-    subs: { endpoint: string; p256dh: string; auth: string }[],
+    subs: PushSubscriptionForDelivery[],
     payload: PushPayload
   ): Promise<void> {
-    if (!config.vapid.publicKey) return; // VAPID not configured
+    const results = await this.sendWithOutcomes(subs, payload);
+    results.filter(result => !result.success).forEach(result => console.warn('[Push] Failed:', result.error));
+  }
+
+  /** Best-effort push fan-out with auditable per-subscription outcomes. */
+  static async sendWithOutcomes<T extends PushSubscriptionForDelivery>(
+    subs: T[],
+    payload: PushPayload,
+    options: { ttl?: number; urgency?: 'very-low' | 'low' | 'normal' | 'high' } = {}
+  ): Promise<PushDeliveryOutcome<T>[]> {
+    if (!config.vapid.publicKey) {
+      return subs.map(subscription => ({ subscription, success: false, error: 'Push delivery is not configured' }));
+    }
     const body = JSON.stringify(payload);
-    const results = await Promise.allSettled(
-      subs.map(sub =>
-        webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+    return Promise.all(subs.map(async subscription => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
           body,
           {
             // Short TTL + high urgency: an order alert that cannot be delivered
             // within ~2 minutes is stale (the delivery meet time is gone), so
             // the push service should drop it instead of delivering it late.
-            TTL: 120,
-            urgency: 'high',
+            TTL: options.ttl ?? 120,
+            urgency: options.urgency ?? 'high',
           }
-        ).catch(async (err: any) => {
-          // Remove expired or invalid subscriptions
-          if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 400) {
-            await query(`DELETE FROM mart_push_subscriptions WHERE endpoint = $1`, [sub.endpoint]);
-          }
-        })
-      )
-    );
-    // Silent — push failures never break the main flow
-    results.forEach(r => { if (r.status === 'rejected') console.warn('[Push] Failed:', r.reason?.message); });
+        );
+        return { subscription, success: true, error: null };
+      } catch (caught: any) {
+        if ([410, 404, 400].includes(caught?.statusCode)) {
+          await query(`DELETE FROM mart_push_subscriptions WHERE endpoint = $1`, [subscription.endpoint]).catch(() => undefined);
+        }
+        return { subscription, success: false, error: String(caught?.message || 'Push delivery failed') };
+      }
+    }));
   }
 }

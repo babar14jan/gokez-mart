@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { Store, LayoutGrid, Package, User } from 'lucide-react';
+import { Home, LayoutGrid, Package, User } from 'lucide-react';
 
 type NavView = 'home' | 'categories' | 'orders' | 'account';
 
@@ -10,7 +10,7 @@ interface BottomNavProps {
 }
 
 const tabs = [
-  { id: 'home',       label: 'Home',       Icon: Store },
+  { id: 'home',       label: 'Home',       Icon: Home },
   { id: 'categories', label: 'Categories', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: Package },
   { id: 'account',    label: 'Account',    Icon: User },

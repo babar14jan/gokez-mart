@@ -36,6 +36,7 @@ router.post('/guest-details',      ctrl.saveGuestDetails);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 router.get('/orders/track/tokens',  ctrl.trackGuestOrdersByTokens);
 router.post('/orders/track/:id/cancel', ctrl.guestCancelOrder);
+router.get('/promotions/:id/click', ctrl.redirectPromotionClick);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
 router.post('/admin/login',            ctrl.adminLogin);
@@ -174,6 +175,15 @@ router.put('/admin/campaigns/:id',             authenticate, requireSuperAdmin, 
 router.delete('/admin/campaigns/:id',          authenticate, requireSuperAdmin, ctrl.adminDeleteCampaign);
 router.get('/admin/campaigns/:id/redemptions',  authenticate, requireSuperAdmin, ctrl.adminGetCampaignRedemptions);
 router.post('/admin/campaigns/:id/supersede',   authenticate, requireSuperAdmin, ctrl.adminSupersedeCampaign);
+
+// Promotional web push (super_admin only)
+router.get('/admin/promotions',                authenticate, requireSuperAdmin, ctrl.adminGetPromotions);
+router.post('/admin/promotions',               authenticate, requireSuperAdmin, ctrl.adminCreatePromotion);
+router.put('/admin/promotions/:id',            authenticate, requireSuperAdmin, ctrl.adminUpdatePromotion);
+router.delete('/admin/promotions/:id',         authenticate, requireSuperAdmin, ctrl.adminDeletePromotion);
+router.post('/admin/promotions/:id/preview',   authenticate, requireSuperAdmin, ctrl.adminPreviewPromotion);
+router.post('/admin/promotions/:id/test',      authenticate, requireSuperAdmin, ctrl.adminTestPromotion);
+router.post('/admin/promotions/:id/send',      authenticate, requireSuperAdmin, ctrl.adminSendPromotion);
 
 // Carousel slides (super_admin only)
 router.get('/admin/carousel',                  authenticate, requireSuperAdmin, ctrl.adminGetCarouselSlides);

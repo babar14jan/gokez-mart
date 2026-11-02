@@ -20,6 +20,7 @@ import { ComplianceService } from '../services/compliance.service';
 import { query, transaction } from '../database/db';
 import { InventoryService } from '../services/inventory.service';
 import { CampaignService } from '../services/campaign.service';
+import { PromotionService } from '../services/promotion.service';
 import { HomeSectionService } from '../services/homeSection.service';
 import { CustomerLeadService, LeadStatus } from '../services/customerLead.service';
 import { ProductSuggestionService, SuggestionStatus, BuyerType, SuggestionRange } from '../services/productSuggestion.service';
@@ -787,9 +788,13 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
   const params: unknown[] = [];
   let i = 1;
   if (categoryId) { conditions.push(`p.category_id = $${i++}`); params.push(categoryId); }
-  if (search) { conditions.push(`p.name ILIKE $${i++}`); params.push(`%${search}%`); }
+  if (search) {
+    conditions.push(`(p.name ILIKE $${i} OR p.product_code ILIKE $${i})`);
+    params.push(`%${search}%`);
+    i++;
+  }
   const result = await query(
-    `SELECT p.id, p.name, p.local_name as "localName", p.search_aliases as "searchAliases", p.description,
+    `SELECT p.id, p.product_code as "productCode", p.name, p.local_name as "localName", p.search_aliases as "searchAliases", p.description,
             p.photo_url as "photoUrl", p.photos as "photos", p.category_id as "categoryId",
             c.name as "categoryName", c.icon as "categoryIcon"
      FROM mart_products p
@@ -841,7 +846,7 @@ export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, 
   params.push(req.params.id);
   const result = await query(
     `UPDATE mart_products SET ${fields.join(', ')} WHERE id = $${i} AND is_catalog = true AND is_bundle = false
-    RETURNING id, name, local_name as "localName", search_aliases as "searchAliases", description, photo_url as "photoUrl", photos as "photos", category_id as "categoryId"`,
+    RETURNING id, product_code as "productCode", name, local_name as "localName", search_aliases as "searchAliases", description, photo_url as "photoUrl", photos as "photos", category_id as "categoryId"`,
     params
   );
   if (!result.rows[0]) { res.status(404).json({ success: false, error: 'Catalog product not found' }); return; }
@@ -934,7 +939,15 @@ export const adminBulkAddFromCatalog = asyncHandler(async (req: AdminRequest, re
       [storeId, productId]
     );
   }
-  res.json({ success: true, data: { added: productIds.length, conflicts }, message: `${productIds.length} product(s) added to store. Set price and availability to make them live.` });
+  const products = await query<{ id: string; productCode: string }>(
+    `SELECT p.id, p.product_code as "productCode"
+       FROM mart_products p
+       JOIN mart_store_products sp ON sp.product_id = p.id
+      WHERE sp.store_id = $1 AND p.id = ANY($2::uuid[])
+      ORDER BY p.name ASC`,
+    [storeId, productIds]
+  );
+  res.json({ success: true, data: { added: productIds.length, conflicts, products: products.rows }, message: `${productIds.length} product(s) added to store. Set price and availability to make them live.` });
 });
 
 // ── Admin category controllers ────────────────────────────────────────────────
@@ -2150,7 +2163,7 @@ async function runCancel(req: CustomerRequest, res: Response, scope: CancelScope
   if (order.storeId) {
     PushService.notifyStoreAdmins(order.storeId, {
       title: `Order #${order.orderNumber} cancelled`,
-      body: `${order.guestName || 'Customer'} cancelled the order${order.cancellationReason && order.cancellationReason !== 'customer_request' ? ` — ${order.cancellationReason.replace(/_/g, ' ')}` : ''}`,
+      body: order.cancellationCustomerMessage || `${order.guestName || 'Customer'} cancelled the order.`,
       url: '/orders',
       tag: `order-${req.params.id}`,
     }).catch(() => {});
@@ -2996,6 +3009,52 @@ export const adminDeleteCampaign = asyncHandler(async (req: AdminRequest, res: R
   } catch (e: any) {
     res.status(400).json({ success: false, error: e.message });
   }
+});
+
+// ── Promotional push controllers ────────────────────────────────────────────
+
+export const adminGetPromotions = asyncHandler(async (_req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await PromotionService.list() });
+});
+
+export const adminCreatePromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try {
+    res.status(201).json({ success: true, data: await PromotionService.create(req.body, req.admin!.id) });
+  } catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Promotion could not be created' }); }
+});
+
+export const adminUpdatePromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try {
+    const promotion = await PromotionService.update(req.params.id, req.body);
+    if (!promotion) { res.status(404).json({ success: false, error: 'Promotion not found' }); return; }
+    res.json({ success: true, data: promotion });
+  } catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Promotion could not be updated' }); }
+});
+
+export const adminDeletePromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try { await PromotionService.delete(req.params.id); res.json({ success: true }); }
+  catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Promotion could not be deleted' }); }
+});
+
+export const adminPreviewPromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try { res.json({ success: true, data: await PromotionService.preview(req.params.id) }); }
+  catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Preview failed' }); }
+});
+
+export const adminTestPromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try { res.json({ success: true, data: await PromotionService.test(req.params.id, req.admin!.id) }); }
+  catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Test send failed' }); }
+});
+
+export const adminSendPromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try { res.json({ success: true, data: await PromotionService.send(req.params.id) }); }
+  catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Promotion could not be sent' }); }
+});
+
+export const redirectPromotionClick = asyncHandler(async (req: Request, res: Response) => {
+  const destination = await PromotionService.registerClick(req.params.id);
+  if (!destination) { res.status(404).json({ success: false, error: 'Promotion not found' }); return; }
+  res.redirect(302, destination);
 });
 
 // ── Carousel controllers ──────────────────────────────────────────────────────
