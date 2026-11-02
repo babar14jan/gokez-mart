@@ -583,7 +583,8 @@ export const homeSectionsApi = {
 export interface DailySalesDay {
   date: string;
   storeId: string | null;
-  ordersDelivered: number;
+  ordersDelivered?: number;
+  ordersPlaced?: number;
   ordersCancelled: number;
   subtotalValue: number;
   couponDeduction?: number;
