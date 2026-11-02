@@ -1490,7 +1490,6 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
               address={checkoutAddress}
               error={validationField === 'address'}
               emptyLabel="No delivery address yet"
-              flat
               onClick={() => { track('checkout_address_started'); openAddressSheet(); }}
             />
           </div>
