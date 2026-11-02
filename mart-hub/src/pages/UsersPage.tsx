@@ -24,6 +24,7 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const EMPTY_FORM = { username: '', password: '', name: '', email: '', phone: '', role: 'store_owner', storeId: '' };
+const isValidPhone = (phone: string) => !phone || /^[6-9]\d{9}$/.test(phone);
 
 interface AdminUser {
   id: string; username: string; name: string | null; email: string | null;
@@ -37,7 +38,7 @@ interface AdminUser {
 export default function UsersPage() {
   const { id: currentUserId } = useAuthStore() as any;
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [stores, setStores] = useState<{ id: string; name: string; address?: string | null }[]>([]);
   const [userStores, setUserStores] = useState<Record<string, any[]>>({});
   const [storeFilter, setStoreFilter] = useState<string>('all');
   const [zoneFilter, setZoneFilter] = useState<string>('all');
@@ -49,6 +50,7 @@ export default function UsersPage() {
   const [showPw, setShowPw] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
   const [confirmRemoveStore, setConfirmRemoveStore] = useState<{ userId: string; storeId: string; storeName: string } | null>(null);
+  const phoneIsValid = isValidPhone(form.phone);
 
   const load = async () => {
     const [ur, sr] = await Promise.all([usersApi.getAll(), storesApi.getAll()]);
@@ -84,6 +86,7 @@ export default function UsersPage() {
 
   const handleSave = async () => {
     if (!editing && (!form.username.trim() || !form.password)) return;
+    if (!phoneIsValid) return;
     setSaving(true);
     try {
       if (editing) {
@@ -131,6 +134,7 @@ export default function UsersPage() {
   });
 
   const storeName = (id: string | null) => stores.find(s => s.id === id)?.name || '—';
+  const storeAddress = (id: string | null) => stores.find(s => s.id === id)?.address || '';
 
   if (loading) return <PageSkeleton />;
 
@@ -217,8 +221,11 @@ export default function UsersPage() {
               {u.role === 'delivery_staff' && userStores[u.id]?.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {userStores[u.id].map((s: any) => (
-                    <div key={s.id} className="flex items-center gap-1">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${s.isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 line-through'}`}>{s.name}</span>
+                    <div key={s.id} className="flex items-start gap-1">
+                      <div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${s.isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-gray-100 text-gray-500 line-through'}`}>{s.name}</span>
+                        {storeAddress(s.id) && <p className="mt-0.5 text-[10px] text-gray-500 dark:text-slate-400">{storeAddress(s.id)}</p>}
+                      </div>
                       <button onClick={() => setConfirmRemoveStore({ userId: u.id, storeId: s.id, storeName: s.name })}
                         className="text-gray-300 hover:text-red-400 transition-colors">
                         <X className="w-3 h-3" />
@@ -229,7 +236,7 @@ export default function UsersPage() {
               ) : (
                 <div>
                   <span className="text-xs text-gray-600 dark:text-slate-400">{u.storeName || storeName(u.storeId)}</span>
-                  {u.zoneName && <p className="text-[10px] text-gray-500 dark:text-slate-400">{u.zoneName}{u.isZoneHead ? ' · head' : u.isZoneMember ? ' · member' : ''}</p>}
+                  {storeAddress(u.storeId) && <p className="text-[10px] text-gray-500 dark:text-slate-400">{storeAddress(u.storeId)}</p>}
                 </div>
               )}
             </div>
@@ -300,7 +307,11 @@ export default function UsersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Phone</label>
-                  <input type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inp} placeholder="9876543210" />
+                  <input type="tel" inputMode="numeric" value={form.phone}
+                    onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                    className={`${inp} ${!phoneIsValid ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''}`}
+                    placeholder="9876543210" maxLength={10} aria-invalid={!phoneIsValid} />
+                  {!phoneIsValid && <p className="mt-1 text-[10px] text-red-500">Enter a valid 10-digit mobile number.</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Email</label>
@@ -325,7 +336,7 @@ export default function UsersPage() {
             </div>
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600">Cancel</button>
-              <button onClick={handleSave} disabled={saving || (!editing && (!form.username || !form.password)) || (form.role !== 'super_admin' && !form.storeId)}
+              <button onClick={handleSave} disabled={saving || !phoneIsValid || (!editing && (!form.username || !form.password)) || (form.role !== 'super_admin' && !form.storeId)}
                 className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : editing ? 'Update User' : 'Create User'}
               </button>

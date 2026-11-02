@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Tag } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Tag } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useFinePointer } from '../utils/useFinePointer';
@@ -90,6 +90,8 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   const [welcomeOffer, setWelcomeOffer] = useState<any | null>(null);
   const [resendTimer, setResendTimer] = useState(() => restoredFlow ? Math.max(0, Math.ceil((restoredFlow.resendAvailableAt - Date.now()) / 1000)) : 0);
   const [newName, setNewName] = useState('');
+  // Bumped on every send/resend so the WebOTP listener restarts for the new SMS.
+  const [webOtpKey, setWebOtpKey] = useState(0);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
   // A new customer's verified token, held until the mandatory name (and any
   // welcome offer) is done. We deliberately do NOT commit the login at OTP
@@ -122,6 +124,28 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
 
 
 
+  // Android Chrome's WebOTP API. When the SMS ends with the origin-bound line
+  // ("@mart.gokez.com #123456") Chrome resolves this with the digits, so we can fill
+  // all six boxes without the customer leaving the page. iOS/Safari have no
+  // equivalent -- there the keyboard's one-time-code suggestion still applies.
+  useEffect(() => {
+    if (step !== 'otp') return;
+    if (typeof window === 'undefined' || !('OTPCredential' in window)) return;
+    if (!/Android/i.test(navigator.userAgent)) return;
+    if (!navigator.credentials || typeof navigator.credentials.get !== 'function') return;
+    const controller = new AbortController();
+    (navigator.credentials as any)
+      .get({ otp: { transport: ['sms'] }, signal: controller.signal })
+      .then((credential: any) => {
+        const code = String(credential?.code ?? '').replace(/\D/g, '').slice(0, 6);
+        if (code.length !== 6) return;
+        setOtp(code);
+        setError('');
+      })
+      .catch(() => { /* dismissed, timed out, or unsupported -- manual entry still works */ });
+    return () => controller.abort();
+  }, [step, webOtpKey]);
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleaned = phone.replace(/\D/g, '');
@@ -133,6 +157,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
       loginFlow.beginOtp(cleaned, !!pendingCheckout);
       setPhone(cleaned);
       setStep('otp');
+      setWebOtpKey(k => k + 1);
       setResendTimer(30);
     } catch (err: any) {
       if (!err?.response) setError('No internet connection. Please try again.');
@@ -194,6 +219,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     try {
       await authApi.sendOtp(phone.replace(/\D/g, ''));
       loginFlow.markOtpResent();
+      setWebOtpKey(k => k + 1);
       setResendTimer(30);
     } catch (err: any) {
       if (!err?.response) setError('No internet connection. Please try again.');
@@ -202,13 +228,16 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   };
 
   const handleOtpChange = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, '').slice(-1);
-    if (!digit) return;
-    const chars = otp.padEnd(6, '').split('');
-    chars[index] = digit;
-    const nextOtp = chars.join('').slice(0, 6);
-    setOtp(nextOtp);
-    const nextIndex = Math.min(index + 1, 5);
+    const digits = value.replace(/\D/g, '');
+    if (!digits) return;
+    const chars = otp.split('');
+    while (chars.length < 6) chars.push('');
+    const start = digits.length > 1 ? 0 : index;
+    for (let i = 0; i < digits.length && start + i < 6; i++) {
+      chars[start + i] = digits[i];
+    }
+    setOtp(chars.join('').slice(0, 6));
+    const nextIndex = Math.min(start + digits.length, 5);
     otpRefs.current[nextIndex]?.focus();
   };
 
@@ -334,7 +363,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   const Spinner = () => <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />;
 
   const primaryBtn = (enabled = true) =>
-    `flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[17px] font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800 ${enabled
+    `flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl py-3 text-[17px] font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800 ${enabled
       ? 'bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600'
       : 'bg-gray-200 text-gray-500 focus-visible:ring-gray-400 dark:bg-slate-700 dark:text-slate-400'}`;
 
@@ -480,6 +509,12 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 and{' '}
                 <button type="button" onClick={() => onNavigateLegal?.('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
               </p>
+              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-[11px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+                <div>
+                  <p className="font-bold"><ShieldCheck className="mr-1 inline h-3.5 w-3.5" />Your number is private.</p>
+                  <p className="pl-5 text-emerald-700 dark:text-emerald-300">We never share it. No spam.</p>
+                </div>
+              </div>
             </>
           ) : (
             <>
@@ -501,7 +536,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                       name={i === 0 ? 'otp' : `otp-${i}`}
                       type="text"
                       inputMode="numeric"
-                      maxLength={1}
+                      maxLength={i === 0 ? 6 : 1}
                       value={otp[i] ?? ''}
                       onChange={e => handleOtpChange(i, e.target.value)}
                       onKeyDown={e => handleOtpKeyDown(i, e)}
@@ -516,10 +551,21 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 <button type="submit" disabled={loading || otp.length !== 6} className={primaryBtn(otp.length === 6)}>
                   {loading ? <Spinner /> : <>Continue</>}
                 </button>
-                <button type="button" onClick={handleResend} disabled={resendTimer > 0 || loading}
-                  className="flex min-h-[44px] w-full items-center justify-center rounded-2xl py-2 text-sm font-bold text-gokez-700 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gokez-400 dark:hover:text-gokez-300">
-                  {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
-                </button>
+                <p className="flex min-h-[44px] items-center justify-center gap-1 py-2 text-sm text-gray-600 dark:text-slate-300">
+                  <span>Didn't receive OTP?</span>
+                  {resendTimer > 0 ? (
+                    <span>(Resend in {resendTimer}s)</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={loading}
+                      className="min-h-[44px] font-bold text-gokez-700 underline decoration-dotted underline-offset-2 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gokez-400 dark:hover:text-gokez-300"
+                    >
+                      Resend
+                    </button>
+                  )}
+                </p>
               </form>
             </>
           )}

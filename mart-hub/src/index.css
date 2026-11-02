@@ -13,6 +13,27 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
+input[inputmode="decimal"][placeholder="Amount"] {
+  flex: 0 0 7rem;
+  min-width: 7rem;
+  color: #111827;
+  background-color: #ffffff;
+  font-weight: 600;
+  text-align: center;
+}
+
+.dark input[inputmode="decimal"][placeholder="Amount"] {
+  color: #f8fafc;
+  background-color: #334155;
+}
+
+select[aria-label="Deduction measure"] {
+  width: 5rem;
+  flex: 0 0 5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
 body { background-color: #ffffff; color: #111827; }
 .dark body { background-color: #18191a; color: #e4e6eb; }
 

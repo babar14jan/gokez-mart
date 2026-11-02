@@ -12,6 +12,7 @@ interface CatalogProduct {
   searchAliases: string[];
   description: string | null;
   photoUrl: string | null;
+  photos?: string[];
   categoryId: string | null;
   categoryName: string | null;
   categoryIcon: string | null;
@@ -32,8 +33,8 @@ export default function CatalogPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<CatalogProduct | null>(null);
   const [form, setForm] = useState({ name: '', localName: '', searchAliases: '', description: '', categoryId: '' });
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [primaryPhoto, setPrimaryPhoto] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -70,7 +71,7 @@ export default function CatalogPage() {
       try {
         const uploadRes = await productsApi.uploadPhoto(item.file);
         const photoUrl = uploadRes.data.data.url;
-        await catalogApi.create({ name: item.name, photoUrl, categoryId: item.categoryId || undefined });
+        await catalogApi.create({ name: item.name, photoUrl, photos: [photoUrl], categoryId: item.categoryId || undefined });
         setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'done' } : i));
       } catch {
         setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'error' } : i));
@@ -103,32 +104,54 @@ export default function CatalogPage() {
   const openCreate = () => {
     setEditing(null);
     setForm({ name: '', localName: '', searchAliases: '', description: '', categoryId: categories[0]?.id || '' });
-    setPhotoFile(null); setPhotoPreview(null);
+    setPhotos([]); setPrimaryPhoto(null);
     setShowModal(true);
   };
 
   const openEdit = (p: CatalogProduct) => {
     setEditing(p);
+    const initialPhotos = p.photos?.length ? p.photos : p.photoUrl ? [p.photoUrl] : [];
+    setPhotos(initialPhotos);
+    setPrimaryPhoto(initialPhotos[0] || null);
     setForm({ name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), description: p.description || '', categoryId: p.categoryId || '' });
-    setPhotoFile(null); setPhotoPreview(p.photoUrl);
     setShowModal(true);
   };
 
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    setPhotoFile(file); setPhotoPreview(URL.createObjectURL(file));
+  const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    for (const file of files) {
+      if (photos.length >= 4) break;
+      const uploadRes = await productsApi.uploadPhoto(file);
+      const url = uploadRes.data.data.url;
+      setPhotos(prev => [...prev, url]);
+      setPrimaryPhoto(url);
+    }
+  };
+
+  const handleRemovePhoto = (url: string) => {
+    setPhotos(prev => {
+      const next = prev.filter(photo => photo !== url);
+      if (next.length && primaryPhoto === url) setPrimaryPhoto(next[0]);
+      if (!next.length) setPrimaryPhoto(null);
+      return next;
+    });
   };
 
   const handleSave = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      let photoUrl = editing?.photoUrl ?? undefined;
-      if (photoFile) {
-        const res = await productsApi.uploadPhoto(photoFile);
-        photoUrl = res.data.data.url;
-      }
-      const data = { name: form.name.trim(), localName: form.localName || undefined, searchAliases: parseSearchAliases(form.searchAliases), description: form.description || undefined, photoUrl, categoryId: form.categoryId || undefined };
+      const photosToSave = photos.length ? photos : (editing?.photoUrl ? [editing.photoUrl] : []);
+      const data = {
+        name: form.name.trim(),
+        localName: form.localName || undefined,
+        searchAliases: parseSearchAliases(form.searchAliases),
+        description: form.description || undefined,
+        photoUrl: primaryPhoto || photosToSave[0] || undefined,
+        photos: photosToSave,
+        categoryId: form.categoryId || undefined,
+      };
       if (editing) await catalogApi.update(editing.id, data);
       else await catalogApi.create(data);
       setShowModal(false);
@@ -247,29 +270,48 @@ export default function CatalogPage() {
               </button>
             </div>
             <div className="p-5 space-y-4">
-              {/* Photo */}
-              <div className="flex justify-center">
-                <div className="relative">
-                  {photoPreview ? (
-                    <>
-                      <img src={photoPreview} alt="" className="w-24 h-24 rounded-2xl object-cover border-2 border-emerald-400 shadow-sm" />
-                      <label className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-emerald-500 hover:bg-emerald-600 rounded-full flex items-center justify-center shadow-md cursor-pointer">
-                        <Camera className="w-3.5 h-3.5 text-white" />
-                        <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
-                      </label>
-                      <button onClick={() => { setPhotoFile(null); setPhotoPreview(null); }}
-                        className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md">
+              {/* Photo gallery */}
+              <div className="space-y-3">
+                {primaryPhoto ? (
+                  <div className="flex justify-center">
+                    <div className="relative">
+                      <img src={primaryPhoto} alt={form.name} className="w-32 h-32 rounded-2xl object-cover border-2 border-emerald-400 shadow-sm" />
+                      <button
+                        type="button"
+                        onClick={() => photos.length > 1 && handleRemovePhoto(photos[photos.length - 1])}
+                        className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md"
+                        disabled={photos.length <= 1}
+                      >
                         <X className="w-3 h-3 text-white" />
                       </button>
-                    </>
-                  ) : (
-                    <label className="w-24 h-24 rounded-2xl bg-gray-100 dark:bg-slate-700 border-2 border-dashed border-gray-300 dark:border-slate-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-center">
+                    <label className="w-32 h-32 rounded-2xl bg-gray-100 dark:bg-slate-700 border-2 border-dashed border-gray-300 dark:border-slate-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
                       <Camera className="w-6 h-6 text-gray-500" />
                       <span className="text-[10px] text-gray-500">Add photo</span>
-                      <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddPhotos} />
                     </label>
-                  )}
-                </div>
+                  </div>
+                )}
+                {photos.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {photos.map(photo => (
+                      <button
+                        key={photo}
+                        type="button"
+                        onClick={() => setPrimaryPhoto(photo)}
+                        className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 flex-shrink-0 ${primaryPhoto === photo ? 'border-emerald-500' : 'border-gray-200 dark:border-slate-600'}`}
+                      >
+                        <img src={photo} alt="" className="h-full w-full object-cover" />
+                        {primaryPhoto === photo && (
+                          <span className="absolute inset-0 flex items-center justify-center bg-emerald-500/20 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">PRIMARY</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Product Name *</label>

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Component, Suspense, useEffect, type ErrorInfo, type ReactNode } from 'react';
 import { useAuthStore } from './store/authStore';
+import { authApi } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { subscribeAdminToPush } from './services/push';
@@ -41,6 +42,7 @@ const FeedbackPage = lazyWithRetry(() => import('./pages/FeedbackPage'));
 const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazyWithRetry(() => import('./pages/CarouselPage'));
 const HomeSectionsPage = lazyWithRetry(() => import('./pages/HomeSectionsPage'));
+const DailySalesPage = lazyWithRetry(() => import('./pages/DailySalesPage'));
 
 // Fallback for the public routes (no app shell yet): same page-shaped
 // skeleton as the rest of the hub, so nothing flashes a bare dark screen.
@@ -85,16 +87,23 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
-  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
-  store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/catalog', '/feedback', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
+  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/daily-sales', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
+  store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/daily-sales', '/catalog', '/stores', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
   staff:           ['/', '/orders', '/products', '/inventory', '/delivery', '/profile', '/change-password', '/more'],
 };
 
 function ProtectedRoute({ children, path }: { children: React.ReactNode; path: string }) {
-  const { isAuthenticated, role } = useAuthStore();
+  const { isAuthenticated, role, canAccessDailySales } = useAuthStore();
   if (!isAuthenticated) return <Navigate to="/hub" replace />;
+  // Daily Sales is a head-store-only surface. The flag is fetched from the
+  // backend (login + /admin/me); `false` means the role is right but the store
+  // is not a zone head. Unknown (null) is allowed through so a head owner is
+  // not bounced before the refresh resolves — the API still enforces access.
+  if (path === '/daily-sales' && role !== 'super_admin' && canAccessDailySales === false) {
+    return <Navigate to="/hub" replace />;
+  }
   // Fail closed: a missing or unrecognised role is granted nothing. It is never
   // promoted to super_admin (the previous `role || 'super_admin'`) and never
   // silently downgraded to the staff allowlist (the previous `|| ROLE_ROUTES.staff`).
@@ -113,6 +122,20 @@ export default function App() {
   useAppUpdate();
   const isDark = useThemeStore(s => s.isDark);
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const setCanAccessDailySales = useAuthStore(s => s.setCanAccessDailySales);
+
+  // Refresh the head-store flag on load. Login already carries it, but an
+  // existing session may predate a zone change (or this field), so /admin/me is
+  // the source of truth for hiding the Daily Sales nav and route.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    authApi.getMe()
+      .then(r => {
+        const value = r.data?.data?.canAccessDailySales;
+        if (typeof value === 'boolean') setCanAccessDailySales(value);
+      })
+      .catch(() => {});
+  }, [isAuthenticated, setCanAccessDailySales]);
 
   // Re-subscribe to push only when authenticated and permission already granted
   useEffect(() => {
@@ -158,7 +181,6 @@ export default function App() {
         <Route path="/suggestions"      element={<ProtectedRoute path="/suggestions"><SuggestionsPage /></ProtectedRoute>} />
         <Route path="/analytics"       element={<ProtectedRoute path="/analytics"><AnalyticsPage /></ProtectedRoute>} />
         <Route path="/install-analytics" element={<ProtectedRoute path="/install-analytics"><InstallAnalyticsPage /></ProtectedRoute>} />
-        <Route path="/settings"        element={<Navigate to="/stores" replace />} />
         <Route path="/stores"          element={<ProtectedRoute path="/stores"><StoresPage /></ProtectedRoute>} />
         <Route path="/zones"           element={<ProtectedRoute path="/zones"><ZonesPage /></ProtectedRoute>} />
         <Route path="/subscriptions"   element={<ProtectedRoute path="/subscriptions"><SubscriptionsPage /></ProtectedRoute>} />
@@ -180,6 +202,7 @@ export default function App() {
         <Route path="/campaigns"         element={<ProtectedRoute path="/campaigns"><CampaignsPage /></ProtectedRoute>} />
         <Route path="/carousel"          element={<ProtectedRoute path="/carousel"><CarouselPage /></ProtectedRoute>} />
         <Route path="/home-sections"     element={<ProtectedRoute path="/home-sections"><HomeSectionsPage /></ProtectedRoute>} />
+        <Route path="/daily-sales"      element={<ProtectedRoute path="/daily-sales"><DailySalesPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

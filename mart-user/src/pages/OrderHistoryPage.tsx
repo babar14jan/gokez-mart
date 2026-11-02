@@ -129,6 +129,7 @@ function OrderDetailSheet({
               const itemSavings = Number(order.itemSavings) || 0;
               const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
               const campaignDiscount = Number(order.campaignDiscount) || 0;
+              const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
               const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
               return (
                 <>
@@ -157,10 +158,10 @@ function OrderDetailSheet({
                       <span>{order.deliveryCharge === 0 ? <span className="text-emerald-600 font-semibold">FREE</span> : `₹${order.deliveryCharge}`}</span>
                     </span>
                   </div>
-                  {campaignDiscount > 0 && (
+                  {hasCampaign && (
                     <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
                       <span>🎉 {order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
-                      <span className="font-semibold">-₹{order.campaignDiscount}</span>
+                      {campaignDiscount > 0 && <span className="font-semibold">-₹{order.campaignDiscount}</span>}
                     </div>
                   )}
                   <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-slate-600">

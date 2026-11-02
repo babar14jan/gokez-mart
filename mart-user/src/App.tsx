@@ -922,9 +922,15 @@ export default function App() {
   // lookup is never a block — the customer picks an area manually instead.
   const useMyLocation = async (): Promise<ZoneAction> => {
     setLocationNotice(null);
+    const previousZoneId = useZoneStore.getState().selectedZone?.id;
     const result = await useZoneStore.getState().detectAndApply();
     switch (result.status) {
       case 'applied':
+        if (previousZoneId !== result.zone.id && useCartStore.getState().items.length > 0) {
+          useCartStore.getState().clearCart();
+          setLocationNotice(`Delivery area changed to ${result.zone.name}. Your cart was cleared because products and prices can differ by area.`);
+          break;
+        }
       case 'kept':
         setLocationNotice(`Delivering to ${result.zone.name}`);
         break;
@@ -1261,6 +1267,7 @@ export default function App() {
           <div className="sm:hidden isolate absolute inset-0 bg-white dark:bg-slate-900 overflow-y-auto">
             <CheckoutPage
               settings={settings}
+              zoneId={selectedZone?.id}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
               onBack={handleCheckoutClose}
@@ -1275,6 +1282,7 @@ export default function App() {
           <div className="hidden sm:block isolate absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
             <CheckoutPage
               settings={settings}
+              zoneId={selectedZone?.id}
               zoneName={selectedZone?.name}
               storeId={selectedZone?.storeId}
               onBack={handleCheckoutClose}

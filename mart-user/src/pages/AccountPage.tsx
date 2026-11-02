@@ -12,7 +12,6 @@ import LoginFlow, { type Step } from '../components/LoginFlow';
 import PageHeader from '../components/PageHeader';
 import { track, trackInstall } from '../utils/track';
 import { useInstallGuide, dismissInstallGuide } from '../utils/install';
-import { BRAND_SLOGAN } from '../constants/brand';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 
@@ -405,7 +404,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   );
 
   if (!isLoggedIn && accountLoginOpen) {
-    // The phone step gets the tall green hero. The OTP step is plain white with a
+    // The phone step gets the tall green hero. The OTP step uses a pale green base with a
     // slim app bar and back chevron (page chrome that nudges the flow back via
     // loginBackSignal). Profile/offer stay plain pale green.
     const showBrandHeader = loginStepView === 'phone';
@@ -415,7 +414,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         showBrandHeader
           ? 'bg-white dark:bg-slate-900'
           : showOtpHeader
-            ? 'flex flex-col bg-white dark:bg-slate-900'
+            ? 'flex flex-col bg-[#f3f8f2] dark:bg-slate-900'
             : 'flex flex-col justify-start bg-[#e8f5e9] pt-[64px] dark:bg-slate-900'
       }`}>
         {showBrandHeader && (
@@ -449,22 +448,17 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div className="text-center">
-            <div className="relative flex flex-col items-center overflow-hidden bg-[linear-gradient(180deg,#4ade80_0%,#86efac_16%,#d1fae5_42%,#ecfdf5_68%,#fef9c3_100%)] px-6 pb-4 pt-[41px] dark:bg-slate-900 dark:bg-none">
+            <div className="overflow-hidden bg-white dark:bg-slate-900">
               <img
-                src="/mart_brand_new.webp"
-                alt="Gokez Mart"
-                width={384}
-                height={256}
-                className="-mb-3 h-[62px] w-auto object-contain"
+                src="/login_banner.webp"
+                alt="Gokez Mart - Shop Local. Support Local."
+                width={960}
+                height={541}
+                decoding="async"
+                className="block h-auto w-full"
               />
-              <p className="mt-0 text-[clamp(9px,calc(4vw-6px),29px)] font-bold leading-tight text-slate-900 dark:text-white">{BRAND_SLOGAN}</p>
-              <p
-                className="mt-4 bg-gradient-to-r from-emerald-600 via-amber-500 to-rose-500 bg-clip-text text-center font-black leading-none tracking-tight text-transparent text-[clamp(12px,3.75vw,28px)]"
-              >
-                From your neighbourhood store to your door
-              </p>
             </div>
-            <h1 className="mt-3 text-[15px] font-black leading-tight text-gray-600 dark:text-gray-300">Log in or sign up</h1>
+            <h1 className="text-[15px] font-black leading-tight text-gray-600 dark:text-gray-300">Log in or sign up</h1>
           </div>
         )}
         <div className={`relative w-full overflow-hidden ${
@@ -474,7 +468,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               ? 'flex-1 sm:mx-auto sm:max-w-sm'
               : 'sm:mx-auto sm:max-w-sm'
         }`}>
-          <div className={showBrandHeader ? "px-5 pb-6 pt-1 space-y-4" : showOtpHeader ? "px-5 pb-6 pt-[44px] space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
+          <div className={showBrandHeader ? "px-5 pb-6 pt-0 space-y-4" : showOtpHeader ? "px-5 pb-6 pt-[44px] space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
 <LoginFlow
               variant="page"
               showPhoneHeading={false}

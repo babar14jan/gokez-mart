@@ -11,16 +11,23 @@ interface AuthState {
   role: string | null;
   storeId: string | null;
   lastLoginAt: string | null;
+  canAccessDailySales: boolean | null;
   isAuthenticated: boolean;
   isSuperAdmin: () => boolean;
-  login: (token: string, data: { id?: string | null; username: string; name: string; email?: string | null; phone?: string | null; role?: string; storeId?: string | null }) => void;
+  login: (token: string, data: { id?: string | null; username: string; name: string; email?: string | null; phone?: string | null; role?: string; storeId?: string | null; canAccessDailySales?: boolean | null }) => void;
   setProfile: (data: { name?: string; email?: string | null; phone?: string | null }) => void;
+  setCanAccessDailySales: (value: boolean | null) => void;
   setName: (name: string) => void;
   logout: () => void;
 }
 
 const get = (key: string) => localStorage.getItem(key);
 const set = (key: string, val: string | null) => val ? localStorage.setItem(key, val) : localStorage.removeItem(key);
+const getBool = (key: string): boolean | null => {
+  const value = get(key);
+  return value === 'true' ? true : value === 'false' ? false : null;
+};
+const setBool = (key: string, val: boolean | null) => set(key, val === null ? null : String(val));
 
 // Must stay in sync with ADMIN_ROLES in mart-backend/src/middleware/index.ts.
 // store_manager became a real role in migration 056. sales_manager was retired
@@ -45,6 +52,7 @@ export const useAuthStore = create<AuthState>((setState) => ({
   role:        get('mart_admin_role'),
   storeId:     get('mart_admin_store_id'),
   lastLoginAt: get('mart_admin_last_login'),
+  canAccessDailySales: getBool('mart_admin_can_access_daily_sales'),
   isAuthenticated: !!get('mart_admin_token'),
   // Derived from the role claim alone. Previously inferred from the *absence* of a
   // store id, which granted super-admin UI to any token missing that field.
@@ -61,13 +69,19 @@ export const useAuthStore = create<AuthState>((setState) => ({
     set('mart_admin_phone',    data.phone || null);
     set('mart_admin_role',     data.role || null);
     set('mart_admin_store_id', data.storeId || null);
-    setState({ id: data.id || null, token, username: data.username, name: data.name, email: data.email || null, phone: data.phone || null, role: data.role || null, storeId: data.storeId || null, isAuthenticated: true });
+    setBool('mart_admin_can_access_daily_sales', data.canAccessDailySales ?? null);
+    setState({ id: data.id || null, token, username: data.username, name: data.name, email: data.email || null, phone: data.phone || null, role: data.role || null, storeId: data.storeId || null, canAccessDailySales: data.canAccessDailySales ?? null, isAuthenticated: true });
   },
 
   setProfile: (data) => {
     if (data.name !== undefined)  { set('mart_admin_name',  data.name);  setState({ name: data.name }); }
     if (data.email !== undefined) { set('mart_admin_email', data.email); setState({ email: data.email }); }
     if (data.phone !== undefined) { set('mart_admin_phone', data.phone); setState({ phone: data.phone }); }
+  },
+
+  setCanAccessDailySales: (value) => {
+    setBool('mart_admin_can_access_daily_sales', value);
+    setState({ canAccessDailySales: value });
   },
 
   setName: (name) => {
@@ -77,8 +91,8 @@ export const useAuthStore = create<AuthState>((setState) => ({
 
   logout: () => {
     clearHttpCache();
-    ['mart_admin_id','mart_admin_token','mart_admin_username','mart_admin_name','mart_admin_email','mart_admin_phone','mart_admin_role','mart_admin_store_id','mart_admin_last_login']
+    ['mart_admin_id','mart_admin_token','mart_admin_username','mart_admin_name','mart_admin_email','mart_admin_phone','mart_admin_role','mart_admin_store_id','mart_admin_last_login','mart_admin_can_access_daily_sales']
       .forEach(k => localStorage.removeItem(k));
-    setState({ id: null, token: null, username: null, name: null, email: null, phone: null, role: null, storeId: null, lastLoginAt: null, isAuthenticated: false });
+    setState({ id: null, token: null, username: null, name: null, email: null, phone: null, role: null, storeId: null, lastLoginAt: null, canAccessDailySales: null, isAuthenticated: false });
   },
 }));

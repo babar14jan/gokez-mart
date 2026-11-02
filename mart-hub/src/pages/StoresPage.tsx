@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, X, Loader2, Store, Upload, CheckCircle, Search, User, UserPlus, KeyRound, Copy } from 'lucide-react';
-import { storesApi, productsApi, usersApi, teamApi, zonesApi } from '../services/api';
+import { Plus, Pencil, X, Loader2, Store, Upload, CheckCircle, Search, User, UserPlus, SlidersHorizontal } from 'lucide-react';
+import { storesApi, productsApi, usersApi, teamApi, zonesApi, inventoryApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
+import { useAuthStore } from '../store/authStore';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -14,12 +15,14 @@ interface MartStore {
   id: string; name: string; address: string | null; isActive: boolean; isLive: boolean;
   logoUrl: string | null; supportPhone: string | null; openingHours: any;
   ownerName: string | null; revenueModel: string; commissionPercent: number;
-  monthlyFee: number; estimatedDelivery?: string;
+  monthlyFee: number;
 }
 
-type Tab = 'details' | 'revenue' | 'manager';
+type Tab = 'details' | 'revenue' | 'manager' | 'inventory';
 
 export default function StoresPage() {
+  const { role } = useAuthStore();
+  const canManageInventoryPolicy = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
   const [stores, setStores] = useState<MartStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,7 +32,7 @@ export default function StoresPage() {
   const [tab, setTab] = useState<Tab>('details');
   const [form, setForm] = useState({
     name: '', address: '', ownerName: '', supportPhone: '',
-    estimatedDelivery: '10-15 mins', logoUrl: '',
+    logoUrl: '',
     monthlyFee: '0',
     openingHours: DEFAULT_HOURS as any,
   });
@@ -38,14 +41,15 @@ export default function StoresPage() {
   const [zones, setZones] = useState<any[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState('');
   const [zoneTeam, setZoneTeam] = useState<any[]>([]);
+  const [zoneTeamLoading, setZoneTeamLoading] = useState(false);
+  const [createdStoreId, setCreatedStoreId] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<any | null>(null);
-  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', role: 'staff', isActive: true, password: '' });
+  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', role: 'staff', isActive: true });
   const [savingMember, setSavingMember] = useState(false);
-  const [credModal, setCredModal] = useState<{ store: MartStore; manager: any } | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [resettingPwd, setResettingPwd] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState<MartStore | null>(null);
+  const [inventoryPolicy, setInventoryPolicy] = useState({ inventoryTracking: false, autoOutOfStock: true, lowStockThreshold: '' });
+  const [inventoryPolicyLoading, setInventoryPolicyLoading] = useState(false);
+  const [savingInventoryPolicy, setSavingInventoryPolicy] = useState(false);
 
   const load = async () => {
     try {
@@ -66,9 +70,29 @@ export default function StoresPage() {
       setLoading(false);
     }
   };
-  const zoneStoreId = zones.find(z => z.id === selectedZoneId)?.primaryStoreId || editing?.id || '';
-  useEffect(() => { load(); }, []);
-  useEffect(() => { if (zoneStoreId) loadZoneTeam(zoneStoreId); }, [zoneStoreId]);
+
+  useEffect(() => { void load(); }, []);
+
+  const managerStoreId = editing?.id || createdStoreId || '';
+  useEffect(() => {
+    if (showModal && managerStoreId) void loadZoneTeam(managerStoreId);
+  }, [showModal, managerStoreId]);
+
+  useEffect(() => {
+    if (!showModal || tab !== 'inventory' || !editing || !canManageInventoryPolicy) return;
+    setInventoryPolicyLoading(true);
+    inventoryApi.getSettings(editing.id)
+      .then(response => {
+        const settings = response.data.data || {};
+        setInventoryPolicy({
+          inventoryTracking: Boolean(settings.inventoryTracking),
+          autoOutOfStock: settings.autoOutOfStock !== false,
+          lowStockThreshold: settings.lowStockThreshold == null ? '' : String(settings.lowStockThreshold),
+        });
+      })
+      .catch(() => window.alert('Could not load inventory policy'))
+      .finally(() => setInventoryPolicyLoading(false));
+  }, [showModal, tab, editing?.id, canManageInventoryPolicy]);
 
 
   const loadZonesForStore = async (storeId: string) => {
@@ -76,19 +100,22 @@ export default function StoresPage() {
       const r = await zonesApi.getAll(storeId);
       const zs = r.data.data || [];
       setZones(zs);
-      if (zs.length && !selectedZoneId) setSelectedZoneId(zs[0].id);
+      setSelectedZoneId(zs[0]?.id || '');
     } catch {
       setZones([]);
     }
   };
 
   const loadZoneTeam = async (storeId: string) => {
-    if (!storeId) { setZoneTeam([]); return; }
+    if (!storeId) { setZoneTeam([]); setZoneTeamLoading(false); return; }
+    setZoneTeamLoading(true);
     try {
       const r = await teamApi.getStoreTeam(storeId);
       setZoneTeam(r.data.data || []);
     } catch {
       setZoneTeam([]);
+    } finally {
+      setZoneTeamLoading(false);
     }
   };
 
@@ -100,25 +127,37 @@ export default function StoresPage() {
       phone: member.phone || '',
       role: member.role || 'staff',
       isActive: member.isActive !== false,
-      password: '',
     });
   };
 
   const saveMember = async () => {
     if (!editingMember) return;
+    if (!managerStoreId) {
+      window.alert('Select a store before updating a staff member');
+      return;
+    }
     setSavingMember(true);
     try {
+      const assignmentChanged = memberForm.role !== editingMember.role
+        || memberForm.isActive !== (editingMember.assignmentActive !== false);
+      if (assignmentChanged) {
+        await teamApi.updateMember(managerStoreId, editingMember.adminId, {
+          role: memberForm.role,
+          isActive: memberForm.isActive,
+        });
+      }
+
       const payload: any = {
         name: memberForm.name.trim() || null,
         email: memberForm.email.trim() || null,
         phone: memberForm.phone.trim() || null,
-        role: memberForm.role,
-        isActive: memberForm.isActive,
       };
-      if (memberForm.password.trim()) payload.password = memberForm.password.trim();
-      await usersApi.update(editingMember.adminId, payload);
+      const profileChanged = payload.name !== (editingMember.name || null)
+        || payload.email !== (editingMember.email || null)
+        || payload.phone !== (editingMember.phone || null);
+      if (profileChanged) await usersApi.update(editingMember.adminId, payload);
       setEditingMember(null);
-      await load();
+      await Promise.all([load(), loadZoneTeam(managerStoreId)]);
     } catch (e: any) {
       window.alert(e?.response?.data?.error || 'Failed to update staff member');
     } finally {
@@ -131,28 +170,6 @@ export default function StoresPage() {
     return team.find((u: any) => u.role === 'store_owner') || team.find((u: any) => u.role === 'store_manager') || team[0] || null;
   };
 
-  const handleResetPassword = async (userId: string) => {
-    if (!newPassword || newPassword.length < 6) { window.alert('Min 6 characters'); return; }
-    setResettingPwd(true);
-    try {
-      await usersApi.update(userId, { password: newPassword });
-      window.alert('Password updated successfully');
-      setNewPassword('');
-    } catch { window.alert('Failed to reset password'); }
-    finally { setResettingPwd(false); }
-  };
-
-  const copyCredentials = async (manager: any, password?: string) => {
-    const text = `Gokez Hub Login\nURL: ${window.location.origin}\nUsername: ${manager.username}${password ? `\nPassword: ${password}` : ''}`;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      window.prompt('Copy login details', text);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   // Manager state
   const [managerSearch, setManagerSearch] = useState('');
   const [managerResults, setManagerResults] = useState<any[]>([]);
@@ -160,7 +177,6 @@ export default function StoresPage() {
   const [newManager, setNewManager] = useState({ username: '', password: '', name: '', phone: '' });
   const [managerMode, setManagerMode] = useState<'search' | 'create'>('search');
   const [searchingManager, setSearchingManager] = useState(false);
-  const [createdStoreId, setCreatedStoreId] = useState<string | null>(null);
 
   const searchManagers = async (q: string) => {
     if (!q.trim()) { setManagerResults([]); return; }
@@ -168,16 +184,21 @@ export default function StoresPage() {
     try {
       const r = await usersApi.getAll();
       const all = r.data.data || [];
+      const query = q.trim().toLowerCase();
+      const phoneQuery = query.replace(/\D/g, '');
       setManagerResults(all.filter((u: any) =>
-        u.username.toLowerCase().includes(q.toLowerCase()) ||
-        (u.name || '').toLowerCase().includes(q.toLowerCase())
+        String(u.id || '').toLowerCase().includes(query)
+        || String(u.username || '').toLowerCase().includes(query)
+        || String(u.name || '').toLowerCase().includes(query)
+        || (phoneQuery.length > 0 && String(u.phone || '').replace(/\D/g, '').includes(phoneQuery))
+        || String(u.email || '').toLowerCase().includes(query)
       ));
     } catch {} finally { setSearchingManager(false); }
   };
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', address: '', ownerName: '', supportPhone: '', estimatedDelivery: '10-15 mins', logoUrl: '', monthlyFee: '0', openingHours: DEFAULT_HOURS });
+    setForm({ name: '', address: '', ownerName: '', supportPhone: '', logoUrl: '', monthlyFee: '0', openingHours: DEFAULT_HOURS });
     setManagerSearch(''); setManagerResults([]); setSelectedManager(null);
     setNewManager({ username: '', password: '', name: '', phone: '' });
     setManagerMode('search'); setCreatedStoreId(null);
@@ -189,7 +210,7 @@ export default function StoresPage() {
     setEditing(s);
     setForm({
       name: s.name, address: s.address || '', ownerName: s.ownerName || '',
-      supportPhone: s.supportPhone || '', estimatedDelivery: s.estimatedDelivery || '10-15 mins',
+      supportPhone: s.supportPhone || '',
       logoUrl: s.logoUrl || '', monthlyFee: String(s.monthlyFee || 0),
       openingHours: s.openingHours || DEFAULT_HOURS,
     });
@@ -217,7 +238,6 @@ export default function StoresPage() {
         supportPhone: form.supportPhone.trim() || undefined,
         logoUrl: form.logoUrl || undefined,
         monthlyFee: parseFloat(form.monthlyFee) || 0,
-        estimatedDelivery: form.estimatedDelivery.trim(),
       };
       if (editing) await storesApi.update(editing.id, data);
       else {
@@ -230,6 +250,29 @@ export default function StoresPage() {
       }
       setShowModal(false); await load();
     } catch { window.alert('Failed to save store'); } finally { setSaving(false); }
+  };
+
+  const saveInventoryPolicy = async () => {
+    if (!editing) return;
+    const lowStockThreshold = Number(inventoryPolicy.lowStockThreshold || 0);
+    if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) {
+      window.alert('Low-stock threshold must be a non-negative number');
+      return;
+    }
+    setSavingInventoryPolicy(true);
+    try {
+      await inventoryApi.updateSettings({
+        inventoryTracking: inventoryPolicy.inventoryTracking,
+        autoOutOfStock: inventoryPolicy.autoOutOfStock,
+        lowStockThreshold,
+      }, editing.id);
+      await load();
+      setShowModal(false);
+    } catch (error: any) {
+      window.alert(error?.response?.data?.error || 'Could not save inventory policy');
+    } finally {
+      setSavingInventoryPolicy(false);
+    }
   };
 
   const toggleLive = async (s: MartStore) => {
@@ -288,11 +331,6 @@ export default function StoresPage() {
                     Subscription plan: ₹{s.monthlyFee}/month
                   </p>
                 </div>
-                {/* Live toggle */}
-                <button onClick={() => toggleLive(s)} title={s.isLive ? 'Take offline' : 'Go live'}
-                  className={"relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors " + (s.isLive ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600')}>
-                  <span className={"inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 " + (s.isLive ? 'translate-x-4' : 'translate-x-0')} />
-                </button>
               </div>
 
               {/* Info row */}
@@ -312,12 +350,15 @@ export default function StoresPage() {
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                   <Pencil className="w-3.5 h-3.5" /> Edit
                 </button>
-                {mgr && (
-                  <button onClick={() => { setCredModal({ store: s, manager: mgr }); setNewPassword(''); }}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
-                    <KeyRound className="w-3.5 h-3.5" /> Credentials
-                  </button>
-                )}
+                <button type="button" onClick={() => toggleLive(s)}
+                  title={s.isLive ? 'Store is live. Click to take it offline.' : 'Store is offline. Click to make it live.'}
+                  aria-label={s.isLive ? 'Take store offline' : 'Make store live'}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
+                  <span>Live</span>
+                  <span className={'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ' + (s.isLive ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600')}>
+                    <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ' + (s.isLive ? 'translate-x-4' : 'translate-x-0')} />
+                  </span>
+                </button>
                 {s.isActive ? (
                   <button onClick={() => setConfirmDeactivate(s)}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
@@ -345,70 +386,6 @@ export default function StoresPage() {
           onConfirm={() => { handleDeactivate(confirmDeactivate.id); setConfirmDeactivate(null); }}
           onCancel={() => setConfirmDeactivate(null)}
         />
-      )}
-
-      {/* Credentials Modal */}
-      {credModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
-              <div>
-                <h2 className="text-sm font-bold text-gray-900 dark:text-white">Store Owner Credentials</h2>
-                <p className="text-xs text-gray-500 mt-0.5">{credModal.store.name}</p>
-              </div>
-              <button onClick={() => setCredModal(null)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              {/* Current credentials */}
-              <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Login Details</p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">URL</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">hub.gokez.com</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">Username</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{credModal.manager.username}</p>
-                  </div>
-                  <button onClick={() => copyCredentials(credModal.manager)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg hover:bg-emerald-100 transition-colors">
-                    <Copy className="w-3.5 h-3.5" />{copied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Reset password */}
-              <div>
-                <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-2">Set New Password</p>
-                <div className="flex gap-2">
-                  <input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                    placeholder="New password (min 6 chars)" />
-                  <button onClick={() => handleResetPassword(credModal.manager.id)} disabled={resettingPwd || !newPassword}
-                    className="px-3 py-2 text-xs font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-1">
-                    {resettingPwd ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
-                    Set
-                  </button>
-                </div>
-                {newPassword.length >= 6 && (
-                  <button onClick={() => copyCredentials(credModal.manager, newPassword)}
-                    className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl hover:bg-emerald-100 transition-colors">
-                    <Copy className="w-3.5 h-3.5" />{copied ? 'Copied!' : 'Copy credentials with new password'}
-                  </button>
-                )}
-              </div>
-
-              <p className="text-[10px] text-gray-500 text-center">
-                Share these credentials securely with the store owner. They should change their password after first login.
-              </p>
-            </div>
-          </div>
-        </div>
       )}
 
       {showModal && (
@@ -439,6 +416,17 @@ export default function StoresPage() {
                   {label}
                 </button>
               ))}
+              {editing && canManageInventoryPolicy && (
+                <button onClick={() => setTab('inventory')}
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors border-b-2 ${
+                    tab === 'inventory'
+                      ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                      : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300'
+                  }`}>
+                  <SlidersHorizontal className="w-4 h-4" />
+                  Inventory
+                </button>
+              )}
             </div>
 
             {/* Content */}
@@ -486,16 +474,9 @@ export default function StoresPage() {
                     </div>
                   </div>
 
-                  {/* Address + Delivery in grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Area / Address</label>
-                      <input type="text" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className={inp} placeholder="e.g. Gobra, Kolkata" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Est. Delivery</label>
-                      <input type="text" value={form.estimatedDelivery} onChange={e => setForm(f => ({ ...f, estimatedDelivery: e.target.value }))} className={inp} placeholder="10-15 mins" />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Area / Address</label>
+                    <input type="text" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} className={inp} placeholder="e.g. Gobra, Kolkata" />
                   </div>
                 </>
               )}
@@ -518,18 +499,45 @@ export default function StoresPage() {
                 </div>
               )}
 
+              {tab === 'inventory' && editing && canManageInventoryPolicy && (
+                inventoryPolicyLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-12 text-xs text-gray-500 dark:text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading inventory policy...</div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">Inventory policy</p>
+                      <p className="mt-1 text-xs text-gray-600 dark:text-slate-400">These settings apply only to {editing.name}.</p>
+                    </div>
+                    <label className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-3 text-sm font-semibold text-gray-700 dark:border-slate-700 dark:text-slate-200">
+                      <span>Track inventory</span>
+                      <button type="button" role="switch" aria-checked={inventoryPolicy.inventoryTracking} onClick={() => setInventoryPolicy(policy => ({ ...policy, inventoryTracking: !policy.inventoryTracking }))} className={'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ' + (inventoryPolicy.inventoryTracking ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600')}><span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ' + (inventoryPolicy.inventoryTracking ? 'translate-x-4' : 'translate-x-0')} /></button>
+                    </label>
+                    <label className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-3 text-sm font-semibold text-gray-700 dark:border-slate-700 dark:text-slate-200">
+                      <span>Auto mark out of stock at zero</span>
+                      <button type="button" role="switch" aria-checked={inventoryPolicy.autoOutOfStock} onClick={() => setInventoryPolicy(policy => ({ ...policy, autoOutOfStock: !policy.autoOutOfStock }))} className={'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ' + (inventoryPolicy.autoOutOfStock ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600')}><span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ' + (inventoryPolicy.autoOutOfStock ? 'translate-x-4' : 'translate-x-0')} /></button>
+                    </label>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-slate-200">Low-stock threshold<input type="number" min="0" value={inventoryPolicy.lowStockThreshold} onChange={event => setInventoryPolicy(policy => ({ ...policy, lowStockThreshold: event.target.value }))} className={`${inp} mt-2`} /></label>
+                  </div>
+                )
+              )}
+
               {/* ── Manager tab ── */}
               {tab === 'manager' && (
                 <div className="space-y-4">
                   {zones.length > 0 && (
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Zone</label>
+                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Mapped zone</label>
                       <select value={selectedZoneId} onChange={e => setSelectedZoneId(e.target.value)} className={inp}>
-                        {zones.map((z: any) => <option key={z.id} value={z.id}>{z.name}</option>)}
+                        {zones.map((z: any) => <option key={z.id} value={z.id}>{z.name}{z.primaryStoreId === managerStoreId ? ' (head store)' : ''}</option>)}
                       </select>
                     </div>
                   )}
-                  {zoneStoreId && zoneTeam.length > 0 && (
+                  {managerStoreId && zoneTeamLoading && (
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading mapped staff...
+                    </div>
+                  )}
+                  {managerStoreId && zoneTeam.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Mapped staff</p>
                       <div className="divide-y divide-gray-100 dark:divide-slate-700 rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
@@ -554,51 +562,44 @@ export default function StoresPage() {
                       <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Store created! Now assign a store owner.</p>
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    {[['search', 'Find Existing', Search], ['create', 'Create New', UserPlus]].map(([mode, label, Icon]: any) => (
-                      <button key={mode} onClick={() => setManagerMode(mode)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold rounded-xl border-2 transition-all ${
-                          managerMode === mode ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600' : 'border-gray-100 dark:border-slate-700 text-gray-500'
-                        }`}>
-                        <Icon className="w-3.5 h-3.5" /> {label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {managerMode === 'search' && (
-                    <div className="space-y-3">
-                      <div className="relative">
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <div className="relative min-w-0 flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input type="text" value={managerSearch}
-                          onChange={e => { setManagerSearch(e.target.value); searchManagers(e.target.value); }}
-                          className={`${inp} pl-9`} placeholder="Search by username or name..." autoFocus />
+                          onChange={e => { setManagerMode('search'); setManagerSearch(e.target.value); searchManagers(e.target.value); }}
+                          className={`${inp} pl-9`} placeholder="Search ID, name, phone or email" />
                       </div>
-                      {searchingManager && <p className="text-xs text-gray-500 text-center">Searching...</p>}
-                      {managerResults.length > 0 && (
-                        <div className="border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
-                          {managerResults.map((u: any) => (
-                            <button key={u.id} onClick={() => setSelectedManager(u)}
-                              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${selectedManager?.id === u.id ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}>
-                              <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                                <span className="text-xs font-bold text-emerald-600">{(u.name || u.username)[0].toUpperCase()}</span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-gray-900 dark:text-white">{u.name || u.username}</p>
-                                <p className="text-[10px] text-gray-500 dark:text-slate-400">@{u.username} · {u.role?.replace('_', ' ')}</p>
-                              </div>
-                              {selectedManager?.id === u.id && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {selectedManager && (
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-emerald-500" />
-                          <p className="text-xs text-emerald-700 dark:text-emerald-400"><strong>{selectedManager.name || selectedManager.username}</strong> will be assigned as store owner</p>
-                        </div>
-                      )}
+                      <button type="button" onClick={() => { setManagerMode('create'); setSelectedManager(null); setManagerResults([]); }}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200">
+                        <UserPlus className="w-3.5 h-3.5" /> Add new member
+                      </button>
                     </div>
-                  )}
+                    {managerMode === 'search' && searchingManager && <p className="text-xs text-gray-500 text-center">Searching...</p>}
+                    {managerMode === 'search' && managerResults.length > 0 && (
+                      <div className="border border-gray-200 dark:border-slate-600 rounded-xl overflow-hidden divide-y divide-gray-50 dark:divide-slate-700">
+                        {managerResults.map((u: any) => (
+                          <button key={u.id} onClick={() => setSelectedManager(u)}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${selectedManager?.id === u.id ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}>
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-bold text-emerald-600">{(u.name || u.username)[0].toUpperCase()}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 dark:text-white">{u.name || u.username}</p>
+                              <p className="text-[10px] text-gray-500 dark:text-slate-400">@{u.username} · {u.role?.replace('_', ' ')}</p>
+                            </div>
+                            {selectedManager?.id === u.id && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {managerMode === 'search' && selectedManager && (
+                      <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        <p className="text-xs text-emerald-700 dark:text-emerald-400"><strong>{selectedManager.name || selectedManager.username}</strong> will be assigned as store owner</p>
+                      </div>
+                    )}
+                  </div>
 
                   {managerMode === 'create' && (
                     <div className="space-y-3">
@@ -636,7 +637,7 @@ export default function StoresPage() {
                 <button
                   disabled={saving || (managerMode === 'search' && !selectedManager) || (managerMode === 'create' && (!newManager.username || !newManager.password))}
                   onClick={async () => {
-                    const storeId = zoneStoreId || createdStoreId || editing?.id;
+                    const storeId = managerStoreId;
                     if (!storeId) return;
                     setSaving(true);
                     try {
@@ -652,6 +653,11 @@ export default function StoresPage() {
                   }}
                   className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : '✅ Assign & Finish'}
+                </button>
+              ) : tab === 'inventory' ? (
+                <button onClick={saveInventoryPolicy} disabled={savingInventoryPolicy || inventoryPolicyLoading}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+                  {savingInventoryPolicy ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save inventory policy'}
                 </button>
               ) : (
                 <button onClick={handleSave} disabled={saving || !form.name.trim()}
@@ -693,10 +699,6 @@ export default function StoresPage() {
                 <option value="staff">Staff</option>
                 <option value="delivery_staff">Delivery Staff</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">New Password (optional)</label>
-              <input type="password" value={memberForm.password} onChange={e => setMemberForm(f => ({ ...f, password: e.target.value }))} className={inp} placeholder="Leave blank to keep current" />
             </div>
             <div className="flex items-center justify-between">
               <label className="text-sm text-gray-700 dark:text-slate-300">Active</label>

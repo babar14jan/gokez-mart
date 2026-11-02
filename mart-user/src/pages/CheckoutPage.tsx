@@ -21,6 +21,7 @@ import { useGuestAddressStore } from '../store/guestAddressStore';
 
 interface CheckoutPageProps {
   settings: PublicSettings;
+  zoneId?: string;
   zoneName?: string;
   storeId?: string;
   onBack: () => void;
@@ -133,7 +134,12 @@ const isValidGuestName = (name: string) => {
   const normalized = name.trim();
   return normalized.length >= 2 && normalized.length <= 80 && /\p{L}/u.test(normalized);
 };
-const isValidIndianMobile = (phone: string) => /^[6-9]\d{9}$/.test(phone.replace(/\D/g, ''));
+const isValidIndianMobile = (phone: string) => {
+  const cleaned = phone.replace(/\D/g, '');
+  if (!cleaned) return false;
+  if (!/^[0-9]/.test(cleaned)) return false;
+  return cleaned.length === 10;
+};
 const isValidDeliveryAddress = (address: string | null) => {
   const normalized = address?.trim() || '';
   return normalized.length >= 10 && normalized.length <= 500;
@@ -360,7 +366,8 @@ function OffersPanel(props: OffersPanelProps) {
   );
 }
 
-export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
+export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBack, onHome, onSuccess, confirmOrder, onLogin }: CheckoutPageProps) {
+  const estimatedDelivery = settings.estimated_delivery?.trim() || '10-15 mins';
   const finePointer = useFinePointer();
   const orderRequestKey = useRef(crypto.randomUUID());
   const guestNameInput = useRef<HTMLInputElement>(null);
@@ -449,7 +456,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     const normalizedLabel = label.trim() || 'Home';
     setStoredGuestAddress(normalizedLabel, address, coordinates);
     const phone = guestPhone.replace(/\D/g, '');
-    if (!/^[6-9]\d{9}$/.test(phone) || address.trim().length < 10) return;
+    if (!/^\d{10}$/.test(phone) || address.trim().length < 10) return;
     void storeApi.saveGuestDetails({
       phone,
       name: guestName,
@@ -632,6 +639,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
               setCampaignDiscount(disc);
               useCartStore.getState().setAppliedCampaign(campaign, disc);
             }
+            setOfferNotice('');
           } catch (e: any) {
             if (cancelled) return;
             if (isTransportFailure(e)) {
@@ -645,7 +653,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
             const message = e?.response?.data?.error || 'Your cart changed, so the coupon was removed.';
             const minimumMatch = message.match(/minimum order ₹([\d.]+)/i);
             setOfferNotice(minimumMatch
-              ? `Add ₹${Math.max(0, Number(minimumMatch[1]) - cartSubtotal).toFixed(0)} more to unlock this offer (minimum order ₹${minimumMatch[1]}).`
+              ? `Add ₹${Math.max(0, Number(minimumMatch[1]) - cartSubtotal).toFixed(0)} more to unlock this offer.`
               : message);
           }
         } else {
@@ -739,7 +747,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
       setCouponSuccess('');
       if (minimumMatch) {
         const minimumOrder = Number(minimumMatch[1]);
-        setOfferNotice(`Add ₹${Math.max(0, minimumOrder - sub).toFixed(0)} more to unlock this offer (minimum order ₹${minimumOrder}).`);
+        setOfferNotice(`Add ₹${Math.max(0, minimumOrder - sub).toFixed(0)} more to unlock this offer.`);
       } else {
         setCouponError(message);
       }
@@ -790,7 +798,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
   const nameComplete = isLoggedIn ? (Boolean(authName) || isValidGuestName(profileNameDraft)) : isValidGuestName(guestName);
   const checkoutName = isLoggedIn ? (authName || profileNameDraft.trim() || 'Customer') : guestName;
   const checkoutPhone = isLoggedIn ? (authPhone || guestPhone) : guestPhone;
-  const phoneComplete = isValidIndianMobile(checkoutPhone);
+  const phoneComplete = !isLoggedIn ? isValidIndianMobile(guestPhone) : true;
   const addressComplete = isValidDeliveryAddress(resolvedAddress);
   const incompleteCheckoutDetails = [
     !nameComplete && 'name',
@@ -901,7 +909,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
     // open or while the request is in flight can never make the order differ
     // from what the customer saw. The qty/add controls are also disabled while
     // `loading` so the cart cannot move underneath them.
-    const lockedItems = items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity }));
+    const lockedItems = items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, sourceStoreId: i.sourceStoreId }));
     const lockedSubtotal = sub;
     track('checkout_address_completed', { itemCount: lockedItems.length });
     track('checkout_reviewed', { itemCount: lockedItems.length, subtotal: lockedSubtotal });
@@ -921,7 +929,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
         latitude: selectedAddress?.latitude ?? guestAddressCoordinates?.latitude ?? null,
         longitude: selectedAddress?.longitude ?? guestAddressCoordinates?.longitude ?? null,
         items: lockedItems,
-        zoneName: zoneName || undefined, storeId: storeId || undefined,
+        zoneId: zoneId || undefined, zoneName: zoneName || undefined, storeId: storeId || undefined,
         deliveryPreference,
         scheduledFor: deliveryPreference === 'scheduled' && scheduledSlot ? scheduledSlot.at.toISOString() : undefined,
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
@@ -1314,7 +1322,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 <p className="text-sm text-gray-900 dark:text-white font-medium">
                   {deliveryPreference === 'scheduled' && scheduledSlot
                     ? <>{slotLabel(schedule, scheduledSlot)}</>
-                    : <>Delivery in 10-15 mins</>}
+                    : <>Delivery in {estimatedDelivery}</>}
                 </p>
               </div>
               <span className="flex h-7 items-center flex-shrink-0 rounded-lg bg-gray-900 px-2.5 text-[11px] font-bold text-white dark:bg-slate-700">
@@ -1326,7 +1334,7 @@ export default function CheckoutPage({ settings, zoneName, storeId, onBack, onHo
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => { setDeliveryPreference('within_15'); setScheduledSlot(null); }}
                     className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold ${deliveryPreference === 'within_15' ? 'border-gokez-500 bg-gokez-50 text-gokez-700 dark:border-gokez-600 dark:bg-slate-900/60 dark:text-gokez-200' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
-                    Fastest Delivery <span className="block text-[10px] font-medium opacity-70">10–15 mins</span>
+                    Fastest Delivery <span className="block text-[10px] font-medium opacity-70">{estimatedDelivery}</span>
                   </button>
                   <button type="button" disabled={availableScheduleDays.length === 0}
                     onClick={() => {
