@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X } from 'lucide-react';
+import { Bell, VolumeX, X } from 'lucide-react';
 import { onOrderEvent, type LiveOrderEvent } from '../services/realtime';
+import { startOrderAlarm, stopOrderAlarm } from '../services/orderAlarm';
 
 interface ToastItem {
   key: number;
@@ -12,36 +13,17 @@ interface ToastItem {
 
 let nextKey = 0;
 
-function playAlert(): void {
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.value = 880;
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.4);
-    setTimeout(() => ctx.close().catch(() => {}), 600);
-  } catch {
-    /* browsers may block autoplay audio — the toast is enough */
-  }
-}
-
 export default function LiveOrderToasts() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [ringing, setRinging] = useState(false);
   const navigate = useNavigate();
-  const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+
+  const stopRinging = () => {
+    stopOrderAlarm();
+    setRinging(false);
+  };
 
   const dismiss = (key: number) => {
-    const t = timers.current.get(key);
-    if (t) clearTimeout(t);
-    timers.current.delete(key);
     setToasts(prev => prev.filter(x => x.key !== key));
   };
 
@@ -55,14 +37,12 @@ export default function LiveOrderToasts() {
         guestName: event.order.guestName,
       };
       setToasts(prev => [...prev.slice(-2), toast]);
-      playAlert();
-      const t = setTimeout(() => dismiss(toast.key), 7000);
-      timers.current.set(toast.key, t);
+      setRinging(true);
+      startOrderAlarm();
     });
     return () => {
       off();
-      timers.current.forEach(t => clearTimeout(t));
-      timers.current.clear();
+      stopOrderAlarm();
     };
   }, []);
 
@@ -73,7 +53,7 @@ export default function LiveOrderToasts() {
       {toasts.map(t => (
         <div
           key={t.key}
-          onClick={() => { dismiss(t.key); navigate('/orders'); }}
+          onClick={() => { stopRinging(); dismiss(t.key); navigate('/orders'); }}
           className="cursor-pointer rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-800 shadow-lg shadow-emerald-900/10 p-3.5 flex items-start gap-3 animate-in"
         >
           <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white flex-shrink-0">
@@ -88,13 +68,25 @@ export default function LiveOrderToasts() {
             </p>
             <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1">Tap to open orders</p>
           </div>
-          <button
-            onClick={e => { e.stopPropagation(); dismiss(t.key); }}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 flex-shrink-0"
-            aria-label="Dismiss"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {ringing && (
+              <button
+                onClick={e => { e.stopPropagation(); stopRinging(); }}
+                className="p-1 text-amber-600 hover:text-amber-700 dark:text-amber-400"
+                aria-label="Stop ringing"
+                title="Stop ringing"
+              >
+                <VolumeX className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={e => { e.stopPropagation(); stopRinging(); dismiss(t.key); }}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"
+              aria-label="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       ))}
     </div>

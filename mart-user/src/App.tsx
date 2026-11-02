@@ -43,6 +43,7 @@ import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { detectPlatform } from './utils/install';
 import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
+import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 
 type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
 
@@ -825,7 +826,7 @@ export default function App() {
   // it and a throw there blanks the whole app.
   useEffect(() => {
     const token = successData?.trackingToken;
-    if (!token) return;
+    if (!token || isLoggedIn) return;
     saveTrackingToken(token);
     // If this guest already granted notification permission (e.g. a previous
     // order), register the new tracking token so the device keeps receiving
@@ -834,7 +835,7 @@ export default function App() {
     if (getNotificationPermission() === 'granted') {
       subscribeToPush().catch(() => {});
     }
-  }, [successData?.trackingToken]);
+  }, [successData?.trackingToken, isLoggedIn]);
 
   useEffect(() => {
     if (!successData) return;
@@ -957,7 +958,6 @@ export default function App() {
   // Success screen
   if (successData) {
     const STEPS = ['pending', 'preparing', 'out_for_delivery', 'delivered'];
-    const STEP_LABELS = ['Order Placed', 'Being Prepared', 'On the Way', 'Delivered'];
     const STEP_ICONS = ['🛒', '🍳', '🛵', '🎉'];
     const curStep = 0;
 
@@ -997,7 +997,7 @@ export default function App() {
           <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-md border border-emerald-100 dark:border-emerald-900">
             <div className="bg-emerald-500 px-4 py-3 flex items-center justify-between">
               <div>
-                <p className="text-white font-bold text-sm">Order Placed</p>
+                <p className="text-white font-bold text-sm">{STATUS_LABELS[successData.status || 'pending']}</p>
                 <p className="text-emerald-100 text-xs mt-0.5">
                   {successData.preference === 'within_15' ? '⚡ Expected in 10-15 mins'
                     : successData.preference === 'within_30' ? '🕐 Expected in ~30 mins'
@@ -1032,7 +1032,7 @@ export default function App() {
                     </div>
                     <span className={`text-[9px] font-semibold text-center leading-tight ${
                       i <= curStep ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'
-                    }`}>{STEP_LABELS[i]}</span>
+                    }`}>{ORDER_PROGRESS_LABELS[i]}</span>
                   </div>
                 ))}
               </div>

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 
 import SmartImage from './SmartImage';
+import { formatDateTime, ORDER_PROGRESS_LABELS, STATUS_LABELS } from '../utils/orderStatus';
 
 /**
  * Shared order cards.
@@ -20,7 +21,6 @@ import SmartImage from './SmartImage';
  */
 
 const STEPS = ['pending', 'preparing', 'out_for_delivery', 'delivered'];
-const STEP_LABELS = ['Order Placed', 'Being Prepared', 'On the Way', 'Delivered'];
 const STEP_ICONS: Record<string, LucideIcon> = {
   pending: ShoppingCart,
   preparing: ChefHat,
@@ -36,12 +36,6 @@ const STATUS_TO_STEP: Record<string, string> = {
   out_for_delivery: 'out_for_delivery',
   picked_up: 'out_for_delivery',
   delivered: 'delivered',
-};
-
-export const STATUS_LABELS: Record<string, string> = {
-  pending: 'Order Placed', confirmed: 'Confirmed', preparing: 'Being Prepared',
-  out_for_delivery: 'Out for Delivery', ready_to_pickup: 'Being Prepared', picked_up: 'On the Way', delivered: 'Order Delivered',
-  cancelled: 'Order Cancelled', failed_delivery: 'Delivery Failed', terminated: 'Cancelled by Store',
 };
 
 const TERMINATION_MESSAGES: Record<string, { title: string; sub: string }> = {
@@ -74,27 +68,6 @@ const STATUS_ICONS: Record<string, LucideIcon> = {
   failed_delivery: AlertCircle,
   terminated: XCircle,
 };
-
-export const CLOSED = ['cancelled', 'failed_delivery', 'terminated'];
-export const DELIVERED = ['delivered'];
-export const ALL_CLOSED = [...CLOSED, ...DELIVERED];
-
-// Only show delivered in the active list if it happened within the last 30 mins.
-export function isRecentlyDelivered(order: any): boolean {
-  if (order.status !== 'delivered') return false;
-  const updated = new Date(order.updatedAt || order.createdAt).getTime();
-  return Date.now() - updated < 30 * 60 * 1000;
-}
-
-export function hasActiveOrder(orders: any[]) {
-  return orders.some(o => !ALL_CLOSED.includes(o.status));
-}
-
-export function formatDateTime(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })
-    + ' at ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-}
 
 // ── Item Thumbnails ───────────────────────────────────────────────────────────
 function ItemThumbnails({ items }: { items: any[] }) {
@@ -224,7 +197,7 @@ export function ActiveOrderCard({
               </div>
               <span className={`text-[9px] font-semibold text-center leading-tight ${
                 i <= curStep ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'
-              }`}>{STEP_LABELS[i]}</span>
+              }`}>{ORDER_PROGRESS_LABELS[i]}</span>
             </div>
           ))}
         </div>

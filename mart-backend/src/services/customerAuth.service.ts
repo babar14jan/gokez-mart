@@ -6,6 +6,7 @@ import { ComplianceService } from './compliance.service';
 import { CustomerLeadService } from './customerLead.service';
 import { badRequest, unauthorized, notFound, tooManyRequests, badGateway } from '../utils/apiError';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
+import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 
 const TWO_FACTOR_BASE = 'https://2factor.in/API/V1';
 const OTP_EXPIRY_MINUTES = 10;
@@ -15,8 +16,8 @@ export class CustomerAuthService {
 
   // ── Send OTP ────────────────────────────────────────────────────────────────
   static async sendOtp(phone: string): Promise<{ message: string }> {
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length !== 10) throw badRequest('Enter a valid 10-digit mobile number');
+    const cleaned = normalizeCustomerPhone(phone);
+    if (!isValidCustomerPhone(cleaned)) throw badRequest('Enter a valid 10-digit mobile number');
 
     // Capture the expressed sign-in intent independently of OTP delivery or verification.
     await CustomerLeadService.recordOtpRequest(cleaned);
@@ -73,7 +74,8 @@ export class CustomerAuthService {
 
   // ── Verify OTP ──────────────────────────────────────────────────────────────
   static async verifyOtp(phone: string, otp: string): Promise<{ token: string; customer: any }> {
-    const cleaned = phone.replace(/\D/g, '');
+    const cleaned = normalizeCustomerPhone(phone);
+    if (!isValidCustomerPhone(cleaned)) throw badRequest('Enter a valid 10-digit mobile number');
 
     const otpRow = await query<{
       id: string; otp: string; session_id: string | null;
@@ -327,8 +329,8 @@ export class CustomerAuthService {
    * so a later login finds the address they last used.
    */
   static async saveGuestDetails(phone: string, data: { name?: string | null; address: string; label?: string | null; latitude?: number | null; longitude?: number | null }): Promise<void> {
-    const cleaned = phone.replace(/\D/g, '');
-    if (!/^\d{10}$/.test(cleaned)) throw badRequest('Invalid phone number');
+    const cleaned = normalizeCustomerPhone(phone);
+    if (!isValidCustomerPhone(cleaned)) throw badRequest('Enter a valid 10-digit mobile number');
     const address = data.address.trim();
     if (address.length < 10 || address.length > 500) throw badRequest('Enter a complete delivery address');
     const name = (data.name ?? '').trim().replace(/\s+/g, ' ');

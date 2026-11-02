@@ -234,6 +234,7 @@ self.addEventListener('push', (e) => {
       vibrate: [200, 100, 200],
       tag: payload.tag || 'gokez-hub',
       renotify: true,
+      requireInteraction: true,
     })
   );
 });
