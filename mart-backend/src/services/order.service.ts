@@ -7,6 +7,7 @@ import { ZoneService } from './zone.service';
 import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
+import { parseSellingUnit } from '../utils/unitConversion';
 import { CUSTOMER_CANCELLATION_MESSAGES, getCancellationPolicy } from '../utils/cancellationPolicy';
 
 // Reasons a customer may give for cancelling, chosen from the order screen. The
@@ -124,6 +125,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
                 FROM mart_order_status_events e WHERE e.order_id = o.id
               ), '[]') as "statusEvents",
               json_agg(json_build_object(
+                'id', oi.id,
                 'productId', oi.product_id,
                 'productName', oi.product_name,
                 'storeId', oi.store_id,
@@ -147,7 +149,22 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
                 FROM mart_order_store_fulfilments f
                 JOIN mart_stores s ON s.id = f.store_id
                 WHERE f.order_id = o.id
-              ), '[]') as "storeFulfilments"`;
+              ), '[]') as "storeFulfilments",
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                  'productName', a.product_name,
+                  'unit', a.unit,
+                  'previousQuantity', a.previous_quantity,
+                  'deliveredQuantity', a.delivered_quantity,
+                  'removedQuantity', a.removed_quantity,
+                  'removedAmount', a.removed_amount::float,
+                  'reason', a.reason,
+                  'adjustedByName', a.adjusted_by_name,
+                  'createdAt', a.created_at
+                ) ORDER BY a.created_at ASC)
+                FROM mart_order_item_adjustments a
+                WHERE a.order_id = o.id
+              ), '[]') as "adjustments"`;
 
 // Shared IST-window builder for the analytics summaries. Mirrors the windowing
 // used by the funnel/lead utilities so KPI cards agree with the rest of the
@@ -894,7 +911,7 @@ export class OrderService {
   }
 
   static async findAll(filters?: {
-    storeId?: string; status?: string; phone?: string; limit?: number; offset?: number;
+    storeId?: string; status?: string; phone?: string; search?: string; limit?: number; offset?: number;
     viewerStoreId?: string | null; restrictItems?: boolean;
   }) {
     const conditions: string[] = [];
@@ -904,6 +921,24 @@ export class OrderService {
     if (filters?.storeId) { conditions.push(`o.store_id = $${i++}`); params.push(filters.storeId); }
     if (filters?.status)  { conditions.push(`o.status = $${i++}`);   params.push(filters.status); }
     if (filters?.phone)   { conditions.push(`o.guest_phone = $${i++}`); params.push(filters.phone); }
+    if (filters?.search?.trim()) {
+      // Staff correcting a delivery know either the order number or the mobile
+      // number, so one box covers both. The phone match strips punctuation and
+      // a leading 91 so "+91 98765 43210" still finds the stored 10-digit value.
+      const term = filters.search.trim();
+      let digits = term.replace(/\D/g, '');
+      if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(-10);
+
+      const clauses = [`o.order_number ILIKE $${i}`, `o.id::text = $${i + 1}`, `o.guest_name ILIKE $${i}`];
+      params.push(`%${term}%`, term);
+      i += 2;
+      if (digits) {
+        clauses.push(`regexp_replace(o.guest_phone, '\\D', '', 'g') LIKE $${i}`);
+        params.push(`%${digits}%`);
+        i += 1;
+      }
+      conditions.push(`(${clauses.join(' OR ')})`);
+    }
     if (filters?.viewerStoreId) {
       conditions.push(`(o.store_id = $${i} OR EXISTS (
         SELECT 1 FROM mart_order_store_fulfilments f
@@ -1039,6 +1074,253 @@ export class OrderService {
     }
 
     return order;
+  }
+
+  /**
+   * Correct an order that was delivered without one or more items.
+   *
+   * The caller sends the quantity actually delivered for each changed line
+   * (0 removes the line). Everything happens in one transaction so the order
+   * items, order money, customer counter, inventory and audit trail can never
+   * disagree. Stock is only returned when the order had already reached
+   * `delivered`, because that is the point at which inventory is deducted.
+   */
+  static async adjustItems(
+    orderId: string,
+    adjustments: Array<{ orderItemId: string; deliveredQuantity: number }>,
+    reason: string,
+    actor: { id: string; username: string; role: string; storeId: string | null },
+    paymentMethod?: 'cod' | 'upi' | null,
+  ) {
+    if (!Array.isArray(adjustments) || adjustments.length === 0) {
+      throw badRequest('Choose at least one item to adjust');
+    }
+    if (paymentMethod && !['cod', 'upi'].includes(paymentMethod)) {
+      throw badRequest('Choose a valid payment mode');
+    }
+
+    return transaction(async client => {
+      const orderResult = await client.query(
+        `SELECT o.id, o.order_number as "orderNumber", o.status, o.store_id as "storeId",
+                o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
+                o.campaign_discount::float as "campaignDiscount", o.total::float,
+                o.customer_id as "customerId", o.payment_method as "paymentMethod"
+           FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
+        [orderId]
+      );
+      const order = orderResult.rows[0];
+      if (!order) throw notFound('Order not found');
+      if (['cancelled', 'terminated', 'failed_delivery'].includes(order.status)) {
+        throw badRequest('This order can no longer be edited');
+      }
+      if (actor.role !== 'super_admin' && actor.storeId !== order.storeId) {
+        throw forbidden('Only the ordering store can edit this order');
+      }
+
+      const itemsResult = await client.query(
+        `SELECT oi.id, oi.product_id as "productId", oi.store_id as "storeId",
+                oi.product_name as "productName", oi.unit, oi.price::float AS price,
+                oi.quantity, oi.total::float AS total
+           FROM mart_order_items oi
+          WHERE oi.order_id = $1
+          FOR UPDATE`,
+        [orderId]
+      );
+      const items = new Map<string, any>(itemsResult.rows.map((row: any) => [row.id, row]));
+
+      const adjustedIds = adjustments.map(input => input.orderItemId);
+      if (new Set(adjustedIds).size !== adjustedIds.length) {
+        throw badRequest('Each item can only be adjusted once');
+      }
+
+      // Validate every requested line before writing anything.
+      for (const input of adjustments) {
+        const item = items.get(input.orderItemId);
+        if (!item) throw badRequest('One of the items is not part of this order');
+        if (!Number.isInteger(input.deliveredQuantity)
+          || input.deliveredQuantity < 0
+          || input.deliveredQuantity > item.quantity) {
+          throw badRequest(`Delivered quantity for ${item.productName} must be between 0 and ${item.quantity}`);
+        }
+      }
+
+      const changed = adjustments.filter(input => {
+        const item = items.get(input.orderItemId)!;
+        return input.deliveredQuantity !== item.quantity;
+      });
+      if (changed.length === 0) throw badRequest('No item quantities were changed');
+
+      // An order with nothing delivered is a cancellation, not a partial
+      // delivery. Keep that distinction explicit so revenue never lands on an
+      // empty order.
+      const remainingQuantity = itemsResult.rows.reduce((sum: number, item: any) => {
+        const requested = adjustments.find(input => input.orderItemId === item.id);
+        return sum + (requested ? requested.deliveredQuantity : item.quantity);
+      }, 0);
+      if (remainingQuantity <= 0) {
+        throw badRequest('At least one item must remain delivered. Cancel the order instead.');
+      }
+
+      const actorResult = await client.query(
+        `SELECT COALESCE(name, username) AS name FROM mart_admins WHERE id = $1`,
+        [actor.id]
+      );
+      const adjustedByName = actorResult.rows[0]?.name || actor.username;
+
+      const settings = await SettingsService.getPublic(order.storeId);
+      const restoreStock = order.status === 'delivered' && settings.inventory_tracking === 'true';
+
+      let removedTotal = 0;
+      for (const change of changed) {
+        const item = items.get(change.orderItemId)!;
+        const removedQuantity = item.quantity - change.deliveredQuantity;
+        const removedAmount = Number((item.price * removedQuantity).toFixed(2));
+        removedTotal += removedAmount;
+
+        await client.query(
+          `INSERT INTO mart_order_item_adjustments
+             (order_id, order_item_id, product_id, product_name, unit, price,
+              previous_quantity, delivered_quantity, removed_quantity, removed_amount,
+              reason, adjusted_by, adjusted_by_name)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [orderId, item.id, item.productId, item.productName, item.unit, item.price,
+            item.quantity, change.deliveredQuantity, removedQuantity, removedAmount,
+            reason || null, actor.id, adjustedByName]
+        );
+
+        if (restoreStock) {
+          await this.restoreInventoryForRemovedLine(client, order, item, removedQuantity);
+        }
+
+        if (change.deliveredQuantity === 0) {
+          await client.query(`DELETE FROM mart_order_items WHERE id = $1`, [item.id]);
+        } else {
+          await client.query(
+            `UPDATE mart_order_items SET quantity = $1, total = $2 WHERE id = $3`,
+            [change.deliveredQuantity, Number((item.price * change.deliveredQuantity).toFixed(2)), item.id]
+          );
+        }
+      }
+
+      const subtotalResult = await client.query(
+        `SELECT COALESCE(SUM(total), 0)::float AS subtotal
+           FROM mart_order_items WHERE order_id = $1`,
+        [orderId]
+      );
+      const subtotal = Number(subtotalResult.rows[0]?.subtotal ?? 0);
+      const total = Math.max(0, Number((subtotal + order.deliveryCharge - order.campaignDiscount).toFixed(2)));
+
+      const effectivePaymentMethod = paymentMethod || order.paymentMethod;
+      await client.query(
+        `UPDATE mart_orders
+            SET subtotal = $1,
+                total = $2,
+                item_savings = CASE WHEN $4 > 0
+                  THEN ROUND(item_savings * $1 / $4, 2)
+                  ELSE item_savings END,
+                payment_method = COALESCE($5, payment_method),
+                updated_at = NOW()
+          WHERE id = $3`,
+        [subtotal, total, orderId, Number(order.subtotal), paymentMethod || null]
+      );
+
+      const removedFromTotal = Number((Number(order.total) - total).toFixed(2));
+      if (order.customerId && removedFromTotal !== 0) {
+        await client.query(
+          `UPDATE mart_customers
+              SET total_spent = GREATEST(0, total_spent - $1), updated_at = NOW()
+            WHERE id = $2`,
+          [removedFromTotal, order.customerId]
+        );
+      }
+
+      return {
+        id: orderId,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        storeId: order.storeId,
+        subtotal,
+        total,
+        paymentMethod: effectivePaymentMethod,
+        removedTotal: Number(removedTotal.toFixed(2)),
+        adjustedItems: changed.length,
+      };
+    });
+  }
+
+  /**
+   * Return stock for the quantity removed from one order line. For a bundle the
+   * line itself was never deducted — its components were — so the components
+   * are restored instead. A missing `order_deducted` log means the delivery
+   * never touched this product, and restoring it would invent stock.
+   */
+  private static async restoreInventoryForRemovedLine(
+    client: any,
+    order: { id: string; orderNumber: string; storeId: string },
+    item: { id: string; productId: string; storeId: string | null; unit: string },
+    removedQuantity: number,
+  ) {
+    const storeId = item.storeId || order.storeId;
+    const components = await client.query(
+      `SELECT bc.component_product_id as "productId", bc.unit,
+              bc.quantity_per_bundle::float as "quantityPerBundle"
+         FROM mart_order_item_bundle_components bc
+        WHERE bc.order_item_id = $1`,
+      [item.id]
+    );
+
+    const lines = components.rows.length
+      ? components.rows.map((component: any) => ({
+        productId: component.productId,
+        unit: component.unit,
+        quantity: removedQuantity * Number(component.quantityPerBundle),
+      }))
+      : [{ productId: item.productId, unit: item.unit, quantity: removedQuantity }];
+
+    for (const line of lines) {
+      const deduction = await client.query(
+        `SELECT 1 FROM mart_inventory_log
+          WHERE product_id = $1 AND store_id = $2 AND reference_id = $3 AND reason = 'order_deducted'
+          LIMIT 1`,
+        [line.productId, storeId, order.id]
+      );
+      if (!deduction.rows.length) continue;
+
+      const { deductionPerQty, baseUnit } = parseSellingUnit(line.unit);
+      const stock = await client.query(
+        `SELECT stock_quantity::float, stock_unit, availability_status
+           FROM mart_store_products
+          WHERE product_id = $1 AND store_id = $2
+          FOR UPDATE`,
+        [line.productId, storeId]
+      );
+      const row = stock.rows[0];
+      if (!row || row.stock_quantity === null || !row.stock_unit) continue;
+      if (baseUnit !== row.stock_unit) continue;
+
+      const restoreQuantity = Number((deductionPerQty * line.quantity).toFixed(3));
+      if (restoreQuantity <= 0) continue;
+
+      const newQuantity = Number((row.stock_quantity + restoreQuantity).toFixed(3));
+      const newStatus = row.availability_status === 'out_of_stock' && newQuantity > 0
+        ? 'available'
+        : row.availability_status;
+
+      await client.query(
+        `UPDATE mart_store_products
+            SET stock_quantity = $1, availability_status = $2,
+                is_available = $3, updated_at = NOW()
+          WHERE product_id = $4 AND store_id = $5`,
+        [newQuantity, newStatus, newStatus === 'available', line.productId, storeId]
+      );
+      await client.query(
+        `INSERT INTO mart_inventory_log
+           (product_id, store_id, change_qty, reason, note, reference_id)
+         VALUES ($1,$2,$3,'manual_correction',$4,$5)`,
+        [line.productId, storeId, restoreQuantity,
+          `Partial delivery correction for order ${order.orderNumber}`, order.id]
+      );
+    }
   }
 
   static async transitionStatus(

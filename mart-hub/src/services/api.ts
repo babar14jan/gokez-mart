@@ -177,7 +177,7 @@ export interface OrderSummary {
 export interface FetchOpts { fresh?: boolean }
 
 export const ordersApi = {
-  getAll: (params?: { storeId?: string; status?: string; phone?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
+  getAll: (params?: { storeId?: string; status?: string; phone?: string; q?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
     api.get('/admin/orders', { params, fresh: opts?.fresh }),
   getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string }, opts?: FetchOpts) =>
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
@@ -185,6 +185,14 @@ export const ordersApi = {
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
   updateFulfilment: (id: string, storeId: string, status: 'prepared' | 'delivered') =>
     api.put(`/admin/orders/${id}/fulfilments/${storeId}`, { status }),
+  // Correct a partial delivery: send the quantity actually delivered per line
+  // (0 removes the line). The backend recalculates totals and restores stock.
+  adjustItems: (
+    id: string,
+    adjustments: Array<{ orderItemId: string; deliveredQuantity: number }>,
+    reason: string,
+    paymentMethod?: 'cod' | 'upi',
+  ) => api.put(`/admin/orders/${id}/items`, { adjustments, reason, paymentMethod }),
   reschedule: (id: string, scheduledFor: string) =>
     api.put(`/admin/orders/${id}/reschedule`, { scheduledFor }),
   // Acknowledge an after-hours order for delivery at the next opening hours
