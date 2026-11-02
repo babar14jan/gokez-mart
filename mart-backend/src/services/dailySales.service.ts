@@ -23,12 +23,13 @@ const dayBounds = (date: string, startIndex = 1) => ({
 export interface DailySalesDay {
   date: string;
   storeId: string | null;
-  // ── App orders (live from mart_orders, all non-terminal statuses) ──────
-  ordersPlaced: number;
+  // ── App orders (live from delivered mart_orders) ───────────────────────
+  ordersDelivered: number;
   ordersCancelled: number;
   subtotalValue: number;    // store fulfillment value before Gokez coupon subsidy (incl. delivery charge)
   couponDeduction: number;  // Gokez-funded campaign/coupon subsidy
   orderValueAfterCoupon: number; // what customers actually pay for app orders
+  deliveryCharge: number;   // delivery charges collected from app orders
   codValue: number;
   upiValue: number;
   // ── Offline counter (itemised, mart_offline_sales) ─────────────────────
@@ -84,18 +85,19 @@ export class DailySalesService {
     const { clause, params: dateParams } = dayBounds(date);
     const appParams = [...dateParams, storeId];
     const app = await query<{
-      placed: number; cancelled: number;
-      subtotal_value: string | number; coupon_amount: string | number; net_value: string | number;
+      delivered: number; cancelled: number;
+      subtotal_value: string | number; coupon_amount: string | number; net_value: string | number; delivery_charge: string | number;
       cod_value: string | number; upi_value: string | number;
     }>(
       `SELECT
-         COUNT(*)::int AS placed,
+         COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
          COUNT(*) FILTER (WHERE o.status IN ${TERMINAL})::int AS cancelled,
-         COALESCE(SUM((o.subtotal + o.delivery_charge + o.campaign_discount)) FILTER (WHERE o.status NOT IN ${TERMINAL}), 0)::float AS subtotal_value,
-         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status NOT IN ${TERMINAL}), 0)::float AS coupon_amount,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ${TERMINAL}), 0)::float AS net_value,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ${TERMINAL} AND o.payment_method = 'cod'), 0)::float AS cod_value,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ${TERMINAL} AND o.payment_method IN ('upi','phonepay')), 0)::float AS upi_value
+         COALESCE(SUM(o.subtotal + o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS subtotal_value,
+         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status = 'delivered'), 0)::float AS coupon_amount,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS net_value,
+         COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_charge,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND o.payment_method = 'cod'), 0)::float AS cod_value,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND o.payment_method IN ('upi','phonepay')), 0)::float AS upi_value
        FROM mart_orders o
        WHERE ${clause} AND o.store_id = $3`,
       appParams
@@ -108,11 +110,12 @@ export class DailySalesService {
 
     return {
       date, storeId,
-      ordersPlaced: num(a?.placed),
+      ordersDelivered: num(a?.delivered),
       ordersCancelled: num(a?.cancelled),
       subtotalValue: num(a?.subtotal_value),
       couponDeduction: num(a?.coupon_amount),
       orderValueAfterCoupon: netValue,
+      deliveryCharge: num(a?.delivery_charge),
       codValue: num(a?.cod_value),
       upiValue: num(a?.upi_value),
       offlineCash: offline.cash,
@@ -137,19 +140,20 @@ export class DailySalesService {
 
     const app = await query<{
       day: string;
-      placed: number; cancelled: number;
-      subtotal_value: string | number; coupon_amount: string | number; net_value: string | number;
+      delivered: number; cancelled: number;
+      subtotal_value: string | number; coupon_amount: string | number; net_value: string | number; delivery_charge: string | number;
       cod_value: string | number; upi_value: string | number;
     }>(
       `SELECT
          (o.created_at AT TIME ZONE 'Asia/Kolkata')::date::text AS day,
-         COUNT(*)::int AS placed,
+         COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
          COUNT(*) FILTER (WHERE o.status IN ${TERMINAL})::int AS cancelled,
-         COALESCE(SUM((o.subtotal + o.delivery_charge + o.campaign_discount)) FILTER (WHERE o.status NOT IN ${TERMINAL}), 0)::float AS subtotal_value,
-         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status NOT IN ${TERMINAL}), 0)::float AS coupon_amount,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ${TERMINAL}), 0)::float AS net_value,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ${TERMINAL} AND o.payment_method = 'cod'), 0)::float AS cod_value,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ${TERMINAL} AND o.payment_method IN ('upi','phonepay')), 0)::float AS upi_value
+         COALESCE(SUM(o.subtotal + o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS subtotal_value,
+         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status = 'delivered'), 0)::float AS coupon_amount,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS net_value,
+         COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_charge,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND o.payment_method = 'cod'), 0)::float AS cod_value,
+         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND o.payment_method IN ('upi','phonepay')), 0)::float AS upi_value
        FROM mart_orders o
        WHERE o.store_id = $1
          AND o.created_at >= (($2::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
@@ -196,11 +200,12 @@ export class DailySalesService {
       const offlineEntryCount = num(o?.entry_count);
       return {
         date, storeId,
-        ordersPlaced: num(a?.placed),
+        ordersDelivered: num(a?.delivered),
         ordersCancelled: num(a?.cancelled),
         subtotalValue: num(a?.subtotal_value),
         couponDeduction: num(a?.coupon_amount),
         orderValueAfterCoupon: netValue,
+        deliveryCharge: num(a?.delivery_charge),
         codValue: num(a?.cod_value),
         upiValue: num(a?.upi_value),
         offlineCash,
