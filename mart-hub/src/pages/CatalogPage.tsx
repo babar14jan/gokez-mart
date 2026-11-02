@@ -7,6 +7,7 @@ import PageSkeleton from '../components/PageSkeleton';
 
 interface CatalogProduct {
   id: string;
+  productCode: string;
   name: string;
   localName: string | null;
   searchAliases: string[];
@@ -96,7 +97,7 @@ export default function CatalogPage() {
   const filtered = useMemo(() => products.filter(p => {
     const matchCat = activeCat === 'all' || p.categoryId === activeCat;
     const query = search.trim().toLowerCase();
-    const matchSearch = !query || p.name.toLowerCase().includes(query) || (p.localName || '').toLowerCase().includes(query)
+    const matchSearch = !query || p.productCode.toLowerCase().includes(query) || p.name.toLowerCase().includes(query) || (p.localName || '').toLowerCase().includes(query)
       || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(query));
     return matchCat && matchSearch;
   }), [products, activeCat, search]);
@@ -195,7 +196,7 @@ export default function CatalogPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
         <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name..." className={`${inp} pl-9`} />
+          placeholder="Search by name or code..." className={`${inp} pl-9`} />
         {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-4 h-4 text-gray-500" /></button>}
       </div>
 
@@ -242,7 +243,9 @@ export default function CatalogPage() {
               </div>
               <div className="p-2 flex flex-col flex-1">
                 <p className="text-xs font-semibold text-gray-900 dark:text-white line-clamp-2 leading-tight">{p.name}</p>
+                <p className="mt-0.5 text-[10px] font-medium tabular-nums text-indigo-600 dark:text-indigo-300">{p.productCode}</p>
                 {p.localName && <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{p.localName}</p>}
+                {p.description && <p className="mt-1 text-[10px] leading-snug text-gray-500 dark:text-slate-400 line-clamp-2">{p.description}</p>}
                 <div className="mt-auto pt-2 flex gap-1.5">
                   <button onClick={() => openEdit(p)}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
@@ -311,6 +314,14 @@ export default function CatalogPage() {
                       </button>
                     ))}
                   </div>
+                )}
+              </div>
+              <div>
+                {editing && (
+                  <>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Product Code</label>
+                    <input type="text" value={editing.productCode} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60 font-mono`} />
+                  </>
                 )}
               </div>
               <div>

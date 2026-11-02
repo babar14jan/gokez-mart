@@ -4,6 +4,7 @@ import { runMigrations } from './database/migrate';
 import pool from './database/db';
 import { installShutdownHandlers } from './utils/shutdown';
 import { recoverAutomaticOrderTransitions } from './controllers';
+import { PromotionService } from './services/promotion.service';
 
 async function start() {
   // Run migrations before starting the server
@@ -22,6 +23,15 @@ async function start() {
   recoverOrders();
   const recoveryTimer = setInterval(recoverOrders, 60_000);
   recoveryTimer.unref();
+
+  const dispatchPromotions = () => {
+    PromotionService.dispatchDueScheduled().catch(error => {
+      console.error('[promotions] scheduled dispatch failed:', error);
+    });
+  };
+  dispatchPromotions();
+  const promotionTimer = setInterval(dispatchPromotions, 60_000);
+  promotionTimer.unref();
 
   // The hosting platform sends SIGTERM on every deploy and restart. Without a
   // handler the process dies mid-request and the database pool is abandoned;

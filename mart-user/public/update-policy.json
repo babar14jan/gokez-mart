@@ -1,5 +1,5 @@
 {
-  "mode": "force",
+  "mode": "silent",
   "_mode_values": ["silent", "force"],
-  "_note": "silent = a new deploy is picked up on the next open/background (never interrupts a live session). force = any open tab or installed PWA reloads itself to the new build within ~2 minutes without being closed. Set to \"force\" only for a planned deploy, then set back to silent."
+  "_note": "silent = normal releases download in the background and apply when the app next goes to the background or is freshly opened, without interrupting a live session. force = exceptional critical deployments immediately reload open tabs and installed PWAs; set it back to silent after the deployment."
 }

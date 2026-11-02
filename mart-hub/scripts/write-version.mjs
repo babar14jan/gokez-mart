@@ -1,4 +1,3 @@
-import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,19 +14,17 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 
-function gitShortSha() {
+function readBuildId() {
   try {
-    return execSync('git rev-parse --short HEAD', { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] })
-      .toString()
-      .trim();
+    const raw = JSON.parse(readFileSync(join(dist, 'version.json'), 'utf8'));
+    if (raw && typeof raw.v === 'string' && raw.v) return raw.v;
   } catch {
-    return 'nogit';
+    /* fall through */
   }
+  throw new Error('dist/version.json is missing a build id — run vite build first');
 }
 
-// The timestamp (base36) guarantees a new id even when the same commit is
-// rebuilt, which is what forces the refresh on every deploy.
-const buildId = `${gitShortSha()}-${Date.now().toString(36)}`;
+const buildId = readBuildId();
 const payload = `${JSON.stringify({ v: buildId })}\n`;
 
 writeFileSync(join(dist, 'version.json'), payload);

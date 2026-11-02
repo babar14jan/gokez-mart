@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, ChevronDown, Check, Store, ShoppingCart, LayoutGrid, Package, User, Search, Loader2, LocateFixed } from 'lucide-react';
+import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, Package, User, Search, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useZoneStore, type ZoneAction } from '../store/zoneStore';
 import AccountGreeting from './AccountGreeting';
@@ -19,7 +19,7 @@ interface NavbarProps {
 
 // Nav items — all including Cart and Profile in center
 const navItems = [
-  { id: 'home',       label: 'Home',       Icon: Store },
+  { id: 'home',       label: 'Home',       Icon: Home },
   { id: 'categories', label: 'Categories', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: Package },
   { id: 'account',    label: 'Account',    Icon: User },

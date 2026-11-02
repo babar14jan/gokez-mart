@@ -7,6 +7,7 @@ import { ZoneService } from './zone.service';
 import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
+import { CUSTOMER_CANCELLATION_MESSAGES, getCancellationPolicy } from '../utils/cancellationPolicy';
 
 // Reasons a customer may give for cancelling, chosen from the order screen. The
 // keys are what is stored in mart_orders.cancellation_reason; only these values
@@ -76,6 +77,9 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
               o.delivery_latitude::float as "deliveryLatitude", o.delivery_longitude::float as "deliveryLongitude",
               o.termination_reason as "terminationReason",
               o.cancellation_reason as "cancellationReason",
+              o.cancellation_customer_message as "cancellationCustomerMessage",
+              o.promised_delivery_at as "promisedDeliveryAt",
+              o.cancellation_window_ends_at as "cancellationWindowEndsAt",
               o.campaign_id as "campaignId",
               o.campaign_discount::float as "campaignDiscount",
               o.coupon_code_used as "couponCodeUsed",
@@ -523,6 +527,17 @@ export class OrderService {
       const scheduledFor = data.deliveryPreference === 'scheduled'
         ? requestedSchedule
         : openState.nextOpenAt;
+      const scheduledAt = scheduledFor ? new Date(scheduledFor) : null;
+      const creationTime = new Date((await client.query('SELECT NOW() AS now')).rows[0].now);
+      const selectedMinutes = data.deliveryPreference === 'within_30' ? 30
+        : data.deliveryPreference === 'within_60' ? 60
+        : data.deliveryPreference === 'within_15' || !data.deliveryPreference ? 15 : null;
+      const promisedDeliveryAt = data.deliveryPreference === 'scheduled'
+        ? scheduledAt
+        : selectedMinutes ? new Date(creationTime.getTime() + selectedMinutes * 60 * 1000) : null;
+      const cancellationWindowEndsAt = data.deliveryPreference === 'scheduled' && scheduledAt
+        ? new Date(scheduledAt.getTime() - 30 * 60 * 1000)
+        : null;
       // A future scheduled delivery is already inside a published opening
       // window, so it must not enter the after-hours confirmation flow. That
       // flow remains for immediate delivery requests made while the store is
@@ -540,10 +555,11 @@ export class OrderService {
             campaign_id, campaign_discount, coupon_code_used, idempotency_key,
             item_savings, free_delivery_saving,
             placed_outside_hours, closed_reason, scheduled_for, tracking_token,
+            promised_delivery_at, cancellation_window_ends_at,
             funnel_session_id, funnel_visitor_id, attribution_source, attribution_medium, attribution_campaign, attribution_qr_code_id,
             first_touch_source, first_touch_medium, first_touch_campaign, first_touch_qr_code_id,
             last_touch_source, last_touch_medium, last_touch_campaign, last_touch_qr_code_id)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)`,
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)`,
 [orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
           data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod || null, data.notes || null,
@@ -558,6 +574,8 @@ export class OrderService {
         // rather than carrying a guess the owner never made.
         scheduledFor,
         trackingToken,
+        promisedDeliveryAt,
+        cancellationWindowEndsAt,
         attribution?.session_id ?? null,
         attribution?.visitor_id ?? null,
         attribution?.source ?? null,
@@ -922,7 +940,13 @@ export class OrderService {
       const fulfilment = isMemberView
         ? (row.storeFulfilments || []).find((entry: any) => entry.storeId === viewerStoreId) || null
         : null;
-      return { ...row, items, fulfilment, scheduledForLabel: formatIstDateTime(row.scheduledFor) };
+      return {
+        ...row,
+        items,
+        fulfilment,
+        scheduledForLabel: formatIstDateTime(row.scheduledFor),
+        cancellationPolicy: getCancellationPolicy(row),
+      };
     });
   }
 
@@ -1391,19 +1415,15 @@ export class OrderService {
     const isGuest = 'trackingToken' in scope;
     const credential = isGuest ? scope.trackingToken : scope.customerId;
     const matchColumn = isGuest ? 'o.tracking_token' : 'o.customer_id';
-    // The customer picks a reason from a fixed list so cancels are explained and
-    // accidental cancels require a deliberate choice. Anything unrecognised (a
-    // stale client, a crafted body) falls back to the generic label rather than
-    // being stored verbatim.
-    const cancellationReason = CUSTOMER_CANCEL_REASONS[reason as CustomerCancelReason]
-      ? (reason as string)
-      : 'customer_request';
-
     const order = await transaction(async (client) => {
       const current = await client.query(
         `SELECT o.id, o.status, o.order_number as "orderNumber", o.store_id as "storeId",
                 o.customer_id as "customerId", o.guest_name as "guestName",
-                o.cancellation_reason as "cancellationReason"
+                o.cancellation_reason as "cancellationReason",
+                o.delivery_preference as "deliveryPreference",
+                o.scheduled_for as "scheduledFor",
+                o.promised_delivery_at as "promisedDeliveryAt",
+                o.cancellation_window_ends_at as "cancellationWindowEndsAt"
          FROM mart_orders o
          WHERE o.id = $1 AND ${matchColumn} = $2
          FOR UPDATE`,
@@ -1411,17 +1431,27 @@ export class OrderService {
       );
       const existing = current.rows[0];
       if (!existing) throw Object.assign(new Error('Order not found'), { status: 404 });
-      if (!['pending', 'confirmed'].includes(existing.status)) {
-        throw Object.assign(new Error('Order cannot be cancelled at this stage'), { status: 400 });
+      const policy = getCancellationPolicy(existing);
+      if (!policy.canCancel) {
+        throw Object.assign(new Error(policy.reason || 'Order cannot be cancelled at this stage'), { status: 400 });
       }
+      if (reason && !CUSTOMER_CANCEL_REASONS[reason as CustomerCancelReason]) {
+        throw Object.assign(new Error('Choose a valid cancellation reason'), { status: 400 });
+      }
+      const cancellationReason = (reason || 'other') as CustomerCancelReason;
+      if (cancellationReason === 'delivery_too_slow' && !policy.canReportDelay) {
+        throw Object.assign(new Error('Delivery can be reported as late only after the promised delivery time has passed'), { status: 400 });
+      }
+      const cancellationCustomerMessage = CUSTOMER_CANCELLATION_MESSAGES[cancellationReason];
 
       await client.query(
         `UPDATE mart_orders
             SET status = 'cancelled',
                 cancellation_reason = $2,
+                cancellation_customer_message = $3,
                 updated_at = NOW()
           WHERE id = $1`,
-        [orderId, cancellationReason]
+        [orderId, cancellationReason, cancellationCustomerMessage]
       );
       await this.reverseCampaignRedemption(orderId, 'cancelled', client);
       await client.query(
@@ -1429,7 +1459,7 @@ export class OrderService {
          VALUES ($1, $2, 'cancelled', $3)`,
         [orderId, existing.status, isGuest ? 'Customer (guest)' : 'Customer']
       );
-      return existing;
+      return { ...existing, cancellationReason, cancellationCustomerMessage };
     });
 
     return order;
@@ -1467,6 +1497,10 @@ export class OrderService {
       clean
     );
     // Same IST formatting as the admin hub so both surfaces agree on timestamps.
-    return result.rows.map(row => ({ ...row, scheduledForLabel: formatIstDateTime(row.scheduledFor) }));
+    return result.rows.map(row => ({
+      ...row,
+      scheduledForLabel: formatIstDateTime(row.scheduledFor),
+      cancellationPolicy: getCancellationPolicy(row),
+    }));
   }
 }

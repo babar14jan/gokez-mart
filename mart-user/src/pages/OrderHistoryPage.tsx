@@ -32,7 +32,7 @@ const CANCEL_REASONS: Array<{ value: string; label: string }> = [
 
 function OrderDetailSheet({
   order, onClose, onOrderAgain, nextOpenLabel, whatsappNumber, fallbackName, fallbackPhone,
-  canCancel, confirmCancel, cancelling, cancelError, onCancel, onRequestCancel, onDismissConfirm,
+  confirmCancel, cancelling, cancelError, onCancel, onRequestCancel, onDismissConfirm,
 }: {
   order: any;
   onClose: () => void;
@@ -41,7 +41,6 @@ function OrderDetailSheet({
   whatsappNumber?: string;
   fallbackName?: string | null;
   fallbackPhone?: string | null;
-  canCancel: boolean;
   confirmCancel: string | null;
   cancelling: string | null;
   cancelError: string;
@@ -50,7 +49,9 @@ function OrderDetailSheet({
   onDismissConfirm: () => void;
 }) {
   const nextOpenWhen = nextOpenLabel || order.scheduledForLabel || null;
-  const showOrderSupport = !ALL_CLOSED.includes(order.status) && (canCancel || whatsappNumber || cancelError);
+  const cancellationPolicy = order.cancellationPolicy;
+  const canCancel = cancellationPolicy?.canCancel === true;
+  const showOrderSupport = !ALL_CLOSED.includes(order.status) && (cancellationPolicy || whatsappNumber || cancelError);
   // Require an explicit reason before the destructive confirm is reachable; this
   // is what stops a stray tap from cancelling an order.
   const [cancelReason, setCancelReason] = useState('');
@@ -242,6 +243,14 @@ function OrderDetailSheet({
             <div className="border-t border-gray-100 pt-4 dark:border-slate-700">
               <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-slate-400">Order support</p>
               <div className="space-y-2">
+                {!canCancel && cancellationPolicy?.reason && (
+                  <p className="text-xs leading-snug text-gray-600 dark:text-slate-300">{cancellationPolicy.reason}</p>
+                )}
+                {!cancellationPolicy?.canReportDelay && cancellationPolicy?.promisedDeliveryAt && (
+                  <p className="text-xs leading-snug text-gray-600 dark:text-slate-300">
+                    Your selected delivery window remains active until {formatDateTime(cancellationPolicy.promisedDeliveryAt)}.
+                  </p>
+                )}
                 {(whatsappNumber || (canCancel && confirmCancel !== order.id)) && (
                   <div className="flex items-center gap-2">
                 {whatsappNumber && (() => {
@@ -269,9 +278,12 @@ function OrderDetailSheet({
                 )}
                 {canCancel && confirmCancel === order.id && (
                   <div className="rounded-xl bg-red-50 px-3 py-3 dark:bg-red-950/30">
+                    <p className="mb-1 text-xs font-medium text-red-700 dark:text-red-300">
+                      {order.status === 'confirmed' ? 'This order is confirmed, but preparation has not started yet.' : 'This order has not started preparation yet.'}
+                    </p>
                     <p className="mb-2 text-xs font-medium text-red-700 dark:text-red-300">Why are you cancelling this order?</p>
                     <div className="mb-3 space-y-1.5">
-                      {CANCEL_REASONS.map(reason => (
+                      {CANCEL_REASONS.filter(reason => reason.value !== 'delivery_too_slow' || cancellationPolicy?.canReportDelay).map(reason => (
                         <label key={reason.value}
                           className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-xs transition-colors ${
                             cancelReason === reason.value
@@ -286,6 +298,9 @@ function OrderDetailSheet({
                         </label>
                       ))}
                     </div>
+                    {cancelReason === 'wrong_address' && cancellationPolicy?.canEditAddress && (
+                      <p className="mb-3 text-xs leading-snug text-gray-600 dark:text-slate-300">Support can help correct delivery details before preparation begins.</p>
+                    )}
                     <div className="flex gap-2">
                       <button type="button" onClick={() => onCancel(order, cancelReason)}
                         disabled={!cancelReason || cancelling === order.id}
@@ -637,7 +652,6 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
           <OrderDetailSheet order={selectedOrder} onClose={() => setSelectedOrder(null)}
             onOrderAgain={handleOrderAgain} nextOpenLabel={nextOpenWhen}
             whatsappNumber={whatsappNumber}
-            canCancel={['pending', 'confirmed'].includes(selectedOrder.status) && typeof selectedOrder.trackingToken === 'string' && selectedOrder.trackingToken.length > 0}
             confirmCancel={confirmCancel} cancelling={cancelling} cancelError={cancelError}
             onCancel={handleCancel}
             onRequestCancel={(order) => { setCancelError(''); setConfirmCancel(order.id); }}
@@ -815,7 +829,6 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
           whatsappNumber={whatsappNumber}
           fallbackName={customerName}
           fallbackPhone={customerPhone}
-          canCancel={['pending', 'confirmed'].includes(selectedOrder.status)}
           confirmCancel={confirmCancel}
           cancelling={cancelling}
           cancelError={cancelError}

@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject, type TouchEvent as ReactTouchEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, CheckCircle, BellRing, RefreshCw, CalendarClock } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
@@ -96,6 +96,43 @@ const WhatIsGokezMartPage = lazyWithRetry(() => import('./pages/WhatIsGokezMartP
 
 function DeferredPage({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="min-h-[12rem]" />}>{children}</Suspense>;
+}
+
+function useContainTopPull(scrollRef: RefObject<HTMLDivElement>, active: boolean) {
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (!active || !scrollElement) return;
+    let start: { x: number; y: number } | null = null;
+    const clear = () => { start = null; };
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || scrollElement.scrollTop !== 0) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const touch = event.touches[0];
+      start = { x: touch.clientX, y: touch.clientY };
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!start || !touch) return;
+      const deltaY = touch.clientY - start.y;
+      const deltaX = Math.abs(touch.clientX - start.x);
+      if (deltaY <= 0 || deltaX > Math.max(16, deltaY * 0.6)) {
+        clear();
+        return;
+      }
+      event.preventDefault();
+    };
+    scrollElement.addEventListener('touchstart', onTouchStart, { passive: true });
+    scrollElement.addEventListener('touchmove', onTouchMove, { passive: false });
+    scrollElement.addEventListener('touchend', clear);
+    scrollElement.addEventListener('touchcancel', clear);
+    return () => {
+      scrollElement.removeEventListener('touchstart', onTouchStart);
+      scrollElement.removeEventListener('touchmove', onTouchMove);
+      scrollElement.removeEventListener('touchend', clear);
+      scrollElement.removeEventListener('touchcancel', clear);
+    };
+  }, [active, scrollRef]);
 }
 
 /** How long to wait before trying a catalogue that would not load again. */
@@ -318,6 +355,8 @@ export default function App() {
   // Account page toggle and this catalog loader all read/write one source of truth.
   const selectedZone = useZoneStore(s => s.selectedZone);
   const activeStoreId = selectedZone?.storeId ?? SHAPOORJI_ZONE.storeId;
+  const activeCatalogSelectionRef = useRef({ storeId: activeStoreId, zoneId: selectedZone?.id });
+  activeCatalogSelectionRef.current = { storeId: activeStoreId, zoneId: selectedZone?.id };
 
   // A catalogue that would not load is loaded again: when the connection
   // comes back, and on a short timer for as long as it keeps failing. The
@@ -359,6 +398,7 @@ export default function App() {
   // instead of the whole catalogue. Pull-to-refresh and reconnects force the
   // real download.
   const catalogStampRef = useRef<string | null>(null);
+  const catalogRefreshGenerationRef = useRef(0);
 
   const fetchCatalogBundle = useCallback(async (storeId?: string, zoneId?: string, fresh = false, isCancelled?: () => boolean) => {
     const [catRes, prodRes, settingsRes, sectionsRes] = await Promise.all([
@@ -388,6 +428,10 @@ export default function App() {
   }, []);
 
   const refreshCatalog = useCallback(async (storeId?: string, zoneId?: string, opts?: { force?: boolean }) => {
+    const refreshGeneration = ++catalogRefreshGenerationRef.current;
+    const isStale = () => refreshGeneration !== catalogRefreshGenerationRef.current
+      || activeCatalogSelectionRef.current.storeId !== storeId
+      || activeCatalogSelectionRef.current.zoneId !== zoneId;
     // The stamp is always read BEFORE the body, forced or not: a stamp stored
     // after the body could be newer than it and would silently swallow one
     // change until the following one. Reading first means a mid-flight change
@@ -403,7 +447,8 @@ export default function App() {
       // real refresh rather than leaving the catalogue stuck.
       stamp = null;
     }
-    await fetchCatalogBundle(storeId, zoneId, true);
+    await fetchCatalogBundle(storeId, zoneId, true, isStale);
+    if (isStale()) return;
     catalogStampRef.current = stamp;
   }, [fetchCatalogBundle]);
 
@@ -426,6 +471,10 @@ export default function App() {
   // so opening and closing it leaves `view` untouched and the offset survives.
   const showingSuccess = Boolean(successData);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mobileCheckoutScrollRef = useRef<HTMLDivElement>(null);
+  const desktopCheckoutScrollRef = useRef<HTMLDivElement>(null);
+  useContainTopPull(mobileCheckoutScrollRef, checkoutActive);
+  useContainTopPull(desktopCheckoutScrollRef, checkoutActive);
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const pullDistance = useRef(0);
   const [pullDistanceVisible, setPullDistanceVisible] = useState(0);
@@ -1258,7 +1307,7 @@ export default function App() {
           pinned to the screen bottom instead of being sized to an ancestor
           scroll container. */}
       {checkoutActive && createPortal(
-        <div className="app-viewport-overlay fixed inset-0 z-[55]">
+        <div className="app-viewport-overlay fixed inset-0 z-[55] overscroll-y-none">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm sm:block hidden"
             onClick={handleCheckoutClose} />
           {/* Mobile — full screen slide up. `isolate` makes this scroller its own
@@ -1266,7 +1315,7 @@ export default function App() {
               child of an overflow scroller that also has positioned siblings
               (the "To pay" footer behind the cart list), and isolating the
               scroll container is the documented fix. */}
-          <div className="sm:hidden isolate absolute inset-0 bg-white dark:bg-slate-900 overflow-y-auto">
+          <div ref={mobileCheckoutScrollRef} className="sm:hidden isolate absolute inset-0 overflow-y-auto overscroll-y-contain bg-white dark:bg-slate-900">
             <CheckoutPage
               settings={settings}
               zoneId={selectedZone?.id}
@@ -1281,7 +1330,7 @@ export default function App() {
           </div>
           {/* Desktop — right side drawer (same `isolate` reasoning as the mobile
               scroller above). */}
-          <div className="hidden sm:block isolate absolute right-0 top-0 h-full w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto">
+          <div ref={desktopCheckoutScrollRef} className="hidden sm:block isolate absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto overscroll-y-contain bg-white shadow-2xl dark:bg-slate-900">
             <CheckoutPage
               settings={settings}
               zoneId={selectedZone?.id}
@@ -1324,6 +1373,7 @@ export default function App() {
           autoFocus={catalogSearchAutoFocus}
           onClose={() => setCatalogSearchOpen(false)}
           onOpenCart={() => handleCheckout()}
+          onRefresh={() => refreshCatalog(activeStoreId, selectedZone?.id, { force: true })}
         />
       )}
 

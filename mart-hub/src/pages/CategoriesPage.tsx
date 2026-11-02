@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast, ToastContainer } from '../hooks/useToast';
 import PageSkeleton from '../components/PageSkeleton';
 
-interface Category { id: string; name: string; slug: string; icon: string; sortOrder: number; isActive: boolean; productCount: number; }
+interface Category { id: string; name: string; slug: string; productPrefix: string; icon: string; sortOrder: number; isActive: boolean; productCount: number; }
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -23,7 +23,7 @@ export default function CategoriesPage() {
   const [uploading, setUploading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
-  const [form, setForm] = useState({ name: '', slug: '', icon: '', sortOrder: '0' });
+  const [form, setForm] = useState({ name: '', slug: '', productPrefix: '', icon: '', sortOrder: '0' });
   const [iconPreview, setIconPreview] = useState<string | null>(null);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -33,14 +33,14 @@ export default function CategoriesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', slug: '', icon: '', sortOrder: '0' });
+    setForm({ name: '', slug: '', productPrefix: '', icon: '', sortOrder: '0' });
     setIconPreview(null);
     setShowModal(true);
   };
 
   const openEdit = (c: Category) => {
     setEditing(c);
-    setForm({ name: c.name, slug: c.slug, icon: c.icon || '', sortOrder: String(c.sortOrder) });
+    setForm({ name: c.name, slug: c.slug, productPrefix: c.productPrefix, icon: c.icon || '', sortOrder: String(c.sortOrder) });
     const isUrl = c.icon?.startsWith('/') || c.icon?.startsWith('http');
     setIconPreview(isUrl ? c.icon : null);
     setShowModal(true);
@@ -97,7 +97,7 @@ export default function CategoriesPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{c.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{c.productCount} products · /{c.slug}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{c.productCount} products · {c.productPrefix} · /{c.slug}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"><Pencil className="w-4 h-4" /></button>
@@ -148,11 +148,16 @@ export default function CategoriesPage() {
               </div>
               <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name *</label><input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Vegetables" /></div>
               <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Slug *</label><input type="text" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} className={inp} placeholder="e.g. vegetables" /></div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Product Prefix *</label>
+                <input type="text" value={form.productPrefix} onChange={e => setForm(f => ({ ...f, productPrefix: e.target.value.toUpperCase() }))} className={`${inp} ${editing && editing.productCount > 0 ? 'cursor-not-allowed bg-gray-100 dark:bg-slate-700/60' : ''}`} placeholder="e.g. VEG" maxLength={6} readOnly={Boolean(editing && editing.productCount > 0)} />
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">Determines codes like VEG-000001 and cannot change once products exist.</p>
+              </div>
               <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Sort Order</label><input type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: e.target.value }))} className={inp} /></div>
             </div>
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.name || !form.slug} className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
+              <button onClick={handleSave} disabled={saving || !form.name || !form.slug || !/^[A-Z]{2,6}$/.test(form.productPrefix)} className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save'}
               </button>
             </div>

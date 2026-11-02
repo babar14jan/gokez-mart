@@ -5,6 +5,7 @@ import { ZoneService } from './zone.service';
 
 export interface MartProduct {
   id: string;
+  productCode: string;
   categoryId: string | null;
   categoryName?: string;
   name: string;
@@ -28,7 +29,7 @@ export interface MartProduct {
 }
 
 const PRODUCT_SELECT = `
-  SELECT p.id, p.category_id as "categoryId", c.name as "categoryName",
+  SELECT p.id, p.product_code as "productCode", p.category_id as "categoryId", c.name as "categoryName",
          p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
           p.description, p.photo_url as "photoUrl", p.photos as "photos",
           p.weight_options as "weightOptions",
@@ -202,7 +203,7 @@ export class ProductService {
     }
     const where = `WHERE ${conditions.join(' AND ')}`;
     const result = await query<MartProduct & { storeId: string; storeName: string }>(
-      `SELECT p.id, p.category_id as "categoryId", c.name as "categoryName",
+      `SELECT p.id, p.product_code as "productCode", p.category_id as "categoryId", c.name as "categoryName",
              p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
               p.description, p.photo_url as "photoUrl", p.photos as "photos",
               p.weight_options as "weightOptions",
@@ -549,7 +550,7 @@ export class ProductService {
   static async createCatalogProduct(data: {
     name: string; localName?: string; description?: string;
     photoUrl?: string; photos?: string[]; categoryId?: string; searchAliases?: string[];
-  }): Promise<{ id: string; name: string; photos: string[] }> {
+  }): Promise<{ id: string; productCode: string; name: string; photos: string[] }> {
     const id = uuidv4();
     const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
     const name = normalizeProductName(data.name);
@@ -557,10 +558,10 @@ export class ProductService {
     const photos = data.photos && data.photos.length
       ? data.photos.map(photo => String(photo)).filter(Boolean)
       : (data.photoUrl ? [String(data.photoUrl)] : []);
-    const result = await query<{ id: string; name: string; photos: string[] }>(
+    const result = await query<{ id: string; productCode: string; name: string; photos: string[] }>(
       `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, is_catalog)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true)
-       RETURNING id, name, photos`,
+      RETURNING id, product_code as "productCode", name, photos`,
       [id, data.categoryId || null, name, localName, searchAliases,
        data.description || null, photos[0] || null, JSON.stringify(photos)]
     );

@@ -427,6 +427,7 @@ export default function MorePage() {
           </span>
           {' '}&copy; {new Date().getFullYear()}
         </span>
+        <span className="text-[10px] text-gray-400 dark:text-slate-500">Version: v0.1.3</span>
       </div>
 
       {confirmLogout && (

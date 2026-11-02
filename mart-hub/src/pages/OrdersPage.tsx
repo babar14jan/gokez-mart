@@ -817,9 +817,10 @@ export default function OrdersPage() {
                       {['cancelled', 'terminated'].includes(order.status) && order.cancellationReason && (
                         <div className="flex items-start gap-1.5 bg-red-50 dark:bg-red-900/10 rounded-xl px-3 py-2">
                           <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                          <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
-                            {CANCELLATION_REASON_LABELS[order.cancellationReason] || order.cancellationReason}
-                          </p>
+                          <div className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
+                            <p className="font-semibold">{CANCELLATION_REASON_LABELS[order.cancellationReason] || order.cancellationReason}</p>
+                            {order.cancellationCustomerMessage && <p className="mt-0.5">{order.cancellationCustomerMessage}</p>}
+                          </div>
                         </div>
                       )}
                     </>
