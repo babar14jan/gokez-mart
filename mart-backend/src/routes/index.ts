@@ -105,6 +105,7 @@ router.put('/admin/daily-sales/entries/:id', authenticate, ctrl.adminUpdateOffli
 router.delete('/admin/daily-sales/entries/:id', authenticate, ctrl.adminDeleteOfflineSale); // ?storeId=
 router.get('/admin/events',              authenticate, ctrl.adminOrderStream);       // SSE live order stream
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
+router.put('/admin/orders/:id/items', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminAdjustOrderItems);
 router.put('/admin/orders/:id/fulfilments/:storeId', authenticate, ctrl.adminUpdateOrderFulfilment);
 router.put('/admin/orders/:id/reschedule', authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminRescheduleOrder);
 router.put('/admin/orders/:id/confirm-next-open', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminConfirmNextOpen);
