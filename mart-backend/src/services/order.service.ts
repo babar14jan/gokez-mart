@@ -6,6 +6,7 @@ import { InventoryService } from './inventory.service';
 import { ZoneService } from './zone.service';
 import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
+import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 
 // Reasons a customer may give for cancelling, chosen from the order screen. The
 // keys are what is stored in mart_orders.cancellation_reason; only these values
@@ -212,8 +213,8 @@ export class OrderService {
       && settings.auto_out_of_stock === 'on_zero';
 
     // Normalize phone once so leads, orders, and funnels all match
-    const cleanPhone = data.guestPhone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) throw badRequest('Invalid phone number');
+    const cleanPhone = normalizeCustomerPhone(data.guestPhone);
+    if (!isValidCustomerPhone(cleanPhone)) throw badRequest('Enter a valid 10-digit mobile number');
 
     // The token is a guest's only credential for reading their order without an
     // account, so it must be unguessable and unique per order.
@@ -1124,6 +1125,110 @@ export class OrderService {
     });
 
     return order;
+  }
+
+  /**
+   * Confirm an order without a staff action. The row lock ensures a staff
+   * transition that wins the race is never overwritten by the delayed job.
+   */
+  static async autoConfirmPending(id: string): Promise<{
+    id: string;
+    orderNumber: string;
+    storeId: string;
+  } | null> {
+    return transaction(async client => {
+      const current = await client.query(
+        `SELECT status, placed_outside_hours as "placedOutsideHours"
+           FROM mart_orders
+          WHERE id = $1
+          FOR UPDATE`,
+        [id]
+      );
+      const existing = current.rows[0] as { status: string; placedOutsideHours: boolean } | undefined;
+      if (!existing || existing.status !== 'pending' || existing.placedOutsideHours) return null;
+
+      const updated = await client.query(
+        `UPDATE mart_orders
+            SET status = 'confirmed', updated_at = NOW()
+          WHERE id = $1
+          RETURNING id, order_number as "orderNumber", store_id as "storeId"`,
+        [id]
+      );
+      const order = updated.rows[0] as { id: string; orderNumber: string; storeId: string };
+      await client.query(
+        `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_id, actor_name)
+         VALUES ($1, 'pending', 'confirmed', NULL, 'System')`,
+        [id]
+      );
+      return order;
+    });
+  }
+
+  /**
+   * Keep fast-delivery order progress moving when staff have not yet started
+   * preparation. Scheduled orders remain staff-controlled until their window.
+   */
+  static async autoStartPreparing(id: string): Promise<{
+    id: string;
+    orderNumber: string;
+    storeId: string;
+  } | null> {
+    return transaction(async client => {
+      const current = await client.query(
+        `SELECT status, delivery_preference as "deliveryPreference"
+           FROM mart_orders
+          WHERE id = $1
+          FOR UPDATE`,
+        [id]
+      );
+      const existing = current.rows[0] as { status: string; deliveryPreference: string | null } | undefined;
+      if (!existing || existing.status !== 'confirmed' || existing.deliveryPreference === 'scheduled') return null;
+
+      const updated = await client.query(
+        `UPDATE mart_orders
+            SET status = 'preparing', updated_at = NOW()
+          WHERE id = $1
+          RETURNING id, order_number as "orderNumber", store_id as "storeId"`,
+        [id]
+      );
+      const order = updated.rows[0] as { id: string; orderNumber: string; storeId: string };
+      await client.query(
+        `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_id, actor_name)
+         VALUES ($1, 'confirmed', 'preparing', NULL, 'System')`,
+        [id]
+      );
+      return order;
+    });
+  }
+
+  static async getOverdueAutomaticTransitions(): Promise<{
+    pendingIds: string[];
+    confirmedIds: string[];
+  }> {
+    const [pending, confirmed] = await Promise.all([
+      query<{ id: string }>(
+        `SELECT id
+           FROM mart_orders
+          WHERE status = 'pending'
+            AND placed_outside_hours = false
+            AND created_at <= NOW() - INTERVAL '2 seconds'
+          ORDER BY created_at ASC
+          LIMIT 100`
+      ),
+      query<{ id: string }>(
+        `SELECT id
+           FROM mart_orders
+          WHERE status = 'confirmed'
+            AND delivery_preference IS DISTINCT FROM 'scheduled'
+            AND updated_at <= NOW() - INTERVAL '3 minutes'
+          ORDER BY updated_at ASC
+          LIMIT 100`
+      ),
+    ]);
+    return {
+      pendingIds: pending.rows.map(order => order.id),
+      confirmedIds: confirmed.rows.map(order => order.id),
+    };
   }
 
   /**

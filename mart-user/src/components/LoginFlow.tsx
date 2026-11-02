@@ -509,11 +509,9 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 and{' '}
                 <button type="button" onClick={() => onNavigateLegal?.('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
               </p>
-              <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-[11px] text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
-                <div>
-                  <p className="font-bold"><ShieldCheck className="mr-1 inline h-3.5 w-3.5" />Your number is private.</p>
-                  <p className="pl-5 text-emerald-700 dark:text-emerald-300">We never share it. No spam.</p>
-                </div>
+              <div className="login-privacy-note flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                <span>Your number is private. No Spam</span>
               </div>
             </>
           ) : (

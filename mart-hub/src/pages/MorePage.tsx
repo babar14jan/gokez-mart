@@ -11,6 +11,7 @@ import { useThemeStore } from '../store/themeStore';
 import { api, authApi, settingsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { subscribeAdminToPush, unsubscribeAdminFromPush } from '../services/push';
+import { clearOrderRingtone, hasOrderRingtone, isOrderAlarmEnabled, saveOrderRingtone, setOrderAlarmEnabled, stopOrderAlarm } from '../services/orderAlarm';
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
@@ -47,6 +48,9 @@ export default function MorePage() {
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default');
   const [enablingNotif, setEnablingNotif] = useState(false);
   const [notifSubscribed, setNotifSubscribed] = useState(false);
+  const [hasCustomRingtone, setHasCustomRingtone] = useState(false);
+  const [ringtoneEnabled, setRingtoneEnabled] = useState(true);
+  const [ringtoneError, setRingtoneError] = useState('');
 
   // Payment QR (store-tagged users only)
   const isStoreUser = !!role && role !== 'super_admin';
@@ -92,13 +96,45 @@ export default function MorePage() {
         navigator.serviceWorker.ready.then(reg =>
           reg.pushManager.getSubscription().then(sub => {
             setNotifSubscribed(!!sub);
-            // Don't auto-subscribe silently — let user do it via toggle
+            if (!sub) handleEnableNotifications();
           })
         ).catch(() => {});
       }
     }
+    hasOrderRingtone().then(setHasCustomRingtone).catch(() => {});
+    isOrderAlarmEnabled().then(setRingtoneEnabled).catch(() => {});
 
   }, []);
+
+  const handleRingtoneChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setRingtoneError('');
+    try {
+      await saveOrderRingtone(file);
+      setHasCustomRingtone(true);
+    } catch (err) {
+      setRingtoneError(err instanceof Error ? err.message : 'Could not save ringtone.');
+    }
+  };
+
+  const handleClearRingtone = async () => {
+    await clearOrderRingtone().catch(() => {});
+    setHasCustomRingtone(false);
+    setRingtoneError('');
+  };
+
+  const handleRingtoneToggle = async () => {
+    const enabled = !ringtoneEnabled;
+    setRingtoneEnabled(enabled);
+    if (!enabled) stopOrderAlarm();
+    try {
+      await setOrderAlarmEnabled(enabled);
+    } catch {
+      setRingtoneEnabled(!enabled);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Name is required'); return; }
@@ -335,6 +371,27 @@ export default function MorePage() {
             <button onClick={handleEnableNotifications} disabled={enablingNotif}
               className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 disabled:opacity-50 transition-colors">
               {enablingNotif ? 'Enabling...' : 'Enable'}
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 dark:border-slate-700">
+          <Bell className="w-4 h-4 text-amber-500 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm text-gray-700 dark:text-slate-300">Order Ringtone</span>
+            <p className="text-[10px] text-gray-500 dark:text-slate-400">
+              {ringtoneEnabled ? (hasCustomRingtone ? 'Custom ringtone selected' : 'Repeats until you stop the alert') : 'Muted for new orders'}
+            </p>
+            {ringtoneError && <p className="text-[10px] text-red-500 mt-1">{ringtoneError}</p>}
+          </div>
+          <Toggle checked={ringtoneEnabled} onChange={handleRingtoneToggle} />
+          <label className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer">
+            Browse
+            <input type="file" accept="audio/*" className="sr-only" onChange={handleRingtoneChange} />
+          </label>
+          {hasCustomRingtone && (
+            <button onClick={handleClearRingtone} className="text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200">
+              Reset
             </button>
           )}
         </div>

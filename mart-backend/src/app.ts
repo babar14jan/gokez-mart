@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import * as Sentry from '@sentry/node';
 import { config } from './config';
+import { isValidCustomerPhone, normalizeCustomerPhone } from './utils/customerPhone';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware';
 import { installRequestLogger } from './utils/requestLog';
@@ -108,8 +109,8 @@ app.use('/api/v1/auth/send-otp', rateLimit({
   legacyHeaders: false,
   message: { success: false, error: 'Too many OTP requests. Please wait 15 minutes before trying again.' },
   keyGenerator: (req) => {
-    const phone = req.body?.phone?.replace(/\D/g, '');
-    return phone && phone.length === 10 ? `otp_send_${phone}` : req.ip || 'unknown';
+    const phone = normalizeCustomerPhone(req.body?.phone);
+    return isValidCustomerPhone(phone) ? `otp_send_${phone}` : req.ip || 'unknown';
   },
 }));
 
@@ -121,8 +122,8 @@ app.use('/api/v1/auth/verify-otp', rateLimit({
   legacyHeaders: false,
   message: { success: false, error: 'Too many verification attempts. Please request a new OTP.' },
   keyGenerator: (req) => {
-    const phone = req.body?.phone?.replace(/\D/g, '');
-    return phone && phone.length === 10 ? `otp_verify_${phone}` : req.ip || 'unknown';
+    const phone = normalizeCustomerPhone(req.body?.phone);
+    return isValidCustomerPhone(phone) ? `otp_verify_${phone}` : req.ip || 'unknown';
   },
 }));
 
@@ -157,11 +158,11 @@ app.use('/api/v1/orders/track/:id/cancel', rateLimit({
   message: { success: false, error: 'Too many cancellation attempts. Please wait a few minutes.' },
 }));
 
-// 6. Public token tracking — tokens are unguessable, but this endpoint still
-// needs a tighter budget than general API traffic because it returns order data.
+// 6. Public token tracking — guests poll only while tracking an active order.
+// Tokens are unguessable, but retain an IP cap to bound automated probing.
 app.use('/api/v1/orders/track/tokens', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isProd ? 20 : 100,
+  max: isProd ? 240 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many order lookups. Please try again in a few minutes.' },

@@ -39,7 +39,7 @@ const storeDateTimeToIso = (value: string) => {
 
 // Order pipeline — used for progress bar
 const PIPELINE = [
-  { status: 'pending',          label: 'Pending',          emoji: '🛒' },
+  { status: 'pending',          label: 'Order Placed',     emoji: '🛒' },
   { status: 'confirmed',        label: 'Confirmed',        emoji: '✅' },
   { status: 'preparing',        label: 'Preparing',        emoji: '🍳' },
   { status: 'out_for_delivery', label: 'Out for Delivery', emoji: '🛵' },
@@ -62,7 +62,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending', confirmed: 'Confirmed', preparing: 'Preparing',
+  pending: 'Order Placed', confirmed: 'Confirmed', preparing: 'Preparing',
   out_for_delivery: 'Out for Delivery', ready_to_pickup: 'Ready to Pickup',
   picked_up: 'Picked Up', delivered: 'Delivered',
   cancelled: 'Cancelled', failed_delivery: 'Delivery Failed', terminated: 'Terminated',
