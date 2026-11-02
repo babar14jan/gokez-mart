@@ -5,7 +5,7 @@ import fetch from 'node-fetch';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
-import { ProductService, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
+import { ProductService, MartProduct, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
 import { OrderService, buildOrderWindow } from '../services/order.service';
 import { SettingsService } from '../services/settings.service';
@@ -29,12 +29,14 @@ import { emitOrderEvent, orderEventBus, type OrderLiveEvent } from '../services/
 import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.service';
 import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
+import { DailySalesService } from '../services/dailySales.service';
 import { CatalogService } from '../services/catalog.service';
 import { RecommendationService } from '../services/recommendation.service';
 import { evaluateStoreOpen, parseIstLocalDateTime, type StoreOpenState } from '../utils/storeHours';
 import { trackStream } from '../utils/sse';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
+import { badRequest, forbidden } from '../utils/apiError';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -77,6 +79,69 @@ function resolveStoreId(req: AdminRequest): string {
   if (req.admin?.storeId) return req.admin.storeId;
   // Super admin → can pass storeId in query or body
   return (req.query.storeId || req.body?.storeId || SHAPOORJI_ID) as string;
+}
+
+// ── Inventory store scoping ───────────────────────────────────────────────────
+// A zone's head store (primary_store_id) is operationally responsible for the
+// whole zone, so an admin account bound to that store may manage the inventory
+// and product listings of every store tagged into the zone. Everyone else
+// stays pinned to their own store; super admins may target any store. This is
+// deliberately narrower than the general resolveStoreId above: other pages
+// keep their existing single-store scope.
+async function canManageStore(
+  admin: NonNullable<AdminRequest['admin']>,
+  storeId: string
+): Promise<boolean> {
+  if (admin.role === 'super_admin') return true;
+  if (!admin.storeId) return false;
+  if (admin.storeId === storeId) return true;
+  const { rows } = await query(
+    `SELECT 1
+       FROM mart_zones z
+       JOIN mart_zone_stores zs ON zs.zone_id = z.id
+      WHERE z.primary_store_id = $1
+        AND z.is_active = true
+        AND zs.store_id = $2
+      LIMIT 1`,
+    [admin.storeId, storeId]
+  );
+  return rows.length > 0;
+}
+
+async function resolveManagedStoreId(req: AdminRequest): Promise<string> {
+  const admin = req.admin!;
+  const requested = (req.query.storeId || req.body?.storeId) as string | undefined;
+  if (admin.role === 'super_admin') return requested || SHAPOORJI_ID;
+  const ownStoreId = admin.storeId || null;
+  if (!requested || requested === ownStoreId) return ownStoreId || requested || SHAPOORJI_ID;
+  if (await canManageStore(admin, requested)) return requested;
+  throw forbidden('You do not have access to that store');
+}
+
+// ── Daily sales access ────────────────────────────────────────────────────────
+// Daily Sales is a head-store responsibility. Only the owner/manager bound to a
+// zone's primary store (plus super admins) may view or edit the ledger; owners
+// and managers of member stores are denied even though they can manage their
+// own inventory.
+async function isHeadStore(storeId: string | null): Promise<boolean> {
+  if (!storeId) return false;
+  const { rows } = await query(
+    `SELECT 1 FROM mart_zones WHERE primary_store_id = $1 AND is_active = true LIMIT 1`,
+    [storeId]
+  );
+  return rows.length > 0;
+}
+
+async function canAccessDailySales(admin: { role: string; storeId: string | null }): Promise<boolean> {
+  if (admin.role === 'super_admin') return true;
+  if (admin.role !== 'store_owner' && admin.role !== 'store_manager') return false;
+  return isHeadStore(admin.storeId);
+}
+
+async function assertDailySalesAccess(req: AdminRequest): Promise<void> {
+  if (!(await canAccessDailySales(req.admin!))) {
+    throw forbidden('Daily Sales is only available to the head store owner/manager');
+  }
 }
 
 // ── Public controllers ────────────────────────────────────────────────────────
@@ -125,8 +190,7 @@ export const getProduct = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getPublicSettings = asyncHandler(async (req: Request, res: Response) => {
-  const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
-  const settings = await SettingsService.getPublic(storeId);
+  const requestedStoreId = (req.query.storeId as string) || SHAPOORJI_ID;
   // A multi-store zone presents its head store as the face of the zone and
   // answers open/close from the zone's own hours + zone settings. The store
   // path below is the legacy single-store behaviour.
@@ -136,8 +200,11 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   let addressOverride: string | null = null;
   let zoneName: string | null = null;
   const zoneId = req.query.zoneId as string | undefined;
+  const zone = zoneId ? await ZoneService.findById(zoneId) : null;
+  const effectiveStoreId = zone?.primaryStoreId ?? requestedStoreId;
+  const effectiveZone = zone ? await ZoneService.getEffectiveSettings(zone.id) : null;
+  const settings = effectiveZone?.settings ?? await SettingsService.getPublic(effectiveStoreId);
   if (zoneId) {
-    const zone = await ZoneService.findById(zoneId);
     if (zone) {
       openState = await ZoneService.getOpenState(zone.id);
       effectiveHours = zone.openingHours as Record<string, unknown> | null;
@@ -150,7 +217,7 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
   // one implementation of the schedule, and so the answer cannot depend on the
   // customer's device clock or timezone. The storefront re-fetches at
   // nextOpenAt to pick up the change instead of re-deriving it locally.
-  const store = await StoreService.findById(storeId);
+  const store = await StoreService.findById(effectiveStoreId);
   if (!zoneId && !openState) {
     const closure = { from: settings.store_closed_from, until: settings.store_closed_until };
     openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
@@ -175,7 +242,7 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
       ...merged,
       openState,
       openingHours: effectiveHours ?? store?.openingHours ?? null,
-      zoneId: zoneId ?? null,
+      zoneId: zone?.id ?? null,
       zoneName,
     },
   });
@@ -259,7 +326,7 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneName, deliveryPreference, deliveryNote, scheduledFor, campaignId, couponCode, latitude, longitude } = req.body;
+  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneId, zoneName, deliveryPreference, deliveryNote, scheduledFor, campaignId, couponCode, latitude, longitude } = req.body;
   let suppliedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
   // A signed-in order is identified by the verified phone, not by the name the
   // client posts. An account that never saved a name sends the 'Customer'
@@ -288,7 +355,7 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   if (normalizedName.length < 2 || normalizedName.length > 80 || !/\p{L}/u.test(normalizedName)) {
     res.status(400).json({ success: false, error: 'Enter a valid name' }); return;
   }
-  if (!/^[6-9]\d{9}$/.test(cleanPhone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  if (!/^\d{10}$/.test(cleanPhone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
   if (req.customer && req.customer.phone !== cleanPhone) {
     res.status(400).json({ success: false, error: 'Use your verified phone number to place this order' }); return;
   }
@@ -319,8 +386,17 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   if ((campaignId || couponCode) && (!req.customer || req.customer.phone !== cleanPhone)) {
     res.status(401).json({ success: false, error: 'Sign in with the ordering phone number to redeem an offer' }); return;
   }
+  const requestedStoreId = storeId || SHAPOORJI_ID;
+  const zone = typeof zoneId === 'string' ? await ZoneService.findById(zoneId) : null;
+  if (zoneId && (!zone || !zone.isActive || !zone.primaryStoreId)) {
+    res.status(400).json({ success: false, error: 'Selected delivery zone is unavailable' }); return;
+  }
+  if (zone && storeId && storeId !== zone.primaryStoreId) {
+    res.status(400).json({ success: false, error: 'Selected store does not match the delivery zone' }); return;
+  }
+  const resolvedStoreId = zone?.primaryStoreId ?? requestedStoreId;
   // Fetch store name for fulfilled_by
-  const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [storeId || SHAPOORJI_ID]);
+  const storeResult = await query<{ name: string }>(`SELECT name FROM mart_stores WHERE id = $1`, [resolvedStoreId]);
   const storeName = storeResult.rows[0]?.name || 'Gokez Mart';
 
   const result = await OrderService.create({
@@ -328,9 +404,10 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     guestAddressLabel: typeof guestAddressLabel === 'string' && guestAddressLabel.trim()
       ? guestAddressLabel.trim().slice(0, 24)
       : undefined,
-    storeId: storeId || SHAPOORJI_ID,
+    storeId: resolvedStoreId,
     storeName,
-    zoneName, deliveryPreference, deliveryNote, scheduledFor,
+    zoneId: zone?.id,
+    zoneName: zone?.name ?? zoneName, deliveryPreference, deliveryNote, scheduledFor,
     latitude: hasCoordinates ? latitude : null,
     longitude: hasCoordinates ? longitude : null,
     campaignId: campaignId || null,
@@ -346,17 +423,26 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     url: '/orders',
     tag: `order-${result.orderId}`,
   }).catch(() => {});
-  if (!result.duplicate) emitOrderEvent({
-    type: 'order.created',
-    order: {
-      id: result.orderId,
-      orderNumber: result.orderNumber,
-      status: 'pending',
-      total: result.total,
-      guestName: normalizedName,
-      storeId: storeId || SHAPOORJI_ID,
-    },
-  });
+  if (!result.duplicate) {
+    const fulfilmentStores = await query<{ storeId: string }>(
+      `SELECT DISTINCT store_id as "storeId"
+         FROM mart_order_items
+        WHERE order_id = $1 AND store_id IS NOT NULL`,
+      [result.orderId]
+    );
+    emitOrderEvent({
+      type: 'order.created',
+      order: {
+        id: result.orderId,
+        orderNumber: result.orderNumber,
+        status: 'pending',
+        total: result.total,
+        guestName: normalizedName,
+        storeId: storeId || SHAPOORJI_ID,
+        storeIds: fulfilmentStores.rows.map(row => row.storeId),
+      },
+    });
+  }
   res.status(201).json({ success: true, data: result });
 });
 
@@ -480,6 +566,7 @@ export const adminLogin = asyncHandler(async (req: Request, res: Response) => {
     phone: admin.phone,
     role: admin.role,
     storeId: admin.store_id,
+    canAccessDailySales: await canAccessDailySales({ role: admin.role, storeId: admin.store_id }),
   }});
 });
 
@@ -505,7 +592,10 @@ export const adminGetMe = asyncHandler(async (req: AdminRequest, res: Response) 
     [req.admin!.id]
   );
   if (!result.rows[0]) { res.status(404).json({ success: false, error: 'Admin not found' }); return; }
-  res.json({ success: true, data: result.rows[0] });
+  res.json({ success: true, data: {
+    ...result.rows[0],
+    canAccessDailySales: await canAccessDailySales(req.admin!),
+  }});
 });
 
 export const adminUpdateProfile = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -538,29 +628,80 @@ export const adminChangePassword = asyncHandler(async (req: AdminRequest, res: R
 // ── Admin product controllers ─────────────────────────────────────────────────
 
 export const adminGetProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = resolveStoreId(req);
+  const storeId = await resolveManagedStoreId(req);
   const products = await ProductService.findAll({ storeId });
   res.json({ success: true, data: products });
 });
 
 export const adminCreateProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = resolveStoreId(req);
-  const product = req.body.bundleComponents
+  const isCombo = Array.isArray(req.body.bundleComponents);
+  const isHeadComboManager = ['store_owner', 'store_manager'].includes(req.admin!.role)
+    && await isHeadStore(req.admin!.storeId);
+  if (!isCombo && req.admin!.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Only super admins can create products' });
+    return;
+  }
+  if (isCombo && req.admin!.role !== 'super_admin' && !isHeadComboManager) {
+    res.status(403).json({ success: false, error: 'Only the zone head owner or manager can create combos' });
+    return;
+  }
+  const storeId = await resolveManagedStoreId(req);
+  if (isCombo && req.admin!.role !== 'super_admin' && storeId !== req.admin!.storeId) {
+    res.status(403).json({ success: false, error: 'Combos can only be created for your own head store' });
+    return;
+  }
+  const product = isCombo
     ? await ProductService.createBundle({ ...req.body, storeId, components: req.body.bundleComponents })
     : await ProductService.create({ ...req.body, storeId });
   res.status(201).json({ success: true, data: product });
 });
 
+export const adminGetProductBundleComponents = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const product = await ProductService.findById(req.params.id, storeId);
+  if (!product?.isBundle) { res.status(404).json({ success: false, error: 'Combo not found' }); return; }
+  const components = await ProductService.getBundleComponents(req.params.id, storeId);
+  res.json({ success: true, data: components });
+});
+
 export const adminUpdateProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = resolveStoreId(req);
-  const product = await ProductService.update(req.params.id, { ...req.body, storeId });
-  if (!product) { res.status(404).json({ success: false, error: 'Product not found' }); return; }
+  const storeId = await resolveManagedStoreId(req);
+  const isSuperAdmin = req.admin!.role === 'super_admin';
+  const existing = await ProductService.findById(req.params.id, storeId);
+  if (!existing) { res.status(404).json({ success: false, error: 'Product not found' }); return; }
+  const isHeadComboManager = ['store_owner', 'store_manager'].includes(req.admin!.role)
+    && await isHeadStore(req.admin!.storeId);
+  if (existing.isBundle && !isSuperAdmin && !isHeadComboManager) {
+    res.status(403).json({ success: false, error: 'Only the zone head owner or manager can edit combos' });
+    return;
+  }
+  if (existing.isBundle && !isSuperAdmin && storeId !== req.admin!.storeId) {
+    res.status(403).json({ success: false, error: 'Combos can only be edited for your own head store' });
+    return;
+  }
+  let data: Partial<MartProduct> & { storeId?: string } = { storeId };
+  if (existing.isBundle) {
+    data = { ...req.body, storeId };
+  } else {
+    data.price = req.body.price;
+    data.unit = req.body.unit;
+    data.approxWeight = req.body.approxWeight;
+    data.discountPercent = req.body.discountPercent;
+    data.availabilityStatus = req.body.availabilityStatus;
+    data.isAvailable = req.body.isAvailable;
+    data.sortOrder = req.body.sortOrder;
+  }
+  if (existing.isBundle && req.body.bundleComponents !== undefined) {
+    await ProductService.replaceBundleComponents(req.params.id, storeId, req.body.bundleComponents);
+  }
+  const product = await ProductService.update(req.params.id, data);
   res.json({ success: true, data: product });
 });
 
 export const adminDeleteProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  await ProductService.delete(req.params.id);
-  res.json({ success: true, message: 'Product deleted' });
+  const storeId = await resolveManagedStoreId(req);
+  await ProductService.removeFromStore(req.params.id, storeId);
+  res.json({ success: true, message: 'Product removed from store' });
 });
 
 // ── Master catalog ────────────────────────────────────────────────────────────
@@ -568,14 +709,14 @@ export const adminDeleteProduct = asyncHandler(async (req: AdminRequest, res: Re
 // Browse catalog — all authenticated roles
 export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { categoryId, search } = req.query;
-  const conditions: string[] = ['p.is_catalog = true'];
+  const conditions: string[] = ['p.is_catalog = true', 'p.is_bundle = false'];
   const params: unknown[] = [];
   let i = 1;
   if (categoryId) { conditions.push(`p.category_id = $${i++}`); params.push(categoryId); }
   if (search) { conditions.push(`p.name ILIKE $${i++}`); params.push(`%${search}%`); }
   const result = await query(
     `SELECT p.id, p.name, p.local_name as "localName", p.search_aliases as "searchAliases", p.description,
-            p.photo_url as "photoUrl", p.category_id as "categoryId",
+            p.photo_url as "photoUrl", p.photos as "photos", p.category_id as "categoryId",
             c.name as "categoryName", c.icon as "categoryIcon"
      FROM mart_products p
      LEFT JOIN mart_categories c ON c.id = p.category_id
@@ -583,20 +724,34 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
      ORDER BY c.sort_order ASC NULLS LAST, p.name ASC`,
     params
   );
-  res.json({ success: true, data: result.rows });
+  res.json({
+    success: true,
+    data: (result.rows as Array<Record<string, unknown>>).map(row => ({
+      ...row,
+      photos: Array.isArray(row.photos) ? row.photos.map((photo) => String(photo)) : [],
+    })),
+  });
 });
 
 // Create catalog product — super_admin only (name + photo + category, no price/store)
 export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, localName, searchAliases, description, photoUrl, categoryId } = req.body;
+  const { name, localName, searchAliases, description, photoUrl, photos, categoryId } = req.body;
   if (!name?.trim()) { res.status(400).json({ success: false, error: 'name is required' }); return; }
-  const product = await ProductService.createCatalogProduct({ name: name.trim(), localName, searchAliases, description, photoUrl, categoryId });
+  const product = await ProductService.createCatalogProduct({
+    name: name.trim(),
+    localName,
+    searchAliases,
+    description,
+    photoUrl,
+    photos,
+    categoryId,
+  });
   res.status(201).json({ success: true, data: product });
 });
 
 // Update catalog product — super_admin only
 export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, localName, searchAliases, description, photoUrl, categoryId } = req.body;
+  const { name, localName, searchAliases, description, photoUrl, photos, categoryId } = req.body;
   const fields: string[] = [];
   const params: unknown[] = [];
   let i = 1;
@@ -604,18 +759,23 @@ export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, 
   if (localName !== undefined)   { fields.push(`local_name = $${i++}`);  params.push(normalizeLocalName(localName)); }
   if (searchAliases !== undefined) { fields.push(`search_aliases = $${i++}`); params.push(normalizeSearchAliases(searchAliases)); }
   if (description !== undefined) { fields.push(`description = $${i++}`); params.push(description); }
-  if (photoUrl !== undefined)    { fields.push(`photo_url = $${i++}`);   params.push(photoUrl); }
+  if (photos !== undefined)      { fields.push(`photos = $${i++}::jsonb`); params.push(JSON.stringify(photos)); }
+  else if (photoUrl !== undefined) { fields.push(`photo_url = $${i++}`); params.push(photoUrl); }
   if (categoryId !== undefined)  { fields.push(`category_id = $${i++}`); params.push(categoryId || null); }
   if (!fields.length) { res.status(400).json({ success: false, error: 'Nothing to update' }); return; }
   fields.push(`updated_at = NOW()`);
   params.push(req.params.id);
   const result = await query(
-    `UPDATE mart_products SET ${fields.join(', ')} WHERE id = $${i} AND is_catalog = true
-    RETURNING id, name, local_name as "localName", search_aliases as "searchAliases", description, photo_url as "photoUrl", category_id as "categoryId"`,
+    `UPDATE mart_products SET ${fields.join(', ')} WHERE id = $${i} AND is_catalog = true AND is_bundle = false
+    RETURNING id, name, local_name as "localName", search_aliases as "searchAliases", description, photo_url as "photoUrl", photos as "photos", category_id as "categoryId"`,
     params
   );
   if (!result.rows[0]) { res.status(404).json({ success: false, error: 'Catalog product not found' }); return; }
-  res.json({ success: true, data: result.rows[0] });
+  const row = result.rows[0] as Record<string, unknown>;
+  const normalizedPhotos = Array.isArray(row.photos)
+    ? row.photos.map(photo => String(photo))
+    : (typeof row.photoUrl === 'string' && row.photoUrl ? [row.photoUrl] : []);
+  res.json({ success: true, data: { ...row, photos: normalizedPhotos } });
 });
 
 // Delete catalog product — super_admin only, blocked if used in any store
@@ -627,18 +787,71 @@ export const adminDeleteCatalogProduct = asyncHandler(async (req: AdminRequest, 
     res.status(400).json({ success: false, error: 'Cannot delete — product is used in one or more stores' });
     return;
   }
-  await query(`DELETE FROM mart_products WHERE id = $1 AND is_catalog = true`, [req.params.id]);
+  await query(`DELETE FROM mart_products WHERE id = $1 AND is_catalog = true AND is_bundle = false`, [req.params.id]);
   res.json({ success: true, message: 'Catalog product deleted' });
 });
 
-// Bulk add from catalog — creates store products with name+photo only, hidden by default
+// Bulk add from catalog — creates store products with name+photo only, hidden by default.
+// Zone-scoped guard: the same catalog product cannot be mapped to two stores in one
+// zone. Conflicting mappings are returned as a 409 so the hub can show a popup instead
+// of silently creating a duplicate.
 export const adminBulkAddFromCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = resolveStoreId(req);
+  const storeId = await resolveManagedStoreId(req);
   const { productIds } = req.body; // array of catalog product IDs
   if (!Array.isArray(productIds) || productIds.length === 0) {
     res.status(400).json({ success: false, error: 'productIds array required' }); return;
   }
-  // For each catalog product, create a store_product entry with placeholder price=0, hidden
+  const catalogRows = await query<{ id: string }>(
+    `SELECT id FROM mart_products
+      WHERE id = ANY($1::uuid[]) AND is_catalog = true AND is_bundle = false`,
+    [productIds]
+  );
+  if (catalogRows.rows.length !== new Set(productIds).size) {
+    throw badRequest('Only master catalog products can be added to a store');
+  }
+  const zoneRows = await query<{ primary_store_id: string }>(
+    `SELECT z.primary_store_id
+       FROM mart_zone_stores zs
+       JOIN mart_zones z ON z.id = zs.zone_id
+      WHERE zs.store_id = $1 AND z.is_active = true
+      ORDER BY z.primary_store_id ASC
+      LIMIT 1`,
+    [storeId]
+  );
+  const headStoreId = zoneRows.rows[0]?.primary_store_id || null;
+
+  const conflicts: Array<{ productId: string; storeId: string; storeName: string }> = [];
+  const seenConflicts = new Set<string>();
+  for (const productId of productIds) {
+    let conflict: { store_id: string; name: string } | undefined;
+    if (headStoreId) {
+      const conflictRows = await query<{ store_id: string; name: string }>(
+        `SELECT sp.store_id, s.name
+           FROM mart_store_products sp
+           JOIN mart_stores s ON s.id = sp.store_id
+           JOIN mart_zone_stores zs ON zs.store_id = sp.store_id
+           JOIN mart_zones z ON z.id = zs.zone_id
+          WHERE sp.product_id = $1
+            AND sp.store_id <> $2
+            AND z.primary_store_id = $3
+            AND z.is_active = true
+          ORDER BY sp.store_id ASC
+          LIMIT 1`,
+        [productId, storeId, headStoreId]
+      );
+      conflict = conflictRows.rows[0];
+    }
+    if (conflict && !seenConflicts.has(productId)) {
+      seenConflicts.add(productId);
+      conflicts.push({ productId, storeId: conflict.store_id, storeName: conflict.name });
+    }
+  }
+
+  if (conflicts.length) {
+    res.status(409).json({ success: false, error: 'PRODUCT_ALREADY_ADDED_IN_ZONE', conflicts });
+    return;
+  }
+
   for (const productId of productIds) {
     await query(
       `INSERT INTO mart_store_products (store_id, product_id, price, unit, discount_percent, availability_status, is_available)
@@ -647,7 +860,7 @@ export const adminBulkAddFromCatalog = asyncHandler(async (req: AdminRequest, re
       [storeId, productId]
     );
   }
-  res.json({ success: true, message: `${productIds.length} product(s) added to store. Set price and availability to make them live.` });
+  res.json({ success: true, data: { added: productIds.length, conflicts }, message: `${productIds.length} product(s) added to store. Set price and availability to make them live.` });
 });
 
 // ── Admin category controllers ────────────────────────────────────────────────
@@ -676,16 +889,27 @@ export const adminDeleteCategory = asyncHandler(async (req: AdminRequest, res: R
 // ── Admin order controllers ───────────────────────────────────────────────────
 
 export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = resolveStoreId(req);
   const { status, phone, limit, offset } = req.query;
+  const isSuperAdmin = req.admin!.role === 'super_admin';
+  const isHeadStoreViewer = !isSuperAdmin && await isHeadStore(req.admin!.storeId);
+  const canManageMaster = isSuperAdmin || isHeadStoreViewer;
+  const storeId = isSuperAdmin ? resolveStoreId(req) : undefined;
   const orders = await OrderService.findAll({
     storeId,
     status: status as string,
     phone: phone as string,
     limit: limit ? parseInt(limit as string) : 50,
     offset: offset ? parseInt(offset as string) : 0,
+    // Non-super admins see the whole order only when their store is the head
+    // store. Member stores get just the lines they fulfil plus their own
+    // fulfilment status.
+    viewerStoreId: isSuperAdmin ? null : req.admin!.storeId,
+    restrictItems: !canManageMaster,
   });
-  res.json({ success: true, data: orders });
+  res.json({
+    success: true,
+    data: orders.map(order => ({ ...order, canManageMaster })),
+  });
 });
 
 // KPI summary for the hub Dashboard + Analytics cards. Computed live from the
@@ -732,6 +956,149 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
   res.json({ success: true, data });
 });
 
+// ── Daily sales ledger (hub → "Daily Sales" page) ────────────────────────────
+// App-side figures come live from mart_orders. Offline counter sales are
+// itemised rows in mart_offline_sales (one per product sold), so the day's
+// cash/UPI split is a SUM over the rows staff actually entered.
+
+export const adminGetDailySalesDay = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertDailySalesAccess(req);
+  const date = typeof req.query.date === 'string' ? req.query.date : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+    return;
+  }
+  const storeId = await resolveManagedStoreId(req);
+  const day = await DailySalesService.getDay(date, storeId);
+  if (req.admin!.role === 'super_admin') {
+    res.json({ success: true, data: day });
+    return;
+  }
+  const { couponDeduction: _couponDeduction, ...storeDay } = day;
+  res.json({ success: true, data: storeDay });
+});
+
+// Filtered ledger: ?mode=today|yesterday|month|all|custom with from/to for custom.
+export const adminGetDailySales = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertDailySalesAccess(req);
+  const storeId = await resolveManagedStoreId(req);
+  const mode = req.query.mode;
+  // IST today/yesterday, matching the dashboard's local-day semantics.
+  const istToday = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = fmt(istToday);
+  let from = today;
+  let to = today;
+  if (mode === 'today') {
+    from = to = today;
+  } else if (mode === 'yesterday') {
+    from = to = fmt(new Date(istToday.getTime() - 86_400_000));
+  } else if (mode === 'month') {
+    from = `${today.slice(0, 8)}01`;
+  } else if (mode === 'all') {
+    from = '1970-01-01';
+    to = today; // a future day has no sales yet; nothing to read
+  } else if (mode === 'custom') {
+    from = typeof req.query.from === 'string' ? req.query.from : today;
+    to = typeof req.query.to === 'string' ? req.query.to : today;
+  } else {
+    res.status(400).json({ success: false, error: 'mode must be today, yesterday, month, all or custom' });
+    return;
+  }
+  const days = await DailySalesService.getDays(from, to, storeId);
+  if (req.admin!.role === 'super_admin') {
+    res.json({ success: true, data: days });
+    return;
+  }
+  res.json({
+    success: true,
+    data: days.map(({ couponDeduction: _couponDeduction, ...storeDay }) => storeDay),
+  });
+});
+
+// Offline counter rows for one day.
+export const adminListOfflineSales = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertDailySalesAccess(req);
+  const date = typeof req.query.date === 'string' ? req.query.date : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+    return;
+  }
+  const storeId = await resolveManagedStoreId(req);
+  const entries = await DailySalesService.listEntries(date, storeId);
+  res.json({ success: true, data: entries });
+});
+
+// Record one offline item sold: product + quantity + cash/UPI. The price is
+// resolved server-side from the store listing, never accepted from the client.
+export const adminAddOfflineSale = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertDailySalesAccess(req);
+  const storeId = await resolveManagedStoreId(req);
+  const date = typeof req.body?.date === 'string' ? req.body.date : '';
+  const productId = typeof req.body?.productId === 'string' ? req.body.productId : '';
+  const quantity = Number(req.body?.quantity);
+  const paymentMethod = req.body?.paymentMethod;
+  const notes = typeof req.body?.notes === 'string' && req.body.notes.trim() ? req.body.notes.trim() : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+    return;
+  }
+  if (!productId) {
+    res.status(400).json({ success: false, error: 'productId is required' });
+    return;
+  }
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    res.status(400).json({ success: false, error: 'quantity must be greater than 0' });
+    return;
+  }
+  if (paymentMethod !== 'cash' && paymentMethod !== 'upi') {
+    res.status(400).json({ success: false, error: 'paymentMethod must be cash or upi' });
+    return;
+  }
+  const result = await DailySalesService.addEntry(
+    storeId, date, productId, quantity, paymentMethod, notes, req.admin?.id ?? null
+  );
+  res.status(201).json({ success: true, data: result });
+});
+
+export const adminUpdateOfflineSale = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertDailySalesAccess(req);
+  const storeId = await resolveManagedStoreId(req);
+  const date = typeof req.body?.date === 'string' ? req.body.date : '';
+  const productId = typeof req.body?.productId === 'string' ? req.body.productId : '';
+  const quantity = Number(req.body?.quantity);
+  const paymentMethod = req.body?.paymentMethod;
+  const notes = typeof req.body?.notes === 'string' && req.body.notes.trim() ? req.body.notes.trim() : null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
+    return;
+  }
+  if (!productId) {
+    res.status(400).json({ success: false, error: 'productId is required' });
+    return;
+  }
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    res.status(400).json({ success: false, error: 'quantity must be greater than 0' });
+    return;
+  }
+  if (paymentMethod !== 'cash' && paymentMethod !== 'upi') {
+    res.status(400).json({ success: false, error: 'paymentMethod must be cash or upi' });
+    return;
+  }
+  const result = await DailySalesService.updateEntry(
+    req.params.id, storeId, date, productId, quantity, paymentMethod, notes
+  );
+  res.json({ success: true, data: result });
+});
+
+export const adminDeleteOfflineSale = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertDailySalesAccess(req);
+  const storeId = await resolveManagedStoreId(req);
+  await DailySalesService.removeEntry(req.params.id, storeId);
+  res.json({ success: true, data: { removed: true } });
+});
+
 // Live order stream (SSE) for the hub. Open hub tabs keep this connection and
 // get bomb order events instantly, independent of web-push (whose delivery the
 // browser/push-service controls and which lags on weak networks). Scoped to the
@@ -749,7 +1116,11 @@ export const adminOrderStream = asyncHandler(async (req: AdminRequest, res: Resp
   const storeId = req.admin?.storeId || null;
   const listener = (event: OrderLiveEvent) => {
     const order = event.order;
-    if (storeId && order.storeId && order.storeId !== storeId) return;
+    if (storeId) {
+      const isHeadStore = order.storeId === storeId;
+      const isFulfillingStore = Array.isArray(order.storeIds) && order.storeIds.includes(storeId);
+      if (!isHeadStore && !isFulfillingStore) return;
+    }
     try {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
     } catch {
@@ -886,11 +1257,57 @@ export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res
       url: '/orders', tag,
     }).catch(() => {});
   }
+  const fulfilmentStores = await query<{ storeId: string }>(
+    `SELECT DISTINCT store_id as "storeId"
+       FROM mart_order_items
+      WHERE order_id = $1 AND store_id IS NOT NULL`,
+    [order.id]
+  );
   emitOrderEvent({
     type: 'order.updated',
-    order: { id: order.id, orderNumber: order.orderNumber, status, storeId: order.storeId },
+    order: {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      status,
+      storeId: order.storeId,
+      storeIds: fulfilmentStores.rows.map(row => row.storeId),
+    },
   });
   res.json({ success: true, data: order });
+});
+
+// A member store moves its own portion from preparing to ready for pickup. The
+// head store may do the same after collecting items on a member's behalf. This
+// never changes the master order status, so customer-facing progress stays
+// under the head store's control.
+export const adminUpdateOrderFulfilment = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const status = req.body.status;
+  if (status !== 'prepared' && status !== 'delivered') {
+    res.status(400).json({ success: false, error: 'status must be prepared or delivered' }); return;
+  }
+  const fulfilment = await OrderService.updateStoreFulfilment(
+    req.params.id,
+    req.params.storeId,
+    status,
+    req.admin!
+  );
+  const stores = await query<{ storeId: string }>(
+    `SELECT DISTINCT store_id as "storeId"
+       FROM mart_order_items
+      WHERE order_id = $1 AND store_id IS NOT NULL`,
+    [req.params.id]
+  );
+  emitOrderEvent({
+    type: 'order.updated',
+    order: {
+      id: req.params.id,
+      orderNumber: fulfilment.orderNumber,
+      status: fulfilment.masterStatus,
+      storeId: fulfilment.headStoreId,
+      storeIds: stores.rows.map(row => row.storeId),
+    },
+  });
+  res.json({ success: true, data: fulfilment });
 });
 
 export const adminRescheduleOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -1373,10 +1790,6 @@ export const adminGetStores = asyncHandler(async (req: AdminRequest, res: Respon
 export const adminCreateStore = asyncHandler(async (req: AdminRequest, res: Response) => {
   const store = await StoreService.create(req.body);
   await StoreSubscriptionService.createPending(store.id, store.monthlyFee, req.admin!.id);
-  // Set estimated_delivery setting for new store
-  if (req.body.estimatedDelivery) {
-    await SettingsService.update(store.id, 'estimated_delivery', req.body.estimatedDelivery);
-  }
   res.status(201).json({ success: true, data: store });
 });
 
@@ -1386,9 +1799,6 @@ export const adminUpdateStore = asyncHandler(async (req: AdminRequest, res: Resp
   }
   const store = await StoreService.update(req.params.id, req.body);
   if (!store) { res.status(404).json({ success: false, error: 'Store not found' }); return; }
-  if (req.body.estimatedDelivery) {
-    await SettingsService.update(req.params.id, 'estimated_delivery', req.body.estimatedDelivery);
-  }
   res.json({ success: true, data: store });
 });
 
@@ -1587,7 +1997,7 @@ export const customerUpdateProfile = asyncHandler(async (req: CustomerRequest, r
  */
 export const saveGuestDetails = asyncHandler(async (req: Request, res: Response) => {
   const phone = typeof req.body.phone === 'string' ? req.body.phone.replace(/\D/g, '') : '';
-  if (!/^[6-9]\d{9}$/.test(phone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
+  if (!/^\d{10}$/.test(phone)) { res.status(400).json({ success: false, error: 'Invalid phone number' }); return; }
   const address = typeof req.body.address === 'string' ? req.body.address.trim() : '';
   if (address.length < 10 || address.length > 500) { res.status(400).json({ success: false, error: 'Enter a complete delivery address' }); return; }
   const name = typeof req.body.name === 'string' ? req.body.name.trim().replace(/\s+/g, ' ') : '';
@@ -1722,7 +2132,12 @@ export const adminGetUsers = asyncHandler(async (_req: AdminRequest, res: Respon
      LEFT JOIN mart_stores s ON s.id = a.store_id
      LEFT JOIN mart_zones z ON z.id = (
        SELECT mz.id FROM mart_zones mz
-       WHERE mz.primary_store_id = a.store_id OR mz.store_id = a.store_id
+       WHERE mz.primary_store_id = a.store_id
+          OR mz.store_id = a.store_id
+          OR EXISTS (
+            SELECT 1 FROM mart_zone_stores mzs
+            WHERE mzs.zone_id = mz.id AND mzs.store_id = a.store_id
+          )
        LIMIT 1
      )
      ORDER BY a.role ASC, a.name ASC`
@@ -1732,8 +2147,12 @@ export const adminGetUsers = asyncHandler(async (_req: AdminRequest, res: Respon
 
 export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { username, password, name, email, phone, role, storeId } = req.body;
+  const normalizedPhone = String(phone || '').replace(/\D/g, '');
   if (!username?.trim() || !password || !role) {
     res.status(400).json({ success: false, error: 'username, password and role are required' }); return;
+  }
+  if (normalizedPhone && !/^[6-9]\d{9}$/.test(normalizedPhone)) {
+    res.status(400).json({ success: false, error: 'Phone must be a valid 10-digit mobile number' }); return;
   }
   if (password.length < 8) {
     res.status(400).json({ success: false, error: 'Password must be at least 8 characters' }); return;
@@ -1758,7 +2177,7 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
        RETURNING id, username, name, email, phone, role, store_id as "storeId", created_at as "createdAt"`,
       [username.trim(), hash, name?.trim() || null, email?.trim() || null,
-       phone?.trim() || null, role, role === 'super_admin' ? null : storeId]
+        normalizedPhone || null, role, role === 'super_admin' ? null : storeId]
     );
     const created = result.rows[0];
     if (role !== 'super_admin') {
@@ -1778,6 +2197,7 @@ export const adminCreateUser = asyncHandler(async (req: AdminRequest, res: Respo
 export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Response) => {
   const { name, email, phone, role, storeId, password, isActive } = req.body;
   const { id } = req.params;
+  const normalizedPhone = phone === undefined ? undefined : String(phone || '').replace(/\D/g, '');
   if (id === req.admin!.id && role && role !== req.admin!.role) {
     res.status(400).json({ success: false, error: 'Cannot change your own role' }); return;
   }
@@ -1789,12 +2209,15 @@ export const adminUpdateUser = asyncHandler(async (req: AdminRequest, res: Respo
   if (role !== undefined && !isValidAdminRole(role)) {
     res.status(400).json({ success: false, error: `Role must be one of: ${ADMIN_ROLE_LIST}` }); return;
   }
+  if (normalizedPhone && !/^[6-9]\d{9}$/.test(normalizedPhone)) {
+    res.status(400).json({ success: false, error: 'Phone must be a valid 10-digit mobile number' }); return;
+  }
   const fields: string[] = [];
   const params: unknown[] = [];
   let i = 1;
   if (name !== undefined)     { fields.push(`name = $${i++}`);      params.push(name?.trim() || null); }
   if (email !== undefined)    { fields.push(`email = $${i++}`);     params.push(email?.trim() || null); }
-  if (phone !== undefined)    { fields.push(`phone = $${i++}`);     params.push(phone?.trim() || null); }
+  if (phone !== undefined)    { fields.push(`phone = $${i++}`);     params.push(normalizedPhone || null); }
   if (role !== undefined)     { fields.push(`role = $${i++}`);      params.push(role); }
   if (storeId !== undefined)  { fields.push(`store_id = $${i++}`);  params.push(role === 'super_admin' ? null : storeId); }
   if (isActive !== undefined) { fields.push(`is_active = $${i++}`); params.push(isActive); }
@@ -2309,8 +2732,78 @@ export const deactivateStore = asyncHandler(async (req: AdminRequest, res: Respo
 
 // ── Inventory controllers ─────────────────────────────────────────────────────
 
+/**
+ * Stores whose inventory this admin may manage. The hub renders this as a
+ * store picker: a zone head sees its own store plus every store tagged into
+ * its active zone; every other admin sees only its own.
+ */
+export const adminGetInventoryStores = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const admin = req.admin!;
+  if (admin.role === 'super_admin') {
+    const stores = await StoreService.findAll();
+    res.json({
+      success: true,
+      data: stores.map(s => ({ id: s.id, name: s.name, address: s.address, isOwn: false })),
+    });
+    return;
+  }
+  if (!admin.storeId) { res.json({ success: true, data: [] }); return; }
+  const result = await query(
+    `SELECT s.id, s.name, s.address, (s.id = $1) as "isOwn"
+       FROM mart_stores s
+      WHERE s.id = $1
+         OR s.id IN (
+           SELECT zs.store_id
+             FROM mart_zones z
+             JOIN mart_zone_stores zs ON zs.zone_id = z.id
+            WHERE z.primary_store_id = $1
+              AND z.is_active = true
+         )
+      ORDER BY (s.id = $1) DESC, s.name ASC`,
+    [admin.storeId]
+  );
+  res.json({ success: true, data: result.rows });
+});
+
+/** Inventory-relevant settings for the store the caller is managing. */
+export const adminGetInventorySettings = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const settings = await SettingsService.getPublic(storeId);
+  const threshold = settings.low_stock_threshold;
+  res.json({
+    success: true,
+    data: {
+      inventoryTracking: settings.inventory_tracking === 'true',
+      autoOutOfStock: (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
+      lowStockThreshold: threshold != null && threshold !== '' ? Number(threshold) : null,
+    },
+  });
+});
+
+export const adminUpdateInventorySettings = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (!['super_admin', 'store_owner', 'store_manager'].includes(req.admin?.role || '')) {
+    res.status(403).json({ success: false, error: 'Only store owners and managers can change inventory policy' }); return;
+  }
+  const storeId = await resolveManagedStoreId(req);
+  const values: Record<string, string> = {};
+  if (typeof req.body.inventoryTracking === 'boolean') values.inventory_tracking = String(req.body.inventoryTracking);
+  if (typeof req.body.autoOutOfStock === 'boolean') values.auto_out_of_stock = req.body.autoOutOfStock ? 'on_zero' : 'off';
+  if (req.body.lowStockThreshold !== undefined) {
+    const threshold = Number(req.body.lowStockThreshold);
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      res.status(400).json({ success: false, error: 'Low-stock threshold must be a non-negative number' }); return;
+    }
+    values.low_stock_threshold = String(threshold);
+  }
+  if (!Object.keys(values).length) {
+    res.status(400).json({ success: false, error: 'No inventory policy changes provided' }); return;
+  }
+  await SettingsService.updateMany(storeId, values);
+  res.json({ success: true, message: 'Inventory policy updated' });
+});
+
 export const adminGetInventory = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = resolveStoreId(req);
+  const storeId = await resolveManagedStoreId(req);
   const data = await InventoryService.getStoreInventory(storeId);
   res.json({ success: true, data });
 });
@@ -2318,7 +2811,7 @@ export const adminGetInventory = asyncHandler(async (req: AdminRequest, res: Res
 export const adminRestockProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
   const idempotencyKey = req.header('Idempotency-Key');
   if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
-  const storeId = resolveStoreId(req);
+  const storeId = await resolveManagedStoreId(req);
   const { qty, stockUnit, note } = req.body;
   if (!qty || isNaN(parseFloat(qty)) || parseFloat(qty) <= 0) {
     res.status(400).json({ success: false, error: 'qty must be a positive number' }); return;
@@ -2333,7 +2826,7 @@ export const adminRestockProduct = asyncHandler(async (req: AdminRequest, res: R
 });
 
 export const adminGetInventoryHistory = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = resolveStoreId(req);
+  const storeId = await resolveManagedStoreId(req);
   const data = await InventoryService.getHistory(req.params.productId, storeId);
   res.json({ success: true, data });
 });
@@ -2341,7 +2834,7 @@ export const adminGetInventoryHistory = asyncHandler(async (req: AdminRequest, r
 export const adminSetProductStock = asyncHandler(async (req: AdminRequest, res: Response) => {
   const idempotencyKey = req.header('Idempotency-Key');
   if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
-  const storeId = resolveStoreId(req);
+  const storeId = await resolveManagedStoreId(req);
   const { qty, stockUnit } = req.body;
   if (qty === undefined || isNaN(parseFloat(qty)) || parseFloat(qty) < 0) {
     res.status(400).json({ success: false, error: 'qty must be a non-negative number' }); return;
@@ -2358,7 +2851,7 @@ export const adminSetProductStock = asyncHandler(async (req: AdminRequest, res: 
 export const adminBulkRestock = asyncHandler(async (req: AdminRequest, res: Response) => {
   const idempotencyKey = req.header('Idempotency-Key');
   if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
-  const storeId = resolveStoreId(req);
+  const storeId = await resolveManagedStoreId(req);
   const { items, note } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     res.status(400).json({ success: false, error: 'items array required' }); return;
@@ -2591,7 +3084,7 @@ export const getRecommendations = asyncHandler(async (req: Request, res: Respons
   const cleanGuestPhone = typeof guestPhone === 'string'
     ? guestPhone.replace(/\D/g, '')
     : null;
-  const resolvedGuestPhone = !customerId && /^[6-9]\d{9}$/.test(cleanGuestPhone || '')
+  const resolvedGuestPhone = !customerId && /^\d{10}$/.test(cleanGuestPhone || '')
     ? cleanGuestPhone
     : null;
   const result = await RecommendationService.getRecommendations(

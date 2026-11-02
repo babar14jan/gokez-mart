@@ -12,6 +12,7 @@ export interface MartProduct {
   searchAliases: string[];
   description: string | null;
   photoUrl: string | null;
+  photos: string[];
   price: number;
   unit: string;
   approxWeight: string | null;
@@ -20,6 +21,7 @@ export interface MartProduct {
   isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
   isBundle: boolean;
+  isCatalog: boolean;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -28,14 +30,15 @@ export interface MartProduct {
 const PRODUCT_SELECT = `
   SELECT p.id, p.category_id as "categoryId", c.name as "categoryName",
          p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
-         p.description, p.photo_url as "photoUrl",
-         p.weight_options as "weightOptions",
-         sp.price::float, sp.unit,
+          p.description, p.photo_url as "photoUrl", p.photos as "photos",
+          p.weight_options as "weightOptions",
+          sp.price::float, sp.unit,
          sp.approx_weight as "approxWeight",
          sp.discount_percent::float as "discountPercent",
          sp.is_available as "isAvailable",
          sp.availability_status as "availabilityStatus",
          p.is_bundle as "isBundle",
+         p.is_catalog as "isCatalog",
          sp.sort_order as "sortOrder",
          sp.stock_quantity::float as "stockQuantity",
          sp.low_stock_threshold::float as "lowStockThreshold",
@@ -201,14 +204,15 @@ export class ProductService {
     const result = await query<MartProduct & { storeId: string; storeName: string }>(
       `SELECT p.id, p.category_id as "categoryId", c.name as "categoryName",
              p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
-             p.description, p.photo_url as "photoUrl",
-             p.weight_options as "weightOptions",
-             sp.price::float, sp.unit,
+              p.description, p.photo_url as "photoUrl", p.photos as "photos",
+              p.weight_options as "weightOptions",
+              sp.price::float, sp.unit,
              sp.approx_weight as "approxWeight",
              sp.discount_percent::float as "discountPercent",
              sp.is_available as "isAvailable",
              sp.availability_status as "availabilityStatus",
              p.is_bundle as "isBundle",
+             p.is_catalog as "isCatalog",
              sp.sort_order as "sortOrder",
              sp.stock_quantity::float as "stockQuantity",
              sp.low_stock_threshold::float as "lowStockThreshold",
@@ -254,11 +258,15 @@ export class ProductService {
     const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
     const name = normalizeProductName(data.name);
     const localName = normalizeLocalName(data.localName);
+    const photos = data.photos && data.photos.length
+      ? data.photos.map(photo => String(photo)).filter(Boolean)
+      : (data.photoUrl ? [String(data.photoUrl)] : []);
     await query(
-      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, weight_options, is_catalog)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, weight_options, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [id, data.categoryId || null, name, localName, searchAliases,
-       data.description || null, data.photoUrl || null, data.weightOptions ? JSON.stringify(data.weightOptions) : null,
+       data.description || null, photos[0] || null, JSON.stringify(photos),
+       data.weightOptions ? JSON.stringify(data.weightOptions) : null,
        data.isCatalog === true]
     );
     await query(
@@ -283,6 +291,7 @@ export class ProductService {
     // Validated before the transaction opens: a rejected name must not take a
     // connection and a rollback to fail.
     const localName = normalizeLocalName(data.localName);
+    const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
     const unit = data.unit?.trim();
     if (!data.categoryId) throw badRequest('A combo category is required');
     if (!Number.isFinite(Number(data.price)) || Number(data.price) < 0 || !unit) {
@@ -307,20 +316,22 @@ export class ProductService {
       const components: Array<{ productId: string; quantity: number; unit: string }> = [];
       for (const component of data.components) {
         const result = await client.query(
-          `SELECT p.is_bundle as "isBundle"
+          `SELECT p.is_bundle as "isBundle", p.is_catalog as "isCatalog"
            FROM mart_store_products sp JOIN mart_products p ON p.id = sp.product_id
            WHERE sp.store_id = $1 AND sp.product_id = $2
            FOR SHARE`,
           [data.storeId, component.productId]
         );
-        const row = result.rows[0] as { isBundle: boolean } | undefined;
-        if (!row || row.isBundle) throw badRequest('Combo items must be existing standard products in this store');
+        const row = result.rows[0] as { isBundle: boolean; isCatalog: boolean } | undefined;
+        if (!row || row.isBundle || !row.isCatalog) {
+          throw badRequest('Combo items must be catalog products already added to this store');
+        }
         components.push({ productId: component.productId, quantity: Number(component.quantity), unit: component.unit.trim().toLowerCase() });
       }
       await client.query(
-        `INSERT INTO mart_products (id, category_id, name, local_name, description, photo_url, is_bundle)
-         VALUES ($1,$2,$3,$4,$5,$6,true)`,
-        [id, data.categoryId, name, localName, data.description || null, data.photoUrl || null]
+        `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, is_bundle)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,true)`,
+        [id, data.categoryId, name, localName, searchAliases, data.description || null, data.photoUrl || null]
       );
       await client.query(
         `INSERT INTO mart_store_products
@@ -339,6 +350,80 @@ export class ProductService {
     return (await this.findById(id, data.storeId))!;
   }
 
+  static async getBundleComponents(bundleProductId: string, storeId: string): Promise<Array<{
+    productId: string;
+    quantity: number;
+    unit: string;
+  }>> {
+    const result = await query<{ productId: string; quantity: number; unit: string }>(
+      `SELECT component_product_id as "productId", quantity::float, deduction_unit as unit
+         FROM mart_bundle_components
+        WHERE bundle_product_id = $1 AND store_id = $2
+        ORDER BY created_at ASC`,
+      [bundleProductId, storeId]
+    );
+    return result.rows;
+  }
+
+  static async replaceBundleComponents(
+    bundleProductId: string,
+    storeId: string,
+    components: Array<{ productId: string; quantity: number; unit: string }>
+  ): Promise<void> {
+    if (!Array.isArray(components) || components.length < 2) {
+      throw badRequest('Choose at least two products for this combo');
+    }
+    const componentIds = new Set<string>();
+    for (const component of components) {
+      const componentUnit = component?.unit?.trim().toLowerCase();
+      if (!component?.productId || !Number.isFinite(Number(component.quantity)) || Number(component.quantity) <= 0 || !componentUnit) {
+        throw badRequest('Every combo item needs a quantity and measure');
+      }
+      if (!BUNDLE_DEDUCTION_UNITS.has(componentUnit)) throw badRequest('Use a supported inventory measure for every combo item');
+      if (componentIds.has(component.productId)) throw badRequest('Add each product only once to a combo');
+      componentIds.add(component.productId);
+    }
+
+    await transaction(async client => {
+      const bundleResult = await client.query(
+        `SELECT p.is_bundle as "isBundle"
+           FROM mart_store_products sp
+           JOIN mart_products p ON p.id = sp.product_id
+          WHERE sp.store_id = $1 AND sp.product_id = $2
+          FOR UPDATE`,
+        [storeId, bundleProductId]
+      );
+      if (!bundleResult.rows[0]?.isBundle) throw badRequest('Combo not found in this store');
+
+      for (const component of components) {
+        const componentResult = await client.query(
+          `SELECT p.is_bundle as "isBundle", p.is_catalog as "isCatalog"
+             FROM mart_store_products sp
+             JOIN mart_products p ON p.id = sp.product_id
+            WHERE sp.store_id = $1 AND sp.product_id = $2
+            FOR SHARE`,
+          [storeId, component.productId]
+        );
+        const componentRow = componentResult.rows[0] as { isBundle: boolean; isCatalog: boolean } | undefined;
+        if (!componentRow || componentRow.isBundle || !componentRow.isCatalog) {
+          throw badRequest('Combo items must be catalog products already added to this store');
+        }
+      }
+
+      await client.query(
+        `DELETE FROM mart_bundle_components WHERE bundle_product_id = $1 AND store_id = $2`,
+        [bundleProductId, storeId]
+      );
+      for (const component of components) {
+        await client.query(
+          `INSERT INTO mart_bundle_components (store_id, bundle_product_id, component_product_id, quantity, deduction_unit)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [storeId, bundleProductId, component.productId, Number(component.quantity), component.unit.trim().toLowerCase()]
+        );
+      }
+    });
+  }
+
   // Update: global fields (name, photo, description) + store-specific fields (price, availability)
   static async update(id: string, data: Partial<MartProduct> & { storeId?: string }): Promise<MartProduct | null> {
     // Update global product fields
@@ -351,6 +436,7 @@ export class ProductService {
     if (data.searchAliases !== undefined) { globalFields.push(`search_aliases = $${gi++}`); globalParams.push(normalizeSearchAliases(data.searchAliases)); }
     if (data.description !== undefined){ globalFields.push(`description = $${gi++}`); globalParams.push(data.description); }
     if (data.photoUrl !== undefined)   { globalFields.push(`photo_url = $${gi++}`);   globalParams.push(data.photoUrl); }
+    if (data.photos !== undefined)     { globalFields.push(`photos = $${gi++}::jsonb`); globalParams.push(JSON.stringify(data.photos)); }
     if (data.weightOptions !== undefined){ globalFields.push(`weight_options = $${gi++}`); globalParams.push(JSON.stringify(data.weightOptions)); }
     if ((data as any).isCatalog !== undefined) { globalFields.push(`is_catalog = $${gi++}`); globalParams.push((data as any).isCatalog === true); }
     if (globalFields.length) {
@@ -393,6 +479,38 @@ export class ProductService {
     await query(`DELETE FROM mart_products WHERE id = $1`, [id]);
   }
 
+  static async removeFromStore(productId: string, storeId: string): Promise<void> {
+    await transaction(async client => {
+      const listing = await client.query(
+        `SELECT p.is_bundle as "isBundle"
+           FROM mart_store_products sp
+           JOIN mart_products p ON p.id = sp.product_id
+          WHERE sp.store_id = $1 AND sp.product_id = $2
+          FOR UPDATE`,
+        [storeId, productId]
+      );
+      const product = listing.rows[0] as { isBundle: boolean } | undefined;
+      if (!product) throw badRequest('Product is not listed in this store');
+      if (product.isBundle) throw badRequest('Manage combos from the combo editor');
+
+      const usedByCombo = await client.query(
+        `SELECT 1
+           FROM mart_bundle_components
+          WHERE store_id = $1 AND component_product_id = $2
+          LIMIT 1`,
+        [storeId, productId]
+      );
+      if (usedByCombo.rows.length) {
+        throw badRequest('Remove this product from the store combo before removing it from the store list');
+      }
+
+      await client.query(
+        `DELETE FROM mart_store_products WHERE store_id = $1 AND product_id = $2`,
+        [storeId, productId]
+      );
+    });
+  }
+
   // Assign an existing catalog product to a store
   static async assignToStore(productId: string, storeId: string, data: {
     price: number; unit: string; discountPercent?: number;
@@ -421,7 +539,7 @@ export class ProductService {
     const result = await query<{ product_id: string }>(
       `SELECT sp.product_id FROM mart_store_products sp
        JOIN mart_products p ON p.id = sp.product_id
-       WHERE sp.store_id = $1 AND p.is_catalog = true`,
+        WHERE sp.store_id = $1 AND p.is_catalog = true AND p.is_bundle = false`,
       [storeId]
     );
     return result.rows.map(r => r.product_id);
@@ -430,18 +548,21 @@ export class ProductService {
   // Create catalog-only product (no store assignment)
   static async createCatalogProduct(data: {
     name: string; localName?: string; description?: string;
-    photoUrl?: string; categoryId?: string; searchAliases?: string[];
-  }): Promise<{ id: string; name: string }> {
+    photoUrl?: string; photos?: string[]; categoryId?: string; searchAliases?: string[];
+  }): Promise<{ id: string; name: string; photos: string[] }> {
     const id = uuidv4();
     const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
     const name = normalizeProductName(data.name);
     const localName = normalizeLocalName(data.localName);
-    const result = await query<{ id: string; name: string }>(
-      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, is_catalog)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,true)
-       RETURNING id, name`,
+    const photos = data.photos && data.photos.length
+      ? data.photos.map(photo => String(photo)).filter(Boolean)
+      : (data.photoUrl ? [String(data.photoUrl)] : []);
+    const result = await query<{ id: string; name: string; photos: string[] }>(
+      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true)
+       RETURNING id, name, photos`,
       [id, data.categoryId || null, name, localName, searchAliases,
-       data.description || null, data.photoUrl || null]
+       data.description || null, photos[0] || null, JSON.stringify(photos)]
     );
     return result.rows[0];
   }

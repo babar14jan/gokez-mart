@@ -26,6 +26,18 @@ if (config.env === 'production' && process.env.SENTRY_DSN) {
 
 app.set('trust proxy', 1);
 
+// API responses must never be revalidated as 304 Not Modified. The hub keeps
+// its own in-memory cache and explicitly asks for fresh data after writes; a
+// browser-level 304 comes back to axios with no body, so a freshly-added
+// offline row (and its "added by" username) silently disappears from the UI.
+// ETags are useless for JSON that changes per request, so disable them and tell
+// browsers not to store API responses at all.
+app.set('etag', false);
+app.use('/api/v1', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {

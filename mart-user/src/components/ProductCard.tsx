@@ -102,7 +102,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
       </div>
 
       {showDetail && (
-        <ProductDetailSheet product={product} onClose={() => setShowDetail(false)} />
+        <ProductDetailSheet key={product.id} product={product} onClose={() => setShowDetail(false)} />
       )}
     </>
   );

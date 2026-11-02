@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useThemeStore } from '../store/themeStore';
 import {
-  LayoutDashboard, Package, Image as ImageIcon,
+  Home, Package, Image as ImageIcon,
   Users, Shield, Boxes, UserPlus,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
-  Store, ShoppingBasket, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb, MapPin,
+  Store, ShoppingBag, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb, MapPin,
+  TrendingUp,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, authApi } from '../services/api';
@@ -16,70 +17,84 @@ import LiveOrderToasts from './LiveOrderToasts';
 // Roles mirror mart_admins_role_check in migration 056, including store_manager.
 // sales_manager was retired: the database now permits super_admin, store_owner,
 // store_manager, delivery_staff and staff only.
-export const NAV_ALL = [
-  { label: 'Dashboard',          href: '/',                    icon: LayoutDashboard, roles: ['super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff'] },
-  { label: 'Orders',             href: '/orders',              icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff'] },
-  { label: 'Products',           href: '/products',            icon: ShoppingBasket,  roles: ['super_admin', 'store_owner', 'store_manager', 'staff'] },
-  { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'staff'] },
-  { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin'] },
-  { label: 'Leads',              href: '/customer-leads',      icon: UserPlus,        roles: ['super_admin'] },
-  { label: 'Suggestions',        href: '/suggestions',         icon: Lightbulb,       roles: ['super_admin'] },
-  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'] },
-  { label: 'Installs',  href: '/install-analytics',   icon: Smartphone,      roles: ['super_admin'] },
-  { label: 'Categories',         href: '/categories',          icon: LayoutGrid,      roles: ['super_admin', 'store_owner'] },
-  { label: 'Catalog',            href: '/catalog',             icon: LayoutList,      roles: ['super_admin', 'store_owner', 'store_manager'] },
-  { label: 'Feedback',           href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager'] },
-  { label: 'Campaigns',          href: '/campaigns',           icon: Megaphone,       roles: ['super_admin', 'store_owner'] },
-  { label: 'Carousel',           href: '/carousel',            icon: ImageIcon,       roles: ['super_admin'] },
-  { label: 'Home Page',          href: '/home-sections',       icon: LayoutTemplate,  roles: ['super_admin', 'store_owner'] },
-  { label: 'My Deliveries',      href: '/delivery',            icon: Truck,           roles: ['delivery_staff', 'staff'] },
-  { label: 'Stores',             href: '/stores',              icon: Store,           roles: ['super_admin', 'store_owner'] },
-  { label: 'Zones',              href: '/zones',               icon: MapPin,          roles: ['super_admin'] },
-  { label: 'Subscriptions',      href: '/subscriptions',       icon: CreditCard,      roles: ['super_admin'] },
-  { label: 'Store Requests',     href: '/store-applications',  icon: Inbox,           roles: ['super_admin'] },
-  { label: 'Users',              href: '/users',               icon: UserCog,         roles: ['super_admin'] },
-  { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'] },
+type NavSection = 'Daily Work' | 'Store Management' | 'Administration';
+type NavItem = {
+  label: string; href: string; icon: React.ElementType; roles: string[]; section: NavSection;
+};
+
+export const NAV_SECTIONS: NavSection[] = ['Daily Work', 'Store Management', 'Administration'];
+
+export const NAV_ALL: NavItem[] = [
+  { label: 'Dashboard',          href: '/',                    icon: Home,            roles: ['super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff'], section: 'Daily Work' },
+  { label: 'Orders',             href: '/orders',              icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff'], section: 'Daily Work' },
+  { label: 'Products',           href: '/products',            icon: ShoppingBag,     roles: ['super_admin', 'store_owner', 'store_manager', 'staff'], section: 'Daily Work' },
+  { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'staff'], section: 'Daily Work' },
+  { label: 'Sales',              href: '/daily-sales',         icon: TrendingUp,      roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Daily Work' },
+  { label: 'My Deliveries',      href: '/delivery',            icon: Truck,           roles: ['delivery_staff', 'staff'], section: 'Daily Work' },
+  { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
+  { label: 'Catalog',            href: '/catalog',             icon: LayoutList,      roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
+  { label: 'Feedback',           href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
+  { label: 'Campaigns',          href: '/campaigns',           icon: Megaphone,       roles: ['super_admin', 'store_owner'], section: 'Store Management' },
+  { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin'], section: 'Administration' },
+  { label: 'Leads',              href: '/customer-leads',      icon: UserPlus,        roles: ['super_admin'], section: 'Administration' },
+  { label: 'Suggestions',        href: '/suggestions',         icon: Lightbulb,       roles: ['super_admin'], section: 'Administration' },
+  { label: 'Installs',           href: '/install-analytics',   icon: Smartphone,      roles: ['super_admin'], section: 'Administration' },
+  { label: 'Categories',         href: '/categories',          icon: LayoutGrid,      roles: ['super_admin', 'store_owner'], section: 'Administration' },
+  { label: 'Carousel',           href: '/carousel',            icon: ImageIcon,       roles: ['super_admin'], section: 'Administration' },
+  { label: 'Home Page',          href: '/home-sections',       icon: LayoutTemplate,  roles: ['super_admin', 'store_owner'], section: 'Administration' },
+  { label: 'Stores',             href: '/stores',              icon: Store,           roles: ['super_admin', 'store_owner'], section: 'Administration' },
+  { label: 'Zones',              href: '/zones',               icon: MapPin,          roles: ['super_admin'], section: 'Administration' },
+  { label: 'Subscriptions',      href: '/subscriptions',       icon: CreditCard,      roles: ['super_admin'], section: 'Administration' },
+  { label: 'Store Requests',     href: '/store-applications',  icon: Inbox,           roles: ['super_admin'], section: 'Administration' },
+  { label: 'Users',              href: '/users',               icon: UserCog,         roles: ['super_admin'], section: 'Administration' },
+  { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'], section: 'Administration' },
 ];
 
 // Bottom nav tabs per role — max 3 primary + More
 export const BOTTOM_NAV: Record<string, { label: string; href: string; icon: React.ElementType }[]> = {
   super_admin:    [
-    { label: 'Home',      href: '/',          icon: Store },
+    { label: 'Home',      href: '/',          icon: Home },
     { label: 'Orders',    href: '/orders',    icon: Package },
     { label: 'Inventory', href: '/inventory', icon: Boxes },
-    { label: 'Products',  href: '/products',  icon: ShoppingBasket },
+    { label: 'Products',  href: '/products',  icon: ShoppingBag },
   ],
   store_owner:  [
-    { label: 'Home',      href: '/',          icon: Store },
+    { label: 'Home',      href: '/',          icon: Home },
     { label: 'Orders',    href: '/orders',    icon: Package },
     { label: 'Inventory', href: '/inventory', icon: Boxes },
-    { label: 'Products',  href: '/products',  icon: ShoppingBasket },
+    { label: 'Products',  href: '/products',  icon: ShoppingBag },
   ],
   store_manager: [
-    { label: 'Home',      href: '/',          icon: Store },
+    { label: 'Home',      href: '/',          icon: Home },
     { label: 'Orders',    href: '/orders',    icon: Package },
     { label: 'Inventory', href: '/inventory', icon: Boxes },
-    { label: 'Products',  href: '/products',  icon: ShoppingBasket },
+    { label: 'Products',  href: '/products',  icon: ShoppingBag },
   ],
   delivery_staff: [
     { label: 'Deliveries', href: '/delivery', icon: Truck },
     { label: 'Orders',     href: '/orders',   icon: Package },
   ],
   staff: [
-    { label: 'Home',      href: '/',          icon: Store },
+    { label: 'Home',      href: '/',          icon: Home },
     { label: 'Orders',    href: '/orders',    icon: Package },
     { label: 'Inventory', href: '/inventory', icon: Boxes },
-    { label: 'Products',  href: '/products',  icon: ShoppingBasket },
+    { label: 'Products',  href: '/products',  icon: ShoppingBag },
   ],
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  const { username, name, storeId, role, logout, isSuperAdmin } = useAuthStore();
+  const { username, name, storeId, role, canAccessDailySales, logout, isSuperAdmin } = useAuthStore();
   const { onAction, label } = useHeaderAction();
   // Fail closed. An absent or unrecognised role yields an empty sidebar rather
   // than the full super-admin nav (previously `role || 'super_admin'`).
   const userRole = isKnownRole(role) ? (role as string) : '';
-  const NAV = userRole ? NAV_ALL.filter(item => item.roles.includes(userRole)) : [];
+  // Daily Sales is only for the head store's owner/manager (or super admin).
+  // Hide it until the backend has confirmed head status for this session.
+  const NAV = userRole ? NAV_ALL.filter(item => {
+    if (!item.roles.includes(userRole)) return false;
+    if (item.href === '/daily-sales' && userRole !== 'super_admin' && canAccessDailySales !== true) return false;
+    return true;
+  }) : [];
   const [stores, setStores] = useState<{ id: string; name: string; address?: string | null }[]>([]);
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
@@ -137,6 +152,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/': 'Dashboard', '/orders': 'Orders', '/products': 'Products',
     '/categories': 'Categories', '/customers': 'Customers',
     '/analytics': 'Analytics', '/inventory': 'Inventory',
+    '/daily-sales': 'Sales Overview',
     '/profile': 'My Profile', '/change-password': 'Change Password',
     '/stores': 'Stores', '/zones': 'Zones', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Requests',
@@ -158,22 +174,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const activeStoreAddress = storeAddress || stores.find(s => s.id === activeStoreId)?.address || '';
 
   const SidebarLinks = ({ onNav }: { onNav?: () => void }) => (
-    <nav className="flex-1 overflow-y-auto py-3 space-y-0.5">
-      {NAV.map(item => {
-        const active = pathname === item.href;
+    <nav className="flex-1 overflow-y-auto py-3">
+      {NAV_SECTIONS.map(section => {
+        const items = NAV.filter(item => item.section === section);
+        if (!items.length) return null;
         return (
-          <NavLink
-            key={item.href}
-            to={item.href}
-            onClick={onNav}
-            className={`sidebar-link ${active ? 'active' : ''} ${collapsed ? 'flex-col gap-2 px-2 py-5 justify-center' : ''}`}
-          >
-            <item.icon className={`flex-shrink-0 ${collapsed ? 'w-8 h-8' : 'w-5 h-5'}`} />
-            {collapsed
-              ? <span className={`text-xs font-semibold text-center leading-tight ${active ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</span>
-              : <span className="truncate">{item.label}</span>
-            }
-          </NavLink>
+          <div key={section} className={collapsed ? 'mb-2' : 'mb-4'}>
+            {!collapsed && <p className="px-4 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500">{section}</p>}
+            <div className="space-y-0.5">
+              {items.map(item => {
+                const active = pathname === item.href;
+                return (
+                  <NavLink
+                    key={item.href}
+                    to={item.href}
+                    onClick={onNav}
+                    className={`sidebar-link ${active ? 'active' : ''} ${collapsed ? 'flex-col gap-2 px-2 py-5 justify-center' : ''}`}
+                  >
+                    <item.icon className={`flex-shrink-0 ${collapsed ? 'w-8 h-8' : 'w-5 h-5'}`} />
+                    {collapsed
+                      ? <span className={`text-xs font-semibold text-center leading-tight ${active ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</span>
+                      : <span className="truncate">{item.label}</span>
+                    }
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </nav>
@@ -233,7 +260,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
+              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <div className="flex items-center gap-1 -ml-1 min-w-0">
                   <button onClick={() => navigate(-1)}
                     className="p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">

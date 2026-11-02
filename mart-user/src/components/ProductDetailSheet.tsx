@@ -38,6 +38,14 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
     ? Math.round(product.price - discountedPrice)
     : 0;
 
+  const photos = product.photos?.length
+    ? product.photos.filter(photo => Boolean(photo))
+    : product.photoUrl
+      ? [product.photoUrl]
+      : [];
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(photos[0] ?? null);
+  const primaryPhoto = selectedPhoto ?? photos[0] ?? product.photoUrl;
+
   // Lock body scroll when sheet is open
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -115,7 +123,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
           {/* Large hero image — full-width, clearly bigger than the home card */}
           <div className="relative h-48 w-full overflow-hidden bg-gray-50 sm:h-56 dark:bg-slate-700">
             <SmartImage
-              src={product.photoUrl}
+              src={primaryPhoto ?? undefined}
               alt={product.name}
               className="h-full w-full"
               imgClassName={`object-contain ${isOutOfStock ? 'opacity-50' : ''}`}
@@ -123,6 +131,23 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
               fetchPriority="high"
               fallback={<div className="flex h-full w-full items-center justify-center text-7xl">🥦</div>}
             />
+            {photos.length > 1 && (
+              <div className="absolute bottom-2 left-2 right-2 flex gap-2 overflow-x-auto px-2">
+                {photos.map(photo => (
+                  <button
+                    key={photo}
+                    type="button"
+                    onClick={() => setSelectedPhoto(photo)}
+                    className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 ${selectedPhoto === photo ? 'border-emerald-500' : 'border-white/70 dark:border-slate-700'} bg-white dark:bg-slate-800`}
+                  >
+                    <img src={photo} alt="" className="h-full w-full object-cover" />
+                    {selectedPhoto === photo && (
+                      <span className="absolute inset-0 flex items-center justify-center bg-emerald-500/20 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">PRIMARY</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
             {savings > 0 && !isOutOfStock && (
               <span className="absolute left-3 top-3 rounded-full border border-saffron-600/45 bg-saffron-400 px-3 py-1.5 text-xs font-extrabold leading-none text-ink shadow-[0_1px_4px_rgba(111,59,19,0.3)]">
                 {product.discountPercent}% OFF

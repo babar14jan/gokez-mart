@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
+  Alert, View, Text, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, RefreshControl, Modal, ScrollView, Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -23,6 +23,7 @@ const CARD_W   = Math.floor((SCREEN_W - 32 - 8) / 3); // 3 cols, 16px side paddi
 
 export default function HomeScreen() {
   const cartItems  = useCartStore(s => s.items);
+  const clearCart = useCartStore(s => s.clearCart);
   const totalItems = () => cartItems.reduce((s, i) => s + i.quantity, 0);
   const { zones, selectedZone, setZones, setSelectedZone } = useZoneStore();
   const colors     = useThemeColors();
@@ -38,11 +39,11 @@ export default function HomeScreen() {
   const [refreshing,     setRefreshing]     = useState(false);
   const [outsideWarning, setOutsideWarning] = useState(false);
 
-  const loadProducts = useCallback(async (storeId?: string) => {
+  const loadProducts = useCallback(async (storeId?: string, zoneId?: string) => {
     try {
       const [catRes, prodRes] = await Promise.all([
         storeApi.getCategories(),
-        storeApi.getProducts(undefined, storeId),
+        storeApi.getProducts(undefined, storeId, zoneId),
       ]);
       setCategories(catRes.data.data);
       setProducts(prodRes.data.data.filter(p => p.availabilityStatus === 'available'));
@@ -61,12 +62,12 @@ export default function HomeScreen() {
       const currentZone = useZoneStore.getState().selectedZone;
       const zoneToUse   = currentZone ?? (fetchedZones.length > 0 ? fetchedZones[0] : null);
       if (zoneToUse && !currentZone) setSelectedZone(zoneToUse);
-      await loadProducts(zoneToUse?.storeId);
+      await loadProducts(zoneToUse?.storeId, zoneToUse?.id);
       if (fetchedZones.length > 0) {
         const loc = await getUserLocation();
         if (loc) {
           const match = findMatchingZone(loc.lat, loc.lng, fetchedZones);
-          if (match) { setSelectedZone(match.zone, true); await loadProducts(match.zone.storeId); }
+          if (match) { setSelectedZone(match.zone, true); await loadProducts(match.zone.storeId, match.zone.id); }
           else setOutsideWarning(true);
         }
       }
@@ -81,11 +82,25 @@ export default function HomeScreen() {
     if (!loc) return;
     const match = findMatchingZone(loc.lat, loc.lng, zones);
     if (match) {
-      setSelectedZone(match.zone, true);
-      setOutsideWarning(false);
-      setLoading(true);
-      await loadProducts(match.zone.storeId);
-      setLoading(false);
+      const applyZone = async () => {
+        setSelectedZone(match.zone, true);
+        setOutsideWarning(false);
+        setLoading(true);
+        await loadProducts(match.zone.storeId, match.zone.id);
+        setLoading(false);
+      };
+      if (selectedZone?.id !== match.zone.id && cartItems.length > 0) {
+        Alert.alert(
+          'Change delivery area?',
+          `Your cart was built for ${selectedZone?.name || 'the current area'}. Switching to ${match.zone.name} will clear it because products and prices can differ by area.`,
+          [
+            { text: 'Keep current area', style: 'cancel' },
+            { text: 'Change and clear cart', style: 'destructive', onPress: () => { clearCart(); void applyZone(); } },
+          ],
+        );
+        return;
+      }
+      await applyZone();
     } else { setOutsideWarning(true); }
   };
 

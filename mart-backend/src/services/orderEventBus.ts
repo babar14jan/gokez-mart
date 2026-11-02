@@ -11,7 +11,10 @@ export interface OrderLivePayload {
   status?: string;
   total?: number;
   guestName?: string;
+  /** Head store that owns the order. */
   storeId?: string;
+  /** Every store with lines in the order, so member stores get live updates too. */
+  storeIds?: string[];
 }
 
 export interface OrderLiveEvent {

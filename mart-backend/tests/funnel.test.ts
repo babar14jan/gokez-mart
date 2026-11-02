@@ -548,7 +548,7 @@ describe('I. Guest checkouts flow through the lead funnel', () => {
     // the Customers page, so the Leads page must not grow a guest bucket again.
     assert.equal(/'Checkout-only'/.test(hub), false,
       'the checkout-only bucket belongs on the Customers page, not Leads');
-    assert.ok(/getAll\('unverified'/.test(hub),
+    assert.ok(/getAll\(\s*'unverified'/.test(hub),
       'the Leads page must list only OTP-not-completed prospects');
   });
 

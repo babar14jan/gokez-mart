@@ -22,6 +22,7 @@ export interface WeightOption {
 
 export interface Product {
   id: string; name: string; localName: string | null; description: string | null;
+  storeId?: string;
   photoUrl: string | null; price: number; unit: string;
   weightOptions: WeightOption[] | null;
   discountPercent: number; isAvailable: boolean;
@@ -137,21 +138,21 @@ export const addressApi = {
 
 export const storeApi = {
   getCategories: () => api.get<{ success: boolean; data: Category[] }>('/categories'),
-  getProducts: (categoryId?: string, storeId?: string) =>
+  getProducts: (categoryId?: string, storeId?: string, zoneId?: string) =>
     api.get<{ success: boolean; data: Product[] }>('/products', {
-      params: { ...(categoryId ? { categoryId } : {}), ...(storeId ? { storeId } : {}) },
+      params: { ...(categoryId ? { categoryId } : {}), ...(storeId ? { storeId } : {}), ...(zoneId ? { zoneId } : {}) },
     }),
-  getSettings: (storeId?: string) =>
+  getSettings: (storeId?: string, zoneId?: string) =>
     api.get<{ success: boolean; data: PublicSettings }>('/settings/public', {
-      params: storeId ? { storeId } : {},
+      params: { ...(storeId ? { storeId } : {}), ...(zoneId ? { zoneId } : {}) },
     }),
   getZones: () => api.get<{ success: boolean; data: MartZone[] }>('/zones'),
   placeOrder: (data: {
     guestName: string; guestPhone: string; guestAddress: string;
     guestAddressLabel?: string;
-    zoneName?: string; storeId?: string;
+    zoneId?: string; zoneName?: string; storeId?: string;
     deliveryPreference?: string; deliveryNote?: string;
-    items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
+    items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number; sourceStoreId?: string }>;
     paymentMethod: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;
   }) => api.post('/orders', data, { headers: { 'Idempotency-Key': crypto.randomUUID() } }),

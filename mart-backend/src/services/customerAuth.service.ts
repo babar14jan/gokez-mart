@@ -328,7 +328,7 @@ export class CustomerAuthService {
    */
   static async saveGuestDetails(phone: string, data: { name?: string | null; address: string; label?: string | null; latitude?: number | null; longitude?: number | null }): Promise<void> {
     const cleaned = phone.replace(/\D/g, '');
-    if (!/^[6-9]\d{9}$/.test(cleaned)) throw badRequest('Invalid phone number');
+    if (!/^\d{10}$/.test(cleaned)) throw badRequest('Invalid phone number');
     const address = data.address.trim();
     if (address.length < 10 || address.length > 500) throw badRequest('Enter a complete delivery address');
     const name = (data.name ?? '').trim().replace(/\s+/g, ' ');

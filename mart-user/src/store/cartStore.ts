@@ -5,6 +5,7 @@ import { syncFunnelCart, track } from '../utils/track';
 
 export interface CartItem {
   productId: string;
+  sourceStoreId?: string;
   productName: string;
   unit: string;
   price: number;
@@ -52,7 +53,7 @@ export const useCartStore = create<CartState>()(
           if (existing) {
             return { items: state.items.map(i => i.productId === product.id && i.unit === u ? { ...i, quantity: i.quantity + 1 } : i) };
           }
-          return { items: [...state.items, { productId: product.id, productName: product.name, unit: u, price: p, mrp, quantity: 1, photoUrl: product.photoUrl }] };
+          return { items: [...state.items, { productId: product.id, sourceStoreId: product.storeId, productName: product.name, unit: u, price: p, mrp, quantity: 1, photoUrl: product.photoUrl }] };
         });
         if (isFirstCartInteraction) track('cart_started');
         track('cart_added', { productId: product.id, productName: product.name, unit: u, quantity: 1 });

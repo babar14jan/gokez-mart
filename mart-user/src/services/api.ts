@@ -179,6 +179,8 @@ export interface Category {
 
 export interface Product {
   id: string; name: string; localName: string | null; description: string | null;
+  /** Fulfilling store for a zone catalogue listing; never displayed to customers. */
+  storeId?: string;
   searchAliases: string[];
   photoUrl: string | null; price: number; unit: string;
   approxWeight: string | null;
@@ -186,6 +188,8 @@ export interface Product {
   discountPercent: number; isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
   categoryId: string; categoryName: string;
+  /** Catalog photo gallery. Falls back to the primary photo when absent. */
+  photos?: string[] | null;
   /** A fixed combo/bundle sold as one product. Drives the "Today's Combos" section. */
   isBundle: boolean;
 }
@@ -374,11 +378,11 @@ export const storeApi = {
     guestName: string; guestPhone: string; guestAddress: string;
     guestAddressLabel?: string;
     latitude?: number | null; longitude?: number | null;
-    zoneName?: string; storeId?: string;
+    zoneId?: string; zoneName?: string; storeId?: string;
     deliveryPreference?: string; deliveryNote?: string;
     /** ISO instant for a customer-chosen "Scheduled" delivery window. */
     scheduledFor?: string;
-    items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number }>;
+    items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number; sourceStoreId?: string }>;
     paymentMethod?: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;
     /** Closes the cart funnel. Optional; the server ignores a malformed value. */
