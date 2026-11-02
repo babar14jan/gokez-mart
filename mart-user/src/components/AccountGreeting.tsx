@@ -318,8 +318,8 @@ export default function AccountGreeting() {
                 await updateAddress(id, label, address, coordinates?.latitude ?? null, coordinates?.longitude ?? null);
                 return true;
               }}
-              onDeleteAddress={(id) => removeAddress(id)}
-              onSetDefaultAddress={(id) => setDefaultAddress(id)}
+              onDeleteAddress={async (id) => { await removeAddress(id); }}
+              onSetDefaultAddress={async (id) => { await setDefaultAddress(id); }}
             />
           )}
         </div>,
