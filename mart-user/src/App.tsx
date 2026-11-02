@@ -929,8 +929,10 @@ export default function App() {
         if (previousZoneId !== result.zone.id && useCartStore.getState().items.length > 0) {
           useCartStore.getState().clearCart();
           setLocationNotice(`Delivery area changed to ${result.zone.name}. Your cart was cleared because products and prices can differ by area.`);
-          break;
+        } else {
+          setLocationNotice(`Delivering to ${result.zone.name}`);
         }
+        break;
       case 'kept':
         setLocationNotice(`Delivering to ${result.zone.name}`);
         break;
