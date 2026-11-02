@@ -1,0 +1,46 @@
+# Gokez-Mart — Project Rules for Cline
+
+## Speed Protocol (follow strictly)
+- Respond fast: keep explanations short. Default to "change + 1-line summary". Give long explanations only if asked.
+- Batch all independent tool calls (reads, searches, edits) into one response.
+- Prefer narrow edits over broad rewrites; do not restructure code the user didn't ask for.
+- Never read package.json / config files you don't need — commands and stack are documented below.
+- If the user names a file, read only that file first; avoid repo-wide exploration.
+- Verify with the smallest possible test/lint command (targeted file, not full suite).
+- Do not run builds or full test suites unless explicitly asked or a change is large/cross-cutting.
+- No placeholder code: always complete, working code.
+
+## Repo Map (monorepo, npm workspaces)
+Root: /Volumes/Entertainment/VS_code/My_working_projects/gokez-mart
+Node: 20.x (see .nvmrc). Root package.json only has dev:* convenience scripts.
+
+- `mart-backend/` — Express API. CommonJS, TypeScript, tsx dev runner.
+  - `src/`: index.ts, app.ts, config, controllers, routes, services, middleware, utils, database, types
+  - Tests in `tests/*.test.ts`
+- `mart-user/` — Vite + React 18 customer web app (port 5177), Tailwind, zustand, axios.
+  - `src/`: pages, components, hooks, store, services, constants, utils
+  - Tests in `tests/*.test.ts`
+- `mart-hub/` — Vite + React admin panel (port 5178), Tailwind, zustand, axios, react-hook-form.
+  - `src/`: pages, components, hooks, store, services, utils
+- `mart-mobile/` — mobile app
+- `docs/` — audit/implementation docs; `FEATURES.txt` — feature list; `README.md` — project overview
+- Deploy: Railway (`railway.json`), Render (`render.yaml`), Docker (`docker-compose.local.yml`)
+
+## Exact Commands (do not re-discover)
+All run from repo root (npm workspaces):
+- Backend:   `npm run dev:api`        (tsx watch)
+- Web:       `npm run dev:web`        (vite, port 5177)
+- Admin:     `npm run dev:admin`      (vite, port 5178)
+- Backend build: `npm run build --workspace=mart-backend`
+- Backend test:  `npm run test --workspace=mart-backend`          (node --test, all)
+- Web test:      `npm run test --workspace=mart-user`
+- Targeted test (fastest): `node --import tsx --test <workspace>/tests/<file>.test.ts`
+- DB migrate:    `npm run db:migrate --workspace=mart-backend`
+- Web build:     `npm run build --workspace=mart-user`
+- Admin build:   `npm run build --workspace=mart-hub`
+
+## Conventions
+- TypeScript everywhere; keep existing patterns/style of the touched file.
+- Backend: pg (Postgres), express-validator, helmet/hpp security middleware, OpenTelemetry + Sentry already wired.
+- Frontend: react-router-dom v6, zustand for state, axios for API, Tailwind CSS, lucide-react icons.
+- Keep changes minimal and scoped to the task; do not rename or move files unless asked.

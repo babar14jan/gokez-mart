@@ -243,12 +243,12 @@ export default function DailySalesPage() {
   };
 
   const periodTotals = useMemo(() => days.reduce((totals, day) => ({
-    transactions: totals.transactions + day.ordersPlaced + day.offlineEntryCount,
+    transactions: totals.transactions + day.ordersDelivered + day.offlineEntryCount,
     cash: totals.cash + day.codValue + day.offlineCash,
     upi: totals.upi + day.upiValue + day.offlineUpi,
-    online: totals.online + day.totalDaySales - day.offlineTotal,
+    online: totals.online + day.orderValueAfterCoupon,
     offline: totals.offline + day.offlineTotal,
-    sales: totals.sales + day.totalDaySales,
+    sales: totals.sales + day.orderValueAfterCoupon + day.offlineTotal,
   }), { transactions: 0, cash: 0, upi: 0, online: 0, offline: 0, sales: 0 }), [days]);
 
   const entryTotals = useMemo(() => entries.reduce((acc, e) => ({
@@ -541,9 +541,12 @@ function LedgerTable({ days, selectedDate, isSuperAdmin }: {
   selectedDate: string;
   isSuperAdmin: boolean;
 }) {
-  const columns = isSuperAdmin
-    ? { date: 'w-[20%]', transactions: 'w-[14%]', coupon: 'w-[16%]', cash: 'w-[17%]', upi: 'w-[17%]', total: 'w-[16%]' }
-    : { date: 'w-[22%]', transactions: 'w-[16%]', coupon: '', cash: 'w-[20%]', upi: 'w-[20%]', total: 'w-[22%]' };
+  const onlineColumns = isSuperAdmin
+    ? { date: 'w-[17%]', transactions: 'w-[12%]', coupon: 'w-[14%]', delivery: 'w-[14%]', cash: 'w-[15%]', upi: 'w-[15%]', total: 'w-[13%]' }
+    : { date: 'w-[19%]', transactions: 'w-[15%]', coupon: '', delivery: 'w-[16%]', cash: 'w-[17%]', upi: 'w-[17%]', total: 'w-[16%]' };
+  const offlineColumns = isSuperAdmin
+    ? { date: 'w-[20%]', transactions: 'w-[15%]', coupon: 'w-[17%]', cash: 'w-[16%]', upi: 'w-[16%]', total: 'w-[16%]' }
+    : { date: 'w-[22%]', transactions: 'w-[16%]', coupon: '', cash: 'w-[21%]', upi: 'w-[21%]', total: 'w-[20%]' };
   return (
     <>
       <section className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -554,20 +557,22 @@ function LedgerTable({ days, selectedDate, isSuperAdmin }: {
           <table className="min-w-[600px] w-full table-fixed text-xs sm:min-w-[820px] sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
-                <th className={`${columns.date} px-2 py-2 font-medium sm:px-4 sm:py-3`}>Date</th>
-                <th className={`${columns.transactions} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Transactions</th>
-                {isSuperAdmin && <th className={`${columns.coupon} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Gokez subsidy</th>}
-                <th className={`${columns.cash} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Cash</th>
-                <th className={`${columns.upi} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>UPI</th>
-                <th className={`${columns.total} px-1.5 py-2 text-right font-medium sm:px-3 sm:py-3`}>Total</th>
+                <th className={`${onlineColumns.date} px-2 py-2 font-medium sm:px-4 sm:py-3`}>Date</th>
+                <th className={`${onlineColumns.transactions} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Transactions</th>
+                {isSuperAdmin && <th className={`${onlineColumns.coupon} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Gokez subsidy</th>}
+                <th className={`${onlineColumns.delivery} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Delivery</th>
+                <th className={`${onlineColumns.cash} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Cash</th>
+                <th className={`${onlineColumns.upi} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>UPI</th>
+                <th className={`${onlineColumns.total} px-1.5 py-2 text-right font-medium sm:px-3 sm:py-3`}>Total</th>
               </tr>
             </thead>
             <tbody>
               {days.map(d => (
                 <tr key={d.date} className={`border-b border-slate-100 last:border-0 dark:border-slate-700/60 ${d.date === selectedDate ? 'bg-indigo-50/60 dark:bg-indigo-500/10' : ''}`}>
                   <td className="px-2 py-2 font-medium text-slate-800 sm:px-4 sm:py-3 dark:text-slate-100">{d.date}</td>
-                  <td className="px-1.5 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{d.ordersPlaced}{d.ordersCancelled ? <span className="text-slate-400"> (−{d.ordersCancelled})</span> : null}</td>
+                  <td className="px-1.5 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{d.ordersDelivered}</td>
                   {isSuperAdmin && <td className="px-1.5 py-2 text-purple-600 sm:px-3 sm:py-3 dark:text-purple-400">{inr(d.couponDeduction || 0)}</td>}
+                  <td className="px-1.5 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{inr(d.deliveryCharge)}</td>
                   <td className="px-1.5 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{inr(d.codValue)}</td>
                   <td className="px-1.5 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{inr(d.upiValue)}</td>
                   <td className="px-1.5 py-2 text-right font-semibold text-slate-800 sm:px-3 sm:py-3 dark:text-slate-100">{inr(d.orderValueAfterCoupon)}</td>
@@ -586,12 +591,12 @@ function LedgerTable({ days, selectedDate, isSuperAdmin }: {
           <table className="min-w-[600px] w-full table-fixed text-xs sm:min-w-[820px] sm:text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
-                <th className={`${columns.date} px-2 py-2 font-medium sm:px-4 sm:py-3`}>Date</th>
-                <th className={`${columns.transactions} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Transactions</th>
-                {isSuperAdmin && <th className={`${columns.coupon} px-1.5 py-2 sm:px-3 sm:py-3`} aria-label="" />}
-                <th className={`${columns.cash} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Cash</th>
-                <th className={`${columns.upi} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>UPI</th>
-                <th className={`${columns.total} px-1.5 py-2 text-right font-medium sm:px-3 sm:py-3`}>Total</th>
+                <th className={`${offlineColumns.date} px-2 py-2 font-medium sm:px-4 sm:py-3`}>Date</th>
+                <th className={`${offlineColumns.transactions} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Transactions</th>
+                {isSuperAdmin && <th className={`${offlineColumns.coupon} px-1.5 py-2 sm:px-3 sm:py-3`} aria-label="" />}
+                <th className={`${offlineColumns.cash} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>Cash</th>
+                <th className={`${offlineColumns.upi} px-1.5 py-2 font-medium sm:px-3 sm:py-3`}>UPI</th>
+                <th className={`${offlineColumns.total} px-1.5 py-2 text-right font-medium sm:px-3 sm:py-3`}>Total</th>
               </tr>
             </thead>
             <tbody>
