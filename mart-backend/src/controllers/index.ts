@@ -839,7 +839,11 @@ export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, 
   if (localName !== undefined)   { fields.push(`local_name = $${i++}`);  params.push(normalizeLocalName(localName)); }
   if (searchAliases !== undefined) { fields.push(`search_aliases = $${i++}`); params.push(normalizeSearchAliases(searchAliases)); }
   if (description !== undefined) { fields.push(`description = $${i++}`); params.push(description); }
-  if (photos !== undefined)      { fields.push(`photos = $${i++}::jsonb`); params.push(JSON.stringify(photos)); }
+  if (photos !== undefined) {
+    fields.push(`photos = $${i++}::jsonb`); params.push(JSON.stringify(photos));
+    fields.push(`photo_url = $${i++}`);
+    params.push(photoUrl || (Array.isArray(photos) && photos[0]) || null);
+  }
   else if (photoUrl !== undefined) { fields.push(`photo_url = $${i++}`); params.push(photoUrl); }
   if (categoryId !== undefined)  { fields.push(`category_id = $${i++}`); params.push(categoryId || null); }
   if (!fields.length) { res.status(400).json({ success: false, error: 'Nothing to update' }); return; }
