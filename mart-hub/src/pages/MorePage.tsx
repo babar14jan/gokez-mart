@@ -387,7 +387,7 @@ export default function MorePage() {
           <Toggle checked={ringtoneEnabled} onChange={handleRingtoneToggle} />
           <label className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer">
             Browse
-            <input type="file" accept="audio/*" className="sr-only" onChange={handleRingtoneChange} />
+            <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg" className="sr-only" onChange={handleRingtoneChange} />
           </label>
           {hasCustomRingtone && (
             <button onClick={handleClearRingtone} className="text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200">

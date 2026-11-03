@@ -20,7 +20,7 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
 
   return (
     <nav className="mobile-bottom-nav relative z-40 border-t border-gray-200 bg-[#f7f8fa] dark:border-slate-800 dark:bg-slate-900">
-      <div className="mx-auto flex h-16 max-w-lg items-end justify-between px-5 pb-2">
+      <div className="mx-auto flex h-16 max-w-lg items-center justify-between px-5 pb-2">
         {tabs.map(({ id, label, Icon }, index) => {
           const isActive = active === id;
           return (

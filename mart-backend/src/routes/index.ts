@@ -43,6 +43,7 @@ router.get('/promotions/:id/click', ctrl.redirectPromotionClick);
 // ── Admin auth ────────────────────────────────────────────────────────────────
 router.post('/admin/login',            ctrl.adminLogin);
 router.post('/admin/logout',           authenticate, ctrl.adminLogout);
+router.post('/admin/session/refresh',  authenticate, ctrl.adminRefreshSession);
 router.get('/admin/me',                authenticate, ctrl.adminGetMe);
 router.put('/admin/profile',           authenticate, ctrl.adminUpdateProfile);
 router.put('/admin/change-password',   authenticate, ctrl.adminChangePassword);

@@ -70,10 +70,11 @@ const pg = require('pg');
         if (typeof jti === 'string') activeSessionJtis.delete(jti);
         return { rows: [] };
       }
-      // The authenticate middleware's session check.
-      if (/FROM mart_admin_sessions WHERE token_jti/.test(text)) {
+      // The authenticate middleware's session check joins the current admin
+      // role and store rather than trusting stale JWT claims.
+      if (/FROM mart_admin_sessions s\s+JOIN mart_admins a/.test(text)) {
         const jti = params?.[0];
-        return { rows: activeSessionJtis.has(jti as string) ? [{ id: 'session-1' }] : [] };
+        return { rows: activeSessionJtis.has(jti as string) ? [{ role: 'super_admin', store_id: null }] : [] };
       }
       if (/adminHasActiveSubscription|FROM mart_store_subscriptions/.test(text)) return { rows: [{ ok: 1 }] };
       return { rows: [] };
@@ -143,6 +144,27 @@ describe('Admin session lifetime', () => {
     assert.ok(expiresAt instanceof Date || typeof expiresAt === 'string' || typeof expiresAt === 'number');
     assert.equal(new Date(expiresAt as any).getTime(), payload.exp * 1000,
       'the row is stamped from the token exp — the middleware check and the JWT cannot drift');
+  });
+
+  test('a valid session can be renewed without creating another device session', async () => {
+    const { token, jti } = await login();
+    queriesRun = [];
+    const res = await fetch(`${baseUrl}/api/v1/admin/session/refresh`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json() as { data: { token: string } };
+    const refreshed = jwt.decode(body.data.token) as { jti: string; exp: number };
+    assert.equal(refreshed.jti, jti, 'renewal keeps the same revocable session');
+    const renewal = queriesRun.find(q => /UPDATE mart_admin_sessions SET expires_at/.test(q.text));
+    assert.ok(renewal, 'the current session expiry was extended');
+    assert.equal(new Date(renewal.params?.[0] as Date).getTime(), refreshed.exp * 1000);
+
+    const protectedRequest = await fetch(`${baseUrl}/api/v1/admin/users`, {
+      headers: { Authorization: `Bearer ${body.data.token}` },
+    });
+    assert.equal(protectedRequest.status, 200, 'the refreshed token is accepted');
   });
 });
 

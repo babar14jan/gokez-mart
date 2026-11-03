@@ -2,10 +2,9 @@
 // public/splash/. iOS shows these instead of a blank white frame while an
 // installed PWA boots, so a cold launch is branded rather than white.
 //
-// The launch image is the single splash artwork (mart_splash.webp) — it
-// already carries the logo and its copy — scaled onto the brand-green canvas.
-// That keeps the hand-over from the OS launch image to the in-page splash
-// invisible rather than a jump between two designs.
+// The launch image is the original splash artwork (mart_splash.webp), which
+// already carries its green surround, logo and copy. It fills each device
+// canvas directly so no additional visual margins are introduced.
 //
 // Requires ImageMagick (`magick`) on PATH. Re-run it whenever the splash
 // artwork or splash colour changes, then keep the
@@ -30,10 +29,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = join(ROOT, 'public');
 const OUT = join(PUBLIC, 'splash');
 
-// The new splash artwork carries the logo and its copy, so every launch image
-// is simply that artwork scaled onto the brand-green canvas. Keep in sync
-// with the asset and the background in index.html.
-const BG = '#087a43';
 const SPLASH = join(PUBLIC, 'mart_splash.webp');
 
 // [pixelWidth, pixelHeight, pointWidth, pointHeight, devicePixelRatio]
@@ -64,18 +59,13 @@ function magick(args) {
 
 mkdirSync(OUT, { recursive: true });
 
-// The launch image is the single splash artwork, scaled to cover the device
-// canvas on the brand-green background — no layered composition, no text drawn
-// separately. The artwork already carries the logo and its copy.
+// The original artwork fills the canvas without any added frame. Cover scaling
+// preserves the intended artwork scale across the iPhone and iPad aspect ratios.
 for (const [w, h, ptW, ptH, dpr] of DEVICES) {
-  const scale = Math.max(w / 1024, h / 1536);
-  const resizedW = Math.round(1024 * scale);
-  const resizedH = Math.round(1536 * scale);
   magick([
     SPLASH,
-    '-resize', `${resizedW}x${resizedH}`,
+    '-resize', `${w}x${h}^`,
     '-gravity', 'center',
-    '-background', BG,
     '-extent', `${w}x${h}`,
     '-strip',
     `PNG8:${join(OUT, `apple-splash-${w}-${h}.png`)}`,

@@ -661,6 +661,36 @@ export const adminLogout = asyncHandler(async (req: AdminRequest, res: Response)
   res.json({ success: true });
 });
 
+export const adminRefreshSession = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const token = req.headers.authorization?.slice(7);
+  const payload = token ? jwt.verify(token, config.jwt.secret) as { jti?: string } : null;
+  if (!payload?.jti) {
+    res.status(401).json({ success: false, error: 'Invalid session' });
+    return;
+  }
+
+  const refreshedToken = jwt.sign(
+    {
+      id: req.admin!.id,
+      username: req.admin!.username,
+      role: req.admin!.role,
+      type: ADMIN_TOKEN_TYPE,
+      storeId: req.admin!.storeId,
+      jti: payload.jti,
+    },
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn } as any
+  );
+  const decoded = jwt.decode(refreshedToken) as { exp?: number } | null;
+  if (!decoded?.exp) throw new Error('Unable to determine refreshed session expiry');
+
+  await query(
+    `UPDATE mart_admin_sessions SET expires_at = $1 WHERE token_jti = $2 AND is_active = true`,
+    [new Date(decoded.exp * 1000), payload.jti]
+  );
+  res.json({ success: true, data: { token: refreshedToken } });
+});
+
 export const adminGetMe = asyncHandler(async (req: AdminRequest, res: Response) => {
   const result = await query(
     `SELECT id, username, name, email, phone, role, store_id as "storeId", last_login_at, created_at

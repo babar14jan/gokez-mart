@@ -124,6 +124,7 @@ api.interceptors.response.use(
 export const authApi = {
   login: (username: string, password: string) =>
     api.post('/admin/login', { username, password }),
+  refreshSession: () => api.post('/admin/session/refresh'),
   getMe: () => api.get('/admin/me', { fresh: true }),
   // Revokes this device's session server-side (mart_admin_sessions). Called on
   // manual logout so the session ends for real instead of lingering until the
