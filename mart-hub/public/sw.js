@@ -232,6 +232,7 @@ self.addEventListener('push', (e) => {
       image: '/icons/icon-512.png',
       data: { url: payload.url || '/' },
       vibrate: [200, 100, 200],
+      silent: false,
       tag: payload.tag || 'gokez-hub',
       renotify: true,
       requireInteraction: true,

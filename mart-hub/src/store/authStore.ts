@@ -15,6 +15,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isSuperAdmin: () => boolean;
   login: (token: string, data: { id?: string | null; username: string; name: string; email?: string | null; phone?: string | null; role?: string; storeId?: string | null; canAccessDailySales?: boolean | null }) => void;
+  replaceToken: (token: string) => void;
   setProfile: (data: { name?: string; email?: string | null; phone?: string | null }) => void;
   setCanAccessDailySales: (value: boolean | null) => void;
   setName: (name: string) => void;
@@ -71,6 +72,11 @@ export const useAuthStore = create<AuthState>((setState) => ({
     set('mart_admin_store_id', data.storeId || null);
     setBool('mart_admin_can_access_daily_sales', data.canAccessDailySales ?? null);
     setState({ id: data.id || null, token, username: data.username, name: data.name, email: data.email || null, phone: data.phone || null, role: data.role || null, storeId: data.storeId || null, canAccessDailySales: data.canAccessDailySales ?? null, isAuthenticated: true });
+  },
+
+  replaceToken: (token) => {
+    set('mart_admin_token', token);
+    setState({ token });
   },
 
   setProfile: (data) => {
