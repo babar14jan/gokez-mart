@@ -61,7 +61,8 @@ export async function setOrderAlarmEnabled(enabled: boolean): Promise<void> {
 }
 
 export async function saveOrderRingtone(file: File): Promise<void> {
-  if (!file.type.startsWith('audio/')) throw new Error('Choose an audio file.');
+  const isAudioFile = file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|webm)$/i.test(file.name);
+  if (!isAudioFile) throw new Error('Choose an MP3 or other audio file.');
   if (file.size > 5 * 1024 * 1024) throw new Error('Choose an audio file smaller than 5 MB.');
 
   const database = await openDatabase();

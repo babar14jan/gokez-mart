@@ -82,7 +82,7 @@
 # one the browser and the Cloudflare edge fall back to heuristics and re-validate
 # on a cold visit. One day mirrors the favicon rule above — long enough that a
 # return visit paints it from cache, short enough that new artwork still lands.
-/fresh-veg.webp
+/fresh_icon.webp
   Content-Type: image/webp
   Cache-Control: public, max-age=86400
 

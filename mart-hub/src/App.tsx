@@ -124,19 +124,25 @@ export default function App() {
   const isDark = useThemeStore(s => s.isDark);
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   const setCanAccessDailySales = useAuthStore(s => s.setCanAccessDailySales);
+  const replaceToken = useAuthStore(s => s.replaceToken);
 
-  // Refresh the head-store flag on load. Login already carries it, but an
-  // existing session may predate a zone change (or this field), so /admin/me is
-  // the source of truth for hiding the Daily Sales nav and route.
+  // Renew a valid session whenever the installed Hub starts. This keeps a
+  // regularly used PWA signed in across app close, background and device lock,
+  // while logout still revokes the same server-side session.
   useEffect(() => {
     if (!isAuthenticated) return;
-    authApi.getMe()
+    authApi.refreshSession()
+      .then(r => {
+        const token = r.data?.data?.token;
+        if (typeof token === 'string') replaceToken(token);
+        return authApi.getMe();
+      })
       .then(r => {
         const value = r.data?.data?.canAccessDailySales;
         if (typeof value === 'boolean') setCanAccessDailySales(value);
       })
       .catch(() => {});
-  }, [isAuthenticated, setCanAccessDailySales]);
+  }, [isAuthenticated, replaceToken, setCanAccessDailySales]);
 
   // Re-subscribe to push only when authenticated and permission already granted
   useEffect(() => {
