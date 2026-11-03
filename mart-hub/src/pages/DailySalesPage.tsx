@@ -70,6 +70,8 @@ export default function DailySalesPage() {
   const [entryDate, setEntryDate] = useState(todayStr());
   const [productQuery, setProductQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<StoreProduct | null>(null);
+  const [isOtherProduct, setIsOtherProduct] = useState(false);
+  const [otherAmount, setOtherAmount] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [quantity, setQuantity] = useState('1');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | ''>('');
@@ -139,6 +141,7 @@ export default function DailySalesPage() {
 
   const pickProduct = (p: StoreProduct) => {
     setSelectedProduct(p);
+    setIsOtherProduct(false);
     setProductQuery(p.name);
     setShowSuggestions(false);
     setFormError('');
@@ -146,21 +149,37 @@ export default function DailySalesPage() {
 
   const clearProduct = () => {
     setSelectedProduct(null);
+    setIsOtherProduct(false);
     setProductQuery('');
+    setOtherAmount('');
     setShowSuggestions(false);
+  };
+
+  const pickOtherProduct = () => {
+    setSelectedProduct(null);
+    setIsOtherProduct(true);
+    setProductQuery('Other');
+    setOtherAmount('');
+    setShowSuggestions(false);
+    setFormError('');
   };
 
   const selectedUnitPrice = selectedProduct ? effectivePrice(selectedProduct) : 0;
   const parsedQuantity = Number(quantity);
+  const parsedOtherAmount = Number(otherAmount);
   const draftTotal = selectedProduct && Number.isFinite(parsedQuantity) && parsedQuantity > 0
     ? round2(selectedUnitPrice * parsedQuantity)
     : 0;
+  const entryTotal = isOtherProduct ? parsedOtherAmount : draftTotal;
 
   const addEntry = async () => {
     setFormError('');
-    if (!selectedProduct) { setFormError('Search and pick a product first.'); return; }
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    if (!selectedProduct && !isOtherProduct) { setFormError('Search and pick a product, or select Other.'); return; }
+    if (!isOtherProduct && (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0)) {
       setFormError('Quantity must be greater than zero.'); return;
+    }
+    if (isOtherProduct && (!Number.isFinite(parsedOtherAmount) || parsedOtherAmount <= 0)) {
+      setFormError('Enter an amount greater than zero.'); return;
     }
     if (!paymentMethod) { setFormError('Select a payment method.'); return; }
     if (!notes.trim()) { setFormError('Select a sale source.'); return; }
@@ -168,8 +187,9 @@ export default function DailySalesPage() {
     try {
       await dailySalesApi.addEntry({
         date: entryDate,
-        productId: selectedProduct.id,
+        productId: selectedProduct?.id,
         quantity: parsedQuantity,
+        amount: isOtherProduct ? parsedOtherAmount : undefined,
         paymentMethod,
         notes: notes.trim(),
         storeId,
@@ -191,7 +211,10 @@ export default function DailySalesPage() {
     setShowEntryForm(true);
     setEntryDate(entry.date);
     setProductQuery(entry.productName);
-    setSelectedProduct(products.find(p => p.id === entry.productId) || null);
+    const product = products.find(p => p.id === entry.productId) || null;
+    setSelectedProduct(product);
+    setIsOtherProduct(!product && entry.productId === null);
+    setOtherAmount(entry.productId === null ? String(entry.total) : '');
     setQuantity(String(entry.quantity));
     setPaymentMethod(entry.paymentMethod);
     setNotes(entry.notes || '');
@@ -200,8 +223,9 @@ export default function DailySalesPage() {
 
   const updateEntry = async () => {
     if (!editingEntry) return;
-    if (!selectedProduct) { setFormError('Search and pick a product first.'); return; }
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) { setFormError('Quantity must be greater than zero.'); return; }
+    if (!selectedProduct && !isOtherProduct) { setFormError('Search and pick a product, or select Other.'); return; }
+    if (!isOtherProduct && (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0)) { setFormError('Quantity must be greater than zero.'); return; }
+    if (isOtherProduct && (!Number.isFinite(parsedOtherAmount) || parsedOtherAmount <= 0)) { setFormError('Enter an amount greater than zero.'); return; }
     if (!paymentMethod) { setFormError('Select a payment method.'); return; }
     if (!notes.trim()) { setFormError('Select a sale source.'); return; }
     setAdding(true);
@@ -209,8 +233,9 @@ export default function DailySalesPage() {
       await dailySalesApi.updateEntry({
         id: editingEntry.id,
         date: entryDate,
-        productId: selectedProduct.id,
+        productId: selectedProduct?.id,
         quantity: parsedQuantity,
+        amount: isOtherProduct ? parsedOtherAmount : undefined,
         paymentMethod,
         notes: notes.trim(),
         storeId,
@@ -302,7 +327,7 @@ export default function DailySalesPage() {
 
       {/* Add an offline sale row */}
       {showEntryForm && <section
-        className="page-card border-emerald-200 p-3 sm:p-4 dark:border-emerald-500/30">
+        className="relative z-20 page-card overflow-visible border-emerald-200 p-3 sm:p-4 dark:border-emerald-500/30">
         <div className="mb-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
@@ -328,7 +353,7 @@ export default function DailySalesPage() {
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" />
           </div>
 
-          <div className="relative lg:col-span-4">
+          <div className="relative z-30 lg:col-span-4">
             <label className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
               <Search className="h-3.5 w-3.5" /> Product
             </label>
@@ -343,6 +368,7 @@ export default function DailySalesPage() {
                 onChange={e => {
                   setProductQuery(e.target.value);
                   setSelectedProduct(null);
+                  setIsOtherProduct(false);
                   setShowSuggestions(true);
                   setFormError('');
                 }}
@@ -372,16 +398,25 @@ export default function DailySalesPage() {
                     </span>
                   </button>
                 ))}
+                <button type="button" onMouseDown={e => e.preventDefault()} onClick={pickOtherProduct}
+                  className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700">
+                  <Plus className="h-4 w-4" /> Other sale
+                </button>
               </div>
             )}
           </div>
 
-          <div className="lg:col-span-1">
+          {isOtherProduct ? <div className="lg:col-span-1">
+            <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Amount</label>
+            <input type="number" min="0.01" step="0.01" value={otherAmount}
+              onChange={e => setOtherAmount(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" />
+          </div> : <div className="lg:col-span-1">
             <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Qty</label>
             <input type="number" min="0.01" step="1" value={quantity}
               onChange={e => setQuantity(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" />
-          </div>
+          </div>}
 
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Payment *</label>
@@ -405,7 +440,7 @@ export default function DailySalesPage() {
           </div>
 
           <div className="flex items-end lg:col-span-1">
-            <button onClick={editingEntry ? updateEntry : addEntry} disabled={adding || !selectedProduct || !paymentMethod || !notes}
+            <button onClick={editingEntry ? updateEntry : addEntry} disabled={adding || (!selectedProduct && !isOtherProduct) || !paymentMethod || !notes}
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200">
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               {editingEntry ? 'Update' : 'Add'}
@@ -426,6 +461,13 @@ export default function DailySalesPage() {
               )}
             </span>
             <span className="font-semibold text-indigo-600 dark:text-indigo-400">Row total {inr(draftTotal)}</span>
+          </div>
+        )}
+
+        {isOtherProduct && (
+          <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
+            <span className="font-medium text-slate-800 dark:text-slate-100">Other sale</span>
+            <span className="font-semibold text-indigo-600 dark:text-indigo-400">Row total {inr(entryTotal)}</span>
           </div>
         )}
 

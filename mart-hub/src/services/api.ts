@@ -183,16 +183,19 @@ export const ordersApi = {
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi') =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
+  declineCancellationRequest: (id: string) => api.put(`/admin/orders/${id}/cancellation-request/decline`),
   updateFulfilment: (id: string, storeId: string, status: 'prepared' | 'delivered') =>
     api.put(`/admin/orders/${id}/fulfilments/${storeId}`, { status }),
-  // Correct a partial delivery: send the quantity actually delivered per line
-  // (0 removes the line). The backend recalculates totals and restores stock.
-  adjustItems: (
+  // Manage an order's lines: send delivered quantities per line (0 removes the
+  // line) and/or add new products. The backend recalculates totals, restores
+  // stock for removals and deducts stock for additions.
+  manageOrder: (
     id: string,
     adjustments: Array<{ orderItemId: string; deliveredQuantity: number }>,
     reason: string,
     paymentMethod?: 'cod' | 'upi',
-  ) => api.put(`/admin/orders/${id}/items`, { adjustments, reason, paymentMethod }),
+    additions?: Array<{ productId: string; quantity: number; unit?: string; price?: number }>,
+  ) => api.put(`/admin/orders/${id}/items`, { adjustments, reason, paymentMethod, additions }),
   reschedule: (id: string, scheduledFor: string) =>
     api.put(`/admin/orders/${id}/reschedule`, { scheduledFor }),
   // Acknowledge an after-hours order for delivery at the next opening hours
@@ -626,11 +629,11 @@ export const dailySalesApi = {
   getEntries: (date: string, storeId?: string, opts?: FetchOpts) =>
     api.get("/admin/daily-sales/entries", { params: { date, storeId }, fresh: opts?.fresh }),
   addEntry: (data: {
-    date: string; productId: string; quantity: number;
+    date: string; productId?: string; quantity: number; amount?: number;
     paymentMethod: 'cash' | 'upi'; notes?: string | null; storeId?: string;
   }) => api.post("/admin/daily-sales/entries", data),
   updateEntry: (data: {
-    id: string; date: string; productId: string; quantity: number;
+    id: string; date: string; productId?: string; quantity: number; amount?: number;
     paymentMethod: 'cash' | 'upi'; notes?: string | null; storeId?: string;
   }) => api.put(`/admin/daily-sales/entries/${data.id}`, data),
   removeEntry: (id: string, storeId?: string) =>

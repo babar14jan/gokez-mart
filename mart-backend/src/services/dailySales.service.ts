@@ -286,27 +286,41 @@ export class DailySalesService {
     }));
   }
 
-  // Add one offline counter row. Price/name/unit are read from the store's
-  // listing server-side — the client never supplies a price, so an offline
-  // entry always matches what the same item sells for in the app. The
-  // effective (discounted) price is used, matching the customer storefront.
+  // Add one offline counter row. Store-product prices are resolved server-side
+  // from the listing; manual Other entries carry the staff-entered total.
   static async addEntry(
     storeId: string,
     date: string,
-    productId: string,
+    productId: string | null,
     quantity: number,
     paymentMethod: 'cash' | 'upi',
     notes: string | null,
-    adminId: string | null
+    adminId: string | null,
+    otherAmount?: number,
   ): Promise<{ id: string }> {
     if (!isDate(date)) throw badRequest('date must be YYYY-MM-DD');
     assertNotFuture(date);
-    if (!productId) throw badRequest('productId is required');
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 99_999) {
       throw badRequest('Quantity must be greater than 0');
     }
     if (paymentMethod !== 'cash' && paymentMethod !== 'upi') {
       throw badRequest('paymentMethod must be cash or upi');
+    }
+
+    if (!productId) {
+      if (!Number.isFinite(otherAmount) || otherAmount! <= 0 || otherAmount! > 9_999_999.99) {
+        throw badRequest('amount must be greater than 0 for Other sales');
+      }
+      const amount = round2(otherAmount!);
+      const inserted = await query<{ id: string }>(
+        `INSERT INTO mart_offline_sales
+           (store_id, sale_date, product_id, product_name, unit, unit_price, quantity, total,
+            payment_method, notes, recorded_by)
+         VALUES ($1, $2::date, NULL, 'Other', '—', $3, 1, $3, $4, $5, $6)
+         RETURNING id`,
+        [storeId, date, amount, paymentMethod, notes ?? null, adminId]
+      );
+      return { id: inserted.rows[0].id };
     }
 
     const { rows } = await query<{
@@ -346,19 +360,36 @@ export class DailySalesService {
     id: string,
     storeId: string,
     date: string,
-    productId: string,
+    productId: string | null,
     quantity: number,
     paymentMethod: 'cash' | 'upi',
-    notes: string | null
+    notes: string | null,
+    otherAmount?: number,
   ): Promise<{ id: string }> {
     if (!isDate(date)) throw badRequest('date must be YYYY-MM-DD');
     assertNotFuture(date);
-    if (!productId) throw badRequest('productId is required');
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 99_999) {
       throw badRequest('Quantity must be greater than 0');
     }
     if (paymentMethod !== 'cash' && paymentMethod !== 'upi') {
       throw badRequest('paymentMethod must be cash or upi');
+    }
+
+    if (!productId) {
+      if (!Number.isFinite(otherAmount) || otherAmount! <= 0 || otherAmount! > 9_999_999.99) {
+        throw badRequest('amount must be greater than 0 for Other sales');
+      }
+      const amount = round2(otherAmount!);
+      const updated = await query<{ id: string }>(
+        `UPDATE mart_offline_sales
+           SET sale_date = $2::date, product_id = NULL, product_name = 'Other', unit = '—',
+               unit_price = $3, quantity = 1, total = $3, payment_method = $4, notes = $5
+         WHERE id = $1 AND store_id = $6
+         RETURNING id`,
+        [id, date, amount, paymentMethod, notes, storeId]
+      );
+      if (updated.rows.length === 0) throw notFound('Offline sale not found');
+      return { id: updated.rows[0].id };
     }
 
     const { rows } = await query<{

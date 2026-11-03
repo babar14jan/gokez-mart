@@ -78,23 +78,31 @@ export const authenticate = async (req: AdminRequest, res: Response, next: NextF
     res.status(403).json({ success: false, error: 'Access denied' });
     return;
   }
-  const sessionResult = await query(
-    `SELECT id FROM mart_admin_sessions WHERE token_jti = $1 AND is_active = true AND expires_at > NOW()`,
+  const sessionResult = await query<{ role: string; store_id: string | null }>(
+    `SELECT a.role, a.store_id
+       FROM mart_admin_sessions s
+       JOIN mart_admins a ON a.id = s.admin_id
+      WHERE s.token_jti = $1 AND s.is_active = true AND s.expires_at > NOW() AND a.is_active = true`,
     [payload.jti]
   );
   if (sessionResult.rows.length === 0) {
     res.status(401).json({ success: false, error: 'Session expired or revoked' });
     return;
   }
-  if (payload.role !== 'super_admin' && !(await StoreSubscriptionService.adminHasActiveSubscription(payload.id))) {
+  const admin = sessionResult.rows[0];
+  if (!ADMIN_ROLES.includes(admin.role as AdminRole)) {
+    res.status(403).json({ success: false, error: 'Access denied' });
+    return;
+  }
+  if (admin.role !== 'super_admin' && !(await StoreSubscriptionService.adminHasActiveSubscription(payload.id))) {
     res.status(403).json({ success: false, error: 'Your store subscription is not active. Contact your administrator.' });
     return;
   }
   req.admin = {
     id: payload.id,
     username: payload.username,
-    role: payload.role,
-    storeId: payload.storeId || null,
+    role: admin.role as AdminRole,
+    storeId: admin.store_id,
   };
   next();
 };

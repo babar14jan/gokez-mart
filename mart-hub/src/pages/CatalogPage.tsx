@@ -281,9 +281,10 @@ export default function CatalogPage() {
                       <img src={primaryPhoto} alt={form.name} className="w-32 h-32 rounded-2xl object-cover border-2 border-emerald-400 shadow-sm" />
                       <button
                         type="button"
-                        onClick={() => photos.length > 1 && handleRemovePhoto(photos[photos.length - 1])}
+                        onClick={() => handleRemovePhoto(primaryPhoto)}
                         className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md"
-                        disabled={photos.length <= 1}
+                        aria-label="Remove primary photo"
+                        title="Remove photo"
                       >
                         <X className="w-3 h-3 text-white" />
                       </button>
@@ -294,6 +295,14 @@ export default function CatalogPage() {
                     <label className="w-32 h-32 rounded-2xl bg-gray-100 dark:bg-slate-700 border-2 border-dashed border-gray-300 dark:border-slate-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
                       <Camera className="w-6 h-6 text-gray-500" />
                       <span className="text-[10px] text-gray-500">Add photo</span>
+                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddPhotos} />
+                    </label>
+                  </div>
+                )}
+                {primaryPhoto && (
+                  <div className="flex justify-center">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                      <Upload className="h-3.5 w-3.5" /> Add photos
                       <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddPhotos} />
                     </label>
                   </div>
