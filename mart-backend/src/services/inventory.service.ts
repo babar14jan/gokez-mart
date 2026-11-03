@@ -96,7 +96,8 @@ export class InventoryService {
     items: Array<{ productId: string; quantity: number; sellingUnit: string; storeId?: string | null }>,
     autoOutOfStock: boolean,
     lowStockThreshold: number,
-    transactionClient?: any
+    transactionClient?: any,
+    deductionReferenceId: string = orderId,
   ) {
     const deduct = async (client: any) => {
     const results = [];
@@ -108,7 +109,7 @@ export class InventoryService {
       const lineStoreId = item.storeId || storeId;
       const alreadyDeducted = await client.query(
         `SELECT 1 FROM mart_inventory_log WHERE product_id = $1 AND store_id = $2 AND reference_id = $3 AND reason = 'order_deducted'`,
-        [item.productId, lineStoreId, orderId]
+        [item.productId, lineStoreId, deductionReferenceId]
       );
       if (alreadyDeducted.rows.length) continue;
       const cur: { rows: Array<{
@@ -154,7 +155,7 @@ export class InventoryService {
         `INSERT INTO mart_inventory_log
            (product_id, store_id, change_qty, reason, reference_id)
          VALUES ($1, $2, $3, 'order_deducted', $4)`,
-        [item.productId, lineStoreId, -deduction, orderId]
+        [item.productId, lineStoreId, -deduction, deductionReferenceId]
       );
 
       results.push({ productId: item.productId, newQty, wentOutOfStock, isLow });

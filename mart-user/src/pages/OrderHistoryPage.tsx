@@ -32,7 +32,7 @@ const CANCEL_REASONS: Array<{ value: string; label: string }> = [
 
 function OrderDetailSheet({
   order, onClose, onOrderAgain, nextOpenLabel, whatsappNumber, fallbackName, fallbackPhone,
-  confirmCancel, cancelling, cancelError, onCancel, onRequestCancel, onDismissConfirm,
+  canCancel, confirmCancel, cancelling, cancelError, onCancel, onRequestCancel, onDismissConfirm,
 }: {
   order: any;
   onClose: () => void;
@@ -41,6 +41,7 @@ function OrderDetailSheet({
   whatsappNumber?: string;
   fallbackName?: string | null;
   fallbackPhone?: string | null;
+  canCancel: boolean;
   confirmCancel: string | null;
   cancelling: string | null;
   cancelError: string;
@@ -50,11 +51,37 @@ function OrderDetailSheet({
 }) {
   const nextOpenWhen = nextOpenLabel || order.scheduledForLabel || null;
   const cancellationPolicy = order.cancellationPolicy;
-  const canCancel = cancellationPolicy?.canCancel === true;
+  const canRequestCancellation = order.status === 'preparing' && !order.cancellationRequestedAt;
+  const isCancellationRequest = order.status === 'preparing';
   const showOrderSupport = !ALL_CLOSED.includes(order.status) && (cancellationPolicy || whatsappNumber || cancelError);
   // Require an explicit reason before the destructive confirm is reachable; this
   // is what stops a stray tap from cancelling an order.
   const [cancelReason, setCancelReason] = useState('');
+  const adjustmentUpdates = (Object.values((order.adjustments || []).reduce((groups: Record<string, {
+    createdAt: string;
+    reason: string | null;
+    changes: string[];
+  }>, adjustment: any) => {
+    const key = `${adjustment.createdAt || ''}:${adjustment.reason || ''}`;
+    const group = groups[key] || {
+      createdAt: adjustment.createdAt || '',
+      reason: adjustment.reason || null,
+      changes: [],
+    };
+    const quantity = Number(adjustment.deliveredQuantity) || 0;
+    const removedQuantity = Number(adjustment.removedQuantity) || 0;
+    if (Number(adjustment.previousQuantity) === 0) {
+      group.changes.push(`Added ${adjustment.productName} · ${adjustment.unit} × ${quantity}`);
+    } else if (removedQuantity > 0) {
+      group.changes.push(`Removed ${adjustment.productName} · ${adjustment.unit} × ${removedQuantity}`);
+    } else {
+      group.changes.push(`Updated ${adjustment.productName}`);
+    }
+    groups[key] = group;
+    return groups;
+  }, {})) as Array<{ createdAt: string; reason: string | null; changes: string[] }>).sort(
+    (first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()
+  );
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -229,6 +256,22 @@ function OrderDetailSheet({
             </div>
           </div>
 
+          {adjustmentUpdates.length > 0 && (
+            <div className="border-t border-gray-100 pt-3 dark:border-slate-700">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-slate-400">Order updates</p>
+              <div className="space-y-2">
+                {adjustmentUpdates.map((update, index) => (
+                  <div key={`${update.createdAt}-${index}`} className="text-xs leading-snug text-gray-700 dark:text-slate-300">
+                    {update.changes.map((change, changeIndex) => (
+                      <p key={changeIndex} className="font-medium text-gray-900 dark:text-white">{change}</p>
+                    ))}
+                    {update.reason && <p className="mt-0.5 text-gray-500 dark:text-slate-400">Reason: {update.reason}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Payment + Receipt — compact single section */}
           <div className="border-t border-gray-100 dark:border-slate-700 pt-3 space-y-2">
             {order.status === 'delivered' && order.paymentCollectedAt && (
@@ -241,17 +284,8 @@ function OrderDetailSheet({
 
           {showOrderSupport && (
             <div className="border-t border-gray-100 pt-4 dark:border-slate-700">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-slate-400">Order support</p>
               <div className="space-y-2">
-                {!canCancel && cancellationPolicy?.reason && (
-                  <p className="text-xs leading-snug text-gray-600 dark:text-slate-300">{cancellationPolicy.reason}</p>
-                )}
-                {!cancellationPolicy?.canReportDelay && cancellationPolicy?.promisedDeliveryAt && (
-                  <p className="text-xs leading-snug text-gray-600 dark:text-slate-300">
-                    Your selected delivery window remains active until {formatDateTime(cancellationPolicy.promisedDeliveryAt)}.
-                  </p>
-                )}
-                {(whatsappNumber || (canCancel && confirmCancel !== order.id)) && (
+                {(whatsappNumber || ((canCancel || canRequestCancellation) && confirmCancel !== order.id)) && (
                   <div className="flex items-center gap-2">
                 {whatsappNumber && (() => {
                   const name = order.guestName || fallbackName || 'Customer';
@@ -274,14 +308,20 @@ function OrderDetailSheet({
                     Cancel order
                   </button>
                 )}
+                {canRequestCancellation && confirmCancel !== order.id && (
+                  <button type="button" onClick={() => { setCancelReason(''); onRequestCancel(order); }}
+                    className="shrink-0 px-2 py-2 text-xs font-semibold text-red-500 transition-colors hover:text-red-600">
+                    Request cancellation
+                  </button>
+                )}
                   </div>
                 )}
-                {canCancel && confirmCancel === order.id && (
+                {(canCancel || canRequestCancellation) && confirmCancel === order.id && (
                   <div className="rounded-xl bg-red-50 px-3 py-3 dark:bg-red-950/30">
                     <p className="mb-1 text-xs font-medium text-red-700 dark:text-red-300">
-                      {order.status === 'confirmed' ? 'This order is confirmed, but preparation has not started yet.' : 'This order has not started preparation yet.'}
+                      {isCancellationRequest ? 'The store will review this request before cancelling the order.' : order.status === 'confirmed' ? 'This order is confirmed, but preparation has not started yet.' : 'This order has not started preparation yet.'}
                     </p>
-                    <p className="mb-2 text-xs font-medium text-red-700 dark:text-red-300">Why are you cancelling this order?</p>
+                    <p className="mb-2 text-xs font-medium text-red-700 dark:text-red-300">Why are you {isCancellationRequest ? 'requesting cancellation' : 'cancelling this order'}?</p>
                     <div className="mb-3 space-y-1.5">
                       {CANCEL_REASONS.filter(reason => reason.value !== 'delivery_too_slow' || cancellationPolicy?.canReportDelay).map(reason => (
                         <label key={reason.value}
@@ -305,7 +345,7 @@ function OrderDetailSheet({
                       <button type="button" onClick={() => onCancel(order, cancelReason)}
                         disabled={!cancelReason || cancelling === order.id}
                         className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
-                        {cancelling === order.id ? 'Cancelling...' : 'Cancel order'}
+                        {cancelling === order.id ? (isCancellationRequest ? 'Requesting...' : 'Cancelling...') : (isCancellationRequest ? 'Request cancellation' : 'Cancel order')}
                       </button>
                       <button type="button" onClick={() => { setCancelReason(''); onDismissConfirm(); }}
                         className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm dark:bg-slate-700 dark:text-slate-200">
@@ -313,6 +353,17 @@ function OrderDetailSheet({
                       </button>
                     </div>
                   </div>
+                )}
+                {order.cancellationRequestedAt && confirmCancel !== order.id && (
+                  <p className={`text-center text-[11px] leading-snug ${
+                    order.cancellationRequestDecision === 'declined'
+                      ? 'text-gray-600 dark:text-slate-300'
+                      : 'text-amber-700 dark:text-amber-300'
+                  }`}>
+                    {order.cancellationRequestDecision === 'declined'
+                      ? 'The store cannot cancel this order because preparation is already underway.'
+                      : 'Cancellation requested. The store will review it before dispatch.'}
+                  </p>
                 )}
                 {cancelError && <p className="text-center text-[11px] leading-snug text-red-600 dark:text-red-400">{cancelError}</p>}
               </div>
@@ -385,8 +436,11 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     if (!silent) setRefreshing(true);
     try {
       const r = await authApi.getOrders({ fresh: silent });
-      setOrders(r.data.data || []);
+      const currentOrders = r.data.data || [];
+      setOrders(currentOrders);
+      setSelectedOrder((current: any | null) => currentOrders.find((order: any) => order.id === current?.id) || current);
       setLoadError(null);
+      return currentOrders;
     } catch (e: any) {
       if (!silent) setLoadError(requestErrorMessage(e, 'We could not load your orders. Please try again.'));
     } finally { setRefreshing(false); setLoading(false); }
@@ -397,10 +451,13 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     if (!silent) setGuestLoading(true);
     try {
       const tokens = readTrackingTokens();
-      if (!tokens.length) { setOrders([]); setLoadError(null); return; }
+      if (!tokens.length) { setOrders([]); setLoadError(null); return []; }
       const r = await storeApi.trackOrdersByTokens(tokens, { fresh: silent });
-      setOrders(r.data.data || []);
+      const currentOrders = r.data.data || [];
+      setOrders(currentOrders);
+      setSelectedOrder((current: any | null) => currentOrders.find((order: any) => order.id === current?.id) || current);
       setLoadError(null);
+      return currentOrders;
     } catch (e: any) {
       // A token can be pruned server-side (a real 4xx) — keep whatever we have
       // rather than blaming the network. Only a genuine load failure with
@@ -425,18 +482,35 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     setCancelError('');
     try {
       if (isLoggedIn) {
-        await authApi.cancelOrder(order.id, reason);
+        if (order.status === 'preparing') await authApi.requestCancellation(order.id, reason);
+        else await authApi.cancelOrder(order.id, reason);
         await fetchOrders(true);
       } else {
-        await storeApi.cancelOrderByToken(order.id, order.trackingToken, reason);
+        if (order.status === 'preparing') await storeApi.requestCancellationByToken(order.id, order.trackingToken, reason);
+        else await storeApi.cancelOrderByToken(order.id, order.trackingToken, reason);
         await fetchGuestOrders(true);
       }
-      setSelectedOrder(null);
+      if (order.status !== 'preparing') setSelectedOrder(null);
     } catch (err: any) {
       const msg = err?.response?.data?.error;
-      setCancelError(msg && !msg.includes('Something went wrong')
-        ? msg
-        : 'Could not cancel this order. Please contact the store for help.');
+      let canRequestLatestCancellation = false;
+      if (err?.response?.status === 400) {
+        const currentOrders = isLoggedIn
+          ? await fetchOrders(true)
+          : await fetchGuestOrders(true);
+        const currentOrder = currentOrders?.find((entry: any) => entry.id === order.id);
+        if (currentOrder) {
+          setSelectedOrder(currentOrder);
+          canRequestLatestCancellation = currentOrder.status === 'preparing' && !currentOrder.cancellationRequestedAt;
+        }
+      }
+      setCancelError(canRequestLatestCancellation
+        ? 'Preparation has started. You can request cancellation and the store will review it before dispatch.'
+        : msg && !msg.includes('Something went wrong')
+          ? msg
+        : order.status === 'preparing'
+          ? 'Could not request cancellation. Please contact the store for help.'
+          : 'Could not cancel this order. Please contact the store for help.');
     } finally {
       setCancelling(null);
       setConfirmCancel(null);
@@ -652,6 +726,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
           <OrderDetailSheet order={selectedOrder} onClose={() => setSelectedOrder(null)}
             onOrderAgain={handleOrderAgain} nextOpenLabel={nextOpenWhen}
             whatsappNumber={whatsappNumber}
+            canCancel={['pending', 'confirmed'].includes(selectedOrder.status) && typeof selectedOrder.trackingToken === 'string' && selectedOrder.trackingToken.length > 0}
             confirmCancel={confirmCancel} cancelling={cancelling} cancelError={cancelError}
             onCancel={handleCancel}
             onRequestCancel={(order) => { setCancelError(''); setConfirmCancel(order.id); }}
@@ -829,6 +904,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
           whatsappNumber={whatsappNumber}
           fallbackName={customerName}
           fallbackPhone={customerPhone}
+          canCancel={['pending', 'confirmed'].includes(selectedOrder.status)}
           confirmCancel={confirmCancel}
           cancelling={cancelling}
           cancelError={cancelError}

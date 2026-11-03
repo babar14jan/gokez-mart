@@ -157,6 +157,13 @@ app.use('/api/v1/orders/track/:id/cancel', rateLimit({
   legacyHeaders: false,
   message: { success: false, error: 'Too many cancellation attempts. Please wait a few minutes.' },
 }));
+app.use('/api/v1/orders/track/:id/cancellation-request', rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: isProd ? 20 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many cancellation requests. Please wait a few minutes.' },
+}));
 
 // 6. Public token tracking — guests poll only while tracking an active order.
 // Tokens are unguessable, but retain an IP cap to bound automated probing.

@@ -321,6 +321,7 @@ export const authApi = {
     return api.post('/auth/upload/photo', form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   cancelOrder: (orderId: string, reason?: string) => api.put(`/auth/orders/${orderId}/cancel`, { reason }),
+  requestCancellation: (orderId: string, reason: string) => api.post(`/auth/orders/${orderId}/cancellation-request`, { reason }),
   requestDeletion: (reason?: string) => api.post('/compliance/deletion', { reason }),
   getDeletionStatus: () => api.get('/compliance/deletion'),
   submitGrievance: (subject: string, description: string, idempotencyKey: string) => api.post('/compliance/grievances', { subject, description }, { headers: { 'Idempotency-Key': idempotencyKey } }),
@@ -401,6 +402,8 @@ export const storeApi = {
     api.get('/orders/track/tokens', { params: { tokens: tokens.join(',') }, fresh: opts?.fresh }),
   cancelOrderByToken: (orderId: string, trackingToken: string, reason?: string) =>
     api.post(`/orders/track/${orderId}/cancel`, { trackingToken, reason }),
+  requestCancellationByToken: (orderId: string, trackingToken: string, reason: string) =>
+    api.post(`/orders/track/${orderId}/cancellation-request`, { trackingToken, reason }),
 };
 
 // ── Feedback ────────────────────────────────────────────────────────────────────────────────
