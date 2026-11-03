@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, IndianRupee,
   Minus, Package, Plus, Search, X,
 } from 'lucide-react';
-import { ordersApi } from '../services/api';
+import { ordersApi, productsApi } from '../services/api';
 import { orderDisplayName } from '../utils/orderName';
+import { getActiveStoreId } from '../utils/store';
 import SmartImage from './SmartImage';
 
 interface Props {
@@ -20,6 +21,7 @@ const REASONS = [
   'Out of stock',
   'Item unavailable',
   'Customer refused item',
+  'Customer requested addition',
   'Quantity mismatch',
   'Other',
 ];
@@ -27,6 +29,8 @@ const REASONS = [
 const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI' };
 
 const EDITABLE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready_to_pickup', 'picked_up', 'out_for_delivery', 'delivered'];
+
+const MAX_ADDED_QUANTITY = 99;
 
 const formatWhen = (value?: string | null) => value
   ? new Date(value).toLocaleString('en-IN', {
@@ -36,7 +40,15 @@ const formatWhen = (value?: string | null) => value
 
 const statusLabel = (status: string) => status.replace(/_/g, ' ');
 
-export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
+interface AddedLine {
+  productId: string;
+  productName: string;
+  unit: string;
+  price: number;
+  quantity: number;
+}
+
+export default function ManageOrderDialog({ onClose, onSaved }: Props) {
   const [step, setStep] = useState<Step>('search');
 
   // Search
@@ -55,25 +67,65 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<any | null>(null);
 
+  // Items added to the order on top of what was originally placed.
+  const [addedLines, setAddedLines] = useState<AddedLine[]>([]);
+  const [productQuery, setProductQuery] = useState('');
+  const [productResults, setProductResults] = useState<any[]>([]);
+  const [productSearching, setProductSearching] = useState(false);
+  const [productError, setProductError] = useState('');
+
+  useEffect(() => {
+    const term = productQuery.trim().toLowerCase();
+    if (term.length < 2) {
+      setProductResults([]);
+      setProductSearching(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setProductSearching(true);
+      setProductError('');
+      try {
+        const response = await productsApi.getAll(getActiveStoreId(), { fresh: true });
+        const all: any[] = response.data.data || [];
+        const filtered = all
+          .filter((product: any) => [product.name, product.localName, ...(product.searchAliases || [])]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(term))
+          .slice(0, 8);
+        setProductResults(filtered);
+      } catch {
+        setProductError('Could not load products');
+      } finally {
+        setProductSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [productQuery]);
+
   const items: any[] = Array.isArray(order?.items) ? order.items : [];
   const deliveryCharge = Number(order?.deliveryCharge) || 0;
   const campaignDiscount = Number(order?.campaignDiscount) || 0;
   const originalTotal = Number(order?.total) || 0;
+  const deliveredSubtotal = items.reduce((sum, item) => sum + Number(item.price) * (quantities[item.id] ?? Number(item.quantity)), 0);
+  const addedSubtotal = addedLines.reduce((sum, line) => sum + line.price * line.quantity, 0);
+  const newSubtotal = Math.max(0, deliveredSubtotal + addedSubtotal);
+  const newTotal = Math.max(0, newSubtotal + deliveryCharge - campaignDiscount);
+  const deliveredOnlyTotal = Math.max(0, deliveredSubtotal + deliveryCharge - campaignDiscount);
+  const removedTotal = Math.max(0, deliveredOnlyTotal - newTotal);
+  const addedTotalValue = addedLines.reduce((sum, line) => sum + line.price * line.quantity, 0);
 
-  const { newSubtotal, newTotal, removedTotal, changedItems, allRemoved } = useMemo(() => {
-    const subtotal = items.reduce((sum, item) => sum + Number(item.price) * (quantities[item.id] ?? Number(item.quantity)), 0);
-    const total = Math.max(0, subtotal + deliveryCharge - campaignDiscount);
+  const { changedItems, allRemoved } = useMemo(() => {
+    const changed = items.filter(item => quantities[item.id] !== Number(item.quantity));
     return {
-      newSubtotal: subtotal,
-      newTotal: total,
-      removedTotal: Math.max(0, originalTotal - total),
-      changedItems: items.filter(item => quantities[item.id] !== Number(item.quantity)),
+      changedItems: changed,
       allRemoved: items.length > 0 && items.every(item => (quantities[item.id] ?? Number(item.quantity)) === 0),
     };
-  }, [items, quantities, deliveryCharge, campaignDiscount, originalTotal]);
+  }, [items, quantities]);
 
   const finalReason = `${reason}${comment.trim() ? ` — ${comment.trim()}` : ''}`;
-  const canPreview = changedItems.length > 0 && !allRemoved && (reason !== 'Other' || comment.trim().length > 0);
+  const canPreview = (changedItems.length > 0 || addedLines.length > 0) && !allRemoved && (changedItems.length === 0 || (reason !== 'Other' || comment.trim().length > 0));
 
   const runSearch = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -97,6 +149,9 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
   const selectOrder = (entry: any) => {
     setOrder(entry);
     setQuantities(Object.fromEntries((entry.items || []).map((item: any) => [item.id, Number(item.quantity)])));
+    setAddedLines([]);
+    setProductQuery('');
+    setProductResults([]);
     setReason(REASONS[0]);
     setComment('');
     setPaymentMethod(entry.paymentMethod || 'cod');
@@ -108,15 +163,45 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
     setQuantities(prev => ({ ...prev, [item.id]: clamped }));
   };
 
+  const addProduct = (product: any) => {
+    const catalogPrice = Number(product.price);
+    const discountPercent = Number(product.discountPercent) || 0;
+    const effectivePrice = discountPercent > 0
+      ? Math.round(catalogPrice * (1 - discountPercent / 100))
+      : catalogPrice;
+    setAddedLines(prev => {
+      const existing = prev.find(line => line.productId === product.id);
+      if (existing) {
+        return prev.map(line => line.productId === product.id
+          ? { ...line, quantity: Math.min(MAX_ADDED_QUANTITY, line.quantity + 1) }
+          : line);
+      }
+      return [...prev, {
+        productId: product.id,
+        productName: product.name,
+        unit: product.unit,
+        price: effectivePrice,
+        quantity: 1,
+      }];
+    });
+  };
+
+  const setAddedQuantity = (productId: string, quantity: number) => {
+    setAddedLines(prev => quantity <= 0
+      ? prev.filter(line => line.productId !== productId)
+      : prev.map(line => line.productId === productId ? { ...line, quantity } : line));
+  };
+
   const handleSubmit = async () => {
     if (!order || !canPreview) return;
     setSaving(true);
     try {
-      const response = await ordersApi.adjustItems(
+      const response = await ordersApi.manageOrder(
         order.id,
         changedItems.map(item => ({ orderItemId: item.id, deliveredQuantity: quantities[item.id] })),
         finalReason,
-                paymentMethod,
+        paymentMethod,
+        addedLines.map(line => ({ productId: line.productId, quantity: line.quantity, unit: line.unit, price: line.price })),
       );
       setResult(response.data.data);
       await onSaved();
@@ -129,10 +214,10 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
   };
 
   const stepTitle =
-    step === 'search' ? 'Find an order to correct'
+    step === 'search' ? 'Find an order to manage'
       : step === 'edit' ? 'Set what was actually delivered'
-        : step === 'preview' ? 'Preview the correction'
-          : 'Order corrected';
+        : step === 'preview' ? 'Preview the changes'
+          : 'Order updated';
 
   const stepNumber = step === 'search' ? 1 : step === 'edit' ? 2 : 3;
 
@@ -146,13 +231,13 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
                 <Package className="h-5 w-5" />
               </span>
               <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">Partial delivery</h2>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">Manage order</h2>
                 <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{stepTitle}</p>
               </div>
             </div>
             <button type="button" onClick={onClose} disabled={saving}
               className="shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700"
-              aria-label="Close partial delivery" title="Close">
+              aria-label="Close manage order" title="Close">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -188,7 +273,7 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
                 </button>
               </form>
               <p className="text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-                Search works across all dates. Pick the order, set the delivered quantities, preview, then submit.
+                Search works across all dates. Pick the order, set what was delivered, add missing items, preview, then submit.
               </p>
 
               {searchError && (
@@ -310,17 +395,110 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
                 );
               })}
 
+              {/* Add products the customer asked to add to the placed order. */}
               <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
-                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="partial-reason">Reason</label>
-                <select id="partial-reason" value={reason} onChange={event => setReason(event.target.value)}
+                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-product-search">Add item</label>
+                <div className="relative mt-1.5">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="manage-product-search"
+                    type="text"
+                    value={productQuery}
+                    onChange={event => setProductQuery(event.target.value)}
+                    placeholder="Search product to add"
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-10 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                  />
+                  {productQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductQuery('');
+                        setProductResults([]);
+                        setProductError('');
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-600 dark:hover:text-slate-200"
+                      aria-label="Clear product search"
+                      title="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {productSearching && (
+                  <p className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">Searching products…</p>
+                )}
+                {productError && (
+                  <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">{productError}</p>
+                )}
+                {!productSearching && productResults.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {productResults.map(product => (
+                      <div key={product.id} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3 dark:border-slate-700">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-semibold text-gray-900 dark:text-white">{product.name}</p>
+                          <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                            {product.unit} · {Number(product.discountPercent) > 0 && <span className="mr-1 line-through">₹{product.price}</span>}
+                            ₹{Number(product.discountPercent) > 0
+                              ? Math.round(Number(product.price) * (1 - Number(product.discountPercent) / 100))
+                              : product.price} each
+                          </p>
+                        </div>
+                        <button type="button" onClick={() => addProduct(product)}
+                          className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700">
+                          Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!productSearching && productQuery.trim().length >= 2 && productResults.length === 0 && !productError && (
+                  <p className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">No product found.</p>
+                )}
+
+                {addedLines.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Added items</p>
+                    {addedLines.map(line => (
+                      <div key={line.productId} className="flex items-center justify-between gap-2 rounded-xl border border-gray-200 p-3 dark:border-slate-700">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-semibold text-gray-900 dark:text-white">{line.productName}</p>
+                          <p className="text-[11px] text-gray-500 dark:text-slate-400">₹{line.price} each</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button type="button" onClick={() => setAddedQuantity(line.productId, line.quantity - 1)} disabled={line.quantity <= 1}
+                            className="rounded-lg border border-gray-200 p-1.5 text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                            aria-label={`Reduce added quantity of ${line.productName}`}>
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="w-8 text-center text-sm font-bold text-gray-900 dark:text-white">{line.quantity}</span>
+                          <button type="button" onClick={() => setAddedQuantity(line.productId, Math.min(MAX_ADDED_QUANTITY, line.quantity + 1))}
+                            className="rounded-lg border border-gray-200 p-1.5 text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                            aria-label={`Increase added quantity of ${line.productName}`}>
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                          <button type="button" onClick={() => setAddedQuantity(line.productId, 0)}
+                            className="rounded-lg border border-gray-200 p-1.5 text-gray-600 transition-colors hover:bg-gray-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                            aria-label={`Remove added item ${line.productName}`}>
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
+                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-reason">Reason</label>
+                <select id="manage-reason" value={reason} onChange={event => setReason(event.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                   {REASONS.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
-                <label className="mt-2 block text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="partial-comment">
+                <label className="mt-2 block text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-comment">
                   Comment <span className="font-normal text-gray-400">(optional)</span>
                 </label>
                 <input
-                  id="partial-comment"
+                  id="manage-comment"
                   type="text"
                   value={comment}
                   onChange={event => setComment(event.target.value)}
@@ -358,8 +536,8 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
               </div>
 
               <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
-                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="partial-payment">Payment mode</label>
-                <select id="partial-payment" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as 'cod' | 'upi')}
+                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-payment">Payment mode</label>
+                <select id="manage-payment" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as 'cod' | 'upi')}
                   className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                   <option value="cod">Cash</option>
                   <option value="upi">UPI</option>
@@ -383,6 +561,14 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
                     </div>
                   );
                 })}
+                {addedLines.map(line => (
+                  <div key={line.productId} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0 break-words text-gray-700 dark:text-slate-300">{line.productName} ({line.unit})</span>
+                    <span className="flex-shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">
+                      +{line.quantity} · ₹{(line.price * line.quantity).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
               </div>
 
               <div className="rounded-xl bg-gray-50 p-3 dark:bg-slate-700/50">
@@ -420,12 +606,18 @@ export default function PartialDeliveryDialog({ onClose, onSaved }: Props) {
             <div className="py-6 text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
               <h3 className="mt-3 text-base font-bold text-gray-900 dark:text-white">Order updated</h3>
-              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
                 #{result.orderNumber} is now ₹{Number(result.total).toFixed(2)}
                 {result.paymentMethod ? ` · ${PAYMENT_LABELS[result.paymentMethod] || result.paymentMethod}` : ''}
               </p>
               <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                 Removed ₹{Number(result.removedTotal).toFixed(2)} across {result.adjustedItems} line(s).
+                {result.addedItems > 0 && (
+                  <>
+                    {' '}
+                    Added ₹{addedTotalValue.toFixed(2)} across {addedLines.length} items.
+                  </>
+                )}
                 The hub and customer apps will show the updated order.
               </p>
             </div>

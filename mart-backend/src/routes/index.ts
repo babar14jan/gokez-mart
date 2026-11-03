@@ -16,6 +16,7 @@ router.get('/auth/me',           authenticateCustomer, ctrl.customerGetMe);
 router.put('/auth/profile',      authenticateCustomer, ctrl.customerUpdateProfile);
 router.get('/auth/orders',       authenticateCustomer, ctrl.customerGetOrders);
 router.put("/auth/orders/:id/cancel", authenticateCustomer, ctrl.customerCancelOrder);
+router.post('/auth/orders/:id/cancellation-request', authenticateCustomer, ctrl.customerRequestCancellation);
 router.get('/auth/addresses',           authenticateCustomer, ctrl.customerGetAddresses);
 router.post('/auth/addresses',          authenticateCustomer, ctrl.customerAddAddress);
 router.put('/auth/addresses/:id',       authenticateCustomer, ctrl.customerUpdateAddress);
@@ -36,6 +37,7 @@ router.post('/guest-details',      ctrl.saveGuestDetails);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 router.get('/orders/track/tokens',  ctrl.trackGuestOrdersByTokens);
 router.post('/orders/track/:id/cancel', ctrl.guestCancelOrder);
+router.post('/orders/track/:id/cancellation-request', ctrl.guestRequestCancellation);
 router.get('/promotions/:id/click', ctrl.redirectPromotionClick);
 
 // ── Admin auth ────────────────────────────────────────────────────────────────
@@ -105,6 +107,7 @@ router.put('/admin/daily-sales/entries/:id', authenticate, ctrl.adminUpdateOffli
 router.delete('/admin/daily-sales/entries/:id', authenticate, ctrl.adminDeleteOfflineSale); // ?storeId=
 router.get('/admin/events',              authenticate, ctrl.adminOrderStream);       // SSE live order stream
 router.put('/admin/orders/:id/status', authenticate, ctrl.adminUpdateOrderStatus);
+router.put('/admin/orders/:id/cancellation-request/decline', authenticate, ctrl.adminDeclineCancellationRequest);
 router.put('/admin/orders/:id/items', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminAdjustOrderItems);
 router.put('/admin/orders/:id/fulfilments/:storeId', authenticate, ctrl.adminUpdateOrderFulfilment);
 router.put('/admin/orders/:id/reschedule', authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminRescheduleOrder);

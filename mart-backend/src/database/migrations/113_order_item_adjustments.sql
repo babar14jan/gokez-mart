@@ -1,4 +1,4 @@
--- Partial delivery corrections.
+-- Order item adjustments.
 --
 -- An order is sometimes delivered with one or more lines missing (item ran out,
 -- was damaged, or the customer refused it). The order row and its items are the

@@ -79,6 +79,10 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
               o.termination_reason as "terminationReason",
               o.cancellation_reason as "cancellationReason",
               o.cancellation_customer_message as "cancellationCustomerMessage",
+              o.cancellation_requested_at as "cancellationRequestedAt",
+              o.cancellation_request_reason as "cancellationRequestReason",
+              o.cancellation_request_decided_at as "cancellationRequestDecidedAt",
+              o.cancellation_request_decision as "cancellationRequestDecision",
               o.promised_delivery_at as "promisedDeliveryAt",
               o.cancellation_window_ends_at as "cancellationWindowEndsAt",
               o.campaign_id as "campaignId",
@@ -1091,8 +1095,11 @@ export class OrderService {
     reason: string,
     actor: { id: string; username: string; role: string; storeId: string | null },
     paymentMethod?: 'cod' | 'upi' | null,
+    additions: Array<{ productId: string; quantity: number; unit?: string; price?: number }> = [],
   ) {
-    if (!Array.isArray(adjustments) || adjustments.length === 0) {
+    const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
+    const additionList = Array.isArray(additions) ? additions : [];
+    if (adjustmentList.length === 0 && additionList.length === 0) {
       throw badRequest('Choose at least one item to adjust');
     }
     if (paymentMethod && !['cod', 'upi'].includes(paymentMethod)) {
@@ -1104,6 +1111,7 @@ export class OrderService {
         `SELECT o.id, o.order_number as "orderNumber", o.status, o.store_id as "storeId",
                 o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
                 o.campaign_discount::float as "campaignDiscount", o.total::float,
+                o.item_savings::float as "itemSavings",
                 o.customer_id as "customerId", o.payment_method as "paymentMethod"
            FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
         [orderId]
@@ -1134,7 +1142,7 @@ export class OrderService {
       }
 
       // Validate every requested line before writing anything.
-      for (const input of adjustments) {
+      for (const input of adjustmentList) {
         const item = items.get(input.orderItemId);
         if (!item) throw badRequest('One of the items is not part of this order');
         if (!Number.isInteger(input.deliveredQuantity)
@@ -1144,17 +1152,19 @@ export class OrderService {
         }
       }
 
-      const changed = adjustments.filter(input => {
+      const changed = adjustmentList.filter(input => {
         const item = items.get(input.orderItemId)!;
         return input.deliveredQuantity !== item.quantity;
       });
-      if (changed.length === 0) throw badRequest('No item quantities were changed');
+      if (changed.length === 0 && additionList.length === 0) {
+        throw badRequest('No item quantities were changed');
+      }
 
       // An order with nothing delivered is a cancellation, not a partial
       // delivery. Keep that distinction explicit so revenue never lands on an
       // empty order.
       const remainingQuantity = itemsResult.rows.reduce((sum: number, item: any) => {
-        const requested = adjustments.find(input => input.orderItemId === item.id);
+        const requested = adjustmentList.find(input => input.orderItemId === item.id);
         return sum + (requested ? requested.deliveredQuantity : item.quantity);
       }, 0);
       if (remainingQuantity <= 0) {
@@ -1169,6 +1179,9 @@ export class OrderService {
 
       const settings = await SettingsService.getPublic(order.storeId);
       const restoreStock = order.status === 'delivered' && settings.inventory_tracking === 'true';
+      const shouldDeductAdditions = order.status === 'delivered' && settings.inventory_tracking === 'true';
+      const autoOutOfStock = (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero';
+      const lowStockThreshold = parseFloat(settings.low_stock_threshold ?? '5');
 
       let removedTotal = 0;
       for (const change of changed) {
@@ -1202,6 +1215,89 @@ export class OrderService {
         }
       }
 
+      let addedItemsCount = 0;
+      let addedTotal = 0;
+      let addedSavings = 0;
+      for (const addition of additionList) {
+        const quantity = Math.floor(Number(addition.quantity));
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw badRequest(`Added item ${addition.productId} needs a positive quantity`);
+        }
+        const productResult = await client.query(
+          `SELECT p.id, p.name, sp.unit, sp.price::float AS price,
+                  sp.discount_percent::float AS "discountPercent", p.is_bundle AS "isBundle"
+             FROM mart_products p
+             JOIN mart_store_products sp ON sp.product_id = p.id AND sp.store_id = $2
+            WHERE p.id = $1`,
+          [addition.productId, order.storeId]
+        );
+        const product = productResult.rows[0];
+        if (!product) throw badRequest('One of the added products is not listed by this store');
+        const unit = product.unit;
+        const price = product.discountPercent > 0
+          ? Math.round(Number(product.price) * (1 - Number(product.discountPercent) / 100))
+          : Number(product.price);
+        const lineTotal = Number((price * quantity).toFixed(2));
+        addedSavings += Math.max(0, Number(product.price) - price) * quantity;
+
+        const orderItemId = uuidv4();
+        await client.query(
+          `INSERT INTO mart_order_items
+             (id, order_id, store_id, product_id, product_name, unit, price, quantity, total)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [orderItemId, orderId, order.storeId, addition.productId, product.name, unit, price, quantity, lineTotal]
+        );
+        const components = product.isBundle
+          ? (await client.query(
+              `SELECT bc.component_product_id AS "componentProductId", p.name, sp.unit, sp.price::float AS price,
+                      bc.quantity_per_bundle::float AS "quantityPerBundle"
+                 FROM mart_bundle_components bc
+                 JOIN mart_products p ON p.id = bc.component_product_id
+                 JOIN mart_store_products sp ON sp.store_id = bc.store_id AND sp.product_id = bc.component_product_id
+                WHERE bc.store_id = $1 AND bc.bundle_product_id = $2`,
+              [order.storeId, addition.productId],
+            )).rows
+          : [];
+        if (product.isBundle) {
+          for (const component of components) {
+            await client.query(
+              `INSERT INTO mart_order_item_bundle_components
+                 (order_item_id, component_product_id, product_name, unit, quantity_per_bundle)
+               VALUES ($1,$2,$3,$4,$5)`,
+              [orderItemId, component.componentProductId, component.name, component.unit, component.quantityPerBundle]
+            );
+          }
+        }
+
+        await client.query(
+          `INSERT INTO mart_order_item_adjustments
+             (order_id, order_item_id, product_id, product_name, unit, price,
+              previous_quantity, delivered_quantity, removed_quantity, removed_amount,
+              reason, adjusted_by, adjusted_by_name)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [orderId, orderItemId, addition.productId, product.name, unit, price, 0, quantity, 0, 0, reason || null, actor.id, adjustedByName]
+        );
+
+        if (shouldDeductAdditions) {
+          const deductionLines = product.isBundle
+            ? components.map((component: any) => ({
+                productId: component.componentProductId,
+                quantity: quantity * Number(component.quantityPerBundle),
+                sellingUnit: component.unit,
+                storeId: order.storeId,
+              }))
+            : [{ productId: addition.productId, quantity, sellingUnit: unit, storeId: order.storeId }];
+          for (const line of deductionLines) {
+            await InventoryService.deductForOrder(
+              orderId, order.storeId, [line], autoOutOfStock, lowStockThreshold, client, orderItemId,
+            );
+          }
+        }
+
+        addedItemsCount += 1;
+        addedTotal += lineTotal;
+      }
+
       const subtotalResult = await client.query(
         `SELECT COALESCE(SUM(total), 0)::float AS subtotal
            FROM mart_order_items WHERE order_id = $1`,
@@ -1209,19 +1305,22 @@ export class OrderService {
       );
       const subtotal = Number(subtotalResult.rows[0]?.subtotal ?? 0);
       const total = Math.max(0, Number((subtotal + order.deliveryCharge - order.campaignDiscount).toFixed(2)));
+      const retainedSubtotal = Math.max(0, subtotal - addedTotal);
+      const retainedSavings = Number(order.subtotal) > 0
+        ? Number(order.itemSavings) * retainedSubtotal / Number(order.subtotal)
+        : 0;
+      const itemSavings = Number((retainedSavings + addedSavings).toFixed(2));
 
       const effectivePaymentMethod = paymentMethod || order.paymentMethod;
       await client.query(
         `UPDATE mart_orders
             SET subtotal = $1,
                 total = $2,
-                item_savings = CASE WHEN $4 > 0
-                  THEN ROUND(item_savings * $1 / $4, 2)
-                  ELSE item_savings END,
+                item_savings = $4,
                 payment_method = COALESCE($5, payment_method),
                 updated_at = NOW()
           WHERE id = $3`,
-        [subtotal, total, orderId, Number(order.subtotal), paymentMethod || null]
+        [subtotal, total, orderId, itemSavings, paymentMethod || null]
       );
 
       const removedFromTotal = Number((Number(order.total) - total).toFixed(2));
@@ -1244,6 +1343,8 @@ export class OrderService {
         paymentMethod: effectivePaymentMethod,
         removedTotal: Number(removedTotal.toFixed(2)),
         adjustedItems: changed.length,
+        addedItems: addedItemsCount,
+        addedTotal: Number(addedTotal.toFixed(2)),
       };
     });
   }
@@ -1318,7 +1419,7 @@ export class OrderService {
            (product_id, store_id, change_qty, reason, note, reference_id)
          VALUES ($1,$2,$3,'manual_correction',$4,$5)`,
         [line.productId, storeId, restoreQuantity,
-          `Partial delivery correction for order ${order.orderNumber}`, order.id]
+          `Order item adjustment for order ${order.orderNumber}`, order.id]
       );
     }
   }
@@ -1337,7 +1438,9 @@ export class OrderService {
     const order = await transaction(async client => {
       const current = await client.query(
         `SELECT o.id, o.status, o.store_id as "storeId", o.customer_id as "customerId",
-                o.order_number as "orderNumber", o.delivery_by as "deliveryById"
+          o.order_number as "orderNumber", o.total::float as total, o.delivery_by as "deliveryById",
+          o.cancellation_requested_at as "cancellationRequestedAt",
+          o.cancellation_request_decision as "cancellationRequestDecision"
          FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
         [id]
       );
@@ -1365,6 +1468,8 @@ export class OrderService {
         (status === 'out_for_delivery' && ['ready_to_pickup', 'picked_up'].includes(existing.status) && isAssignedHandler) ||
         (status === 'delivered' && ['out_for_delivery', 'picked_up'].includes(existing.status) && (isAssignedHandler || assignmentRoles.includes(actor.role))) ||
         (status === 'cancelled' && ['pending', 'confirmed'].includes(existing.status) && processingRoles.includes(actor.role) && canCancelOutsideArea) ||
+        (status === 'cancelled' && existing.status === 'preparing' && cancellationReason === 'customer_request' &&
+          !!existing.cancellationRequestedAt && !existing.cancellationRequestDecision && processingRoles.includes(actor.role)) ||
         (status === 'failed_delivery' && ['out_for_delivery', 'picked_up'].includes(existing.status) && (isAssignedHandler || assignmentRoles.includes(actor.role)));
 
       if (!allowed) throw Object.assign(new Error('This status change is not allowed'), { status: 403 });
@@ -1421,6 +1526,24 @@ export class OrderService {
       }
       if (['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
         await this.reverseCampaignRedemption(id, status, client);
+      }
+      if (status === 'cancelled' && existing.customerId) {
+        await client.query(
+          `UPDATE mart_customers
+              SET total_spent = GREATEST(0, total_spent - $1), updated_at = NOW()
+            WHERE id = $2`,
+          [Number(existing.total), existing.customerId]
+        );
+      }
+      if (status === 'cancelled' && existing.status === 'preparing' && cancellationReason === 'customer_request') {
+        await client.query(
+          `UPDATE mart_orders
+              SET cancellation_request_decision = 'approved',
+                  cancellation_request_decided_at = NOW(),
+                  cancellation_request_decided_by = $2
+            WHERE id = $1`,
+          [id, actorName]
+        );
       }
       await client.query(
         `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_id, actor_name)
@@ -1701,6 +1824,7 @@ export class OrderService {
       const current = await client.query(
         `SELECT o.id, o.status, o.order_number as "orderNumber", o.store_id as "storeId",
                 o.customer_id as "customerId", o.guest_name as "guestName",
+                o.total::float as total,
                 o.cancellation_reason as "cancellationReason",
                 o.delivery_preference as "deliveryPreference",
                 o.scheduled_for as "scheduledFor",
@@ -1735,6 +1859,14 @@ export class OrderService {
           WHERE id = $1`,
         [orderId, cancellationReason, cancellationCustomerMessage]
       );
+      if (existing.customerId) {
+        await client.query(
+          `UPDATE mart_customers
+              SET total_spent = GREATEST(0, total_spent - $1), updated_at = NOW()
+            WHERE id = $2`,
+          [Number(existing.total), existing.customerId]
+        );
+      }
       await this.reverseCampaignRedemption(orderId, 'cancelled', client);
       await client.query(
         `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_name)
@@ -1745,6 +1877,91 @@ export class OrderService {
     });
 
     return order;
+  }
+
+  static async requestCancellationByCaller(
+    orderId: string,
+    scope: { customerId: string } | { trackingToken: string },
+    reason?: string | null
+  ) {
+    const isGuest = 'trackingToken' in scope;
+    const credential = isGuest ? scope.trackingToken : scope.customerId;
+    const matchColumn = isGuest ? 'o.tracking_token' : 'o.customer_id';
+    return transaction(async (client) => {
+      const current = await client.query(
+        `SELECT o.id, o.status, o.order_number as "orderNumber", o.store_id as "storeId",
+                o.guest_name as "guestName", o.delivery_preference as "deliveryPreference",
+                o.scheduled_for as "scheduledFor", o.promised_delivery_at as "promisedDeliveryAt",
+                o.cancellation_window_ends_at as "cancellationWindowEndsAt",
+                o.cancellation_requested_at as "cancellationRequestedAt",
+                o.cancellation_request_decision as "cancellationRequestDecision"
+           FROM mart_orders o
+          WHERE o.id = $1 AND ${matchColumn} = $2
+          FOR UPDATE`,
+        [orderId, credential]
+      );
+      const order = current.rows[0];
+      if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
+      if (order.status !== 'preparing') throw Object.assign(new Error('Cancellation requests are available after preparation starts'), { status: 400 });
+      if (!reason || !CUSTOMER_CANCEL_REASONS[reason as CustomerCancelReason]) {
+        throw Object.assign(new Error('Choose a valid cancellation reason'), { status: 400 });
+      }
+      const policy = getCancellationPolicy(order);
+      if (reason === 'delivery_too_slow' && !policy.canReportDelay) {
+        throw Object.assign(new Error('Delivery can be reported as late only after the promised delivery time has passed'), { status: 400 });
+      }
+      if (order.cancellationRequestedAt && !order.cancellationRequestDecision) {
+        throw Object.assign(new Error('A cancellation request is already being reviewed'), { status: 400 });
+      }
+      await client.query(
+        `UPDATE mart_orders
+            SET cancellation_requested_at = NOW(),
+                cancellation_request_reason = $2,
+                cancellation_request_decided_at = NULL,
+                cancellation_request_decision = NULL,
+                cancellation_request_decided_by = NULL,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [orderId, reason]
+      );
+      return { ...order, cancellationRequestReason: reason };
+    });
+  }
+
+  static async declineCancellationRequest(
+    orderId: string,
+    actor: { id: string; username: string; role: string; storeId: string | null },
+  ) {
+    return transaction(async (client) => {
+      const current = await client.query(
+        `SELECT id, status, store_id as "storeId", order_number as "orderNumber",
+                cancellation_requested_at as "cancellationRequestedAt",
+                cancellation_request_decision as "cancellationRequestDecision"
+           FROM mart_orders WHERE id = $1 FOR UPDATE`,
+        [orderId]
+      );
+      const order = current.rows[0];
+      if (!order) throw Object.assign(new Error('Order not found'), { status: 404 });
+      const processingRoles = ['super_admin', 'store_owner', 'store_manager', 'staff'];
+      if (actor.role !== 'super_admin' && actor.storeId !== order.storeId) throw Object.assign(new Error('Access denied'), { status: 403 });
+      if (!processingRoles.includes(actor.role) || order.status !== 'preparing' || !order.cancellationRequestedAt || order.cancellationRequestDecision) {
+        throw Object.assign(new Error('This cancellation request cannot be declined'), { status: 400 });
+      }
+      const actorResult = await client.query(
+        `SELECT COALESCE(name, username) as name FROM mart_admins WHERE id = $1`, [actor.id]
+      );
+      const actorName = actorResult.rows[0]?.name || actor.username;
+      await client.query(
+        `UPDATE mart_orders
+            SET cancellation_request_decision = 'declined',
+                cancellation_request_decided_at = NOW(),
+                cancellation_request_decided_by = $2,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [orderId, actorName]
+      );
+      return { ...order, decisionBy: actorName };
+    });
   }
 
   static async trackByPhone(phone: string) {

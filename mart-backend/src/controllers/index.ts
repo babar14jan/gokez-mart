@@ -7,7 +7,8 @@ import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
 import { ProductService, MartProduct, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
-import { OrderService, buildOrderWindow } from '../services/order.service';
+import { OrderService, buildOrderWindow, CUSTOMER_CANCEL_REASONS, CustomerCancelReason } from '../services/order.service';
+import { CUSTOMER_CANCELLATION_MESSAGES } from '../utils/cancellationPolicy';
 import { SettingsService } from '../services/settings.service';
 import { ZoneService } from '../services/zone.service';
 import { StoreService } from '../services/store.service';
@@ -838,7 +839,11 @@ export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, 
   if (localName !== undefined)   { fields.push(`local_name = $${i++}`);  params.push(normalizeLocalName(localName)); }
   if (searchAliases !== undefined) { fields.push(`search_aliases = $${i++}`); params.push(normalizeSearchAliases(searchAliases)); }
   if (description !== undefined) { fields.push(`description = $${i++}`); params.push(description); }
-  if (photos !== undefined)      { fields.push(`photos = $${i++}::jsonb`); params.push(JSON.stringify(photos)); }
+  if (photos !== undefined) {
+    fields.push(`photos = $${i++}::jsonb`); params.push(JSON.stringify(photos));
+    fields.push(`photo_url = $${i++}`);
+    params.push(photoUrl || (Array.isArray(photos) && photos[0]) || null);
+  }
   else if (photoUrl !== undefined) { fields.push(`photo_url = $${i++}`); params.push(photoUrl); }
   if (categoryId !== undefined)  { fields.push(`category_id = $${i++}`); params.push(categoryId || null); }
   if (!fields.length) { res.status(400).json({ success: false, error: 'Nothing to update' }); return; }
@@ -1118,22 +1123,19 @@ export const adminListOfflineSales = asyncHandler(async (req: AdminRequest, res:
   res.json({ success: true, data: entries });
 });
 
-// Record one offline item sold: product + quantity + cash/UPI. The price is
-// resolved server-side from the store listing, never accepted from the client.
+// Record one offline item sold: a store product plus quantity, or a manual
+// "Other" amount when staff cannot identify the item.
 export const adminAddOfflineSale = asyncHandler(async (req: AdminRequest, res: Response) => {
   await assertDailySalesAccess(req);
   const storeId = await resolveManagedStoreId(req);
   const date = typeof req.body?.date === 'string' ? req.body.date : '';
   const productId = typeof req.body?.productId === 'string' ? req.body.productId : '';
   const quantity = Number(req.body?.quantity);
+  const amount = Number(req.body?.amount);
   const paymentMethod = req.body?.paymentMethod;
   const notes = typeof req.body?.notes === 'string' && req.body.notes.trim() ? req.body.notes.trim() : null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
-    return;
-  }
-  if (!productId) {
-    res.status(400).json({ success: false, error: 'productId is required' });
     return;
   }
   if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -1144,8 +1146,13 @@ export const adminAddOfflineSale = asyncHandler(async (req: AdminRequest, res: R
     res.status(400).json({ success: false, error: 'paymentMethod must be cash or upi' });
     return;
   }
+  if (!productId && (!Number.isFinite(amount) || amount <= 0)) {
+    res.status(400).json({ success: false, error: 'amount must be greater than 0 for Other sales' });
+    return;
+  }
   const result = await DailySalesService.addEntry(
-    storeId, date, productId, quantity, paymentMethod, notes, req.admin?.id ?? null
+    storeId, date, productId || null, quantity, paymentMethod, notes, req.admin?.id ?? null,
+    productId ? undefined : amount,
   );
   res.status(201).json({ success: true, data: result });
 });
@@ -1156,14 +1163,11 @@ export const adminUpdateOfflineSale = asyncHandler(async (req: AdminRequest, res
   const date = typeof req.body?.date === 'string' ? req.body.date : '';
   const productId = typeof req.body?.productId === 'string' ? req.body.productId : '';
   const quantity = Number(req.body?.quantity);
+  const amount = Number(req.body?.amount);
   const paymentMethod = req.body?.paymentMethod;
   const notes = typeof req.body?.notes === 'string' && req.body.notes.trim() ? req.body.notes.trim() : null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     res.status(400).json({ success: false, error: 'date must be YYYY-MM-DD' });
-    return;
-  }
-  if (!productId) {
-    res.status(400).json({ success: false, error: 'productId is required' });
     return;
   }
   if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -1174,8 +1178,13 @@ export const adminUpdateOfflineSale = asyncHandler(async (req: AdminRequest, res
     res.status(400).json({ success: false, error: 'paymentMethod must be cash or upi' });
     return;
   }
+  if (!productId && (!Number.isFinite(amount) || amount <= 0)) {
+    res.status(400).json({ success: false, error: 'amount must be greater than 0 for Other sales' });
+    return;
+  }
   const result = await DailySalesService.updateEntry(
-    req.params.id, storeId, date, productId, quantity, paymentMethod, notes
+    req.params.id, storeId, date, productId || null, quantity, paymentMethod, notes,
+    productId ? undefined : amount,
   );
   res.json({ success: true, data: result });
 });
@@ -1398,19 +1407,21 @@ export const adminUpdateOrderFulfilment = asyncHandler(async (req: AdminRequest,
   res.json({ success: true, data: fulfilment });
 });
 
-// Correct an order after a partial delivery. The admin picks the quantity that
+// Correct an order after an item adjustment. The admin picks the quantity that
 // actually arrived for each line; the service removes the rest, recalculates the
 // order money, returns any stock for an already-delivered order, and writes an
 // audit row so the original quantity is never lost.
 export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { adjustments, reason, paymentMethod } = req.body;
-  if (!Array.isArray(adjustments) || adjustments.length === 0) {
-    res.status(400).json({ success: false, error: 'Choose at least one item to adjust' }); return;
+  const { adjustments, reason, paymentMethod, additions } = req.body;
+  const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
+  const additionList = Array.isArray(additions) ? additions : [];
+  if (adjustmentList.length === 0 && additionList.length === 0) {
+    res.status(400).json({ success: false, error: 'Choose at least one item to adjust or add' }); return;
   }
   if (paymentMethod !== undefined && paymentMethod !== 'cod' && paymentMethod !== 'upi') {
     res.status(400).json({ success: false, error: 'Choose a valid payment mode' }); return;
   }
-  const normalized = adjustments.map((entry: any) => {
+  const normalized = adjustmentList.map((entry: any) => {
     const rawQuantity = entry?.deliveredQuantity;
     const deliveredQuantity = Number(rawQuantity);
     const orderItemId = String(entry?.orderItemId || '');
@@ -1421,13 +1432,26 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     }
     return { orderItemId, deliveredQuantity };
   });
+  const normalizedAdditions = additionList.map((entry: any) => {
+    const quantity = Number(entry?.quantity);
+    const productId = String(entry?.productId || '');
+    const quantityIsValid = (typeof entry?.quantity === 'number' || typeof entry?.quantity === 'string')
+      && Number.isInteger(quantity) && quantity > 0;
+    const price = Number(entry?.price);
+    const unit = typeof entry?.unit === 'string' ? entry.unit.trim() : '';
+    if (!productId || !quantityIsValid || !unit || !Number.isFinite(price) || price < 0) {
+      throw badRequest('Each added item needs a product, positive quantity, unit and valid price');
+    }
+    return { productId, quantity, unit, price };
+  });
 
   const result = await OrderService.adjustItems(
     req.params.id,
     normalized,
     typeof reason === 'string' ? reason.trim() : '',
     req.admin!,
-    paymentMethod
+    paymentMethod,
+    normalizedAdditions,
   );
 
   ComplianceService.logAudit({
@@ -1437,7 +1461,7 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     action: 'order_items_adjusted',
     entityType: 'order',
     entityId: result.id,
-    detail: `Order #${result.orderNumber}: ${result.adjustedItems} line(s) adjusted, ₹${result.removedTotal.toFixed(2)} removed, new total ₹${result.total.toFixed(2)}, payment ${result.paymentMethod}${reason ? ` — ${reason}` : ''}`,
+    detail: `Order #${result.orderNumber}: ${result.adjustedItems} line(s) adjusted, ₹${result.removedTotal.toFixed(2)} removed, ${result.addedItems} line(s) added, ₹${result.addedTotal.toFixed(2)} added, new total ₹${result.total.toFixed(2)}, payment ${result.paymentMethod}${reason ? ` — ${reason}` : ''}`,
     ipAddress: req.ip,
     userAgent: req.get('user-agent'),
   });
@@ -1446,6 +1470,15 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     PushService.notifyOrderRecipient(result.id, {
       title: `Order #${result.orderNumber} updated`,
       body: `An item we could not deliver was removed. Your updated total is ₹${result.total.toFixed(0)}.`,
+      url: '/orders',
+      tag: `order-${result.id}`,
+    }).catch(() => {});
+  }
+
+  if (result.addedItems > 0) {
+    PushService.notifyOrderRecipient(result.id, {
+      title: `Order #${result.orderNumber} updated`,
+      body: `An item was added to your order. Your updated total is ₹${result.total.toFixed(0)}.`,
       url: '/orders',
       tag: `order-${result.id}`,
     }).catch(() => {});
@@ -2266,6 +2299,48 @@ export const guestCancelOrder = asyncHandler(async (req: CustomerRequest, res: R
     return;
   }
   await runCancel(req, res, { trackingToken: token });
+});
+
+async function runCancellationRequest(req: CustomerRequest, res: Response, scope: CancelScope) {
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : null;
+  let order;
+  try {
+    order = await OrderService.requestCancellationByCaller(req.params.id, scope, reason);
+  } catch (err: any) {
+    const status = err?.status === 404 || err?.status === 400 ? err.status : 500;
+    res.status(status).json({ success: false, error: err?.message || 'Could not request cancellation' });
+    return;
+  }
+  if (order.storeId) {
+    PushService.notifyStoreAdmins(order.storeId, {
+      title: `Cancellation requested · #${order.orderNumber}`,
+      body: `${order.guestName || 'Customer'} requested cancellation: ${CUSTOMER_CANCELLATION_MESSAGES[reason as CustomerCancelReason] || reason}.`,
+      url: '/orders',
+      tag: `order-${req.params.id}`,
+    }).catch(() => {});
+  }
+  res.json({ success: true, message: 'Cancellation requested' });
+}
+
+export const customerRequestCancellation = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  if (!req.customer) { res.status(401).json({ success: false, error: 'Not signed in' }); return; }
+  await runCancellationRequest(req, res, { customerId: req.customer.id });
+});
+
+export const guestRequestCancellation = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const token = typeof req.body?.trackingToken === 'string' ? req.body.trackingToken.trim() : '';
+  if (!token) { res.status(400).json({ success: false, error: 'A tracking token is required' }); return; }
+  await runCancellationRequest(req, res, { trackingToken: token });
+});
+
+export const adminDeclineCancellationRequest = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const order = await OrderService.declineCancellationRequest(req.params.id, req.admin!);
+  PushService.notifyOrderRecipient(req.params.id, {
+    title: `Order #${order.orderNumber} update`,
+    body: 'The store cannot cancel this order because preparation is already underway.',
+    url: '/orders',
+  }).catch(() => {});
+  res.json({ success: true, message: 'Cancellation request declined' });
 });
 
 // ── Admin user management (super_admin only) ─────────────────────────────────

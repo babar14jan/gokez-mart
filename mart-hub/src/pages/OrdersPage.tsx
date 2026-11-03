@@ -12,7 +12,7 @@ import { useAuthStore } from '../store/authStore';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PaymentConfirmDialog from '../components/PaymentConfirmDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
-import PartialDeliveryDialog from '../components/PartialDeliveryDialog';
+import ManageOrderDialog from '../components/ManageOrderDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
 
@@ -165,6 +165,26 @@ function getJourneyEvents(order: any) {
     .sort((first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime());
 }
 
+function getAdjustmentUpdates(order: any): Array<{ reason: string | null; changes: string[] }> {
+  const groups = (order.adjustments || []).reduce((result: Record<string, { reason: string | null; changes: string[] }>, adjustment: any) => {
+    const key = `${adjustment.createdAt || ''}:${adjustment.reason || ''}`;
+    const group = result[key] || { reason: adjustment.reason || null, changes: [] };
+    const previousQuantity = Number(adjustment.previousQuantity) || 0;
+    const removedQuantity = Number(adjustment.removedQuantity) || 0;
+    const quantity = Number(adjustment.deliveredQuantity) || 0;
+    if (previousQuantity === 0) {
+      group.changes.push(`Added ${adjustment.productName} · ${adjustment.unit} × ${quantity}`);
+    } else if (removedQuantity > 0) {
+      group.changes.push(`Removed ${adjustment.productName} · ${adjustment.unit} × ${removedQuantity}`);
+    } else {
+      group.changes.push(`Updated ${adjustment.productName} · ${adjustment.unit}`);
+    }
+    result[key] = group;
+    return result;
+  }, {});
+  return Object.values(groups);
+}
+
 const STALE_MINS: Record<string, number> = {
   pending: 15, confirmed: 20, preparing: 30, out_for_delivery: 45,
 };
@@ -273,7 +293,7 @@ export default function OrdersPage() {
   const [confirmNextOpenOrder, setConfirmNextOpenOrder] = useState<any | null>(null);
   const [rescheduleOrder, setRescheduleOrder] = useState<any | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState('');
-  const [partialOpen, setPartialOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const { role, id: currentUserId, name, username } = useAuthStore();
   const canTerminate = ['super_admin', 'store_owner'].includes(role || '');
@@ -386,6 +406,30 @@ export default function OrdersPage() {
     }
     setCancellingId(null);
     setCancellationReason('');
+  };
+
+  const handleApproveCancellationRequest = async (order: any) => {
+    setUpdating(order.id);
+    try {
+      await ordersApi.updateStatus(order.id, 'cancelled', undefined, 'customer_request');
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Could not approve this cancellation request');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleDeclineCancellationRequest = async (order: any) => {
+    setUpdating(order.id);
+    try {
+      await ordersApi.declineCancellationRequest(order.id);
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Could not keep this order');
+    } finally {
+      setUpdating(null);
+    }
   };
 
   const handleDeliveryResolution = async (order: any) => {
@@ -617,11 +661,11 @@ export default function OrdersPage() {
         {canManage && (
           <button
             type="button"
-            onClick={() => setPartialOpen(true)}
+            onClick={() => setManageOpen(true)}
             className="flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
-            title="Correct a partially delivered order">
+            title="Add or correct items on this order">
             <Package className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Partial delivery</span>
+            <span className="hidden sm:inline">Manage order</span>
           </button>
         )}
       </div>
@@ -725,6 +769,11 @@ export default function OrdersPage() {
                           className="text-[10px] font-semibold bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-full"
                         >
                           {CANCELLATION_REASON_LABELS[order.cancellationReason] || order.cancellationReason}
+                        </span>
+                      )}
+                      {order.cancellationRequestedAt && !order.cancellationRequestDecision && (
+                        <span className="text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">
+                          Cancellation requested
                         </span>
                       )}
                         {/* Express ETA is meaningless on an after-hours order,
@@ -831,6 +880,15 @@ export default function OrdersPage() {
                           <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed">{order.notes}</p>
                         </div>
                       )}
+                      {order.cancellationRequestedAt && !order.cancellationRequestDecision && (
+                        <div className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-900/10 rounded-xl px-3 py-2">
+                          <XCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                          <div className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                            <p className="font-semibold">Customer requested cancellation</p>
+                            <p className="mt-0.5">{CANCELLATION_REASON_LABELS[order.cancellationRequestReason] || order.cancellationRequestReason}</p>
+                          </div>
+                        </div>
+                      )}
                       {/* Why the order stopped — the customer's own reason for a
                           self-service cancel, or the staff reason otherwise. */}
                       {['cancelled', 'terminated'].includes(order.status) && order.cancellationReason && (
@@ -866,6 +924,26 @@ export default function OrdersPage() {
                 <div className="flex items-center justify-between gap-2 px-4 py-3">
                   <JourneyButton onClick={e => { e.stopPropagation(); setDetailsOrder(order); }} />
                   <div className="flex items-center gap-1.5">
+                    {canManage && order.status === 'preparing' && order.cancellationRequestedAt && !order.cancellationRequestDecision && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); void handleApproveCancellationRequest(order); }}
+                          disabled={isUpdating}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> Approve cancellation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); void handleDeclineCancellationRequest(order); }}
+                          disabled={isUpdating}
+                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+                        >
+                          Keep order
+                        </button>
+                      </>
+                    )}
                     {canManage && !TERMINAL.includes(order.status) && order.status !== 'out_for_delivery' && (['pending', 'confirmed'].includes(order.status) || canTerminate) && (
                       <button
                         type="button"
@@ -1214,12 +1292,24 @@ export default function OrdersPage() {
                         const campaignDiscount = Number(order.campaignDiscount) || 0;
                         const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
                         const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
+                        const adjustmentUpdates = getAdjustmentUpdates(order);
                         return (
                           <>
                             {totalSavings > 0 && (
                               <div className="flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-1.5 text-amber-950">
                                 <span className="text-xs" aria-hidden="true">🎉</span>
                                 <span className="text-xs font-extrabold">Customer saved ₹{totalSavings.toFixed(0)}</span>
+                              </div>
+                            )}
+                            {adjustmentUpdates.length > 0 && (
+                              <div className="space-y-1 rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-[11px] leading-snug text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/10 dark:text-amber-200">
+                                <p className="font-bold">Order updates</p>
+                                {adjustmentUpdates.map((update, updateIndex) => (
+                                  <div key={updateIndex}>
+                                    {update.changes.map((change, changeIndex) => <p key={changeIndex}>{change}</p>)}
+                                    {update.reason && <p className="text-amber-700 dark:text-amber-300">Reason: {update.reason}</p>}
+                                  </div>
+                                ))}
                               </div>
                             )}
                             <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
@@ -1326,13 +1416,15 @@ export default function OrdersPage() {
                         {event.type === 'delivery'
                           ? `Delivery rescheduled to ${new Date(event.scheduledFor).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\b(AM|PM)\b/, meridiem => meridiem.toLowerCase())}`
                           : event.type === 'adjustment'
-                            ? `Partial delivery · ${event.reason || 'Adjusted'}`
+                            ? `${Number(event.previousQuantity) === 0 ? 'Item added' : 'Order adjusted'} · ${event.reason || 'Adjusted'}`
                             : event.toStatus.replaceAll('_', ' ')}
                       </p>
                       {event.type === 'adjustment' && (
                         <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400 break-words">
-                          {event.productName} ({event.unit}): {event.previousQuantity} → {event.deliveredQuantity}
-                          {event.removedQuantity > 0 ? ` · ${event.removedQuantity} removed · ₹${Number(event.removedAmount).toFixed(2)} off` : ''}
+                          {Number(event.previousQuantity) === 0
+                            ? `${event.productName} (${event.unit}): ${event.deliveredQuantity} added`
+                            : <>{event.productName} ({event.unit}): {event.previousQuantity} → {event.deliveredQuantity}
+                              {event.removedQuantity > 0 ? ` · ${event.removedQuantity} removed · ₹${Number(event.removedAmount).toFixed(2)} off` : ''}</>}
                         </p>
                       )}
                       <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400 break-words">
@@ -1399,9 +1491,9 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {partialOpen && (
-        <PartialDeliveryDialog
-          onClose={() => setPartialOpen(false)}
+      {manageOpen && (
+        <ManageOrderDialog
+          onClose={() => setManageOpen(false)}
           onSaved={() => load(true)}
         />
       )}
