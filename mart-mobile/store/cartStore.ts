@@ -7,6 +7,7 @@ export interface CartItem {
   productId: string; sourceStoreId?: string; productName: string;
   unit: string; price: number; quantity: number;
   photoUrl: string | null;
+  thumbnailUrl?: string | null;
 }
 
 interface CartState {
@@ -37,7 +38,7 @@ export const useCartStore = create<CartState>()(
           if (existing) {
             return { items: state.items.map(i => i.productId === product.id && i.unit === u ? { ...i, quantity: i.quantity + 1 } : i) };
           }
-          return { items: [...state.items, { productId: product.id, sourceStoreId: product.storeId, productName: product.name, unit: u, price: p, quantity: 1, photoUrl: product.photoUrl }] };
+          return { items: [...state.items, { productId: product.id, sourceStoreId: product.storeId, productName: product.name, unit: u, price: p, quantity: 1, photoUrl: product.photoUrl, thumbnailUrl: product.thumbnailUrl ?? product.photoVariants?.[0]?.thumbnailUrl ?? null }] };
         });
       },
 

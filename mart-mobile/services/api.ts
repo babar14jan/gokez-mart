@@ -24,6 +24,10 @@ export interface Product {
   id: string; name: string; localName: string | null; description: string | null;
   storeId?: string;
   photoUrl: string | null; price: number; unit: string;
+  photos?: string[] | null;
+  photoVariants?: Array<{ thumbnailUrl: string; largeUrl: string }> | null;
+  thumbnailUrl?: string | null;
+  largeUrl?: string | null;
   weightOptions: WeightOption[] | null;
   discountPercent: number; isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
@@ -141,6 +145,10 @@ export const storeApi = {
   getProducts: (categoryId?: string, storeId?: string, zoneId?: string) =>
     api.get<{ success: boolean; data: Product[] }>('/products', {
       params: { ...(categoryId ? { categoryId } : {}), ...(storeId ? { storeId } : {}), ...(zoneId ? { zoneId } : {}) },
+    }),
+  getProduct: (id: string, storeId?: string, zoneId?: string) =>
+    api.get<{ success: boolean; data: Product }>(`/products/${id}`, {
+      params: { ...(storeId ? { storeId } : {}), ...(zoneId ? { zoneId } : {}) },
     }),
   getSettings: (storeId?: string, zoneId?: string) =>
     api.get<{ success: boolean; data: PublicSettings }>('/settings/public', {

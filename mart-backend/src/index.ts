@@ -5,6 +5,7 @@ import pool from './database/db';
 import { installShutdownHandlers } from './utils/shutdown';
 import { recoverAutomaticOrderTransitions } from './controllers';
 import { PromotionService } from './services/promotion.service';
+import { ProductImageAssetService } from './services/productImageAsset.service';
 
 async function start() {
   // Run migrations before starting the server
@@ -32,6 +33,15 @@ async function start() {
   dispatchPromotions();
   const promotionTimer = setInterval(dispatchPromotions, 60_000);
   promotionTimer.unref();
+
+  const cleanupProductImages = () => {
+    ProductImageAssetService.cleanupDue().catch(error => {
+      console.error('[product-images] cleanup failed:', error);
+    });
+  };
+  cleanupProductImages();
+  const imageCleanupTimer = setInterval(cleanupProductImages, 60_000);
+  imageCleanupTimer.unref();
 
   // The hosting platform sends SIGTERM on every deploy and restart. Without a
   // handler the process dies mid-request and the database pool is abandoned;

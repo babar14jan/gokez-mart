@@ -38,13 +38,15 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
     ? Math.round(product.price - discountedPrice)
     : 0;
 
-  const photos = product.photos?.length
-    ? product.photos.filter(photo => Boolean(photo))
-    : product.photoUrl
-      ? [product.photoUrl]
+  const photos = product.photoVariants?.length
+    ? product.photoVariants
+    : product.photos?.length
+      ? product.photos.filter(photo => Boolean(photo)).map(photo => ({ thumbnailUrl: photo, largeUrl: photo }))
+      : product.photoUrl
+      ? [{ thumbnailUrl: product.photoUrl, largeUrl: product.photoUrl }]
       : [];
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(photos[0] ?? null);
-  const primaryPhoto = selectedPhoto ?? photos[0] ?? product.photoUrl;
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(photos[0]?.largeUrl ?? null);
+  const primaryPhoto = selectedPhoto ?? photos[0]?.largeUrl ?? product.largeUrl ?? product.photoUrl;
 
   // Lock body scroll when sheet is open
   useEffect(() => {
@@ -135,13 +137,13 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
               <div className="absolute bottom-2 left-2 right-2 flex gap-2 overflow-x-auto px-2">
                 {photos.map(photo => (
                   <button
-                    key={photo}
+                    key={photo.largeUrl}
                     type="button"
-                    onClick={() => setSelectedPhoto(photo)}
-                    className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 ${selectedPhoto === photo ? 'border-emerald-500' : 'border-white/70 dark:border-slate-700'} bg-white dark:bg-slate-800`}
+                    onClick={() => setSelectedPhoto(photo.largeUrl)}
+                    className={`relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border-2 ${selectedPhoto === photo.largeUrl ? 'border-emerald-500' : 'border-white/70 dark:border-slate-700'} bg-white dark:bg-slate-800`}
                   >
-                    <img src={photo} alt="" className="h-full w-full object-cover" />
-                    {selectedPhoto === photo && (
+                    <img src={photo.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                    {selectedPhoto === photo.largeUrl && (
                       <span className="absolute inset-0 flex items-center justify-center bg-emerald-500/20 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">PRIMARY</span>
                     )}
                   </button>

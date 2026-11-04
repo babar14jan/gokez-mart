@@ -204,7 +204,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
                       className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
                         <SmartImage
-                          src={product.photoUrl}
+                          src={product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
                           alt=""
                           className="h-full w-full"
                           imgClassName="object-cover"
