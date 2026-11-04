@@ -1445,8 +1445,8 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
   const { adjustments, reason, paymentMethod, additions } = req.body;
   const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
   const additionList = Array.isArray(additions) ? additions : [];
-  if (adjustmentList.length === 0 && additionList.length === 0) {
-    res.status(400).json({ success: false, error: 'Choose at least one item to adjust or add' }); return;
+  if (adjustmentList.length === 0 && additionList.length === 0 && paymentMethod === undefined) {
+    res.status(400).json({ success: false, error: 'Choose at least one item to adjust or add, or change the payment mode' }); return;
   }
   if (paymentMethod !== undefined && paymentMethod !== 'cod' && paymentMethod !== 'upi') {
     res.status(400).json({ success: false, error: 'Choose a valid payment mode' }); return;
@@ -1496,7 +1496,7 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     userAgent: req.get('user-agent'),
   });
 
-  if (result.status === 'delivered') {
+  if (result.status === 'delivered' && result.adjustedItems > 0) {
     PushService.notifyOrderRecipient(result.id, {
       title: `Order #${result.orderNumber} updated`,
       body: `An item we could not deliver was removed. Your updated total is ₹${result.total.toFixed(0)}.`,

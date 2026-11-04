@@ -1099,8 +1099,8 @@ export class OrderService {
   ) {
     const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
     const additionList = Array.isArray(additions) ? additions : [];
-    if (adjustmentList.length === 0 && additionList.length === 0) {
-      throw badRequest('Choose at least one item to adjust');
+    if (adjustmentList.length === 0 && additionList.length === 0 && !paymentMethod) {
+      throw badRequest('Choose at least one item to adjust or add, or change the payment mode');
     }
     if (paymentMethod && !['cod', 'upi'].includes(paymentMethod)) {
       throw badRequest('Choose a valid payment mode');
@@ -1156,8 +1156,9 @@ export class OrderService {
         const item = items.get(input.orderItemId)!;
         return input.deliveredQuantity !== item.quantity;
       });
-      if (changed.length === 0 && additionList.length === 0) {
-        throw badRequest('No item quantities were changed');
+      const paymentChanged = !!paymentMethod && paymentMethod !== order.paymentMethod;
+      if (changed.length === 0 && additionList.length === 0 && !paymentChanged) {
+        throw badRequest('No changes to save');
       }
 
       // An order with nothing delivered is a cancellation, not a partial
