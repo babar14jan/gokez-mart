@@ -1092,7 +1092,7 @@ export default function App() {
                 {(successData.items || []).map((item: any, i: number) => (
                   <div key={i} className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0">
                     <SmartImage
-                      src={item.photoUrl}
+                      src={item.thumbnailUrl || item.photoUrl}
                       alt={item.productName}
                       className="h-full w-full"
                       imgClassName="object-cover"

@@ -28,6 +28,7 @@ import { ProductSuggestionService, SuggestionStatus, BuyerType, SuggestionRange 
 import { FunnelService, FunnelRange } from '../services/funnel.service';
 import { CustomerAnalyticsService } from '../services/customerAnalytics.service';
 import { emitOrderEvent, orderEventBus, type OrderLiveEvent } from '../services/orderEventBus';
+import { ProductImageAssetService } from '../services/productImageAsset.service';
 import { FunnelEventService, FunnelEventName } from '../services/funnelEvent.service';
 import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
@@ -40,6 +41,7 @@ import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
 import { badRequest, forbidden } from '../utils/apiError';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
+import { v4 as uuidv4 } from 'uuid';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -115,6 +117,10 @@ export async function recoverAutomaticOrderTransitions(): Promise<void> {
 }
 
 type PreparedImage = { buffer: Buffer; extension: string; mimeType: string };
+type PreparedProductImages = {
+  thumbnail: PreparedImage;
+  large: PreparedImage;
+};
 
 function hasValidCoordinates(latitude: unknown, longitude: unknown): boolean {
   if (latitude == null && longitude == null) return true;
@@ -123,18 +129,21 @@ function hasValidCoordinates(latitude: unknown, longitude: unknown): boolean {
     latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
 }
 
-async function prepareImage(buffer: Buffer, maxDimension: number): Promise<PreparedImage> {
+async function prepareImage(buffer: Buffer, maxDimension?: number): Promise<PreparedImage> {
   // sharp is a native module (libvips) and it is only needed when an image is
   // actually being re-encoded, which is rare. Importing it lazily keeps it out
   // of the boot path, so the process does not hold ~11 MB of native bindings
   // for the whole time it is running.
   const { default: sharp } = await import('sharp');
-  const image = sharp(buffer, { failOn: 'error' }).rotate().resize({
-    width: maxDimension,
-    height: maxDimension,
-    fit: 'inside',
-    withoutEnlargement: true,
-  });
+  const image = sharp(buffer, { failOn: 'error' }).rotate();
+  if (maxDimension) {
+    image.resize({
+      width: maxDimension,
+      height: maxDimension,
+      fit: 'inside',
+      withoutEnlargement: true,
+    });
+  }
   const metadata = await image.metadata();
 
   if (metadata.format === 'jpeg' || metadata.format === 'png' || metadata.format === 'webp') {
@@ -145,6 +154,44 @@ async function prepareImage(buffer: Buffer, maxDimension: number): Promise<Prepa
     };
   }
   throw new Error('Only JPEG, PNG, and WebP images are supported');
+}
+
+async function prepareAvatarImage(buffer: Buffer): Promise<PreparedImage> {
+  const { default: sharp } = await import('sharp');
+  const source = sharp(buffer, { failOn: 'error' }).rotate();
+  const metadata = await source.metadata();
+  if (!['jpeg', 'png', 'webp'].includes(metadata.format || '')) {
+    throw new Error('Only JPEG, PNG, and WebP images are supported');
+  }
+  return {
+    buffer: await source.resize(256, 256, { fit: 'cover', position: 'centre' }).webp({ quality: 80, effort: 4 }).toBuffer(),
+    extension: 'webp',
+    mimeType: 'image/webp',
+  };
+}
+
+async function prepareProductImages(buffer: Buffer): Promise<PreparedProductImages> {
+  const { default: sharp } = await import('sharp');
+  const source = sharp(buffer, { failOn: 'error' }).rotate();
+  const metadata = await source.metadata();
+  if (!['jpeg', 'png', 'webp'].includes(metadata.format || '')) {
+    throw new Error('Only JPEG, PNG, and WebP images are supported');
+  }
+  const sourceMax = Math.max(metadata.width || 0, metadata.height || 0);
+  const encode = async (maxDimension: number): Promise<PreparedImage> => ({
+    buffer: await source.clone().resize({
+      width: maxDimension,
+      height: maxDimension,
+      fit: 'inside',
+      withoutEnlargement: true,
+    }).webp({ quality: maxDimension <= 160 ? 72 : maxDimension <= 480 ? 76 : 82, effort: 4 }).toBuffer(),
+    extension: 'webp',
+    mimeType: 'image/webp',
+  });
+
+  const thumbnail = await encode(160);
+  const large = sourceMax <= 160 ? thumbnail : await encode(480);
+  return { thumbnail, large };
 }
 
 // Helper: resolve storeId from request (admin JWT or query param storeId)
@@ -757,7 +804,7 @@ export const adminCreateProduct = asyncHandler(async (req: AdminRequest, res: Re
     return;
   }
   const product = isCombo
-    ? await ProductService.createBundle({ ...req.body, storeId, components: req.body.bundleComponents })
+    ? await ProductService.createBundle({ ...req.body, storeId, adminId: req.admin!.id, components: req.body.bundleComponents })
     : await ProductService.create({ ...req.body, storeId });
   res.status(201).json({ success: true, data: product });
 });
@@ -787,7 +834,7 @@ export const adminUpdateProduct = asyncHandler(async (req: AdminRequest, res: Re
   }
   let data: Partial<MartProduct> & { storeId?: string } = { storeId };
   if (existing.isBundle) {
-    data = { ...req.body, storeId };
+    data = { ...req.body, storeId, adminId: req.admin!.id };
   } else {
     data.price = req.body.price;
     data.unit = req.body.unit;
@@ -826,7 +873,7 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
   }
   const result = await query(
     `SELECT p.id, p.product_code as "productCode", p.name, p.local_name as "localName", p.search_aliases as "searchAliases", p.description,
-            p.photo_url as "photoUrl", p.photos as "photos", p.category_id as "categoryId",
+            p.photo_url as "photoUrl", p.photos as "photos", p.photo_variants as "photoVariants", p.category_id as "categoryId",
             c.name as "categoryName", c.icon as "categoryIcon"
      FROM mart_products p
      LEFT JOIN mart_categories c ON c.id = p.category_id
@@ -834,18 +881,29 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
      ORDER BY c.sort_order ASC NULLS LAST, p.name ASC`,
     params
   );
+  const rows = result.rows as Array<Record<string, unknown>>;
+  const assetVariants = await ProductImageAssetService.getCatalogAssetVariants(rows.map(row => String(row.id)));
   res.json({
     success: true,
-    data: (result.rows as Array<Record<string, unknown>>).map(row => ({
-      ...row,
-      photos: Array.isArray(row.photos) ? row.photos.map((photo) => String(photo)) : [],
-    })),
+    data: rows.map(row => {
+      const photos = Array.isArray(row.photos) ? row.photos.map(photo => String(photo)) : [];
+      const generated = assetVariants.get(String(row.id)) || [];
+      const existing = Array.isArray(row.photoVariants) ? row.photoVariants as Array<Record<string, unknown>> : [];
+      const generatedByLargeUrl = new Map(generated.map(variant => [variant.largeUrl, variant]));
+      const existingByLargeUrl = new Map(existing
+        .filter(variant => typeof variant?.largeUrl === 'string')
+        .map(variant => [String(variant.largeUrl), variant]));
+      const photoVariants = photos.map(largeUrl => generatedByLargeUrl.get(largeUrl)
+        || existingByLargeUrl.get(largeUrl)
+        || { thumbnailUrl: largeUrl, largeUrl });
+      return { ...row, photos, photoVariants };
+    }),
   });
 });
 
 // Create catalog product — super_admin only (name + photo + category, no price/store)
 export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, localName, searchAliases, description, photoUrl, photos, categoryId } = req.body;
+  const { name, localName, searchAliases, description, photoUrl, photos, photoVariants, imageAssetIds, categoryId } = req.body;
   if (!name?.trim()) { res.status(400).json({ success: false, error: 'name is required' }); return; }
   const product = await ProductService.createCatalogProduct({
     name: name.trim(),
@@ -854,6 +912,9 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
     description,
     photoUrl,
     photos,
+    photoVariants,
+    imageAssetIds,
+    adminId: req.admin!.id,
     categoryId,
   });
   res.status(201).json({ success: true, data: product });
@@ -861,7 +922,7 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
 
 // Update catalog product — super_admin only
 export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, localName, searchAliases, description, photoUrl, photos, categoryId } = req.body;
+  const { name, localName, searchAliases, description, photoUrl, photos, photoVariants, imageAssetIds, categoryId } = req.body;
   const fields: string[] = [];
   const params: unknown[] = [];
   let i = 1;
@@ -875,15 +936,22 @@ export const adminUpdateCatalogProduct = asyncHandler(async (req: AdminRequest, 
     params.push(photoUrl || (Array.isArray(photos) && photos[0]) || null);
   }
   else if (photoUrl !== undefined) { fields.push(`photo_url = $${i++}`); params.push(photoUrl); }
+  if (photoVariants !== undefined) { fields.push(`photo_variants = $${i++}::jsonb`); params.push(JSON.stringify(photoVariants)); }
   if (categoryId !== undefined)  { fields.push(`category_id = $${i++}`); params.push(categoryId || null); }
   if (!fields.length) { res.status(400).json({ success: false, error: 'Nothing to update' }); return; }
   fields.push(`updated_at = NOW()`);
   params.push(req.params.id);
-  const result = await query(
-    `UPDATE mart_products SET ${fields.join(', ')} WHERE id = $${i} AND is_catalog = true AND is_bundle = false
-    RETURNING id, product_code as "productCode", name, local_name as "localName", search_aliases as "searchAliases", description, photo_url as "photoUrl", photos as "photos", category_id as "categoryId"`,
-    params
-  );
+  const result = await transaction(async client => {
+    const updated = await client.query(
+      `UPDATE mart_products SET ${fields.join(', ')} WHERE id = $${i} AND is_catalog = true AND is_bundle = false
+      RETURNING id, product_code as "productCode", name, local_name as "localName", search_aliases as "searchAliases", description, photo_url as "photoUrl", photos as "photos", photo_variants as "photoVariants", category_id as "categoryId"`,
+      params
+    );
+    if (updated.rows[0] && imageAssetIds !== undefined) {
+      await ProductImageAssetService.syncProductAssets(client, req.params.id, imageAssetIds, req.admin!.id);
+    }
+    return updated;
+  });
   if (!result.rows[0]) { res.status(404).json({ success: false, error: 'Catalog product not found' }); return; }
   const row = result.rows[0] as Record<string, unknown>;
   const normalizedPhotos = Array.isArray(row.photos)
@@ -901,7 +969,10 @@ export const adminDeleteCatalogProduct = asyncHandler(async (req: AdminRequest, 
     res.status(400).json({ success: false, error: 'Cannot delete — product is used in one or more stores' });
     return;
   }
-  await query(`DELETE FROM mart_products WHERE id = $1 AND is_catalog = true AND is_bundle = false`, [req.params.id]);
+  await transaction(async client => {
+    await ProductImageAssetService.queueProductAssets(client, req.params.id);
+    await client.query(`DELETE FROM mart_products WHERE id = $1 AND is_catalog = true AND is_bundle = false`, [req.params.id]);
+  });
   res.json({ success: true, message: 'Catalog product deleted' });
 });
 
@@ -2699,7 +2770,7 @@ export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequ
 export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
   const bucket = config.supabase.bucket;
-  const image = await prepareImage(req.file.buffer, 512);
+  const image = await prepareAvatarImage(req.file.buffer);
   const filename = `customers/${req.customer!.id}-${Date.now()}.${image.extension}`;
   const uploadUrl = `${config.supabase.url}/storage/v1/object/${bucket}/${filename}`;
   const uploadRes = await fetch(uploadUrl, {
@@ -2883,15 +2954,74 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
 
   const bucket = config.supabase.bucket;
+  const isProductImage = req.body?.profile === 'product';
   // Callers can ask for a tighter cap: a category icon is painted at ~32px in
   // the app, so storing it at the default 1600px wastes bandwidth on every
   // category view. Clamped so a client can never request an unbounded size.
   const requested = Number(req.body?.maxDimension);
   const maxDimension = Number.isFinite(requested)
     ? Math.min(Math.max(Math.round(requested), 64), 1600)
-    : 1600;
-  const image = await prepareImage(req.file.buffer, maxDimension);
+    : undefined;
   const baseName = req.file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+
+  if (isProductImage) {
+    const images = await prepareProductImages(req.file.buffer);
+    const entries = Object.entries(images) as Array<[keyof PreparedProductImages, PreparedImage]>;
+    const assetId = uuidv4();
+    const filenames = new Map<PreparedImage, string>();
+    for (const [name, variant] of entries) {
+      if (!filenames.has(variant)) {
+        filenames.set(variant, `products/${assetId}-${baseName || 'product'}-${name}.${variant.extension}`);
+      }
+    }
+
+    if (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+      const uploadsDir = path.resolve(__dirname, '../../uploads');
+      await mkdir(path.join(uploadsDir, 'products'), { recursive: true });
+      await Promise.all([...filenames].map(([variant, variantFilename]) => writeFile(path.join(uploadsDir, variantFilename), variant.buffer)));
+      const localUrl = (variant: PreparedImage) => `${req.protocol}://${req.get('host')}/uploads/${filenames.get(variant)!}`;
+      const photoVariants = { assetId, thumbnailUrl: localUrl(images.thumbnail), largeUrl: localUrl(images.large) };
+      await ProductImageAssetService.createPending({
+        id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
+        thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'local',
+      });
+      res.json({ success: true, data: { url: photoVariants.largeUrl, ...photoVariants, photoVariants } });
+      return;
+    }
+
+    const uploaded = await Promise.all([...filenames].map(async ([variant, variantFilename]) => {
+      const uploadRes = await fetch(`${config.supabase.url}/storage/v1/object/${bucket}/${variantFilename}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.supabase.serviceRoleKey}`,
+          'Content-Type': variant.mimeType,
+          'x-upsert': 'false',
+          'cache-control': 'max-age=31536000, immutable',
+        },
+        body: variant.buffer,
+        signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
+      });
+      if (!uploadRes.ok) {
+        await uploadRes.text();
+        throw new Error('Upload failed. Please try again.');
+      }
+      return [variant, `${config.supabase.url}/storage/v1/object/public/${bucket}/${variantFilename}`] as const;
+    }));
+    const urls = new Map(uploaded);
+    const photoVariants = {
+      assetId,
+      thumbnailUrl: urls.get(images.thumbnail)!,
+      largeUrl: urls.get(images.large)!,
+    };
+    await ProductImageAssetService.createPending({
+      id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
+      thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'supabase',
+    });
+    res.json({ success: true, data: { url: photoVariants.largeUrl, ...photoVariants, photoVariants } });
+    return;
+  }
+
+  const image = await prepareImage(req.file.buffer, maxDimension);
   const filename = `${Date.now()}-${baseName || 'image'}.${image.extension}`;
 
   if (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {

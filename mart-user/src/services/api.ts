@@ -190,6 +190,10 @@ export interface Product {
   categoryId: string; categoryName: string;
   /** Catalog photo gallery. Falls back to the primary photo when absent. */
   photos?: string[] | null;
+  /** Responsive image URLs, ordered to match the photo gallery. */
+  photoVariants?: Array<{ thumbnailUrl: string; largeUrl: string }> | null;
+  thumbnailUrl?: string | null;
+  largeUrl?: string | null;
   /** A fixed combo/bundle sold as one product. Drives the "Today's Combos" section. */
   isBundle: boolean;
 }

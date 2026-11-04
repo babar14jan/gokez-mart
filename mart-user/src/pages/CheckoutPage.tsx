@@ -1061,7 +1061,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
               {items.map(item => (
                 <div key={`${item.productId}-${item.unit}`} className="flex items-center gap-3 px-4 py-3">
                   <SmartImage
-                    src={item.photoUrl}
+                    src={item.thumbnailUrl || item.photoUrl}
                     alt={item.productName}
                     className="w-12 h-12 rounded-xl flex-shrink-0"
                     imgClassName="object-cover"

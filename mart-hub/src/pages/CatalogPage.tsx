@@ -5,6 +5,8 @@ import CategoryIcon from '../components/CategoryIcon';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
 
+interface ProductImageVariant { assetId?: string; thumbnailUrl: string; largeUrl: string; }
+
 interface CatalogProduct {
   id: string;
   productCode: string;
@@ -14,6 +16,7 @@ interface CatalogProduct {
   description: string | null;
   photoUrl: string | null;
   photos?: string[];
+  photoVariants?: ProductImageVariant[];
   categoryId: string | null;
   categoryName: string | null;
   categoryIcon: string | null;
@@ -35,6 +38,7 @@ export default function CatalogPage() {
   const [editing, setEditing] = useState<CatalogProduct | null>(null);
   const [form, setForm] = useState({ name: '', localName: '', searchAliases: '', description: '', categoryId: '' });
   const [photos, setPhotos] = useState<string[]>([]);
+  const [photoVariants, setPhotoVariants] = useState<ProductImageVariant[]>([]);
   const [primaryPhoto, setPrimaryPhoto] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -70,9 +74,10 @@ export default function CatalogPage() {
     for (const item of pending) {
       setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'uploading' } : i));
       try {
-        const uploadRes = await productsApi.uploadPhoto(item.file);
-        const photoUrl = uploadRes.data.data.url;
-        await catalogApi.create({ name: item.name, photoUrl, photos: [photoUrl], categoryId: item.categoryId || undefined });
+        const uploadRes = await productsApi.uploadPhoto(item.file, undefined, 'product');
+        const upload = uploadRes.data.data;
+        const photoUrl = upload.url;
+        await catalogApi.create({ name: item.name, photoUrl, photos: [photoUrl], photoVariants: [upload.photoVariants], imageAssetIds: [upload.photoVariants.assetId], categoryId: item.categoryId || undefined });
         setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'done' } : i));
       } catch {
         setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'error' } : i));
@@ -105,7 +110,7 @@ export default function CatalogPage() {
   const openCreate = () => {
     setEditing(null);
     setForm({ name: '', localName: '', searchAliases: '', description: '', categoryId: categories[0]?.id || '' });
-    setPhotos([]); setPrimaryPhoto(null);
+    setPhotos([]); setPhotoVariants([]); setPrimaryPhoto(null);
     setShowModal(true);
   };
 
@@ -113,6 +118,7 @@ export default function CatalogPage() {
     setEditing(p);
     const initialPhotos = p.photos?.length ? p.photos : p.photoUrl ? [p.photoUrl] : [];
     setPhotos(initialPhotos);
+    setPhotoVariants(p.photoVariants?.length ? p.photoVariants : initialPhotos.map(url => ({ thumbnailUrl: url, largeUrl: url })));
     setPrimaryPhoto(initialPhotos[0] || null);
     setForm({ name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), description: p.description || '', categoryId: p.categoryId || '' });
     setShowModal(true);
@@ -123,10 +129,12 @@ export default function CatalogPage() {
     e.target.value = '';
     for (const file of files) {
       if (photos.length >= 4) break;
-      const uploadRes = await productsApi.uploadPhoto(file);
-      const url = uploadRes.data.data.url;
+      const uploadRes = await productsApi.uploadPhoto(file, undefined, 'product');
+      const upload = uploadRes.data.data;
+      const url = upload.url;
       setPhotos(prev => [...prev, url]);
-      setPrimaryPhoto(url);
+      setPhotoVariants(prev => [...prev, upload.photoVariants]);
+      setPrimaryPhoto(current => current || url);
     }
   };
 
@@ -137,6 +145,7 @@ export default function CatalogPage() {
       if (!next.length) setPrimaryPhoto(null);
       return next;
     });
+    setPhotoVariants(prev => prev.filter(variant => variant.largeUrl !== url));
   };
 
   const handleSave = async () => {
@@ -144,13 +153,21 @@ export default function CatalogPage() {
     setSaving(true);
     try {
       const photosToSave = photos.length ? photos : (editing?.photoUrl ? [editing.photoUrl] : []);
+      const orderedPhotos = primaryPhoto
+        ? [primaryPhoto, ...photosToSave.filter(photo => photo !== primaryPhoto)]
+        : photosToSave;
+      const orderedVariants = orderedPhotos.map(url =>
+        photoVariants.find(variant => variant.largeUrl === url) || { thumbnailUrl: url, largeUrl: url }
+      );
       const data = {
         name: form.name.trim(),
         localName: form.localName || undefined,
         searchAliases: parseSearchAliases(form.searchAliases),
         description: form.description || undefined,
-        photoUrl: primaryPhoto || photosToSave[0] || undefined,
-        photos: photosToSave,
+        photoUrl: orderedPhotos[0] || undefined,
+        photos: orderedPhotos,
+        photoVariants: orderedVariants,
+        imageAssetIds: orderedVariants.flatMap(variant => variant.assetId ? [variant.assetId] : []),
         categoryId: form.categoryId || undefined,
       };
       if (editing) await catalogApi.update(editing.id, data);
@@ -302,7 +319,7 @@ export default function CatalogPage() {
                 {primaryPhoto && (
                   <div className="flex justify-center">
                     <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
-                      <Upload className="h-3.5 w-3.5" /> Add photos
+                      <Upload className="h-3.5 w-3.5" /> Add secondary photos
                       <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddPhotos} />
                     </label>
                   </div>
