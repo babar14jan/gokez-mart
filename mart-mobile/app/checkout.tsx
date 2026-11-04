@@ -322,7 +322,7 @@ export default function CheckoutScreen() {
           <SectionTitle icon="bag-outline" title={`${items.length} Items`} />
           {items.map((item) => (
             <View key={`${item.productId}-${item.unit}`} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.gray100 }}>
-              <Image source={{ uri: item.photoUrl ?? undefined }} style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: colors.gray100 }} contentFit="cover" />
+              <Image source={{ uri: item.thumbnailUrl ?? item.photoUrl ?? undefined }} style={{ width: 52, height: 52, borderRadius: 12, backgroundColor: colors.gray100 }} contentFit="cover" />
               <View style={{ flex: 1, marginLeft: 10 }}>
                 <Text style={{ fontSize: 13, fontFamily: 'Inter-Medium', color: colors.gray900 }} numberOfLines={1}>{item.productName}</Text>
                 <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }}>{item.unit} · ₹{item.price}</Text>
@@ -369,7 +369,7 @@ export default function CheckoutScreen() {
               contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
               renderItem={({ item: p }) => (
                 <View style={{ width: 120, backgroundColor: colors.surface, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.gray100 }}>
-                  <Image source={{ uri: p.photoUrl ?? undefined }} style={{ width: 120, height: 100, backgroundColor: colors.gray100 }} contentFit="cover" />
+                  <Image source={{ uri: p.thumbnailUrl ?? p.photoVariants?.[0]?.thumbnailUrl ?? p.photoUrl ?? undefined }} style={{ width: 120, height: 100, backgroundColor: colors.gray100 }} contentFit="cover" />
                   <View style={{ padding: 8 }}>
                     <Text style={{ fontSize: 11, fontFamily: 'Inter-Medium', color: colors.gray900, lineHeight: 15 }} numberOfLines={2}>{p.name}</Text>
                     <Text style={{ fontSize: 10, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }}>{p.unit}</Text>

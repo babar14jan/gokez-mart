@@ -11,6 +11,7 @@
     "build": "tsc && rm -rf dist/database/migrations && mkdir -p dist/database/migrations && cp src/database/migrations/*.sql dist/database/migrations/",
     "start": "node scripts/start.mjs",
     "db:migrate": "tsx src/database/migrate.ts",
+    "images:export-local": "tsx scripts/export-local-product-images.ts",
     "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {

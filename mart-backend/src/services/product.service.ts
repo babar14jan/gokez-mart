@@ -2,6 +2,7 @@ import { query, transaction } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
 import { badRequest } from '../utils/apiError';
 import { ZoneService } from './zone.service';
+import { ProductImageAssetService } from './productImageAsset.service';
 
 export interface MartProduct {
   id: string;
@@ -14,6 +15,9 @@ export interface MartProduct {
   description: string | null;
   photoUrl: string | null;
   photos: string[];
+  photoVariants: ProductImageVariant[];
+  thumbnailUrl: string | null;
+  largeUrl: string | null;
   price: number;
   unit: string;
   approxWeight: string | null;
@@ -28,10 +32,50 @@ export interface MartProduct {
   updatedAt: string;
 }
 
+export interface ProductImageVariant {
+  thumbnailUrl: string;
+  largeUrl: string;
+}
+
+function normalizePhotoVariants(value: unknown, photos: unknown, photoUrl: unknown): ProductImageVariant[] {
+  const legacyPhotos = Array.isArray(photos)
+    ? photos.filter((photo): photo is string => typeof photo === 'string' && photo.length > 0)
+    : (typeof photoUrl === 'string' && photoUrl ? [photoUrl] : []);
+  const supplied = Array.isArray(value) ? value : [];
+  return supplied.map((entry, index) => {
+    const source = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+    const fallback = legacyPhotos[index] || legacyPhotos[0] || '';
+    const largeUrl = typeof source.largeUrl === 'string' && source.largeUrl ? source.largeUrl : fallback;
+    const thumbnailUrl = typeof source.thumbnailUrl === 'string' && source.thumbnailUrl ? source.thumbnailUrl : largeUrl;
+    return { thumbnailUrl, largeUrl };
+  }).filter(variant => Boolean(variant.largeUrl));
+}
+
+function decorateProductImages<T extends { photoUrl: string | null; photos: unknown; photoVariants?: unknown }>(product: T): T & {
+  photos: string[];
+  photoVariants: ProductImageVariant[];
+  thumbnailUrl: string | null;
+  largeUrl: string | null;
+} {
+  const photoVariants = normalizePhotoVariants(product.photoVariants, product.photos, product.photoUrl);
+  const photos = Array.isArray(product.photos)
+    ? product.photos.filter((photo): photo is string => typeof photo === 'string' && photo.length > 0)
+    : [];
+  const primary = photoVariants[0];
+  return {
+    ...product,
+    photoUrl: product.photoUrl || primary?.largeUrl || null,
+    photos: photos.length ? photos : photoVariants.map(variant => variant.largeUrl),
+    photoVariants,
+    thumbnailUrl: primary?.thumbnailUrl || product.photoUrl || null,
+    largeUrl: primary?.largeUrl || product.photoUrl || null,
+  };
+}
+
 const PRODUCT_SELECT = `
   SELECT p.id, p.product_code as "productCode", p.category_id as "categoryId", c.name as "categoryName",
          p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
-          p.description, p.photo_url as "photoUrl", p.photos as "photos",
+          p.description, p.photo_url as "photoUrl", p.photos as "photos", p.photo_variants as "photoVariants",
           p.weight_options as "weightOptions",
           sp.price::float, sp.unit,
          sp.approx_weight as "approxWeight",
@@ -166,7 +210,7 @@ export class ProductService {
          sp.sort_order ASC, p.name ASC`,
       params
     );
-    return result.rows;
+    return result.rows.map(decorateProductImages);
   }
 
   /**
@@ -205,7 +249,7 @@ export class ProductService {
     const result = await query<MartProduct & { storeId: string; storeName: string }>(
       `SELECT p.id, p.product_code as "productCode", p.category_id as "categoryId", c.name as "categoryName",
              p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
-              p.description, p.photo_url as "photoUrl", p.photos as "photos",
+              p.description, p.photo_url as "photoUrl", p.photos as "photos", p.photo_variants as "photoVariants",
               p.weight_options as "weightOptions",
               sp.price::float, sp.unit,
              sp.approx_weight as "approxWeight",
@@ -234,7 +278,7 @@ export class ProductService {
     // lists the product, otherwise any member store's.
     const primaryId = zone.primaryStoreId;
     const bestById = new Map<string, MartProduct & { storeId: string; storeName: string }>();
-    for (const row of result.rows) {
+    for (const row of result.rows.map(decorateProductImages)) {
       const existing = bestById.get(row.id);
       if (!existing) { bestById.set(row.id, row); continue; }
       if (row.storeId === primaryId && existing.storeId !== primaryId) bestById.set(row.id, row);
@@ -250,7 +294,7 @@ export class ProductService {
       `${PRODUCT_SELECT} WHERE ${conditions.join(' AND ')}`,
       params
     );
-    return result.rows[0] || null;
+    return result.rows[0] ? decorateProductImages(result.rows[0]) : null;
   }
 
   // Create global product + store_product entry
@@ -262,11 +306,12 @@ export class ProductService {
     const photos = data.photos && data.photos.length
       ? data.photos.map(photo => String(photo)).filter(Boolean)
       : (data.photoUrl ? [String(data.photoUrl)] : []);
+    const photoVariants = normalizePhotoVariants((data as any).photoVariants, photos, data.photoUrl);
     await query(
-      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, weight_options, is_catalog)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, photo_variants, weight_options, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [id, data.categoryId || null, name, localName, searchAliases,
-       data.description || null, photos[0] || null, JSON.stringify(photos),
+       data.description || null, photos[0] || null, JSON.stringify(photos), JSON.stringify(photoVariants),
        data.weightOptions ? JSON.stringify(data.weightOptions) : null,
        data.isCatalog === true]
     );
@@ -287,6 +332,8 @@ export class ProductService {
   static async createBundle(data: Partial<MartProduct> & {
     storeId: string;
     components: Array<{ productId: string; quantity: number; unit: string }>;
+    imageAssetIds?: string[];
+    adminId?: string;
   }): Promise<MartProduct> {
     const name = normalizeProductName(data.name, 'Combo name');
     // Validated before the transaction opens: a rejected name must not take a
@@ -330,10 +377,15 @@ export class ProductService {
         components.push({ productId: component.productId, quantity: Number(component.quantity), unit: component.unit.trim().toLowerCase() });
       }
       await client.query(
-        `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, is_bundle)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,true)`,
-        [id, data.categoryId, name, localName, searchAliases, data.description || null, data.photoUrl || null]
+        `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, photo_variants, is_bundle)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true)`,
+          [id, data.categoryId, name, localName, searchAliases, data.description || null, data.photoUrl || null,
+          JSON.stringify(data.photoUrl ? [data.photoUrl] : []), JSON.stringify(normalizePhotoVariants((data as any).photoVariants, data.photoUrl ? [data.photoUrl] : [], data.photoUrl))]
       );
+      if (data.imageAssetIds !== undefined) {
+        if (!data.adminId) throw badRequest('Missing admin identity for image upload');
+        await ProductImageAssetService.syncProductAssets(client, id, data.imageAssetIds, data.adminId);
+      }
       await client.query(
         `INSERT INTO mart_store_products
            (store_id, product_id, price, unit, discount_percent, availability_status, is_available, sort_order)
@@ -426,7 +478,7 @@ export class ProductService {
   }
 
   // Update: global fields (name, photo, description) + store-specific fields (price, availability)
-  static async update(id: string, data: Partial<MartProduct> & { storeId?: string }): Promise<MartProduct | null> {
+  static async update(id: string, data: Partial<MartProduct> & { storeId?: string; imageAssetIds?: string[]; adminId?: string }): Promise<MartProduct | null> {
     // Update global product fields
     const globalFields: string[] = [];
     const globalParams: unknown[] = [];
@@ -438,16 +490,23 @@ export class ProductService {
     if (data.description !== undefined){ globalFields.push(`description = $${gi++}`); globalParams.push(data.description); }
     if (data.photoUrl !== undefined)   { globalFields.push(`photo_url = $${gi++}`);   globalParams.push(data.photoUrl); }
     if (data.photos !== undefined)     { globalFields.push(`photos = $${gi++}::jsonb`); globalParams.push(JSON.stringify(data.photos)); }
+    if ((data as any).photoVariants !== undefined) { globalFields.push(`photo_variants = $${gi++}::jsonb`); globalParams.push(JSON.stringify((data as any).photoVariants)); }
     if (data.weightOptions !== undefined){ globalFields.push(`weight_options = $${gi++}`); globalParams.push(JSON.stringify(data.weightOptions)); }
     if ((data as any).isCatalog !== undefined) { globalFields.push(`is_catalog = $${gi++}`); globalParams.push((data as any).isCatalog === true); }
-    if (globalFields.length) {
-      globalFields.push(`updated_at = NOW()`);
-      globalParams.push(id);
-      await query(`UPDATE mart_products SET ${globalFields.join(', ')} WHERE id = $${gi}`, globalParams);
-    }
+    await transaction(async client => {
+      if (globalFields.length) {
+        globalFields.push(`updated_at = NOW()`);
+        globalParams.push(id);
+        await client.query(`UPDATE mart_products SET ${globalFields.join(', ')} WHERE id = $${gi}`, globalParams);
+      }
 
-    // Update store-specific fields
-    if (data.storeId) {
+      if (data.imageAssetIds !== undefined) {
+        if (!data.adminId) throw badRequest('Missing admin identity for image upload');
+        await ProductImageAssetService.syncProductAssets(client, id, data.imageAssetIds, data.adminId);
+      }
+
+      // Update store-specific fields
+      if (!data.storeId) return;
       const storeFields: string[] = [];
       const storeParams: unknown[] = [];
       let si = 1;
@@ -465,19 +524,21 @@ export class ProductService {
       if (storeFields.length) {
         storeFields.push(`updated_at = NOW()`);
         storeParams.push(data.storeId, id);
-        await query(
+        await client.query(
           `UPDATE mart_store_products SET ${storeFields.join(', ')} WHERE store_id = $${si} AND product_id = $${si + 1}`,
           storeParams
         );
       }
-    }
+    });
 
     return this.findById(id, data.storeId);
   }
 
   static async delete(id: string): Promise<void> {
-    // Deletes cascade to mart_store_products via FK
-    await query(`DELETE FROM mart_products WHERE id = $1`, [id]);
+    await transaction(async client => {
+      await ProductImageAssetService.queueProductAssets(client, id);
+      await client.query(`DELETE FROM mart_products WHERE id = $1`, [id]);
+    });
   }
 
   static async removeFromStore(productId: string, storeId: string): Promise<void> {
@@ -549,7 +610,7 @@ export class ProductService {
   // Create catalog-only product (no store assignment)
   static async createCatalogProduct(data: {
     name: string; localName?: string; description?: string;
-    photoUrl?: string; photos?: string[]; categoryId?: string; searchAliases?: string[];
+    photoUrl?: string; photos?: string[]; photoVariants?: ProductImageVariant[]; imageAssetIds?: string[]; adminId: string; categoryId?: string; searchAliases?: string[];
   }): Promise<{ id: string; productCode: string; name: string; photos: string[] }> {
     const id = uuidv4();
     const searchAliases = data.searchAliases === undefined ? [] : normalizeSearchAliases(data.searchAliases);
@@ -558,14 +619,20 @@ export class ProductService {
     const photos = data.photos && data.photos.length
       ? data.photos.map(photo => String(photo)).filter(Boolean)
       : (data.photoUrl ? [String(data.photoUrl)] : []);
-    const result = await query<{ id: string; productCode: string; name: string; photos: string[] }>(
-      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, is_catalog)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true)
-      RETURNING id, product_code as "productCode", name, photos`,
-      [id, data.categoryId || null, name, localName, searchAliases,
-       data.description || null, photos[0] || null, JSON.stringify(photos)]
-    );
-    return result.rows[0];
+    const photoVariants = normalizePhotoVariants(data.photoVariants, photos, data.photoUrl);
+    return transaction(async client => {
+      const result = await client.query(
+        `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, photo_variants, is_catalog)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true)
+        RETURNING id, product_code as "productCode", name, photos`,
+        [id, data.categoryId || null, name, localName, searchAliases,
+         data.description || null, photos[0] || null, JSON.stringify(photos), JSON.stringify(photoVariants)]
+      );
+      if (data.imageAssetIds !== undefined) {
+        await ProductImageAssetService.syncProductAssets(client, id, data.imageAssetIds, data.adminId);
+      }
+      return result.rows[0] as { id: string; productCode: string; name: string; photos: string[] };
+    });
   }
 
   // Update is_catalog flag on existing product

@@ -139,12 +139,13 @@ export const productsApi = {
   getBundleComponents: (id: string, storeId?: string) => api.get(`/admin/products/${id}/components`, { params: storeId ? { storeId } : {} }),
   update: (id: string, data: any) => api.put(`/admin/products/${id}`, data),
   delete: (id: string, storeId?: string) => api.delete(`/admin/products/${id}`, { params: storeId ? { storeId } : {} }),
-  uploadPhoto: (file: File, maxDimension?: number) => {
+  uploadPhoto: (file: File, maxDimension?: number, profile?: 'product') => {
     const form = new FormData();
     form.append('photo', file);
     // Icons are drawn tiny in the customer app; cap them server-side so the
     // stored/served WebP stays a few KB instead of the default 1600px.
     if (maxDimension) form.append('maxDimension', String(maxDimension));
+    if (profile) form.append('profile', profile);
     return api.post('/admin/upload/photo', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
@@ -496,9 +497,9 @@ export const complianceApi = {
 export const catalogApi = {
   getAll: (params?: { categoryId?: string; search?: string }) =>
     api.get('/admin/catalog', { params }),
-  create: (data: { name: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; categoryId?: string }) =>
+  create: (data: { name: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; photoVariants?: Array<{ assetId?: string; thumbnailUrl: string; largeUrl: string }>; imageAssetIds?: string[]; categoryId?: string }) =>
     api.post('/admin/catalog', data),
-  update: (id: string, data: { name?: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; categoryId?: string }) =>
+  update: (id: string, data: { name?: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; photoVariants?: Array<{ assetId?: string; thumbnailUrl: string; largeUrl: string }>; imageAssetIds?: string[]; categoryId?: string }) =>
     api.put(`/admin/catalog/${id}`, data),
   delete: (id: string) => api.delete(`/admin/catalog/${id}`),
   bulkAddToStore: (productIds: string[], storeId?: string) =>

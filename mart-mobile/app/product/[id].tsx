@@ -21,9 +21,9 @@ export default function ProductDetailScreen() {
   const [selPrice, setSelPrice] = useState(0);
 
   useEffect(() => {
-    storeApi.getProducts().then(res => {
-      const found = res.data.data.find(p => p.id === id) ?? null;
-      if (found) { setProduct(found); setSelUnit(found.unit); setSelPrice(found.price); }
+    storeApi.getProduct(id).then(res => {
+      const found = res.data.data;
+      setProduct(found); setSelUnit(found.unit); setSelPrice(found.price);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
@@ -61,8 +61,8 @@ export default function ProductDetailScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Image */}
         <View style={{ marginHorizontal: 16, marginTop: 8, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.gray50, height: IMG_H }}>
-          {product.photoUrl ? (
-            <Image source={{ uri: product.photoUrl }} style={{ width: '100%', height: IMG_H, opacity: isOutOfStock ? 0.5 : 1 }} contentFit="cover" transition={200} />
+          {product.largeUrl ?? product.photoVariants?.[0]?.largeUrl ?? product.photoUrl ? (
+            <Image source={{ uri: product.largeUrl ?? product.photoVariants?.[0]?.largeUrl ?? product.photoUrl ?? undefined }} style={{ width: '100%', height: IMG_H, opacity: isOutOfStock ? 0.5 : 1 }} contentFit="cover" transition={200} />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 64 }}>🥦</Text>

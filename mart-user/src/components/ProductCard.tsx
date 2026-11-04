@@ -48,7 +48,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
         />
         <div className="pointer-events-none relative z-10 aspect-square overflow-hidden bg-cream-100 dark:bg-slate-700">
           <SmartImage
-            src={product.photoUrl}
+            src={product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
             alt={product.name}
             className="h-full w-full"
             imgClassName={`object-cover ${finePointer ? 'transition-transform duration-300 group-hover:scale-[1.03]' : ''} ${isOutOfStock ? 'opacity-40' : ''}`}

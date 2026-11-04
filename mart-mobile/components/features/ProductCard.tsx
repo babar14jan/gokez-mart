@@ -35,7 +35,7 @@ export default function ProductCard({ product, width = CARD_W_HOME }: Props) {
       {/* Square image */}
       <View style={{ width, height: width, position: 'relative', backgroundColor: colors.gray100 }}>
         <Image
-          source={{ uri: product.photoUrl ?? undefined }}
+          source={{ uri: product.thumbnailUrl ?? product.photoVariants?.[0]?.thumbnailUrl ?? product.photoUrl ?? undefined }}
           style={{ width, height: width }}
           contentFit="cover"
         />

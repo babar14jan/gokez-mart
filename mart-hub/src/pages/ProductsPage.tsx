@@ -30,6 +30,7 @@ interface Product {
   isCatalog: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
   photoUrl: string | null; description: string | null;
+  photoVariants?: Array<{ assetId?: string; thumbnailUrl: string; largeUrl: string }>;
   sortOrder: number;
   stockQuantity: number | null;
   lowStockThreshold: number | null;
@@ -427,12 +428,16 @@ export default function ProductsPage() {
     setComboSaving(true);
     try {
       let photoUrl: string | null = editingCombo?.photoUrl || null;
+      let photoVariants = editingCombo?.photoVariants;
+      let imageAssetIds: string[] | undefined;
       if (comboPhotoFile) {
-        const upload = await productsApi.uploadPhoto(comboPhotoFile);
+        const upload = await productsApi.uploadPhoto(comboPhotoFile, undefined, 'product');
         photoUrl = upload.data.data.url;
+        photoVariants = [upload.data.data.photoVariants];
+        imageAssetIds = [upload.data.data.photoVariants.assetId];
       }
       const data = {
-        storeId, name: comboName.trim(), localName: comboLocalName.trim() || null, searchAliases: parseSearchAliases(comboSearchAliases), categoryId: comboCategoryId, price: parseFloat(comboPrice), unit: comboUnit.trim(), photoUrl, availabilityStatus: 'available',
+        storeId, name: comboName.trim(), localName: comboLocalName.trim() || null, searchAliases: parseSearchAliases(comboSearchAliases), categoryId: comboCategoryId, price: parseFloat(comboPrice), unit: comboUnit.trim(), photoUrl, photoVariants, imageAssetIds, availabilityStatus: 'available',
         bundleComponents: comboComponents.map(component => ({ productId: component.productId, quantity: parseFloat(component.quantity), unit: component.unit })),
       };
       if (editingCombo) await productsApi.update(editingCombo.id, data);
