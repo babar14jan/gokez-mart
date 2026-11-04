@@ -26,7 +26,10 @@ const REASONS = [
   'Other',
 ];
 
-const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI' };
+const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
+
+const normalizePayment = (value?: string | null): 'cod' | 'upi' =>
+  value === 'upi' || value === 'phonepay' ? 'upi' : 'cod';
 
 const EDITABLE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready_to_pickup', 'picked_up', 'out_for_delivery', 'delivered'];
 
@@ -125,7 +128,11 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
   }, [items, quantities]);
 
   const finalReason = `${reason}${comment.trim() ? ` — ${comment.trim()}` : ''}`;
-  const canPreview = (changedItems.length > 0 || addedLines.length > 0) && !allRemoved && (changedItems.length === 0 || (reason !== 'Other' || comment.trim().length > 0));
+  const hasItemEdits = changedItems.length > 0 || addedLines.length > 0;
+  const paymentChanged = !!order && paymentMethod !== normalizePayment(order.paymentMethod);
+  const canPreview = !allRemoved && (hasItemEdits || paymentChanged)
+    && (changedItems.length === 0 || reason !== 'Other' || comment.trim().length > 0);
+  const submitReason = hasItemEdits ? finalReason : 'Payment mode corrected';
 
   const runSearch = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -154,7 +161,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
     setProductResults([]);
     setReason(REASONS[0]);
     setComment('');
-    setPaymentMethod(entry.paymentMethod || 'cod');
+    setPaymentMethod(normalizePayment(entry.paymentMethod));
     setStep('edit');
   };
 
@@ -199,7 +206,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
       const response = await ordersApi.manageOrder(
         order.id,
         changedItems.map(item => ({ orderItemId: item.id, deliveredQuantity: quantities[item.id] })),
-        finalReason,
+        submitReason,
         paymentMethod,
         addedLines.map(line => ({ productId: line.productId, quantity: line.quantity, unit: line.unit, price: line.price })),
       );
@@ -345,6 +352,24 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                 <p className="text-[11px] text-gray-500 dark:text-slate-400">{order.guestPhone} · {formatWhen(order.createdAt)}</p>
               </div>
 
+              <div className={`rounded-xl border p-3 ${
+                paymentChanged
+                  ? 'border-blue-200 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-900/10'
+                  : 'border-gray-200 dark:border-slate-700'
+              }`}>
+                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-payment-edit">Payment mode</label>
+                <select id="manage-payment-edit" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as 'cod' | 'upi')}
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                  <option value="cod">Cash</option>
+                  <option value="upi">UPI</option>
+                </select>
+                <p className="mt-1.5 text-[11px] text-gray-500 dark:text-slate-400">
+                  {paymentChanged
+                    ? `Was ${PAYMENT_LABELS[normalizePayment(order.paymentMethod)]}. This corrects the recorded mode on both apps.`
+                    : 'Change this only if the recorded mode was wrong. No item changes are needed.'}
+                </p>
+              </div>
+
               {items.map(item => {
                 const delivered = quantities[item.id] ?? Number(item.quantity);
                 const missing = Number(item.quantity) - delivered;
@@ -488,24 +513,26 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                 )}
               </div>
 
-              <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
-                <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-reason">Reason</label>
-                <select id="manage-reason" value={reason} onChange={event => setReason(event.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
-                  {REASONS.map(option => <option key={option} value={option}>{option}</option>)}
-                </select>
-                <label className="mt-2 block text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-comment">
-                  Comment <span className="font-normal text-gray-400">(optional)</span>
-                </label>
-                <input
-                  id="manage-comment"
-                  type="text"
-                  value={comment}
-                  onChange={event => setComment(event.target.value)}
-                  placeholder={reason === 'Other' ? 'Tell us what happened' : 'Add a note for the journey'}
-                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-                />
-              </div>
+              {hasItemEdits && (
+                <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
+                  <label className="text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-reason">Reason</label>
+                  <select id="manage-reason" value={reason} onChange={event => setReason(event.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                    {REASONS.map(option => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                  <label className="mt-2 block text-xs font-semibold text-gray-700 dark:text-slate-300" htmlFor="manage-comment">
+                    Comment <span className="font-normal text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    id="manage-comment"
+                    type="text"
+                    value={comment}
+                    onChange={event => setComment(event.target.value)}
+                    placeholder={reason === 'Other' ? 'Tell us what happened' : 'Add a note for the journey'}
+                    className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
+                  />
+                </div>
+              )}
 
               {allRemoved && (
                 <div className="flex items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -531,7 +558,8 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                 <p className="text-xs font-bold text-gray-900 dark:text-white">#{order.orderNumber} · {orderDisplayName(order)}</p>
                 <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">{order.guestPhone} · {order.guestAddress}</p>
                 <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">
-                  Status: <span className="capitalize">{statusLabel(order.status)}</span> · Reason: {finalReason}
+                  Status: <span className="capitalize">{statusLabel(order.status)}</span>
+                  {hasItemEdits ? ` · Reason: ${finalReason}` : ''}
                 </p>
               </div>
 
@@ -569,6 +597,14 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                     </span>
                   </div>
                 ))}
+                {paymentChanged && (
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-700 dark:text-slate-300">Payment mode</span>
+                    <span className="flex-shrink-0 font-semibold text-blue-700 dark:text-blue-400">
+                      {PAYMENT_LABELS[normalizePayment(order.paymentMethod)]} → {PAYMENT_LABELS[paymentMethod]}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-xl bg-gray-50 p-3 dark:bg-slate-700/50">
@@ -611,13 +647,13 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                 {result.paymentMethod ? ` · ${PAYMENT_LABELS[result.paymentMethod] || result.paymentMethod}` : ''}
               </p>
               <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                Removed ₹{Number(result.removedTotal).toFixed(2)} across {result.adjustedItems} line(s).
-                {result.addedItems > 0 && (
-                  <>
-                    {' '}
-                    Added ₹{addedTotalValue.toFixed(2)} across {addedLines.length} items.
-                  </>
+                {result.adjustedItems > 0 && (
+                  <>Removed ₹{Number(result.removedTotal).toFixed(2)} across {result.adjustedItems} line(s).{' '}</>
                 )}
+                {result.addedItems > 0 && (
+                  <>Added ₹{addedTotalValue.toFixed(2)} across {addedLines.length} items.{' '}</>
+                )}
+                {result.adjustedItems === 0 && result.addedItems === 0 && 'Payment mode updated. '}
                 The hub and customer apps will show the updated order.
               </p>
             </div>
