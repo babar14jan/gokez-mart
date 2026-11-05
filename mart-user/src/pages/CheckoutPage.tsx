@@ -48,16 +48,18 @@ const PREFERENCES = [
 ] as const;
 
 /* Delivery preferences are generated in IST from the store's published hours.
-  They are non-exclusive 30-minute windows for today or tomorrow only. */
+  Scheduling is next-day only: 60-minute windows starting at the shop's
+  opening time, so a 7:30 opening offers 7:30–8:30 first. */
 const IST_OFFSET_MIN = 330; // Asia/Kolkata, fixed +05:30
-const SLOT_MINUTES = 30;
+const SLOT_MINUTES = 60;
 const SLOT_LEAD_MINUTES = 30; // a window opening within 30 min is not bookable
+const SCHEDULE_DAY_OFFSET = 1; // tomorrow only
 const FALLBACK_OPEN_MIN = 8 * 60;
 const FALLBACK_CLOSE_MIN = 22 * 60;
 const JS_DAY_TO_KEY = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 export interface DeliverySlot {
-  offset: number; // days from today: 0, 1
+  offset: number; // days from today: 1
   start: number;  // minutes from IST midnight
   end: number;
   at: Date;       // UTC instant the window opens
@@ -65,6 +67,7 @@ export interface DeliverySlot {
 export interface DeliveryDay {
   offset: number;
   label: string;
+  dateLabel: string;
   slots: DeliverySlot[];
 }
 
@@ -100,28 +103,28 @@ function slotRange(slot: DeliverySlot): string {
 function buildSchedule(hours: StoreOpeningHours | undefined): DeliveryDay[] {
   const nowMs = Date.now();
   const b = istParts();
-  const days: DeliveryDay[] = [];
-  for (let offset = 0; offset < 2; offset++) {
-    const dt = new Date(Date.UTC(b.y, b.mo, b.d + offset));
-    const key = JS_DAY_TO_KEY[dt.getUTCDay()] ?? 'mon';
-    const label = offset === 0 ? 'Today' : 'Tomorrow';
-    const w = hours?.[key];
-    const slots: DeliverySlot[] = [];
-    if (w && !w.closed) {
-      const open = toMinutes(w.open, FALLBACK_OPEN_MIN);
-      const close = toMinutes(w.close, FALLBACK_CLOSE_MIN);
-      for (let s = open; s + SLOT_MINUTES <= close; s += SLOT_MINUTES) {
-        const at = istInstant(offset, s);
-        if (at.getTime() <= nowMs + SLOT_LEAD_MINUTES * 60000) continue;
-        slots.push({ offset, start: s, end: s + SLOT_MINUTES, at });
-      }
+  const offset = SCHEDULE_DAY_OFFSET;
+  const dt = new Date(Date.UTC(b.y, b.mo, b.d + offset));
+  const key = JS_DAY_TO_KEY[dt.getUTCDay()] ?? 'mon';
+  const dateLabel = new Intl.DateTimeFormat('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+  }).format(dt);
+  const w = hours?.[key];
+  const slots: DeliverySlot[] = [];
+  if (w && !w.closed) {
+    const open = toMinutes(w.open, FALLBACK_OPEN_MIN);
+    const close = toMinutes(w.close, FALLBACK_CLOSE_MIN);
+    for (let s = open; s + SLOT_MINUTES <= close; s += SLOT_MINUTES) {
+      const at = istInstant(offset, s);
+      if (at.getTime() <= nowMs + SLOT_LEAD_MINUTES * 60000) continue;
+      slots.push({ offset, start: s, end: s + SLOT_MINUTES, at });
     }
-    days.push({ offset, label, slots });
   }
-  return days;
+  return [{ offset, label: 'Tomorrow', dateLabel, slots }];
 }
 function dayLabel(days: DeliveryDay[], offset: number): string {
-  return days.find(d => d.offset === offset)?.label ?? '';
+  const day = days.find(d => d.offset === offset);
+  return day?.dateLabel ?? day?.label ?? '';
 }
 function slotLabel(days: DeliveryDay[], slot: DeliverySlot | null): string {
   if (!slot) return '';
@@ -180,6 +183,7 @@ type OfferCampaign = {
   min_order_amount?: number | string | null;
   eligibility_type?: string | null;
   allow_redemption_until_used?: boolean;
+  requires_scheduled_delivery?: boolean | null;
 };
 
 /* The admin stores these as NUMERIC, so they arrive as "50.00" and would otherwise
@@ -234,12 +238,25 @@ type OffersPanelProps = {
   onApply: (c: OfferCampaign) => void;
   onClearCode: () => void;
   onRemoveOffer: () => void;
+  schedule: DeliveryDay[];
+  selectedSchedule?: DeliveryDay;
+  draftSlot: DeliverySlot | null;
+  scheduledSlot: DeliverySlot | null;
+  deliveryPreference: string;
+  scheduleCampaignId: string | null;
+  onOpenSchedule: (c: OfferCampaign) => void;
+  onSelectDraftSlot: (slot: DeliverySlot) => void;
+  onSaveSchedule: (c: OfferCampaign) => void;
+  onClearSchedule: () => void;
 };
 
 function OffersPanel(props: OffersPanelProps) {
   const { cardClass, campaigns, applied, appliedCode, notice, locked,
     codeInput, onCodeInput, codeLoading, codeError,
-    codeSuccess, onValidateCode, onApply, onClearCode, onRemoveOffer } = props;
+    codeSuccess, onValidateCode, onApply, onClearCode, onRemoveOffer,
+    schedule, selectedSchedule, draftSlot, scheduledSlot,
+    deliveryPreference, scheduleCampaignId, onOpenSchedule, onSelectDraftSlot,
+    onSaveSchedule, onClearSchedule } = props;
   const hasMinimumOrderNotice = /^Add ₹[\d.]+ more to unlock this offer/.test(notice);
   const showOffersHeader = campaigns.length > 0 || locked || Boolean(notice);
 
@@ -273,6 +290,12 @@ function OffersPanel(props: OffersPanelProps) {
               const bits = offerDetailBits(c);
               const welcomeMessage = welcomeOfferMessage(c);
               const done = isApplied || isAppliedByCode;
+              const requiresSchedule = Boolean(c.requires_scheduled_delivery);
+              const scheduleOpen = scheduleCampaignId === c.id;
+              const scheduleCommitted = requiresSchedule
+                && deliveryPreference === 'scheduled'
+                && Boolean(scheduledSlot);
+              const scheduleDone = scheduleCommitted && done;
               const badgeText = c.badge_text && !/^new customer$/i.test(c.badge_text.trim()) ? c.badge_text : null;
               return (
                 <div key={c.id}
@@ -297,19 +320,86 @@ function OffersPanel(props: OffersPanelProps) {
                         {c.coupon_code && <span className="font-semibold"> Code: {c.coupon_code}</span>}
                       </p>
                       {welcomeMessage && <p className="mt-0.5 text-[10px] font-semibold leading-snug text-gokez-700 dark:text-gokez-200">{welcomeMessage}</p>}
+                      {requiresSchedule && (
+                        <p className="mt-1 text-[10px] font-semibold leading-snug text-gokez-700 dark:text-gokez-200">
+                          {scheduleCommitted && scheduledSlot
+                            ? `Scheduled: ${slotLabel(schedule, scheduledSlot)}${scheduleDone ? ' · coupon applied' : ' · apply to finish'}`
+                            : 'Next-day delivery only. Choose a slot to use this coupon.'}
+                        </p>
+                      )}
                     </div>
-                    {/* Explicit Apply. The old signed-in list applied the moment the
-                        radio was touched, which read as the app grabbing a discount
-                        the customer had not chosen. */}
-                    <button
-                      type="button"
-                      onClick={() => done ? (isAppliedByCode ? onClearCode() : onRemoveOffer()) : onApply(c)}
-                      className={`flex min-h-11 flex-shrink-0 items-center px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors ${
-                        done ? 'text-gokez-700 hover:text-red-600 dark:text-gokez-200'
-                             : 'bg-gokez-700 hover:bg-gokez-800 text-white'}`}>
-                      {done ? 'Remove' : 'Apply'}
-                    </button>
+                    {requiresSchedule ? (
+                      scheduleOpen ? (
+                        <button type="button" onClick={onClearSchedule}
+                          className="flex min-h-11 flex-shrink-0 items-center rounded-lg bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-red-700">
+                          Clear
+                        </button>
+                      ) : scheduleDone ? (
+                        <button type="button" onClick={onRemoveOffer}
+                          className="flex min-h-11 flex-shrink-0 items-center rounded-lg px-2.5 py-1 text-[10px] font-bold text-gokez-700 transition-colors hover:text-red-600 dark:text-gokez-200">
+                          Remove
+                        </button>
+                      ) : scheduleCommitted && scheduledSlot ? (
+                        <button type="button" onClick={() => onApply(c)}
+                          className="flex min-h-11 flex-shrink-0 items-center rounded-lg bg-gokez-700 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-gokez-800">
+                          Apply
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => onOpenSchedule(c)}
+                          className="flex min-h-11 flex-shrink-0 items-center gap-1 rounded-lg bg-gokez-700 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-gokez-800 dark:bg-gokez-600 dark:hover:bg-gokez-700">
+                          <Plus className="h-3.5 w-3.5" /> Schedule
+                        </button>
+                      )
+                    ) : (
+                      /* Explicit Apply. The old signed-in list applied the moment the
+                          radio was touched, which read as the app grabbing a discount
+                          the customer had not chosen. */
+                      <button
+                        type="button"
+                        onClick={() => done ? (isAppliedByCode ? onClearCode() : onRemoveOffer()) : onApply(c)}
+                        className={`flex min-h-11 flex-shrink-0 items-center px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors ${
+                          done ? 'text-gokez-700 hover:text-red-600 dark:text-gokez-200'
+                               : 'bg-gokez-700 hover:bg-gokez-800 text-white'}`}>
+                        {done ? 'Remove' : 'Apply'}
+                      </button>
+                    )}
                   </div>
+                  {requiresSchedule && scheduleOpen && (
+                    <div className="mt-2 space-y-2.5 rounded-xl border border-transparent bg-white/60 p-2.5 dark:border-slate-700 dark:bg-slate-900/50">
+                      {selectedSchedule ? (
+                        <>
+                          <div className="rounded-lg bg-gokez-50 px-3 py-1.5 text-center dark:bg-slate-800/80">
+                            <p className="text-xs font-bold text-gokez-700 dark:text-gokez-200">{selectedSchedule.label}</p>
+                            <p className="text-[10px] font-semibold text-gray-500 dark:text-slate-400">
+                              {draftSlot ? `Selected: ${slotLabel(schedule, draftSlot)}` : selectedSchedule.dateLabel}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {selectedSchedule.slots.map(slot => {
+                              const active = draftSlot?.offset === slot.offset && draftSlot.start === slot.start;
+                              return (
+                                <button key={`${slot.offset}-${slot.start}`} type="button" onClick={() => onSelectDraftSlot(slot)}
+                                  className={`rounded-lg border px-2 py-2 text-xs font-bold transition-colors ${
+                                    active
+                                      ? 'border-gokez-500 bg-gokez-700 text-white'
+                                      : 'border-gokez-200 bg-white text-gokez-700 hover:bg-gokez-50 dark:border-gokez-800 dark:bg-slate-800 dark:text-gokez-200'
+                                  }`}>
+                                  {slotRange(slot)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <button type="button" disabled={!draftSlot}
+                            onClick={() => onSaveSchedule(c)}
+                            className="w-full rounded-lg bg-gokez-700 px-3 py-2.5 text-sm font-bold text-white transition-colors hover:bg-gokez-800 disabled:opacity-50 dark:bg-gokez-600 dark:hover:bg-gokez-500">
+                            Save &amp; continue
+                          </button>
+                        </>
+                      ) : (
+                        <p className="py-2 text-center text-xs font-medium text-gokez-700 dark:text-gokez-200">No delivery times are available tomorrow.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -510,17 +600,31 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
 
   // Delivery preference
   const [deliveryPreference, setDeliveryPreference] = useState<typeof PREFERENCES[number]['value']>('within_15');
-  const [showPreferences, setShowPreferences] = useState(false);
+  const [scheduleCampaignId, setScheduleCampaignId] = useState<string | null>(null);
   const [scheduledSlot, setScheduledSlot] = useState<DeliverySlot | null>(null);
-  const [scheduleDay, setScheduleDay] = useState(0);
-  const [schedulePeriod, setSchedulePeriod] = useState<'all' | 'am' | 'pm'>('all');
+  const [draftSlot, setDraftSlot] = useState<DeliverySlot | null>(null);
   const schedule = useMemo(() => buildSchedule(settings.openingHours), [settings.openingHours]);
   const availableScheduleDays = useMemo(() => schedule.filter(day => day.slots.length > 0), [schedule]);
-  const selectedSchedule = availableScheduleDays.find(day => day.offset === scheduleDay) ?? availableScheduleDays[0];
-  const visibleScheduleSlots = (selectedSchedule?.slots ?? []).filter(slot => (
-    schedulePeriod === 'all'
-    || (schedulePeriod === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60)
-  ));
+  const selectedSchedule = availableScheduleDays[0];
+
+  const primeScheduleDraft = () => {
+    if (availableScheduleDays.length === 0) {
+      setDraftSlot(null);
+      return;
+    }
+    const existing = scheduledSlot && availableScheduleDays.find(day => (
+      day.offset === scheduledSlot.offset
+      && day.slots.some(slot => slot.start === scheduledSlot.start)
+    ));
+    setDraftSlot(existing ? scheduledSlot : availableScheduleDays[0].slots[0]);
+  };
+
+  const resetScheduleState = () => {
+    setDeliveryPreference('within_15');
+    setScheduledSlot(null);
+    setDraftSlot(null);
+    setScheduleCampaignId(null);
+  };
 
   // Delivery note
   const [deliveryNote, setDeliveryNote] = useState('Ring the bell');
@@ -619,7 +723,12 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       const eligible: any[] = eligibleRes.status === 'fulfilled' && eligibleRes.value
         ? (eligibleRes.value?.data?.data || []) : [];
       const merged = [...eligible, ...welcome.filter(w => !eligible.some((e: any) => e.id === w.id))];
-      setEligibleCampaigns(merged);
+      // A coupon entered by hand may not be in either public list. Keep its row
+      // visible so the scheduled-delivery picker stays attached to the coupon
+      // that actually needs it.
+      setEligibleCampaigns(appliedCampaign && !merged.some((c: any) => c.id === appliedCampaign.id)
+        ? [appliedCampaign, ...merged]
+        : merged);
 
       if (appliedCampaign && !appliedCouponCode && !eligible.some((c: any) => c.id === appliedCampaign.id)) {
         removeCampaign();
@@ -708,36 +817,44 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     return 0;
   };
 
-  const applyCampaign = (campaign: any, couponCode: string | null = null) => {
+  const applyCampaign = (campaign: any, couponCode: string | null = null, opts: { skipSchedulePrompt?: boolean } = {}) => {
     const disc = calcDiscount(campaign, sub);
     setLocalAppliedCampaign(campaign);
     setAppliedCouponCode(couponCode);
     setCampaignDiscount(disc);
     useCartStore.getState().setAppliedCampaign(campaign, disc);
+    setEligibleCampaigns(prev => prev.some(c => c.id === campaign.id) ? prev : [campaign, ...prev]);
     setCouponError('');
+    if (campaign.requires_scheduled_delivery && !opts.skipSchedulePrompt && (deliveryPreference !== 'scheduled' || !scheduledSlot)) {
+      setOfferNotice('This coupon needs a next-day delivery slot. Choose one below.');
+      setScheduleCampaignId(campaign.id);
+      primeScheduleDraft();
+    }
   };
 
   const removeCampaign = () => {
+    const wasScheduledOnly = Boolean(appliedCampaign?.requires_scheduled_delivery);
     setLocalAppliedCampaign(null);
     setAppliedCouponCode(null);
     setCampaignDiscount(0);
     useCartStore.getState().setAppliedCampaign(null, 0);
     setCouponError('');
     setCouponSuccess('');
+    if (wasScheduledOnly) resetScheduleState();
   };
 
   /* The single server-side redemption path. A typed code and an offer row that
      carries its own code both come through here, so a discount is never taken on
      the client's word: the server re-checks eligibility, expiry, usage limits and
      minimum order before the figure on screen is allowed to stand. */
-  const applyCode = async (raw: string) => {
+  const applyCode = async (raw: string, opts: { skipSchedulePrompt?: boolean } = {}) => {
     const code = raw.trim().toUpperCase();
     if (!code || !storeId) return;
     setCouponLoading(true); setCouponError(''); setCouponSuccess(''); setOfferNotice('');
     try {
       const res = await campaignApi.validateCode(code, sub, storeId);
       const { campaign } = res.data.data;
-      applyCampaign(campaign, code);
+      applyCampaign(campaign, code, opts);
       setCouponSuccess(campaign.allow_redemption_until_used
         ? `${campaign.coupon_code || 'Welcome offer'} applied. This is your one welcome-offer redemption.`
         : 'Coupon applied');
@@ -919,6 +1036,12 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     // published store hours, so the closed-store prompt applies only to the
     // immediate Fastest option. Defaulting to "proceed" keeps checkout working
     // if this page is ever rendered without the prop.
+    if (appliedCampaign?.requires_scheduled_delivery && deliveryPreference !== 'scheduled') {
+      setOfferNotice('Choose a next-day delivery slot to use this coupon, or remove the coupon.');
+      setScheduleCampaignId(appliedCampaign.id);
+      primeScheduleDraft();
+      return;
+    }
     if (deliveryPreference !== 'scheduled' && confirmOrder && !(await confirmOrder())) return;
     setLoading(true); setError(''); setValidationField(null); setShowMissingDetails(false); setSubmittedTotal(total);
     try {
@@ -1041,10 +1164,39 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     );
   }
 
+  const openSchedulePanel = (campaign: OfferCampaign) => {
+    setScheduleCampaignId(campaign.id);
+    primeScheduleDraft();
+  };
+
+  const commitSchedule = (campaign: OfferCampaign) => {
+    if (!draftSlot) return;
+    setScheduledSlot(draftSlot);
+    setDeliveryPreference('scheduled');
+    setScheduleCampaignId(null);
+
+    if (campaign.coupon_code) {
+      if (!isLoggedIn) {
+        useLoginFlowStore.getState().setPendingCouponApply(true, campaign.id);
+        onLogin?.(campaign);
+        return;
+      }
+      void applyCode(campaign.coupon_code, { skipSchedulePrompt: true });
+      return;
+    }
+    applyCampaign(campaign, null, { skipSchedulePrompt: true });
+  };
+
+  const clearSchedule = () => {
+    const wasScheduledOnly = Boolean(appliedCampaign?.requires_scheduled_delivery);
+    resetScheduleState();
+    if (wasScheduledOnly) removeCampaign();
+  };
+
   return (
     <div className="page-shell bg-gray-50 dark:bg-slate-900">
       {/* Header */}
-      <PageHeader title="My Cart" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
+      <PageHeader title="Checkout" onBack={onBack} backLabel="Back to shopping" backStyle="square" backSize="md" />
 
       {/* noValidate: the required-field guidance is our own dialog, which knows
           about the whole order, not the browser's per-field bubble. Without it
@@ -1305,81 +1457,33 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
             }}
             onClearCode={removeCampaign}
             onRemoveOffer={removeCampaign}
+            schedule={schedule}
+            selectedSchedule={selectedSchedule}
+            draftSlot={draftSlot}
+            scheduledSlot={scheduledSlot}
+            deliveryPreference={deliveryPreference}
+            scheduleCampaignId={scheduleCampaignId}
+            onOpenSchedule={openSchedulePanel}
+            onSelectDraftSlot={setDraftSlot}
+            onSaveSchedule={commitSchedule}
+            onClearSchedule={clearSchedule}
           />
 
-          {/* ── USP: Delivery time + Note in one card ── */}
+          {/* ── Delivery summary + note ── */}
           <div className={`${card} !overflow-visible`}>
-            <button type="button"
-              onClick={() => {
-                setShowPreferences(open => !open);
-              }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left">
+            <div className="flex w-full items-center gap-3 px-4 py-3">
               <div className="w-9 h-9 rounded-xl bg-gokez-50 dark:bg-gokez-900/20 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-4 h-4 text-gokez-700 dark:text-gokez-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">Delivery Time</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">Delivery</p>
                 <p className="text-sm text-gray-900 dark:text-white font-medium">
                   {deliveryPreference === 'scheduled' && scheduledSlot
                     ? <>{slotLabel(schedule, scheduledSlot)}</>
-                    : <>Delivery in {estimatedDelivery}</>}
+                    : <>Now in {estimatedDelivery}</>}
                 </p>
               </div>
-              <span className="flex h-7 items-center flex-shrink-0 rounded-lg bg-gray-900 px-2.5 text-[11px] font-bold text-white dark:bg-slate-700">
-                {showPreferences ? 'Done' : 'Schedule Delivery'}
-              </span>
-            </button>
-            {showPreferences && (
-              <div className="border-t border-gray-100 dark:border-slate-700 p-3 space-y-2.5">
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => { setDeliveryPreference('within_15'); setScheduledSlot(null); }}
-                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold ${deliveryPreference === 'within_15' ? 'border-gokez-500 bg-gokez-50 text-gokez-700 dark:border-gokez-600 dark:bg-slate-900/60 dark:text-gokez-200' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
-                    Fastest Delivery <span className="block text-[10px] font-medium opacity-70">{estimatedDelivery}</span>
-                  </button>
-                  <button type="button" disabled={availableScheduleDays.length === 0}
-                    onClick={() => {
-                      const first = availableScheduleDays[0];
-                      if (!first) return;
-                      const existingDay = scheduledSlot && availableScheduleDays.find(day => (
-                        day.offset === scheduledSlot.offset
-                        && day.slots.some(slot => slot.start === scheduledSlot.start)
-                      ));
-                      const day = existingDay ?? first;
-                      setDeliveryPreference('scheduled');
-                      setScheduleDay(day.offset);
-                      setScheduledSlot(existingDay ? scheduledSlot : day.slots[0]);
-                    }}
-                    className={`rounded-lg border-2 px-3 py-2 text-left text-xs font-bold disabled:cursor-not-allowed disabled:opacity-45 ${deliveryPreference === 'scheduled' ? 'border-gokez-500 bg-gokez-50 text-gokez-700 dark:border-gokez-600 dark:bg-slate-900/60 dark:text-gokez-200' : 'border-gray-100 text-gray-700 dark:border-slate-700 dark:text-slate-200'}`}>
-                    Schedule Delivery <span className="block text-[10px] font-medium opacity-70">Choose your preferred time</span>
-                  </button>
-                </div>
-                {deliveryPreference === 'scheduled' && (
-                  <div className="space-y-2.5 rounded-xl border border-transparent bg-gokez-50 p-2.5 dark:border-slate-700 dark:bg-slate-900/50">
-                    {availableScheduleDays.length === 0 ? <p className="py-2 text-center text-xs font-medium text-gokez-700 dark:text-gokez-200">No delivery times are available today or tomorrow.</p> : <>
-                      <div className="flex gap-2">
-                        {availableScheduleDays.map(day => <button key={day.offset} type="button"
-                          onClick={() => { setScheduleDay(day.offset); setScheduledSlot(day.slots.find(slot => schedulePeriod === 'all' || (schedulePeriod === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60)) ?? day.slots[0]); }}
-                          className={`flex-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold ${selectedSchedule?.offset === day.offset ? 'border-gokez-500 bg-white text-gokez-700 dark:border-gokez-600 dark:bg-slate-700 dark:text-gokez-200' : 'border-transparent bg-white/70 text-gray-600 dark:bg-slate-800/80 dark:text-slate-300'}`}>{day.label}</button>)}
-                      </div>
-                      <div className="flex gap-1.5">
-                        {(['all', 'am', 'pm'] as const).map(period => <button key={period} type="button" onClick={() => {
-                          setSchedulePeriod(period);
-                          const first = selectedSchedule?.slots.find(slot => period === 'all' || (period === 'am' ? slot.start < 12 * 60 : slot.start >= 12 * 60));
-                          if (first) setScheduledSlot(first);
-                        }} className={`flex-1 rounded-md py-1 text-[10px] font-bold uppercase ${schedulePeriod === period ? 'bg-gokez-700 text-white' : 'bg-white/70 text-gokez-700 dark:bg-slate-800 dark:text-gokez-300'}`}>{period}</button>)}
-                      </div>
-                      {visibleScheduleSlots.length === 0 ? <p className="py-1 text-center text-xs text-gokez-700 dark:text-gokez-200">No {schedulePeriod.toUpperCase()} times for this day.</p> : <select value={scheduledSlot && scheduledSlot.offset === selectedSchedule?.offset ? `${scheduledSlot.offset}-${scheduledSlot.start}` : ''} onChange={event => {
-                        const slot = selectedSchedule?.slots.find(item => `${item.offset}-${item.start}` === event.target.value);
-                        if (slot) setScheduledSlot(slot);
-                      }} className="w-full rounded-lg border border-gokez-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 dark:border-gokez-800 dark:bg-slate-800 dark:text-white">
-                        {visibleScheduleSlots.map(slot => <option key={`${slot.offset}-${slot.start}`} value={`${slot.offset}-${slot.start}`}>{slotRange(slot)}</option>)}
-                      </select>}
-                      {scheduledSlot && <p className="text-center text-[11px] font-semibold text-gokez-700 dark:text-gokez-200">Scheduled: {slotLabel(schedule, scheduledSlot)}</p>}
-                    </>}
-                  </div>
-                )}
-              </div>
-            )}
+            </div>
 
             {/* Divider */}
             <div className="border-t border-gray-50 dark:border-slate-700" />

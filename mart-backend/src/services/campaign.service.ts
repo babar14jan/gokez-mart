@@ -112,8 +112,8 @@ export class CampaignService {
         discount_type, discount_value, max_discount, min_order_amount,
         coupon_code, new_customers_only, per_customer_limit, usage_limit,
         store_id, show_in_carousel, carousel_image_url, carousel_gradient, carousel_sort_order,
-        status, valid_from, valid_until, eligibility_type, inactive_days, allow_redemption_until_used, priority, created_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+        status, valid_from, valid_until, eligibility_type, inactive_days, allow_redemption_until_used, priority, requires_scheduled_delivery, created_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
       RETURNING *`,
       [
         data.title, data.subtitle || null, data.description || null, data.badgeText || null,
@@ -126,7 +126,8 @@ export class CampaignService {
         data.status || 'draft',
         data.validFrom || null, data.validUntil || null,
         data.eligibilityType || 'all', data.eligibilityType === 'inactive_customers' ? Number(data.inactiveDays) : null,
-        data.eligibilityType === 'first_order' && Boolean(data.allowRedemptionUntilUsed), Number(data.priority) || 0, adminId,
+        data.eligibilityType === 'first_order' && Boolean(data.allowRedemptionUntilUsed), Number(data.priority) || 0,
+        Boolean(data.requiresScheduledDelivery), adminId,
       ]
     );
     const campaign = result.rows[0];
@@ -193,6 +194,7 @@ export class CampaignService {
       storeId: 'store_id', eligibilityType: 'eligibility_type',
       inactiveDays: 'inactive_days', newCustomersOnly: 'new_customers_only',
       allowRedemptionUntilUsed: 'allow_redemption_until_used',
+      requiresScheduledDelivery: 'requires_scheduled_delivery',
     };
     const changedTerms: { field: string; from: unknown; to: unknown }[] = [];
     const NUMERIC_TERM_COLUMNS = ['discount_value', 'max_discount', 'min_order_amount', 'per_customer_limit', 'usage_limit', 'inactive_days'];
@@ -244,6 +246,7 @@ export class CampaignService {
       validFrom: 'valid_from', validUntil: 'valid_until',
       eligibilityType: 'eligibility_type', inactiveDays: 'inactive_days',
       allowRedemptionUntilUsed: 'allow_redemption_until_used', priority: 'priority',
+      requiresScheduledDelivery: 'requires_scheduled_delivery',
     };
     for (const [key, col] of Object.entries(map)) {
       if (data[key] !== undefined) {
@@ -429,6 +432,7 @@ export class CampaignService {
       validFrom: pick(data.validFrom, existing.valid_from),
       validUntil: pick(data.validUntil, existing.valid_until),
       priority: pick(data.priority, existing.priority),
+      requiresScheduledDelivery: pick(data.requiresScheduledDelivery, existing.requires_scheduled_delivery),
       // Always the new one
       couponCode: newCode,
     }, adminId);
@@ -484,7 +488,8 @@ export class CampaignService {
     const result = await query(
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
               discount_type, discount_value, max_discount, min_order_amount,
-              eligibility_type, allow_redemption_until_used, carousel_gradient, valid_until,
+              eligibility_type, allow_redemption_until_used, requires_scheduled_delivery,
+              carousel_gradient, valid_until,
               -- The welcome-offer option is a customer-visible redemption term.
               -- The remaining fields are only for eligibility enforcement below.
               new_customers_only, per_customer_limit
@@ -552,7 +557,8 @@ export class CampaignService {
       // not hand out targeting lists, per-customer limits or admin-only fields.
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
               discount_type, discount_value, max_discount, min_order_amount,
-              eligibility_type, allow_redemption_until_used, carousel_gradient, valid_until,
+              eligibility_type, allow_redemption_until_used, requires_scheduled_delivery,
+              carousel_gradient, valid_until,
               -- Needed for per-customer enforcement below; stripped before return.
               per_customer_limit, inactive_days
          FROM mart_campaigns

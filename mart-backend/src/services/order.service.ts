@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SettingsService } from './settings.service';
 import { InventoryService } from './inventory.service';
 import { ZoneService } from './zone.service';
-import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery } from '../utils/storeHours';
+import { evaluateStoreOpen, formatIstDateTime, isNextDayIst, isValidScheduledDelivery } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 import { parseSellingUnit } from '../utils/unitConversion';
@@ -449,6 +449,9 @@ export class OrderService {
         if (data.campaignId && campaign.coupon_code) {
           throw badRequest('Enter the coupon code to redeem this campaign');
         }
+        if (campaign.requires_scheduled_delivery && data.deliveryPreference !== 'scheduled') {
+          throw badRequest('This coupon is only valid with scheduled delivery. Choose a next-day delivery slot to use it.');
+        }
 
         const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
         if (eligibilityType === 'first_order') {
@@ -544,6 +547,9 @@ export class OrderService {
       const requestedSchedule = data.scheduledFor ? new Date(data.scheduledFor) : null;
       if (data.deliveryPreference === 'scheduled' && (!requestedSchedule || !isValidScheduledDelivery(effectiveHours, requestedSchedule))) {
         throw badRequest('Choose an available delivery time today or tomorrow');
+      }
+      if (campaign?.requires_scheduled_delivery && (!requestedSchedule || !isNextDayIst(requestedSchedule))) {
+        throw badRequest('This coupon is only valid for next-day scheduled delivery');
       }
       const scheduledFor = data.deliveryPreference === 'scheduled'
         ? requestedSchedule

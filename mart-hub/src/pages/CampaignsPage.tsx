@@ -46,7 +46,7 @@ const EMPTY_FORM = {
   title: '', subtitle: '', description: '', badgeText: '',
   discountType: 'flat', discountValue: '', maxDiscount: '', minOrderAmount: '0',
   couponCode: '', eligibilityType: 'all', inactiveDays: '30', targetCustomerIds: [] as string[], perCustomerLimit: '1', usageLimit: '', priority: '0',
-  allowRedemptionUntilUsed: false,
+  allowRedemptionUntilUsed: false, requiresScheduledDelivery: false,
   showInCarousel: false, carouselGradient: GRADIENTS[0],
   status: 'active', validFrom: '', validUntil: '',
 };
@@ -117,6 +117,7 @@ export default function CampaignsPage() {
       priority: String(c.priority || '0'),
       perCustomerLimit: String(c.per_customer_limit || '1'), usageLimit: String(c.usage_limit || ''),
       allowRedemptionUntilUsed: Boolean(c.allow_redemption_until_used),
+      requiresScheduledDelivery: Boolean(c.requires_scheduled_delivery),
       showInCarousel: c.show_in_carousel || false,
       carouselGradient: c.carousel_gradient || GRADIENTS[0],
       status: c.status || 'active',
@@ -153,6 +154,7 @@ export default function CampaignsPage() {
         targetCustomerIds: form.eligibilityType === 'targeted_customers' ? form.targetCustomerIds : undefined,
         perCustomerLimit: parseInt(form.perCustomerLimit) || 1,
         allowRedemptionUntilUsed: form.eligibilityType === 'first_order' && form.allowRedemptionUntilUsed,
+        requiresScheduledDelivery: form.requiresScheduledDelivery,
         usageLimit: form.usageLimit ? parseInt(form.usageLimit) : undefined,
         priority: parseInt(form.priority) || 0,
         showInCarousel: form.showInCarousel, carouselGradient: form.carouselGradient,
@@ -181,6 +183,7 @@ export default function CampaignsPage() {
         if (sameNumber(data.usageLimit, editing.usage_limit)) delete (data as any).usageLimit;
         if (data.eligibilityType === editing.eligibility_type) delete (data as any).eligibilityType;
         if (data.allowRedemptionUntilUsed === Boolean(editing.allow_redemption_until_used)) delete (data as any).allowRedemptionUntilUsed;
+        if (data.requiresScheduledDelivery === Boolean(editing.requires_scheduled_delivery)) delete (data as any).requiresScheduledDelivery;
         if (sameNumber(data.inactiveDays, editing.inactive_days)) delete (data as any).inactiveDays;
         if (sameTargets(data.targetCustomerIds, editing.targetCustomerIds)) delete (data as any).targetCustomerIds;
       }
@@ -255,6 +258,7 @@ export default function CampaignsPage() {
                       {c.badge_text && <span className="text-[10px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded-full">{c.badge_text}</span>}
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[c.status] || STATUS_COLORS.draft}`}>{c.status}</span>
                       {c.show_in_carousel && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">📱 Carousel</span>}
+                      {c.requires_scheduled_delivery && <span className="text-[10px] font-bold bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded-full">Scheduled delivery only</span>}
                       {c.eligibility_type === 'first_order' && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">{c.allow_redemption_until_used ? 'Welcome offer until used' : 'First order'}</span>}
                       {c.eligibility_type === 'inactive_customers' && <span className="text-[10px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">Inactive {c.inactive_days} days</span>}
                       {c.eligibility_type === 'targeted_customers' && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">Targeted customers</span>}
@@ -355,6 +359,15 @@ export default function CampaignsPage() {
                 <p className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Redemption</p>
                 <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Coupon Code <span className="text-gray-400 font-normal">(leave blank = auto-applied)</span></label>
                   <input type="text" value={form.couponCode} onChange={e => setForm(f => ({ ...f, couponCode: e.target.value.toUpperCase() }))} className={inp} placeholder="e.g. POOJA50" /></div>
+                <label className="flex items-start gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2.5 cursor-pointer">
+                  <input type="checkbox" checked={form.requiresScheduledDelivery}
+                    onChange={e => setForm(f => ({ ...f, requiresScheduledDelivery: e.target.checked }))}
+                    className="mt-0.5 h-4 w-4 accent-emerald-500" />
+                  <span>
+                    <span className="block text-xs font-semibold text-gray-900 dark:text-white">Scheduled delivery only</span>
+                    <span className="block mt-0.5 text-[11px] leading-tight text-gray-600 dark:text-slate-400">Customers must choose a next-day delivery slot before this offer can be applied. The checkout pairs the coupon with its schedule picker.</span>
+                  </span>
+                </label>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Per Customer Limit</label>
                     <input type="number" value={form.perCustomerLimit} onChange={e => setForm(f => ({ ...f, perCustomerLimit: e.target.value }))} className={inp} placeholder="1" min="1" /></div>
