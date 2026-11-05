@@ -91,6 +91,9 @@ function gridCols(section: HomeSection): string {
   return 'grid-cols-3 sm:grid-cols-4';
 }
 
+const productGridCols = 'grid-cols-3';
+const catalogCardWidth = 'w-[calc((100%-1.25rem)/3)] min-w-[calc((100%-1.25rem)/3)]';
+
 export interface ResolvedSection {
   section: HomeSection;
   items: Product[];
@@ -191,13 +194,13 @@ export default function HomeSections({ entries, categories, onViewAll, onSelectC
             ) : layout === 'row' ? (
               <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
                 {visibleItems.map((p: any) => (
-                  <div key={p.id} className="w-[46%] min-w-[148px] flex-shrink-0 sm:w-[172px] md:w-[190px]">
+                  <div key={p.id} className={`${catalogCardWidth} flex-shrink-0`}>
                     <ProductCard product={p} />
                   </div>
                 ))}
               </div>
             ) : layout === 'grid' ? (
-              <div className={`grid ${gridCols(section)} gap-2.5`}>
+              <div className={`grid ${productGridCols} gap-2.5`}>
                 {visibleItems.slice(0, items.length >= 4 ? 4 : items.length).map((p: any) => (
                   <ProductCard key={p.id} product={p} />
                 ))}
@@ -209,7 +212,7 @@ export default function HomeSections({ entries, categories, onViewAll, onSelectC
                 ))}
               </div>
             ) : (
-              <div className={`grid ${gridCols(section)} gap-2.5`}>
+              <div className={`grid ${productGridCols} gap-2.5`}>
                 {visibleItems.slice(0, items.length >= 4 ? 4 : items.length).map((p: any) => (
                   <ProductCard key={p.id} product={p} />
                 ))}
