@@ -246,7 +246,7 @@ export default function CustomersPage() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name or mobile"
+            placeholder="Search by name, mobile, or address"
             className="w-full pl-9 pr-8 py-2 text-xs bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
           />
           {search && (

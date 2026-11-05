@@ -844,7 +844,7 @@ export default function App() {
   // in CheckoutPage redeems the code and shows it applied.
   const handleCheckoutLogin = (campaign?: any) => {
     const flow = useLoginFlowStore.getState();
-    flow.setPendingCouponApply(true, campaign?.id ?? null);
+    flow.setPendingCouponApply(Boolean(campaign?.id), campaign?.id ?? null);
     flow.setPostLoginPath('/checkout');
     // Declining login must come back here too, basket intact, not to Home.
     flow.setGuestReturnPath('/checkout');

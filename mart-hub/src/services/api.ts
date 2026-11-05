@@ -179,7 +179,7 @@ export interface OrderSummary {
 export interface FetchOpts { fresh?: boolean }
 
 export const ordersApi = {
-  getAll: (params?: { storeId?: string; status?: string; phone?: string; q?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
+  getAll: (params?: { storeId?: string; status?: string; deliveryPreference?: string; phone?: string; q?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
     api.get('/admin/orders', { params, fresh: opts?.fresh }),
   getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string }, opts?: FetchOpts) =>
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),

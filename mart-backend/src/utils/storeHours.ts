@@ -241,6 +241,31 @@ export function isValidScheduledDelivery(
 }
 
 /**
+ * True only when the requested instant falls on the next IST calendar day.
+ * Some offers are explicitly next-day only, so "scheduled" alone is not enough:
+ * the customer must not choose a later window today.
+ */
+export function isNextDayIst(target: Date, now: Date = new Date()): boolean {
+  if (Number.isNaN(target.getTime())) return false;
+  const current = istParts(now);
+  const requested = istParts(target);
+  const dayOffset = Math.round(
+    (Date.UTC(requested.y, requested.mo - 1, requested.d) - Date.UTC(current.y, current.mo - 1, current.d)) / 86_400_000,
+  );
+  return dayOffset === 1;
+}
+
+/** True when a requested IST instant starts inside that day's opening hour. */
+export function isWithinFirstOpeningHour(openingHours: OpeningHours, scheduledFor: Date): boolean {
+  if (Number.isNaN(scheduledFor.getTime())) return false;
+  const requested = istParts(scheduledFor);
+  const window = dayWindow(openingHours, requested.day);
+  if (!window) return false;
+  const minutes = requested.h * 60 + requested.mi;
+  return minutes >= window.open && minutes < window.open + 60;
+}
+
+/**
  * "21:30" -> "9:30 PM", in IST.
  *
  * Formatted by hand rather than via Intl's time formatter. `en-IN` currently

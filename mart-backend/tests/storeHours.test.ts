@@ -16,7 +16,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery } from '../src/utils/storeHours';
+import { evaluateStoreOpen, formatIstDateTime, isValidScheduledDelivery, isWithinFirstOpeningHour } from '../src/utils/storeHours';
 
 /** 09:00-21:00 every day -- the shape seeded by migration 026. */
 const ALL_DAY_9_21 = Object.fromEntries(
@@ -303,11 +303,24 @@ describe('scheduled delivery preferences', () => {
     assert.equal(isValidScheduledDelivery(hours, at('2026-01-07T04:00:00Z'), now), false, 'Wednesday 9:30 AM IST is before opening');
   });
 
+  test('identifies only the first hour after opening for campaign restrictions', () => {
+    assert.equal(isWithinFirstOpeningHour(ALL_DAY_9_21, at('2026-01-08T03:30:00Z')), true, '9:00 AM IST starts the excluded hour');
+    assert.equal(isWithinFirstOpeningHour(ALL_DAY_9_21, at('2026-01-08T04:00:00Z')), true, '9:30 AM IST remains in the excluded hour');
+    assert.equal(isWithinFirstOpeningHour(ALL_DAY_9_21, at('2026-01-08T04:30:00Z')), false, '10:00 AM IST is available again');
+  });
+
   test('the migration permits a customer preference without weakening closure metadata', () => {
     const migration = readFileSync(join(__dirname, '..', 'src', 'database', 'migrations', '098_scheduled_delivery_preferences.sql'), 'utf8');
     assert.ok(!migration.includes('scheduled_for IS NULL'));
     assert.ok(migration.includes('placed_outside_hours = false AND closed_reason IS NULL'));
     assert.ok(migration.includes('placed_outside_hours = true AND closed_reason IS NOT NULL'));
+  });
+
+  test('campaign zone scope is stored in a cascade-safe mapping table', () => {
+    const migration = readFileSync(join(__dirname, '..', 'src', 'database', 'migrations', '120_campaign_zone_scope.sql'), 'utf8');
+    assert.match(migration, /CREATE TABLE IF NOT EXISTS mart_campaign_zones/);
+    assert.match(migration, /campaign_id UUID NOT NULL REFERENCES mart_campaigns\(id\) ON DELETE CASCADE/);
+    assert.match(migration, /zone_id UUID NOT NULL REFERENCES mart_zones\(id\) ON DELETE CASCADE/);
   });
 
   test('a valid scheduled delivery does not enter the after-hours flow', () => {

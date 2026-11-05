@@ -36,6 +36,8 @@ let campaignRow: Row | null = null;
 let couponClash: Row[] = [];
 /** Rows returned for existing targeted customers. */
 let existingTargets: Row[] = [];
+/** Rows returned for existing category scope. */
+let existingCategoryIds: Row[] = [];
 /** Simulated failure of audit inserts, to prove they are non-fatal. */
 let auditInsertFails = false;
 
@@ -50,6 +52,9 @@ const pg = require('pg');
       }
       if (/FROM mart_campaign_targets WHERE campaign_id/.test(text)) {
         return { rows: existingTargets };
+      }
+      if (/FROM mart_campaign_categories WHERE campaign_id/.test(text)) {
+        return { rows: existingCategoryIds };
       }
       if (/SELECT id FROM mart_campaigns WHERE coupon_code/.test(text)) {
         return { rows: couponClash };
@@ -89,6 +94,7 @@ const liveCampaign = (over: Row = {}): Row => ({
   carousel_gradient: 'from-emerald-500', carousel_sort_order: 1,
   status: 'active', valid_from: null, valid_until: null,
   eligibility_type: 'all', inactive_days: null, allow_redemption_until_used: false, priority: 5,
+  requires_scheduled_delivery: true, exclude_first_hour_after_open: true,
   superseded_by: null, superseded_at: null,
   ...over,
 });
@@ -117,6 +123,7 @@ beforeEach(() => {
   campaignRow = liveCampaign();
   couponClash = [];
   existingTargets = [];
+  existingCategoryIds = [];
   auditInsertFails = false;
 });
 
@@ -328,6 +335,7 @@ describe('supersede mints a new version without losing the offer', () => {
     assert.equal(row.eligibility_type, 'all', 'eligibility carried');
     assert.equal(row.show_in_carousel, true, 'carousel flag carried');
     assert.equal(row.priority, 5, 'priority carried');
+    assert.equal(row.exclude_first_hour_after_open, true, 'opening-hour exclusion carried');
   });
 
   test('an explicit override wins over the carried value', async () => {
@@ -391,6 +399,14 @@ describe('supersede mints a new version without losing the offer', () => {
     const inserts = calls.filter(c => /INSERT INTO mart_campaign_targets/.test(c.text));
     assert.equal(inserts.length, 2, 'both existing targets are re-created');
     assert.deepEqual(inserts.map(i => i.params[1]).sort(), ['cust-1', 'cust-2']);
+  });
+
+  test('category scope is copied to the replacement', async () => {
+    existingCategoryIds = [{ category_id: 'category-1' }, { category_id: 'category-2' }];
+    await CampaignService.supersede('campaign-1', { couponCode: 'weekend25' }, ADMIN);
+    const inserts = calls.filter(c => /INSERT INTO mart_campaign_categories/.test(c.text));
+    assert.equal(inserts.length, 2, 'both existing categories are re-created');
+    assert.deepEqual(inserts.map(i => i.params[1]).sort(), ['category-1', 'category-2']);
   });
 
   test('inactive-days eligibility keeps its threshold', async () => {
