@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { Loader2, Plus, Minus, Trash2, X, Tag, Check, MessageCircle, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
+import { Loader2, Plus, Minus, Trash2, X, Tag, MessageCircle, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { storeApi, campaignApi, authApi, recommendationApi } from '../services/api';
 import type { PublicSettings, StoreOpeningHours, RecommendationResult, Product } from '../services/api';
@@ -304,16 +304,16 @@ function OffersPanel(props: OffersPanelProps) {
                          : 'border-gokez-200 bg-gokez-50 dark:border-gokez-800 dark:bg-slate-900/60'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className={`text-[11px] sm:text-xs leading-snug font-bold break-words ${done ? 'text-gokez-700 dark:text-gokez-200' : 'text-gokez-700 dark:text-gokez-200'}`}>
+                      <p className={`text-[11px] sm:text-xs leading-snug font-bold break-words whitespace-nowrap ${done ? 'text-gokez-700 dark:text-gokez-200' : 'text-gokez-700 dark:text-gokez-200'}`}>
                         {badgeText && (
-                          <span className="mr-1 inline-block rounded bg-gokez-100 px-1.5 py-0.5 align-middle text-[9px] font-bold uppercase tracking-wide text-gokez-800 dark:bg-gokez-900/40 dark:text-gokez-200">
+                          <span className="mr-1 align-middle text-[10px] font-bold text-gokez-700 dark:text-gokez-300">
                             {badgeText}
                           </span>
                         )}
                         {c.title}
-                        {bits.length > 0 && (
-                          <span className="text-[10px] font-medium text-gray-500 dark:text-slate-400"> · {bits.join(' · ')}</span>
-                        )}
+                      {bits.length > 0 && (
+                        <span className="text-[10px] font-medium text-gray-500 dark:text-slate-400 block">{bits.join(' · ')}</span>
+                      )}
                       </p>
                       <p className={`text-[10px] sm:text-[11px] leading-snug mt-0.5 break-words ${done ? 'text-gokez-700 dark:text-gokez-300' : 'text-gokez-700 dark:text-gokez-300'}`}>
                         {desc.replace(/[.!?]+$/, '')}.
@@ -323,15 +323,15 @@ function OffersPanel(props: OffersPanelProps) {
                       {requiresSchedule && (
                         <p className="mt-1 text-[10px] font-semibold leading-snug text-gokez-700 dark:text-gokez-200">
                           {scheduleCommitted && scheduledSlot
-                            ? `Scheduled: ${slotLabel(schedule, scheduledSlot)}${scheduleDone ? ' · coupon applied' : ' · apply to finish'}`
-                            : 'Next-day delivery only. Choose a slot to use this coupon.'}
+                            ? `Scheduled: ${slotLabel(schedule, scheduledSlot)}${scheduleDone ? ` · coupon applied · ${offerHeadline(c)} off` : ' · apply to finish'}`
+                            : 'Apply and choose tomorrow\'s slot to use this coupon.'}
                         </p>
                       )}
                     </div>
                     {requiresSchedule ? (
                       scheduleOpen ? (
                         <button type="button" onClick={onClearSchedule}
-                          className="flex min-h-11 flex-shrink-0 items-center rounded-lg bg-red-600 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-red-700">
+                          className="flex h-7 shrink-0 items-center rounded-lg bg-red-600 px-2.5 text-[10px] font-bold text-white transition-colors hover:bg-red-700">
                           Clear
                         </button>
                       ) : scheduleDone ? (
@@ -341,13 +341,13 @@ function OffersPanel(props: OffersPanelProps) {
                         </button>
                       ) : scheduleCommitted && scheduledSlot ? (
                         <button type="button" onClick={() => onApply(c)}
-                          className="flex min-h-11 flex-shrink-0 items-center rounded-lg bg-gokez-700 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-gokez-800">
+                          className="flex h-7 shrink-0 items-center rounded-lg bg-gokez-700 px-2.5 text-[10px] font-bold text-white transition-colors hover:bg-gokez-800">
                           Apply
                         </button>
                       ) : (
                         <button type="button" onClick={() => onOpenSchedule(c)}
-                          className="flex min-h-11 flex-shrink-0 items-center gap-1 rounded-lg bg-gokez-700 px-2.5 py-1 text-[10px] font-bold text-white transition-colors hover:bg-gokez-800 dark:bg-gokez-600 dark:hover:bg-gokez-700">
-                          <Plus className="h-3.5 w-3.5" /> Schedule
+                          className="flex h-[34px] shrink-0 items-center gap-1 rounded-lg bg-gokez-700 px-2.5 text-[11px] font-bold text-white transition-colors hover:bg-gokez-800 dark:bg-gokez-600 dark:hover:bg-gokez-700">
+                          Apply
                         </button>
                       )
                     ) : (
@@ -357,7 +357,7 @@ function OffersPanel(props: OffersPanelProps) {
                       <button
                         type="button"
                         onClick={() => done ? (isAppliedByCode ? onClearCode() : onRemoveOffer()) : onApply(c)}
-                        className={`flex min-h-11 flex-shrink-0 items-center px-2.5 py-1 text-[10px] font-bold rounded-lg transition-colors ${
+                        className={`flex h-[34px] shrink-0 items-center px-2.5 text-[11px] font-bold rounded-lg transition-colors ${
                           done ? 'text-gokez-700 hover:text-red-600 dark:text-gokez-200'
                                : 'bg-gokez-700 hover:bg-gokez-800 text-white'}`}>
                         {done ? 'Remove' : 'Apply'}
@@ -381,7 +381,7 @@ function OffersPanel(props: OffersPanelProps) {
                                 <button key={`${slot.offset}-${slot.start}`} type="button" onClick={() => onSelectDraftSlot(slot)}
                                   className={`rounded-lg border px-2 py-2 text-xs font-bold transition-colors ${
                                     active
-                                      ? 'border-gokez-500 bg-gokez-700 text-white'
+                                      ? 'border-gray-900 bg-gray-900 text-white dark:border-gokez-500 dark:bg-gokez-700'
                                       : 'border-gokez-200 bg-white text-gokez-700 hover:bg-gokez-50 dark:border-gokez-800 dark:bg-slate-800 dark:text-gokez-200'
                                   }`}>
                                   {slotRange(slot)}
@@ -433,7 +433,7 @@ function OffersPanel(props: OffersPanelProps) {
         {/* Signed-in only. /campaigns/validate requires auth, so a guest typing
             here gets a bare "No token provided". Guests apply the campaign code
             with Apply & Save, and the code is printed in the offer details. */}
-        {!locked && !hasMinimumOrderNotice && (
+        {!locked && (
         <div className={showOffersHeader ? 'mt-3 border-t border-gray-100 pt-3 dark:border-slate-700' : ''}>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300">Have a coupon code?</label>
@@ -443,8 +443,8 @@ function OffersPanel(props: OffersPanelProps) {
             <input type="text" value={appliedCode || codeInput} onChange={e => onCodeInput(e.target.value)} placeholder="Enter coupon code" disabled={Boolean(appliedCode)}
               className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-gokez-500 disabled:cursor-not-allowed disabled:border-gokez-200 disabled:bg-gokez-50 disabled:text-gokez-700 dark:disabled:border-gokez-800 dark:disabled:bg-slate-900/60 dark:disabled:text-gokez-200" />
             <button type="button" onClick={appliedCode ? onClearCode : onValidateCode} disabled={!appliedCode && (codeLoading || !codeInput.trim())}
-              className={`px-3 py-2 text-xs font-bold rounded-xl disabled:opacity-50 flex items-center gap-1 whitespace-nowrap ${appliedCode ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-300 dark:bg-red-900/20 dark:hover:bg-red-900/30' : 'text-white bg-gokez-700 hover:bg-gokez-800'}`}>
-              {appliedCode ? <X className="w-3 h-3" /> : codeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {appliedCode ? 'Remove' : 'Apply'}
+              className={`flex h-[34px] shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-bold disabled:opacity-50 ${appliedCode ? 'text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-300 dark:bg-red-900/20 dark:hover:bg-red-900/30' : 'text-white bg-gokez-700 hover:bg-gokez-800'}`}>
+              {appliedCode ? <X className="w-3 h-3" /> : codeLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : null} {appliedCode ? 'Remove' : 'Apply'}
             </button>
           </div>
           {codeSuccess && <p className="mt-1.5 text-xs text-gokez-700 dark:text-gokez-300">{codeSuccess}</p>}
@@ -631,6 +631,19 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const [showNoteMenu, setShowNoteMenu] = useState(false);
   const [showCustomNote, setShowCustomNote] = useState(false);
   const [customNote, setCustomNote] = useState('');
+  const noteMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showNoteMenu) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      if (noteMenuRef.current && !noteMenuRef.current.contains(target)) {
+        setShowNoteMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [showNoteMenu]);
 
 
   const [loading, setLoading] = useState(false);
@@ -819,17 +832,19 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
 
   const applyCampaign = (campaign: any, couponCode: string | null = null, opts: { skipSchedulePrompt?: boolean } = {}) => {
     const disc = calcDiscount(campaign, sub);
+    if (campaign.requires_scheduled_delivery && !opts.skipSchedulePrompt && (deliveryPreference !== 'scheduled' || !scheduledSlot)) {
+      setEligibleCampaigns(prev => prev.some(c => c.id === campaign.id) ? prev : [campaign, ...prev]);
+      setOfferNotice('This coupon needs a next-day delivery slot. Choose one below.');
+      openSchedulePanel(campaign);
+      return;
+    }
+
     setLocalAppliedCampaign(campaign);
     setAppliedCouponCode(couponCode);
     setCampaignDiscount(disc);
     useCartStore.getState().setAppliedCampaign(campaign, disc);
     setEligibleCampaigns(prev => prev.some(c => c.id === campaign.id) ? prev : [campaign, ...prev]);
     setCouponError('');
-    if (campaign.requires_scheduled_delivery && !opts.skipSchedulePrompt && (deliveryPreference !== 'scheduled' || !scheduledSlot)) {
-      setOfferNotice('This coupon needs a next-day delivery slot. Choose one below.');
-      setScheduleCampaignId(campaign.id);
-      primeScheduleDraft();
-    }
   };
 
   const removeCampaign = () => {
@@ -1037,7 +1052,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     // immediate Fastest option. Defaulting to "proceed" keeps checkout working
     // if this page is ever rendered without the prop.
     if (appliedCampaign?.requires_scheduled_delivery && deliveryPreference !== 'scheduled') {
-      setOfferNotice('Choose a next-day delivery slot to use this coupon, or remove the coupon.');
+      setOfferNotice('Apply and choose a tomorrow\'s delivery slot to use this coupon, or remove the coupon.');
       setScheduleCampaignId(appliedCampaign.id);
       primeScheduleDraft();
       return;
@@ -1498,11 +1513,11 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
                 <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{currentNote}</p>
               </div>
               <button type="button" onClick={() => setShowNoteMenu(open => !open)}
-                className="flex h-7 shrink-0 items-center rounded-lg border border-gokez-600 bg-gokez-700 px-2.5 text-[11px] font-bold text-white dark:border-gokez-500 dark:bg-gokez-700">
+                className="flex h-[34px] shrink-0 items-center rounded-lg border border-gokez-600 bg-gokez-700 px-2.5 text-[11px] font-bold text-white dark:border-gokez-500 dark:bg-gokez-700">
                 Change
               </button>
               {showNoteMenu && (
-                <div className="absolute right-4 top-[calc(100%-4px)] z-20 w-52 overflow-hidden rounded-lg border border-gokez-100 bg-white py-1 shadow-lg dark:border-gokez-900 dark:bg-slate-800">
+                <div ref={noteMenuRef} className="absolute right-4 top-[calc(100%-4px)] z-20 w-52 overflow-hidden rounded-lg border border-gokez-100 bg-white py-1 shadow-lg dark:border-gokez-900 dark:bg-slate-800">
                   {NOTES.map(note => <button key={note} type="button" onClick={() => {
                     setDeliveryNote(note);
                     setShowCustomNote(false);

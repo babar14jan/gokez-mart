@@ -389,7 +389,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   </div>
                 )}
               </div>
-                <button onClick={finalizeLogin} className={primaryBtn()}>
+                <button onClick={finalizeLogin} className="flex h-[34px] w-full items-center justify-center gap-2 rounded-2xl py-0 text-[11px] font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800 bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600">
                 <ArrowRight className="h-4 w-4" aria-hidden="true" /> Start Shopping
               </button>
             </>

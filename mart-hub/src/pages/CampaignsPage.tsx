@@ -47,6 +47,7 @@ const EMPTY_FORM = {
   discountType: 'flat', discountValue: '', maxDiscount: '', minOrderAmount: '0',
   couponCode: '', eligibilityType: 'all', inactiveDays: '30', targetCustomerIds: [] as string[], perCustomerLimit: '1', usageLimit: '', priority: '0',
   allowRedemptionUntilUsed: false, requiresScheduledDelivery: false,
+  excludeFirstHourAfterOpen: false,
   showInCarousel: false, carouselGradient: GRADIENTS[0],
   status: 'active', validFrom: '', validUntil: '',
 };
@@ -118,6 +119,7 @@ export default function CampaignsPage() {
       perCustomerLimit: String(c.per_customer_limit || '1'), usageLimit: String(c.usage_limit || ''),
       allowRedemptionUntilUsed: Boolean(c.allow_redemption_until_used),
       requiresScheduledDelivery: Boolean(c.requires_scheduled_delivery),
+      excludeFirstHourAfterOpen: Boolean(c.exclude_first_hour_after_open ?? c.excludeFirstHourAfterOpen ?? false),
       showInCarousel: c.show_in_carousel || false,
       carouselGradient: c.carousel_gradient || GRADIENTS[0],
       status: c.status || 'active',
@@ -155,6 +157,7 @@ export default function CampaignsPage() {
         perCustomerLimit: parseInt(form.perCustomerLimit) || 1,
         allowRedemptionUntilUsed: form.eligibilityType === 'first_order' && form.allowRedemptionUntilUsed,
         requiresScheduledDelivery: form.requiresScheduledDelivery,
+        excludeFirstHourAfterOpen: form.excludeFirstHourAfterOpen,
         usageLimit: form.usageLimit ? parseInt(form.usageLimit) : undefined,
         priority: parseInt(form.priority) || 0,
         showInCarousel: form.showInCarousel, carouselGradient: form.carouselGradient,
@@ -184,6 +187,7 @@ export default function CampaignsPage() {
         if (data.eligibilityType === editing.eligibility_type) delete (data as any).eligibilityType;
         if (data.allowRedemptionUntilUsed === Boolean(editing.allow_redemption_until_used)) delete (data as any).allowRedemptionUntilUsed;
         if (data.requiresScheduledDelivery === Boolean(editing.requires_scheduled_delivery)) delete (data as any).requiresScheduledDelivery;
+        if (data.excludeFirstHourAfterOpen === Boolean(editing.exclude_first_hour_after_open)) delete (data as any).excludeFirstHourAfterOpen;
         if (sameNumber(data.inactiveDays, editing.inactive_days)) delete (data as any).inactiveDays;
         if (sameTargets(data.targetCustomerIds, editing.targetCustomerIds)) delete (data as any).targetCustomerIds;
       }
@@ -259,6 +263,7 @@ export default function CampaignsPage() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLORS[c.status] || STATUS_COLORS.draft}`}>{c.status}</span>
                       {c.show_in_carousel && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">📱 Carousel</span>}
                       {c.requires_scheduled_delivery && <span className="text-[10px] font-bold bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded-full">Scheduled delivery only</span>}
+                      {c.exclude_first_hour_after_open && <span className="text-[10px] font-bold bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded-full">Excludes first hour</span>}
                       {c.eligibility_type === 'first_order' && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">{c.allow_redemption_until_used ? 'Welcome offer until used' : 'First order'}</span>}
                       {c.eligibility_type === 'inactive_customers' && <span className="text-[10px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">Inactive {c.inactive_days} days</span>}
                       {c.eligibility_type === 'targeted_customers' && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">Targeted customers</span>}
@@ -366,6 +371,15 @@ export default function CampaignsPage() {
                   <span>
                     <span className="block text-xs font-semibold text-gray-900 dark:text-white">Scheduled delivery only</span>
                     <span className="block mt-0.5 text-[11px] leading-tight text-gray-600 dark:text-slate-400">Customers must choose a next-day delivery slot before this offer can be applied. The checkout pairs the coupon with its schedule picker.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2.5 cursor-pointer">
+                  <input type="checkbox" checked={form.excludeFirstHourAfterOpen}
+                    onChange={e => setForm(f => ({ ...f, excludeFirstHourAfterOpen: e.target.checked }))}
+                    className="mt-0.5 h-4 w-4 accent-emerald-500" />
+                  <span>
+                    <span className="block text-xs font-semibold text-gray-900 dark:text-white">Exclude first hour after store opens</span>
+                    <span className="block mt-0.5 text-[11px] leading-tight text-gray-600 dark:text-slate-400">Skip delivery scheduling during the first hour after the store opens. Keeps delivery off during that window.</span>
                   </span>
                 </label>
                 <div className="grid grid-cols-2 gap-3">
