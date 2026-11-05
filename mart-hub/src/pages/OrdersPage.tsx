@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  ClipboardList, Calendar, CalendarClock, ChevronDown, Phone, MapPin,
+  ClipboardList, CalendarClock, ChevronDown, Phone, MapPin,
   Navigation, Package, XCircle, CheckSquare, Square,
   Truck, Clock, IndianRupee, Search, X,
 } from 'lucide-react';
@@ -48,6 +48,20 @@ const PIPELINE = [
 ];
 
 const TERMINAL = ['delivered', 'cancelled', 'failed_delivery', 'terminated'];
+
+const orderBrowseDate = (order: any): Date => {
+  if (order.deliveryPreference === 'scheduled' && !TERMINAL.includes(order.status) && order.scheduledFor) {
+    return new Date(order.scheduledFor);
+  }
+  if (order.status === 'delivered' && order.deliveredAt) return new Date(order.deliveredAt);
+  if (TERMINAL.includes(order.status)) {
+    const terminalEvent = [...(order.statusEvents || [])]
+      .reverse()
+      .find((event: any) => event.toStatus === order.status);
+    if (terminalEvent?.createdAt) return new Date(terminalEvent.createdAt);
+  }
+  return new Date(order.createdAt);
+};
 
 const STATUS_COLORS: Record<string, string> = {
   pending:          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -271,16 +285,18 @@ export default function OrdersPage() {
   const [paymentOrder, setPaymentOrder] = useState<any | null>(null);
   const [resolutionReason, setResolutionReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('');
+  const [deliveryPreferenceFilter, setDeliveryPreferenceFilter] = useState<'all' | 'scheduled'>('all');
   const [statusOpen, setStatusOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [dateRange, setDateRange] = useState<DateRange>('today');
+  const [dateRange, setDateRange] = useState<DateRange | null>('today');
   // The range to return to when Custom is clicked a second time (the date
   // range toggles closed instead of staying stuck open).
   const prevDateRangeRef = useRef<DateRange>('today');
   const handleDateRangeClick = (id: DateRange) => {
+    setDeliveryPreferenceFilter('all');
     if (id !== 'custom') { setDateRange(id); return; }
     if (dateRange === 'custom') { setDateRange(prevDateRangeRef.current); return; }
-    prevDateRangeRef.current = dateRange;
+    prevDateRangeRef.current = dateRange || 'today';
     setDateRange('custom');
   };
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
@@ -304,11 +320,15 @@ export default function OrdersPage() {
   const canAssignDelivery = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
 
   const load = (fresh = false) =>
-    ordersApi.getAll({ limit: 500, storeId: getActiveStoreId() } as any, { fresh })
+    ordersApi.getAll({
+      limit: 500,
+      storeId: getActiveStoreId(),
+      deliveryPreference: deliveryPreferenceFilter === 'scheduled' ? 'scheduled' : undefined,
+    }, { fresh })
       .then(r => setAllOrders(r.data.data || []))
       .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [deliveryPreferenceFilter]);
   useEffect(() => {
     teamApi.getStoreTeam(getActiveStoreId())
       .then(r => setDeliveryHandlers((r.data.data || []).filter((member: any) => member.isActive && member.assignmentActive && ['store_owner', 'store_manager', 'staff', 'delivery_staff'].includes(member.role))))
@@ -530,14 +550,20 @@ export default function OrdersPage() {
     const { start, end } = dateBounds;
     const query = search.trim();
     return allOrders.filter(o => {
-      const created = new Date(o.createdAt);
+      const browseDate = orderBrowseDate(o);
+      const isScheduledQueue = deliveryPreferenceFilter === 'scheduled';
       // A search is an explicit "find this order" action, so it must reach
       // older orders too — the date tab stays a browsing filter only.
-      if (!query) {
-        if (start && created < start) return false;
-        if (end   && created > end)   return false;
+      if (!query && !isScheduledQueue) {
+        if (start && browseDate < start) return false;
+        if (end   && browseDate > end)   return false;
       }
-      if (statusFilter && o.status !== statusFilter) return false;
+      if (isScheduledQueue) {
+        if (o.deliveryPreference !== 'scheduled' || TERMINAL.includes(o.status)) return false;
+      } else if (dateRange === 'today' && o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status)) {
+        return false;
+      }
+      if (!isScheduledQueue && statusFilter && o.status !== statusFilter) return false;
       if (query) {
         const q = query.toLowerCase();
         // Match what the row actually shows (real name, or the phone fallback for
@@ -551,12 +577,12 @@ export default function OrdersPage() {
       }
       return true;
     });
-  }, [allOrders, dateBounds, statusFilter, search]);
+  }, [allOrders, dateBounds, dateRange, statusFilter, deliveryPreferenceFilter, search]);
 
   const statusCounts = useMemo(() => {
     const { start, end } = dateBounds;
     const base = allOrders.filter(o => {
-      const d = new Date(o.createdAt);
+      const d = orderBrowseDate(o);
       if (start && d < start) return false;
       if (end && d > end) return false;
       return true;
@@ -580,10 +606,21 @@ export default function OrdersPage() {
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
             }`}>
-            {tab.id === 'custom' && <Calendar className="w-3 h-3" />}
             {tab.label}
           </button>
         ))}
+        <button type="button" onClick={() => {
+          if (deliveryPreferenceFilter !== 'scheduled') setDateRange(null);
+          setDeliveryPreferenceFilter(current => current === 'scheduled' ? 'all' : 'scheduled');
+          setStatusFilter('');
+        }}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            deliveryPreferenceFilter === 'scheduled'
+              ? 'bg-emerald-500 text-white shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
+          }`}>
+          Scheduled
+        </button>
         {dateRange === 'custom' && (
           <div className="flex items-center gap-2">
             <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
@@ -1223,6 +1260,8 @@ export default function OrdersPage() {
                               ? 'Preparation is locked — the head store marked the order ready.'
                               : fulfilment?.status === 'prepared' && order.status === 'ready_to_pickup'
                                 ? 'Waiting for the head store to start delivery.'
+                                : fulfilment?.status === 'delivered' && order.status === 'ready_to_pickup'
+                                  ? 'The head store marked this order ready for pickup.'
                                 : fulfilment?.status === 'delivered'
                                   ? 'Your store has marked its items ready for pickup.'
                                   : 'No action needed from your store right now.'}

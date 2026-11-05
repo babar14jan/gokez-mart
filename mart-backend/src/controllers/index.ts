@@ -1082,7 +1082,7 @@ export const adminDeleteCategory = asyncHandler(async (req: AdminRequest, res: R
 // ── Admin order controllers ───────────────────────────────────────────────────
 
 export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { status, phone, q, limit, offset } = req.query;
+  const { status, deliveryPreference, phone, q, limit, offset } = req.query;
   const isSuperAdmin = req.admin!.role === 'super_admin';
   const isHeadStoreViewer = !isSuperAdmin && await isHeadStore(req.admin!.storeId);
   const canManageMaster = isSuperAdmin || isHeadStoreViewer;
@@ -1090,6 +1090,7 @@ export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Respon
   const orders = await OrderService.findAll({
     storeId,
     status: status as string,
+    deliveryPreference: deliveryPreference as string,
     phone: phone as string,
     search: typeof q === 'string' ? q : undefined,
     limit: limit ? parseInt(limit as string) : 50,
@@ -1837,7 +1838,7 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
        FROM classified c
        LEFT JOIN order_agg a ON a.ckey = c.ckey
        WHERE ($1 = 'all' OR c."identityType" = $1)
-         AND ($4 = '' OR c.name ILIKE $4 OR c.phone ILIKE $4)
+         AND ($4 = '' OR c.name ILIKE $4 OR c.phone ILIKE $4 OR c.address ILIKE $4)
          AND (${ranged ? 'a.ckey IS NOT NULL' : 'TRUE'})
        ORDER BY ${orderBy}
        LIMIT $2 OFFSET $3`,
@@ -1845,7 +1846,7 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
     ),
     query<{ total: number; signedIn: number; guestCheckout: number; filtered: number }>(
       `WITH classified AS (
-         SELECT c.name, c.phone, ${identitySql} as "identityType",
+         SELECT c.name, c.phone, c.address, ${identitySql} as "identityType",
                 NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
          FROM mart_customers c
        ), active AS (
@@ -1860,7 +1861,7 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
               COUNT(*) FILTER (WHERE "identityType" = 'guest_checkout'
                                  AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as "guestCheckout",
               COUNT(*) FILTER (WHERE ($1 = 'all' OR "identityType" = $1)
-                                 AND ($2 = '' OR name ILIKE $2 OR phone ILIKE $2)
+                                 AND ($2 = '' OR name ILIKE $2 OR phone ILIKE $2 OR address ILIKE $2)
                                  AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as filtered
        FROM classified c
        LEFT JOIN active a ON a.ckey = c.ckey`,
@@ -3463,11 +3464,12 @@ export const adminReorderHomeSections = asyncHandler(async (req: AdminRequest, r
 // ── Public campaign routes ────────────────────────────────────────────────────
 
 export const getEligibleCampaigns = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { cartTotal, storeId } = req.query;
+  const { cartTotal, storeId, zoneId } = req.query;
   const campaigns = await CampaignService.getEligible(
     req.customer?.id || null,
     parseFloat(cartTotal as string) || 0,
-    (storeId as string) || ''
+    (storeId as string) || '',
+    typeof zoneId === 'string' ? zoneId : null,
   );
   res.json({ success: true, data: campaigns });
 });
@@ -3478,23 +3480,25 @@ export const getEligibleCampaigns = asyncHandler(async (req: CustomerRequest, re
 // token is present the teaser is filtered so an offer they already used is not
 // advertised back to them.
 export const getPublicWelcomeOffers = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { cartTotal, storeId } = req.query;
+  const { cartTotal, storeId, zoneId } = req.query;
   const offers = await CampaignService.getPublicWelcomeOffers(
     parseFloat(cartTotal as string) || 0,
     (storeId as string) || '',
-    req.customer?.id || null
+    req.customer?.id || null,
+    typeof zoneId === 'string' ? zoneId : null,
   );
   res.json({ success: true, data: offers });
 });
 
 export const validateCouponCode = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { code, cartTotal, storeId } = req.body;
+  const { code, cartTotal, storeId, zoneId } = req.body;
   if (!code) { res.status(400).json({ success: false, error: 'Coupon code required' }); return; }
   try {
     const campaign = await CampaignService.validateCode(
       code, req.customer!.id,
       parseFloat(cartTotal) || 0,
-      storeId || ''
+      storeId || '',
+      typeof zoneId === 'string' ? zoneId : null,
     );
     const discount = CampaignService.calculateDiscount(campaign, parseFloat(cartTotal) || 0);
     res.json({ success: true, data: { campaign, discount } });

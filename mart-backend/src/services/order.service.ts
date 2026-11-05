@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SettingsService } from './settings.service';
 import { InventoryService } from './inventory.service';
 import { ZoneService } from './zone.service';
-import { evaluateStoreOpen, formatIstDateTime, isNextDayIst, isValidScheduledDelivery } from '../utils/storeHours';
+import { evaluateStoreOpen, formatIstDateTime, isNextDayIst, isValidScheduledDelivery, isWithinFirstOpeningHour } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 import { parseSellingUnit } from '../utils/unitConversion';
@@ -27,6 +27,7 @@ export type CustomerCancelReason = keyof typeof CUSTOMER_CANCEL_REASONS;
 export interface OrderItem {
   productId: string;
   sourceStoreId?: string;
+  categoryId?: string | null;
   productName: string;
   unit: string;
   price: number;
@@ -88,6 +89,12 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
               o.campaign_id as "campaignId",
               o.campaign_discount::float as "campaignDiscount",
               o.coupon_code_used as "couponCodeUsed",
+              COALESCE(
+                (SELECT (u.terms_snapshot ->> 'requires_scheduled_delivery')::boolean
+                 FROM mart_campaign_uses u WHERE u.order_id = o.id LIMIT 1),
+                (SELECT c.requires_scheduled_delivery FROM mart_campaigns c WHERE c.id = o.campaign_id),
+                false
+              ) as "campaignRequiresScheduledDelivery",
               o.item_savings::float as "itemSavings",
               o.free_delivery_saving::float as "freeDeliverySaving",
               o.delivery_by_name as "deliveryByName",
@@ -355,7 +362,7 @@ export class OrderService {
           throw badRequest('An item is assigned to a store outside the selected delivery zone');
         }
         const product = await client.query(
-            `SELECT p.name, p.is_bundle as "isBundle", sp.price::float AS price,
+            `SELECT p.name, p.category_id as "categoryId", p.is_bundle as "isBundle", sp.price::float AS price,
               sp.discount_percent::float AS "discountPercent", sp.unit,
               sp.is_available as "isAvailable", sp.availability_status as "availabilityStatus"
            FROM mart_store_products sp
@@ -365,7 +372,7 @@ export class OrderService {
           [sourceStoreId, item.productId]
         );
         const catalogItem = product.rows[0] as {
-          name: string; isBundle: boolean; price: number; discountPercent: number; unit: string;
+          name: string; categoryId: string | null; isBundle: boolean; price: number; discountPercent: number; unit: string;
           isAvailable: boolean; availabilityStatus: string;
         } | undefined;
         if (!catalogItem || catalogItem.unit !== item.unit || (enforceInventoryAvailability
@@ -402,6 +409,7 @@ export class OrderService {
           productId: item.productId,
           sourceStoreId,
           productName: catalogItem.name,
+          categoryId: catalogItem.categoryId,
           unit: catalogItem.unit,
           price: effectivePrice,
           mrp: catalogItem.price,
@@ -449,9 +457,28 @@ export class OrderService {
         if (data.campaignId && campaign.coupon_code) {
           throw badRequest('Enter the coupon code to redeem this campaign');
         }
+        const zoneScope = await client.query(
+          `SELECT EXISTS (SELECT 1 FROM mart_campaign_zones WHERE campaign_id = $1) AS scoped,
+                  EXISTS (SELECT 1 FROM mart_campaign_zones WHERE campaign_id = $1 AND zone_id = $2::uuid) AS applies`,
+          [campaign.id, data.zoneId || null]
+        ) as { rows: Array<{ scoped: boolean; applies: boolean }> };
+        if (zoneScope.rows[0]?.scoped && !zoneScope.rows[0]?.applies) {
+          throw badRequest('Campaign is not available in this delivery zone');
+        }
         if (campaign.requires_scheduled_delivery && data.deliveryPreference !== 'scheduled') {
           throw badRequest('This coupon is only valid with scheduled delivery. Choose a next-day delivery slot to use it.');
         }
+        const categoryScope = await client.query(
+          `SELECT category_id FROM mart_campaign_categories WHERE campaign_id = $1`,
+          [campaign.id]
+        ) as { rows: Array<{ category_id: string }> };
+        const scopedCategoryIds = new Set(categoryScope.rows.map(row => row.category_id));
+        if (scopedCategoryIds.size > 0 && !resolvedItems.some(item => item.categoryId && scopedCategoryIds.has(item.categoryId))) {
+          throw badRequest('Add an item from an eligible category to use this offer');
+        }
+        campaign.categorySubtotal = scopedCategoryIds.size > 0
+          ? resolvedItems.reduce((sum, item) => sum + (item.categoryId && scopedCategoryIds.has(item.categoryId) ? item.price * item.quantity : 0), 0)
+          : subtotal;
 
         const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
         if (eligibilityType === 'first_order') {
@@ -495,16 +522,16 @@ export class OrderService {
 
       const campaignDiscount = campaign
         ? campaign.discount_type === 'flat'
-          ? Math.min(Number(campaign.discount_value), subtotal)
+          ? Math.min(Number(campaign.discount_value), campaign.categorySubtotal ?? subtotal)
           : campaign.discount_type === 'percent'
-            ? Math.min((subtotal * Number(campaign.discount_value)) / 100, campaign.max_discount ? Number(campaign.max_discount) : Number.MAX_SAFE_INTEGER)
+            ? Math.min(((campaign.categorySubtotal ?? subtotal) * Number(campaign.discount_value)) / 100, campaign.max_discount ? Number(campaign.max_discount) : Number.MAX_SAFE_INTEGER)
             : 0
         : 0;
       // freeAbove = 0 means the store has no free-delivery threshold, so the
       // delivery charge still applies. Without this guard `subtotal >= 0` would
       // waive delivery for every order.
       const actualDelivery = campaign?.discount_type === 'free_delivery' || (freeAbove > 0 && subtotal >= freeAbove) ? 0 : deliveryCharge;
-      const total = Math.max(0, subtotal + actualDelivery - campaignDiscount);
+      const total = Math.ceil(Math.max(0, subtotal + actualDelivery - campaignDiscount));
       // Delivery fee the customer avoided (either through the free-delivery
       // threshold or a free-delivery offer). Stored so the receipt can show the
       // full "you saved" figure without needing the store's live settings.
@@ -550,6 +577,9 @@ export class OrderService {
       }
       if (campaign?.requires_scheduled_delivery && (!requestedSchedule || !isNextDayIst(requestedSchedule))) {
         throw badRequest('This coupon is only valid for next-day scheduled delivery');
+      }
+      if (campaign?.exclude_first_hour_after_open && requestedSchedule && isWithinFirstOpeningHour(effectiveHours, requestedSchedule)) {
+        throw badRequest('This coupon is not valid during the first hour after the store opens');
       }
       const scheduledFor = data.deliveryPreference === 'scheduled'
         ? requestedSchedule
@@ -672,6 +702,7 @@ export class OrderService {
           coupon_code: campaign.coupon_code || null,
           eligibility_type: campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all'),
           allow_redemption_until_used: Boolean(campaign.allow_redemption_until_used),
+          requires_scheduled_delivery: Boolean(campaign.requires_scheduled_delivery),
           store_id: campaign.store_id || null,
         });
         await client.query(
@@ -921,7 +952,7 @@ export class OrderService {
   }
 
   static async findAll(filters?: {
-    storeId?: string; status?: string; phone?: string; search?: string; limit?: number; offset?: number;
+    storeId?: string; status?: string; deliveryPreference?: string; phone?: string; search?: string; limit?: number; offset?: number;
     viewerStoreId?: string | null; restrictItems?: boolean;
   }) {
     const conditions: string[] = [];
@@ -930,6 +961,7 @@ export class OrderService {
 
     if (filters?.storeId) { conditions.push(`o.store_id = $${i++}`); params.push(filters.storeId); }
     if (filters?.status)  { conditions.push(`o.status = $${i++}`);   params.push(filters.status); }
+    if (filters?.deliveryPreference) { conditions.push(`o.delivery_preference = $${i++}`); params.push(filters.deliveryPreference); }
     if (filters?.phone)   { conditions.push(`o.guest_phone = $${i++}`); params.push(filters.phone); }
     if (filters?.search?.trim()) {
       // Staff correcting a delivery know either the order number or the mobile
@@ -1311,7 +1343,7 @@ export class OrderService {
         [orderId]
       );
       const subtotal = Number(subtotalResult.rows[0]?.subtotal ?? 0);
-      const total = Math.max(0, Number((subtotal + order.deliveryCharge - order.campaignDiscount).toFixed(2)));
+      const total = Math.ceil(Math.max(0, subtotal + order.deliveryCharge - order.campaignDiscount));
       const retainedSubtotal = Math.max(0, subtotal - addedTotal);
       const retainedSavings = Number(order.subtotal) > 0
         ? Number(order.itemSavings) * retainedSubtotal / Number(order.subtotal)
@@ -1505,6 +1537,14 @@ export class OrderService {
                    delivery_by_name as "deliveryByName"`,
         [status, handler?.id || null, handler?.name || null, handler?.phone || null, id]
       );
+      if (status === 'ready_to_pickup') {
+        await client.query(
+          `UPDATE mart_order_store_fulfilments
+              SET status = 'delivered', delivered_at = NOW(), delivered_by = $2, updated_at = NOW()
+            WHERE order_id = $1 AND status IN ('pending', 'prepared')`,
+          [id, actor.id]
+        );
+      }
       if (status === 'delivered') {
         await client.query(
           `UPDATE mart_orders SET payment_method = $1, payment_collected_at = NOW(), delivered_at = COALESCE(delivered_at, NOW()) WHERE id = $2`,

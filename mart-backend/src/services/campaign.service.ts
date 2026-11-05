@@ -54,6 +54,11 @@ const validateCampaignTerms = (data: any): void => {
   if (allowRedemptionUntilUsed && eligibilityType !== 'first_order') {
     throw new Error('Redemption until used is only available for welcome campaigns');
   }
+  const requiresScheduledDelivery = Boolean(data.requiresScheduledDelivery ?? data.requires_scheduled_delivery ?? false);
+  const excludeFirstHourAfterOpen = Boolean(data.excludeFirstHourAfterOpen ?? data.exclude_first_hour_after_open ?? false);
+  if (excludeFirstHourAfterOpen && !requiresScheduledDelivery) {
+    throw new Error('First-hour exclusion requires scheduled delivery');
+  }
 
   const validFrom = data.validFrom ?? data.valid_from;
   const validUntil = data.validUntil ?? data.valid_until;
@@ -81,11 +86,19 @@ export class CampaignService {
     const targetCustomerIds = superAdmin
       ? `COALESCE((SELECT json_agg(ct.customer_id) FROM mart_campaign_targets ct WHERE ct.campaign_id = c.id), '[]'::json)`
       : `'[]'::json`;
+    const zoneIds = superAdmin
+      ? `COALESCE((SELECT json_agg(cz.zone_id) FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id), '[]'::json)`
+      : `'[]'::json`;
+    const categoryIds = superAdmin
+      ? `COALESCE((SELECT json_agg(cc.category_id) FROM mart_campaign_categories cc WHERE cc.campaign_id = c.id), '[]'::json)`
+      : `'[]'::json`;
     const result = await query(
       `SELECT c.*,
               a.name as "createdByName",
               s.name as "storeName",
               ${targetCustomerIds} as "targetCustomerIds",
+              ${zoneIds} as "zoneIds",
+              ${categoryIds} as "categoryIds",
               (SELECT COUNT(*) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id AND cu.reversed_at IS NULL)::int as "useCount",
               (SELECT COALESCE(SUM(cu.discount_applied),0) FROM mart_campaign_uses cu WHERE cu.campaign_id = c.id AND cu.reversed_at IS NULL)::float as "totalDiscount"
        FROM mart_campaigns c
@@ -112,8 +125,8 @@ export class CampaignService {
         discount_type, discount_value, max_discount, min_order_amount,
         coupon_code, new_customers_only, per_customer_limit, usage_limit,
         store_id, show_in_carousel, carousel_image_url, carousel_gradient, carousel_sort_order,
-        status, valid_from, valid_until, eligibility_type, inactive_days, allow_redemption_until_used, priority, requires_scheduled_delivery, created_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+        status, valid_from, valid_until, eligibility_type, inactive_days, allow_redemption_until_used, priority, requires_scheduled_delivery, exclude_first_hour_after_open, created_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
       RETURNING *`,
       [
         data.title, data.subtitle || null, data.description || null, data.badgeText || null,
@@ -127,7 +140,7 @@ export class CampaignService {
         data.validFrom || null, data.validUntil || null,
         data.eligibilityType || 'all', data.eligibilityType === 'inactive_customers' ? Number(data.inactiveDays) : null,
         data.eligibilityType === 'first_order' && Boolean(data.allowRedemptionUntilUsed), Number(data.priority) || 0,
-        Boolean(data.requiresScheduledDelivery), adminId,
+        Boolean(data.requiresScheduledDelivery), Boolean(data.excludeFirstHourAfterOpen), adminId,
       ]
     );
     const campaign = result.rows[0];
@@ -136,6 +149,22 @@ export class CampaignService {
         await query(
           `INSERT INTO mart_campaign_targets (campaign_id, customer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
           [campaign.id, customerId]
+        );
+      }
+    }
+    if (Array.isArray(data.zoneIds)) {
+      for (const zoneId of [...new Set(data.zoneIds)]) {
+        await query(
+          `INSERT INTO mart_campaign_zones (campaign_id, zone_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [campaign.id, zoneId]
+        );
+      }
+    }
+    if (Boolean(data.requiresScheduledDelivery) && Array.isArray(data.categoryIds)) {
+      for (const categoryId of [...new Set(data.categoryIds)]) {
+        await query(
+          `INSERT INTO mart_campaign_categories (campaign_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [campaign.id, categoryId]
         );
       }
     }
@@ -169,6 +198,8 @@ export class CampaignService {
       usageLimit: data.usageLimit !== undefined ? data.usageLimit : existing.usage_limit,
       eligibilityType: data.eligibilityType ?? existing.eligibility_type,
       allowRedemptionUntilUsed: data.allowRedemptionUntilUsed ?? existing.allow_redemption_until_used,
+      requiresScheduledDelivery: data.requiresScheduledDelivery ?? existing.requires_scheduled_delivery,
+      excludeFirstHourAfterOpen: data.excludeFirstHourAfterOpen ?? existing.exclude_first_hour_after_open,
       validFrom: data.validFrom !== undefined ? data.validFrom : existing.valid_from,
       validUntil: data.validUntil !== undefined ? data.validUntil : existing.valid_until,
     });
@@ -195,6 +226,7 @@ export class CampaignService {
       inactiveDays: 'inactive_days', newCustomersOnly: 'new_customers_only',
       allowRedemptionUntilUsed: 'allow_redemption_until_used',
       requiresScheduledDelivery: 'requires_scheduled_delivery',
+      excludeFirstHourAfterOpen: 'exclude_first_hour_after_open',
     };
     const changedTerms: { field: string; from: unknown; to: unknown }[] = [];
     const NUMERIC_TERM_COLUMNS = ['discount_value', 'max_discount', 'min_order_amount', 'per_customer_limit', 'usage_limit', 'inactive_days'];
@@ -247,6 +279,7 @@ export class CampaignService {
       eligibilityType: 'eligibility_type', inactiveDays: 'inactive_days',
       allowRedemptionUntilUsed: 'allow_redemption_until_used', priority: 'priority',
       requiresScheduledDelivery: 'requires_scheduled_delivery',
+      excludeFirstHourAfterOpen: 'exclude_first_hour_after_open',
     };
     for (const [key, col] of Object.entries(map)) {
       if (data[key] !== undefined) {
@@ -274,6 +307,26 @@ export class CampaignService {
           await query(
             `INSERT INTO mart_campaign_targets (campaign_id, customer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
             [id, customerId]
+          );
+        }
+      }
+    }
+    if (campaign && Array.isArray(data.zoneIds)) {
+      await query(`DELETE FROM mart_campaign_zones WHERE campaign_id = $1`, [id]);
+      for (const zoneId of [...new Set(data.zoneIds)]) {
+        await query(
+          `INSERT INTO mart_campaign_zones (campaign_id, zone_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [id, zoneId]
+        );
+      }
+    }
+    if (campaign && Array.isArray(data.categoryIds)) {
+      await query(`DELETE FROM mart_campaign_categories WHERE campaign_id = $1`, [id]);
+      if (campaign.requires_scheduled_delivery) {
+        for (const categoryId of [...new Set(data.categoryIds)]) {
+          await query(
+            `INSERT INTO mart_campaign_categories (campaign_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [id, categoryId]
           );
         }
       }
@@ -400,6 +453,12 @@ export class CampaignService {
     const targetCustomerIds = Array.isArray(data.targetCustomerIds)
       ? data.targetCustomerIds
       : (await query(`SELECT customer_id FROM mart_campaign_targets WHERE campaign_id = $1`, [id])).rows.map(r => r.customer_id);
+    const zoneIds = Array.isArray(data.zoneIds)
+      ? data.zoneIds
+      : (await query(`SELECT zone_id FROM mart_campaign_zones WHERE campaign_id = $1`, [id])).rows.map(r => r.zone_id);
+    const categoryIds = Array.isArray(data.categoryIds)
+      ? data.categoryIds
+      : (await query(`SELECT category_id FROM mart_campaign_categories WHERE campaign_id = $1`, [id])).rows.map(r => r.category_id);
 
     const replacement = await this.create({
       // Copy forward
@@ -433,6 +492,9 @@ export class CampaignService {
       validUntil: pick(data.validUntil, existing.valid_until),
       priority: pick(data.priority, existing.priority),
       requiresScheduledDelivery: pick(data.requiresScheduledDelivery, existing.requires_scheduled_delivery),
+      excludeFirstHourAfterOpen: pick(data.excludeFirstHourAfterOpen, existing.exclude_first_hour_after_open),
+      zoneIds,
+      categoryIds,
       // Always the new one
       couponCode: newCode,
     }, adminId);
@@ -468,6 +530,10 @@ export class CampaignService {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) ? s : null;
   }
 
+  private static normalizeZoneId(zoneId?: string | null): string | null {
+    return this.normalizeStoreId(zoneId);
+  }
+
   /**
    * The welcome offer is the one campaign a shopper is meant to see *before*
    * they have an account, so it cannot come from getEligible(): that query
@@ -483,28 +549,33 @@ export class CampaignService {
     cartTotal: number,
     storeId: string,
     customerId: string | null = null,
+    zoneId: string | null = null,
   ): Promise<any[]> {
     const now = new Date().toISOString();
     const result = await query(
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
               discount_type, discount_value, max_discount, min_order_amount,
-              eligibility_type, allow_redemption_until_used, requires_scheduled_delivery,
+              eligibility_type, allow_redemption_until_used, requires_scheduled_delivery, exclude_first_hour_after_open,
+              COALESCE((SELECT json_agg(cc.category_id) FROM mart_campaign_categories cc WHERE cc.campaign_id = c.id), '[]'::json) as "categoryIds",
+              COALESCE((SELECT json_agg(mc.name ORDER BY mc.name) FROM mart_campaign_categories cc JOIN mart_categories mc ON mc.id = cc.category_id WHERE cc.campaign_id = c.id), '[]'::json) as "categoryNames",
               carousel_gradient, valid_until,
               -- The welcome-offer option is a customer-visible redemption term.
               -- The remaining fields are only for eligibility enforcement below.
               new_customers_only, per_customer_limit
-         FROM mart_campaigns
+         FROM mart_campaigns c
         WHERE status = 'active'
           AND (store_id IS NULL OR store_id = $1::uuid)
           AND (valid_from IS NULL OR valid_from <= $2)
           AND (valid_until IS NULL OR valid_until >= $2)
           AND (usage_limit IS NULL OR usage_count < usage_limit)
           AND min_order_amount <= $3
+          AND (NOT EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id)
+            OR EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id AND cz.zone_id = $4::uuid))
           AND COALESCE(eligibility_type, CASE WHEN new_customers_only THEN 'first_order' ELSE 'all' END)
               IN ('first_order', 'all')
         ORDER BY priority DESC, discount_value DESC
         LIMIT 5`,
-      [this.normalizeStoreId(storeId), now, cartTotal]
+      [this.normalizeStoreId(storeId), now, cartTotal, this.normalizeZoneId(zoneId)]
     );
 
     const strip = (c: any) => {
@@ -548,7 +619,7 @@ export class CampaignService {
 
   // ── Public: eligible campaigns for a customer + cart ─────────────────────────
 
-  static async getEligible(customerId: string | null, cartTotal: number, storeId: string): Promise<any[]> {
+  static async getEligible(customerId: string | null, cartTotal: number, storeId: string, zoneId: string | null = null): Promise<any[]> {
     const now = new Date().toISOString();
 
     // Get all active campaigns for this store
@@ -557,11 +628,13 @@ export class CampaignService {
       // not hand out targeting lists, per-customer limits or admin-only fields.
       `SELECT id, title, subtitle, description, badge_text, coupon_code,
               discount_type, discount_value, max_discount, min_order_amount,
-              eligibility_type, allow_redemption_until_used, requires_scheduled_delivery,
+              eligibility_type, allow_redemption_until_used, requires_scheduled_delivery, exclude_first_hour_after_open,
+              COALESCE((SELECT json_agg(cc.category_id) FROM mart_campaign_categories cc WHERE cc.campaign_id = c.id), '[]'::json) as "categoryIds",
+              COALESCE((SELECT json_agg(mc.name ORDER BY mc.name) FROM mart_campaign_categories cc JOIN mart_categories mc ON mc.id = cc.category_id WHERE cc.campaign_id = c.id), '[]'::json) as "categoryNames",
               carousel_gradient, valid_until,
               -- Needed for per-customer enforcement below; stripped before return.
               per_customer_limit, inactive_days
-         FROM mart_campaigns
+         FROM mart_campaigns c
         WHERE status IN ('active', 'scheduled')
          AND (status = 'active' OR (valid_from IS NOT NULL AND valid_from <= $2))
          AND coupon_code IS NULL
@@ -570,8 +643,10 @@ export class CampaignService {
          AND (valid_until IS NULL OR valid_until >= $2)
           AND (usage_limit IS NULL OR usage_count < usage_limit)
           AND min_order_amount <= $3
+          AND (NOT EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id)
+            OR EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id AND cz.zone_id = $4::uuid))
        ORDER BY priority DESC, discount_value DESC`,
-      [this.normalizeStoreId(storeId), now, cartTotal]
+      [this.normalizeStoreId(storeId), now, cartTotal, this.normalizeZoneId(zoneId)]
     );
 
     // Enforcement fields are selected for the checks below but must never reach
@@ -627,7 +702,7 @@ export class CampaignService {
     return eligible;
   }
 
-  static async validateCode(code: string, customerId: string | null, cartTotal: number, storeId: string): Promise<any> {
+  static async validateCode(code: string, customerId: string | null, cartTotal: number, storeId: string, zoneId: string | null = null): Promise<any> {
     const result = await query(
       `SELECT * FROM mart_campaigns
        WHERE coupon_code = $1
@@ -637,9 +712,20 @@ export class CampaignService {
     );
     if (!result.rows[0]) throw badRequest('That coupon code is not valid');
     const campaign = result.rows[0];
+    const categoryScope = await query<{ category_id: string }>(
+      `SELECT category_id FROM mart_campaign_categories WHERE campaign_id = $1`,
+      [campaign.id]
+    );
+    campaign.categoryIds = categoryScope.rows.map(row => row.category_id);
 
     // Check store scope
     if (campaign.store_id && campaign.store_id !== storeId) throw new Error('This coupon is not valid for this store');
+    const scope = await query<{ scoped: boolean; applies: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM mart_campaign_zones WHERE campaign_id = $1) AS scoped,
+              EXISTS (SELECT 1 FROM mart_campaign_zones WHERE campaign_id = $1 AND zone_id = $2::uuid) AS applies`,
+      [campaign.id, this.normalizeZoneId(zoneId)]
+    );
+    if (scope.rows[0]?.scoped && !scope.rows[0]?.applies) throw new Error('This coupon is not valid for this delivery zone');
 
     // Check validity dates
     const now = new Date();

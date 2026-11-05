@@ -451,12 +451,12 @@ export const recommendationApi = {
 // ── Campaigns (public) ────────────────────────────────────────────────────────────────────────────────
 export const campaignApi = {
   /** Pre-login welcome teaser. Includes coupon-code offers; grants no authority. */
-  getWelcome: (cartTotal: number, storeId: string) =>
-    api.get("/campaigns/welcome", { params: { cartTotal, storeId } }),
-  getEligible: (cartTotal: number, storeId: string) =>
-    api.get("/campaigns/eligible", { params: { cartTotal, storeId } }),
-  validateCode: (code: string, cartTotal: number, storeId: string) =>
-    api.post("/campaigns/validate", { code, cartTotal, storeId }),
+  getWelcome: (cartTotal: number, storeId: string, zoneId?: string) =>
+    api.get("/campaigns/welcome", { params: { cartTotal, storeId, zoneId } }),
+  getEligible: (cartTotal: number, storeId: string, zoneId?: string) =>
+    api.get("/campaigns/eligible", { params: { cartTotal, storeId, zoneId } }),
+  validateCode: (code: string, cartTotal: number, storeId: string, zoneId?: string) =>
+    api.post("/campaigns/validate", { code, cartTotal, storeId, zoneId }),
   getCarousel: () => api.get("/carousel"),
   getCarouselSettings: () => api.get("/carousel/settings"),
 };

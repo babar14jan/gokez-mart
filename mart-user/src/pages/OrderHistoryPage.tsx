@@ -187,7 +187,7 @@ function OrderDetailSheet({
                   </div>
                   {hasCampaign && (
                     <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
-                      <span>🎉 {order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
+                      <span>{order.campaignRequiresScheduledDelivery ? 'Scheduled delivery discount' : order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
                       {campaignDiscount > 0 && <span className="font-semibold">-₹{order.campaignDiscount}</span>}
                     </div>
                   )}

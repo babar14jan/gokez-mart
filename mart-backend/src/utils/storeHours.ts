@@ -255,6 +255,16 @@ export function isNextDayIst(target: Date, now: Date = new Date()): boolean {
   return dayOffset === 1;
 }
 
+/** True when a requested IST instant starts inside that day's opening hour. */
+export function isWithinFirstOpeningHour(openingHours: OpeningHours, scheduledFor: Date): boolean {
+  if (Number.isNaN(scheduledFor.getTime())) return false;
+  const requested = istParts(scheduledFor);
+  const window = dayWindow(openingHours, requested.day);
+  if (!window) return false;
+  const minutes = requested.h * 60 + requested.mi;
+  return minutes >= window.open && minutes < window.open + 60;
+}
+
 /**
  * "21:30" -> "9:30 PM", in IST.
  *
