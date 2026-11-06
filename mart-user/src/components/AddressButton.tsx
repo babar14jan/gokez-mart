@@ -42,7 +42,7 @@ export default function AddressButton({ address, onClick, heading, emptyLabel = 
       aria-invalid={error || undefined}
       className={`flex w-full items-center gap-2 text-left ${error ? 'text-red-600 dark:text-red-400' : ''} ${className}`}
     >
-      <MapPin className="h-4 w-4 shrink-0 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
+      <MapPin className="h-6 w-6 shrink-0 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
       <span className="min-w-0 flex-1">
         <span className="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#687386] dark:text-slate-400">
           {heading || 'Deliver to'}
