@@ -25,20 +25,25 @@ export function resolveSectionItems(
 
   const cfg: any = section.config || {};
   const kind = (section as any).kind || (section as any).sectionKey || 'manual';
+  // Fresh is a nav page config, never a home shelf.
+  if (kind === 'fresh') return [];
   const slugs: string[] = Array.isArray(cfg.categorySlugs) && cfg.categorySlugs.length ? cfg.categorySlugs : (cfg.categorySlug ? [cfg.categorySlug] : []);
+  // Config slugs are stored lowercase; compare case-insensitively so a legacy
+  // category like "Fruits" still matches "fruits".
+  const wantedSlugs = new Set(slugs.map(slug => String(slug).toLowerCase()));
   let list: Product[] = products as Product[];
 
   if (kind === 'top_picks' || kind === 'manual') {
     const byId = new Map((products as Product[]).map(p => [p.id, p]));
     list = ((cfg.productIds || []) as string[]).map(id => byId.get(id)).filter((p): p is Product => Boolean(p));
     if (slugs.length) {
-      const cats = new Set((categories as Category[]).filter(c => slugs.includes((c as any).slug)).map(c => (c as any).id));
+      const cats = new Set((categories as Category[]).filter(c => wantedSlugs.has(String((c as any).slug || '').toLowerCase())).map(c => (c as any).id));
       if (!cats.size) return [];
       list = list.filter(p => (p as any).categoryId && cats.has((p as any).categoryId));
     }
   } else {
     if (slugs.length) {
-      const cats = new Set((categories as Category[]).filter(c => slugs.includes((c as any).slug)).map(c => (c as any).id));
+      const cats = new Set((categories as Category[]).filter(c => wantedSlugs.has(String((c as any).slug || '').toLowerCase())).map(c => (c as any).id));
       if (!cats.size) return [];
       list = list.filter(p => (p as any).categoryId && cats.has((p as any).categoryId));
     }
@@ -176,7 +181,7 @@ export default function HomeSections({ entries, categories, onViewAll, onSelectC
             {isTiles ? (
               <div className={`grid ${gridCols(section)} gap-2.5`}>
                 {(section.config.categorySlugs && section.config.categorySlugs.length ? section.config.categorySlugs : categories.slice(0, 6).map(c => c.slug)).map((slug: string) => {
-                  const cat = categories.find(c => c.slug === slug);
+                  const cat = categories.find(c => String(c.slug).toLowerCase() === String(slug).toLowerCase());
                   if (!cat) return null;
                   return (
                     <button

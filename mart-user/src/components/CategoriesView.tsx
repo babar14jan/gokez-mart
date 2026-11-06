@@ -78,12 +78,12 @@ export default function CategoriesView({ categories, products, initialCategoryId
     }
   }, [initialCategoryId, initialCategorySlug, visibleCategories, activeCatId]);
 
-  const activeCategory = visibleCategories.find(category => category.id === activeCatId);
   const query = search.trim().toLowerCase();
-  // Search stays inside the selected category — name, Hindi name or any alias.
-  const filteredProducts = products.filter(
-    product => product.categoryId === activeCatId && (!query || matches(product, query))
-  );
+  // A search is always catalogue-wide — name, Hindi name or any alias — even
+  // while a category tab is open. With no query the active tab's products show.
+  const filteredProducts = query
+    ? products.filter(product => matches(product, query))
+    : products.filter(product => product.categoryId === activeCatId);
   const redirected = useRef(false);
 
   useEffect(() => {
@@ -134,7 +134,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
               value={search}
               onChange={event => setSearch(event.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={activeCategory ? `Search in ${activeCategory.name}` : 'Search'}
+              placeholder="Search all products"
               className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
             />
             {search && (
@@ -149,7 +149,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
         <div className="p-2">
           {filteredProducts.length === 0 ? (
             <div className="text-center py-16 text-gray-500 dark:text-slate-400">
-              <p className="text-sm">{query ? 'No matching products in this category' : 'No products in this category'}</p>
+              <p className="text-sm">{query ? 'No products match your search' : 'No products in this category'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

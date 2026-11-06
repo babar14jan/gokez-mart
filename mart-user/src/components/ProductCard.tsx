@@ -39,28 +39,28 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
 
   return (
     <>
-      <div className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card transition-[transform,box-shadow] duration-200 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 ${finePointer ? 'hover:-translate-y-0.5 hover:shadow-lift' : ''}`}>
+      <div className={`group relative flex h-full flex-col overflow-hidden rounded-xl border border-cream-200 bg-white shadow-card transition-[transform,box-shadow] duration-200 active:scale-[0.98] dark:border-slate-700 dark:bg-slate-800 ${finePointer ? 'hover:-translate-y-0.5 hover:shadow-lift' : ''}`}>
         <button
           type="button"
           onClick={openDetail}
           aria-label={`View ${product.name}`}
-          className="absolute inset-0 z-0 cursor-pointer rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gokez-500"
+          className="absolute inset-0 z-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gokez-500"
         />
-        <div className="pointer-events-none relative z-10 aspect-square overflow-hidden bg-cream-100 dark:bg-slate-700">
+        <div className="pointer-events-none relative z-10 aspect-square overflow-hidden bg-white dark:bg-slate-800">
           <SmartImage
             src={product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
             alt={product.name}
             className="h-full w-full"
             imgClassName={`object-cover ${finePointer ? 'transition-transform duration-300 group-hover:scale-[1.03]' : ''} ${isOutOfStock ? 'opacity-40' : ''}`}
             fallback={
-              <div className="flex h-full w-full items-center justify-center bg-cream-50 text-gokez-300 dark:bg-slate-800 dark:text-slate-500">
+              <div className="flex h-full w-full items-center justify-center bg-white text-gokez-300 dark:bg-slate-800 dark:text-slate-500">
                 <Leaf className="h-8 w-8" aria-hidden="true" />
               </div>
             }
           />
 
           {savings > 0 && !isOutOfStock && (
-            <span className="absolute left-1.5 top-1.5 rounded-full border border-red-700/40 bg-red-600 px-2 py-1 text-[10px] font-extrabold leading-none text-white shadow-[0_1px_3px_rgba(127,29,29,0.35)]">
+            <span className="absolute left-1.5 top-1.5 rounded-md border border-red-700/40 bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold leading-none text-white shadow-[0_1px_3px_rgba(127,29,29,0.35)]">
               {product.discountPercent}% OFF
             </span>
           )}
@@ -71,8 +71,13 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
             </div>
           )}
 
+        </div>
+
+        <div className="pointer-events-none relative flex flex-1 flex-col px-2 pb-2.5 pt-1.5 dark:bg-slate-800">
+          {/* Straddles the image/text boundary so it breaks the divider line,
+              nudged right and down from the old in-image corner. */}
           {!isOutOfStock && (
-            <div className="pointer-events-auto absolute bottom-1.5 right-1.5 z-20">
+            <div className="pointer-events-auto absolute -top-[26px] right-0.5 z-20">
               <CartQuantityControl
                 variant="card"
                 quantity={qty}
@@ -82,17 +87,14 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
               />
             </div>
           )}
-        </div>
-
-        <div className="pointer-events-none flex flex-1 flex-col bg-gray-50 px-2.5 pb-2.5 pt-2 dark:bg-slate-800">
-          <div className="mb-1 min-h-[2.7em]">
+          <div className="mb-0.5 min-h-[2.6em]">
             <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3] text-ink dark:text-white">{primaryName}</p>
             {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
           </div>
           <p className="text-[11px] font-medium leading-none text-gray-500 dark:text-slate-400">
             {product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}
           </p>
-          <div className="mt-auto flex flex-wrap items-baseline gap-x-1.5 pt-2">
+          <div className="mt-auto flex flex-wrap items-baseline gap-x-1.5 pt-1.5">
             <span className="text-base font-extrabold leading-none text-ink dark:text-white">₹{discountedPrice}</span>
             {savings > 0 && (
               <span className="text-[11px] font-semibold leading-none text-gray-400 line-through dark:text-slate-500">₹{product.price}</span>

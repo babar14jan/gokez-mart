@@ -9,6 +9,11 @@ interface Category { id: string; name: string; slug: string; productPrefix: stri
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
+// Slugs are stable keys used in links and Home/Fresh settings, so they must be
+// lowercase words joined by single hyphens. Underscores, spaces and uppercase
+// are rejected to keep every reference unambiguous.
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 function CategoryIcon({ icon }: { icon: string }) {
   const isUrl = icon?.startsWith('/') || icon?.startsWith('http');
   if (isUrl) return <img src={icon} alt="" className="w-8 h-8 object-contain rounded-lg" />;
@@ -40,7 +45,7 @@ export default function CategoriesPage() {
 
   const openEdit = (c: Category) => {
     setEditing(c);
-    setForm({ name: c.name, slug: c.slug, productPrefix: c.productPrefix, icon: c.icon || '', sortOrder: String(c.sortOrder) });
+    setForm({ name: c.name, slug: c.slug.toLowerCase(), productPrefix: c.productPrefix, icon: c.icon || '', sortOrder: String(c.sortOrder) });
     const isUrl = c.icon?.startsWith('/') || c.icon?.startsWith('http');
     setIconPreview(isUrl ? c.icon : null);
     setShowModal(true);
@@ -61,7 +66,7 @@ export default function CategoriesPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const data = { ...form, sortOrder: parseInt(form.sortOrder) };
+      const data = { ...form, slug: form.slug.trim().toLowerCase(), sortOrder: parseInt(form.sortOrder) };
       if (editing) await categoriesApi.update(editing.id, data);
       else await categoriesApi.create(data);
       setShowModal(false); await load();
@@ -74,6 +79,22 @@ export default function CategoriesPage() {
     showToast('Category deleted');
     await load();
   };
+
+  const slugValue = form.slug.trim().toLowerCase();
+  const slugFormatValid = !slugValue || SLUG_RE.test(slugValue);
+  const slugTaken = Boolean(slugValue) && categories.some(
+    c => c.slug.toLowerCase() === slugValue && c.id !== editing?.id
+  );
+  const slugError = !slugValue
+    ? ''
+    : !slugFormatValid
+      ? 'Use lowercase letters, numbers and single hyphens only — e.g. leafy-greens.'
+      : slugTaken
+        ? 'This slug is already used by another category.'
+        : '';
+  const canSave = Boolean(form.name.trim()) && Boolean(slugValue)
+    && slugFormatValid && !slugTaken
+    && /^[A-Z]{2,6}$/.test(form.productPrefix);
 
   if (loading) return <PageSkeleton />;
 
@@ -147,7 +168,18 @@ export default function CategoriesPage() {
                 </div>
               </div>
               <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name *</label><input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Vegetables" /></div>
-              <div><label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Slug *</label><input type="text" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} className={inp} placeholder="e.g. vegetables" /></div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Slug *</label>
+                <input type="text" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value.toLowerCase() }))} className={`${inp} ${slugError ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20' : ''}`} placeholder="e.g. vegetables" />
+                {/* Stable key: changing it breaks links and Home/Fresh tab references. */}
+                {slugError ? (
+                  <p className="mt-1 text-[11px] text-red-600">{slugError}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">
+                    Stable key used in category links and Home/Fresh settings; the display name can change freely. Lowercase letters, numbers and single hyphens only — e.g. <span className="font-medium">leafy-greens</span>. Changing the slug can break existing links.
+                  </p>
+                )}
+              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Product Prefix *</label>
                 <input type="text" value={form.productPrefix} onChange={e => setForm(f => ({ ...f, productPrefix: e.target.value.toUpperCase() }))} className={`${inp} ${editing && editing.productCount > 0 ? 'cursor-not-allowed bg-gray-100 dark:bg-slate-700/60' : ''}`} placeholder="e.g. VEG" maxLength={6} readOnly={Boolean(editing && editing.productCount > 0)} />
@@ -157,7 +189,7 @@ export default function CategoriesPage() {
             </div>
             <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.name || !form.slug || !/^[A-Z]{2,6}$/.test(form.productPrefix)} className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
+              <button onClick={handleSave} disabled={saving || !canSave} className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save'}
               </button>
             </div>
