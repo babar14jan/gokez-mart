@@ -34,18 +34,13 @@ interface AddressButtonProps {
   className?: string;
 }
 
-export default function AddressButton({ address, onClick, heading, emptyLabel = 'Add your delivery address', error = false, flat = false, className = '' }: AddressButtonProps) {
-  const surface = flat
-    ? (error ? 'ring-1 ring-red-300 dark:ring-red-900' : '')
-    : error
-      ? 'bg-red-50 ring-1 ring-red-300 dark:bg-red-950/20 dark:ring-red-900'
-      : 'bg-white ring-1 ring-[#e9edf2] hover:bg-gray-50 active:bg-gray-100 dark:bg-slate-800 dark:ring-slate-700 dark:hover:bg-slate-700/60';
+export default function AddressButton({ address, onClick, heading, emptyLabel = 'Add your delivery address', error = false, className = '' }: AddressButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-invalid={error || undefined}
-      className={`flex w-full items-center gap-2.5 rounded-xl px-3 ${flat ? 'min-h-11 py-0' : 'py-2'} text-left transition-colors ${surface} ${className}`}
+      className={`flex w-full items-center gap-2 text-left ${error ? 'text-red-600 dark:text-red-400' : ''} ${className}`}
     >
       <MapPin className="h-4 w-4 shrink-0 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
       <span className="min-w-0 flex-1">
@@ -56,9 +51,7 @@ export default function AddressButton({ address, onClick, heading, emptyLabel = 
           {address ? address.address : emptyLabel}
         </span>
       </span>
-      {/* A span, not a button: the whole row is already the control, so a nested
-          button would be invalid markup and a second, confusing tab stop. */}
-      <span className="shrink-0 rounded-lg bg-gokez-50 px-2.5 py-1 text-xs font-bold text-gokez-800 dark:bg-gokez-900/25 dark:text-gokez-300">
+      <span className="shrink-0 text-xs font-bold text-gokez-800 dark:text-gokez-300">
         {address ? 'Update' : 'Add'}
       </span>
     </button>
