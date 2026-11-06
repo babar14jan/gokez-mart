@@ -1645,7 +1645,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       <div className="checkout-sticky-footer sticky bottom-0 z-30 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800" style={{ transform: 'translateZ(0)', willChange: 'transform' }}>
         <div className="max-w-lg mx-auto">
           {/* Address row — the same control as the account page, opens the sheet */}
-          <div className="px-3 pt-1">
+          <div className="px-3 pt-1 pb-2">
             <AddressButton
               address={checkoutAddress}
               error={validationField === 'address'}
