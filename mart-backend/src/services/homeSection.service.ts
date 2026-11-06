@@ -1,5 +1,5 @@
 import { query } from '../database/db';
-import { badRequest, notFound } from '../utils/apiError';
+import { badRequest, notFound, conflict } from '../utils/apiError';
 
 export type SectionLayout = 'row' | 'grid' | 'hero' | 'tiles';
 export type SectionKind =
@@ -11,7 +11,8 @@ export type SectionKind =
   | 'new_arrivals'
   | 'buy_again'
   | 'banner'
-  | 'category_tiles';
+  | 'category_tiles'
+  | 'fresh';
 
 export interface HomeSectionConfig {
   // Category scope (multi-category supported)
@@ -63,7 +64,7 @@ export interface HomeSection {
 }
 
 export const SECTION_KINDS: SectionKind[] = [
-  'manual', 'category', 'combo', 'deals', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'category_tiles'
+  'manual', 'category', 'combo', 'deals', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'category_tiles', 'fresh'
 ];
 // Keep old test name/export for compatibility
 export const HOME_SECTION_KEYS = ['todays_combos', 'fresh_vegetables', 'deals', 'top_picks'];
@@ -233,8 +234,8 @@ async function resolveItems(storeId: string, section: HomeSection): Promise<any[
   const exc = new Set(cfg.excludeProductIds || []);
   const inStock = cfg.inStockOnly !== false;
 
-  // Banner / tiles are config-driven, not product lists
-  if (section.kind === 'banner' || section.kind === 'category_tiles') return [];
+  // Banner / tiles / the Fresh page config are config-driven, not product lists
+  if (section.kind === 'banner' || section.kind === 'category_tiles' || section.kind === 'fresh') return [];
 
   // Manual picks
   if (section.kind === 'manual') {
@@ -457,8 +458,11 @@ export class HomeSectionService {
       if (sec.startsAt && new Date(sec.startsAt) > now) continue;
       if (sec.endsAt && new Date(sec.endsAt) < now) continue;
       const items = await resolveItems(storeId, sec as any);
-      if ((kind === 'banner' || kind === 'category_tiles')) {
-        live.push({ ...sec, items, kind, sectionKey: origKey });
+      if (kind === 'banner' || kind === 'category_tiles' || kind === 'fresh') {
+        // Fresh is a page config consumed by nav, not a home shelf; keep it in
+        // the payload even though it resolves no items.
+        const cfg = normalizeSectionConfig(sec.config || {});
+        live.push({ ...sec, items, kind, sectionKey: origKey, config: cfg });
         continue;
       }
       if (!items.length) continue;
@@ -481,6 +485,13 @@ export class HomeSectionService {
     const kindInput = data.kind ?? (data as any).sectionKey ?? (data as any).type ?? (data as any).key;
     assertKind(kindInput);
     const kind = (normalizeKind((assertKind as any).last !== undefined ? (assertKind as any).last : kindInput) as string) || normalizeKind(kindInput) as string;
+    // The Fresh page is one config per store.
+    if (kind === 'fresh') {
+      const existing = await HomeSectionService.findByStore(storeId, false);
+      if (existing.some((section: any) => (section.kind || section.sectionKey) === 'fresh')) {
+        throw conflict('Only one Fresh page config is allowed per store');
+      }
+    }
     const title = assertTitle(data.title);
     const subtitle = typeof data.subtitle === 'string' && data.subtitle.trim() ? data.subtitle.trim() : null;
     const config = normalizeSectionConfig(data.config);
