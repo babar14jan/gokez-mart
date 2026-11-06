@@ -92,7 +92,9 @@ function gridCols(section: HomeSection): string {
 }
 
 const productGridCols = 'grid-cols-3';
-const catalogCardWidth = 'w-[calc((100%-1.25rem)/3)] min-w-[calc((100%-1.25rem)/3)]';
+// Slightly wider than the catalogue grid so the next card remains visible as a
+// natural cue that this row continues horizontally.
+const homeRowCardWidth = 'w-[calc((100%-1.25rem)/2.85)] min-w-[calc((100%-1.25rem)/2.85)]';
 
 export interface ResolvedSection {
   section: HomeSection;
@@ -194,7 +196,7 @@ export default function HomeSections({ entries, categories, onViewAll, onSelectC
             ) : layout === 'row' ? (
               <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
                 {visibleItems.map((p: any) => (
-                  <div key={p.id} className={`${catalogCardWidth} flex-shrink-0`}>
+                  <div key={p.id} className={`${homeRowCardWidth} flex-shrink-0`}>
                     <ProductCard product={p} />
                   </div>
                 ))}
