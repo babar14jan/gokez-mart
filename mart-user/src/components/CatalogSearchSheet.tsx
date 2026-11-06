@@ -55,6 +55,15 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
     () => categories.filter(category => products.some(product => product.categoryId === category.id)),
     [categories, products]
   );
+  // The catalogue opens on a concrete category instead of an "All" view.
+  // Vegetables is the default; if it has no products, fall back to the first
+  // category that does.
+  const defaultCategoryId = useMemo(() => {
+    const vegetables = categoriesWithProducts.find(
+      category => String(category.slug).toLowerCase() === 'vegetables'
+    );
+    return vegetables?.id || categoriesWithProducts[0]?.id || null;
+  }, [categoriesWithProducts]);
   // Live matches, closest keyword first. Recomputed on every keystroke — the
   // catalogue already lives on the client, so no request is needed.
   const results = useMemo(() => {
@@ -66,9 +75,12 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
       .map(entry => entry.product);
   }, [products, query]);
   const suggestions = results.slice(0, 8);
+  // Before the effect below has run (or while categories are still loading),
+  // fall back to the default so the sheet never flashes an "all products" grid.
+  const activeCategoryId = categoryId ?? defaultCategoryId;
   const displayed = useMemo(
-    () => (query ? results : products.filter(product => !categoryId || product.categoryId === categoryId)),
-    [query, results, products, categoryId]
+    () => (query ? results : products.filter(product => !activeCategoryId || product.categoryId === activeCategoryId)),
+    [query, results, products, activeCategoryId]
   );
 
   useEffect(() => {
@@ -95,8 +107,15 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
     return () => clearTimeout(timer);
   }, [query, results.length]);
 
+  useEffect(() => {
+    if (!defaultCategoryId) return;
+    if (!categoryId || !categoriesWithProducts.some(category => category.id === categoryId)) {
+      setCategoryId(defaultCategoryId);
+    }
+  }, [categoryId, categoriesWithProducts, defaultCategoryId]);
+
   const selectCategory = (id: string) => {
-    setCategoryId(current => current === id ? null : id);
+    setCategoryId(id);
     setSearch('');
   };
 
@@ -166,7 +185,7 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
           <PageHeader onBack={onClose} backLabel="Back to home" position="static" backStyle="square" backSize="sm">
             <div className="relative min-w-0 flex-1">
               <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
-                value={search} onChange={event => { setSearch(event.target.value); setCategoryId(null); }}
+                value={search} onChange={event => setSearch(event.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={searchPrompt}
                 className="w-full rounded-xl border-0 bg-white py-2 pl-4 pr-11 text-sm text-gray-900 shadow-sm ring-1 ring-black/5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/70 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
@@ -241,17 +260,8 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
             <section className="mb-5">
               <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">Browse categories</h2>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                <button type="button" onClick={() => setCategoryId(null)}
-                  className={`flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-colors ${
-                    categoryId === null
-                      ? 'border-gokez-700 bg-gokez-50 text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-300'
-                      : 'border-gray-100 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                  }`}>
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-current/10"><ShoppingCart className="h-4 w-4" /></span>
-                  <span className="line-clamp-2 text-[10px] font-semibold leading-tight">All products</span>
-                </button>
-                {categoriesWithProducts.slice(0, 5).map(category => {
-                  const selected = category.id === categoryId;
+                {categoriesWithProducts.map(category => {
+                  const selected = category.id === activeCategoryId;
                   return (
                     <button type="button" key={category.id} onClick={() => selectCategory(category.id)}
                       className={`flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-colors ${
@@ -273,14 +283,16 @@ export default function CatalogSearchSheet({ categories, products, searchPrompt,
             <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
               {query
                 ? `Showing results for “${search.trim()}”`
-                : categoryId ? categoryById.get(categoryId)?.name || 'Products' : 'All products'}
+                : categoryById.get(activeCategoryId ?? '')?.name || 'Products'}
             </h2>
             {displayed.length ? (
               <div className="grid grid-cols-3 gap-2.5">
                 {displayed.map(product => <ProductCard key={product.id} product={product} />)}
               </div>
             ) : (
-              <p className="py-12 text-center text-sm text-gray-500 dark:text-slate-400">No products found for “{search.trim()}”</p>
+              <p className="py-12 text-center text-sm text-gray-500 dark:text-slate-400">
+                {query ? `No products found for “${search.trim()}”` : 'No products in this category'}
+              </p>
             )}
           </section>
         </div>
