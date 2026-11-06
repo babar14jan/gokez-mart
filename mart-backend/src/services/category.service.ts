@@ -63,14 +63,21 @@ export class CategoryService {
     if (data.name !== undefined) { fields.push(`name = $${i++}`); params.push(data.name); }
     if (data.slug !== undefined) { fields.push(`slug = $${i++}`); params.push(data.slug); }
     if (data.productPrefix !== undefined) {
-      const productCount = await query<{ count: string }>(
-        `SELECT COUNT(*)::TEXT as count FROM mart_products WHERE category_id = $1`, [id]
+      const productPrefix = normalizeProductPrefix(data.productPrefix);
+      const existing = await query<{ productPrefix: string | null; count: string }>(
+        `SELECT c.product_prefix as "productPrefix", COUNT(p.id)::TEXT as count
+         FROM mart_categories c
+         LEFT JOIN mart_products p ON p.category_id = c.id
+         WHERE c.id = $1
+         GROUP BY c.id`,
+        [id]
       );
-      if (Number(productCount.rows[0].count) > 0) {
+      const row = existing.rows[0];
+      if (row && Number(row.count) > 0 && row.productPrefix !== productPrefix) {
         throw badRequest('Product prefix cannot change after products exist for this category');
       }
       fields.push(`product_prefix = $${i++}`);
-      params.push(normalizeProductPrefix(data.productPrefix));
+      params.push(productPrefix);
     }
     if (data.icon !== undefined) { fields.push(`icon = $${i++}`); params.push(data.icon); }
     if (data.sortOrder !== undefined) { fields.push(`sort_order = $${i++}`); params.push(data.sortOrder); }
