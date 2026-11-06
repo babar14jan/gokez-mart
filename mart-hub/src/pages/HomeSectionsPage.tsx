@@ -14,6 +14,7 @@ const KINDS = [
   { key: 'new_arrivals', label: 'New arrivals', hint: 'Recently added products.', icon: Sparkles, usesProducts: false, multiCategory: true },
   { key: 'banner', label: 'Banner', hint: 'Image with an optional link.', icon: Image, usesProducts: false, multiCategory: false },
   { key: 'category_tiles', label: 'Category tiles', hint: 'Tap to jump to categories.', icon: LayoutGrid, usesProducts: false, multiCategory: true },
+  { key: 'fresh', label: 'Fresh page', hint: 'Choose the Fresh tabs (categories) and how products display.', icon: LayoutGrid, usesProducts: false, multiCategory: true },
 ] as const;
 
 type KindKey = typeof KINDS[number]['key'];
@@ -26,6 +27,7 @@ interface FormState {
   productIds: string[];
   excludeProductIds: string[];
   limit: string;
+  columns: '' | '2' | '3' | '4';
   layout: '' | 'row' | 'grid' | 'hero' | 'tiles';
   isEnabled: boolean;
   badge: string;
@@ -38,9 +40,9 @@ interface FormState {
 }
 
 const emptyForm = (k: KindKey): FormState => ({
-  kind: k, title: KINDS.find(x => x.key === k)?.label || k, subtitle: '',
-  categorySlugs: [], productIds: [], excludeProductIds: [],
-  limit: '', layout: '', isEnabled: true, badge: '',
+  kind: k, title: k === 'fresh' ? 'Fresh' : (KINDS.find(x => x.key === k)?.label || k), subtitle: '',
+  categorySlugs: k === 'fresh' ? ['vegetables'] : [], productIds: [], excludeProductIds: [],
+  limit: '', columns: '', layout: '', isEnabled: true, badge: '',
   fallback: 'none', sort: 'catalogue',
   imageUrl: '', buttonText: '', href: '', alt: '',
 });
@@ -79,6 +81,12 @@ export default function HomeSectionsPage() {
 
   const openCreate = (kind?: KindKey) => {
     const k = kind || 'manual';
+    // The Fresh page is one config per store — edit the existing row instead of
+    // creating a duplicate.
+    if (k === 'fresh') {
+      const existing = sections.find((s: any) => (s.kind || s.sectionKey) === 'fresh');
+      if (existing) { openEdit(existing); return; }
+    }
     setEditing(null);
     setProductSearch('');
     setForm(emptyForm(k));
@@ -99,6 +107,7 @@ export default function HomeSectionsPage() {
       productIds: Array.isArray(cfg.productIds) ? cfg.productIds : [],
       excludeProductIds: Array.isArray(cfg.excludeProductIds) ? cfg.excludeProductIds : [],
       limit: cfg.limit != null ? String(cfg.limit) : '',
+      columns: cfg.columns != null ? String(cfg.columns) as FormState['columns'] : '',
       layout: s.layout || cfg.layout || '',
       isEnabled: s.isEnabled !== false,
       badge: s.badge || '',
@@ -122,13 +131,14 @@ export default function HomeSectionsPage() {
         title: form.title.trim(),
         subtitle: form.subtitle.trim() || null,
         isEnabled: form.isEnabled,
-        layout: form.layout || 'row',
+        layout: form.layout || (form.kind === 'fresh' ? 'grid' : 'row'),
         badge: form.badge.trim() || null,
         config: {
           categorySlugs: form.categorySlugs,
-          productIds: form.productIds,
-          excludeProductIds: form.excludeProductIds,
+          productIds: form.kind === 'fresh' ? [] : form.productIds,
+          excludeProductIds: form.kind === 'fresh' ? [] : form.excludeProductIds,
           limit: limitNum != null && Number.isFinite(limitNum) ? limitNum : null,
+          columns: form.columns ? Number(form.columns) : null,
           fallback: form.fallback,
           sort: form.sort,
       imageUrl: (form.imageUrl||'').trim() || null,
@@ -151,6 +161,10 @@ export default function HomeSectionsPage() {
   };
 
   const duplicate = async (s: any) => {
+    if ((s.kind || s.sectionKey) === 'fresh') {
+      alert('Only one Fresh page config is allowed. Edit the existing one instead.');
+      return;
+    }
     await homeSectionsApi.duplicate(storeId, s.id);
     await load();
   };
@@ -190,6 +204,16 @@ export default function HomeSectionsPage() {
     setForm(f => f.categorySlugs.includes(slug)
       ? { ...f, categorySlugs: f.categorySlugs.filter(s => s !== slug) }
       : { ...f, categorySlugs: [...f.categorySlugs, slug] });
+  };
+  const moveSlug = (slug: string, dir: -1 | 1) => {
+    setForm(f => {
+      const slugs = [...f.categorySlugs];
+      const i = slugs.indexOf(slug);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= slugs.length) return f;
+      [slugs[i], slugs[j]] = [slugs[j], slugs[i]];
+      return { ...f, categorySlugs: slugs };
+    });
   };
 
   if (loading) return <PageSkeleton />;
@@ -311,7 +335,38 @@ export default function HomeSectionsPage() {
               </div>
               <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Subtitle <span className="text-gray-400">(optional)</span></label><input value={form.subtitle} onChange={e => setForm(f => ({...f, subtitle: e.target.value}))} className={inp} /></div>
 
-              {(activeKind?.multiCategory) && (
+              {form.kind === 'fresh' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Fresh categories (tab order)</label>
+                  {form.categorySlugs.length === 0 ? (
+                    <p className="text-[11px] text-amber-600 mb-2">Add at least one category. If empty, the storefront falls back to Vegetables.</p>
+                  ) : (
+                    <div className="space-y-1.5 mb-3">
+                      {form.categorySlugs.map((slug, idx) => {
+                        const cat = categories.find((c: any) => c.slug === slug);
+                        return (
+                          <div key={slug} className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-600 px-2 py-1.5">
+                            <span className="text-[11px] font-bold text-gray-400 w-4">{idx + 1}</span>
+                            <span className="flex-1 min-w-0 text-xs text-gray-900 dark:text-white truncate">{cat?.name || slug}</span>
+                            <button type="button" onClick={() => moveSlug(slug, -1)} disabled={idx === 0}><ArrowUp className="w-3.5 h-3.5 text-gray-400" /></button>
+                            <button type="button" onClick={() => moveSlug(slug, 1)} disabled={idx === form.categorySlugs.length - 1}><ArrowDown className="w-3.5 h-3.5 text-gray-400" /></button>
+                            <button type="button" onClick={() => toggleSlug(slug)}><X className="w-3.5 h-3.5 text-red-400" /></button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {categories.filter((c: any) => !form.categorySlugs.includes(c.slug)).map((c: any) => (
+                      <button key={c.id} type="button" onClick={() => toggleSlug(c.slug)}
+                        className="px-2.5 py-1 text-xs rounded-full border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300">
+                        + {c.name}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">Only these categories appear as Fresh tabs; add any category here. Other categories never show in Fresh.</p>
+                </div>
+              ) : (activeKind?.multiCategory) && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Categories</label>
                   <div className="flex flex-wrap gap-1.5">
@@ -388,12 +443,23 @@ export default function HomeSectionsPage() {
                     <option value="">Auto</option>
                     <option value="row">Row (scroll)</option>
                     <option value="grid">Grid</option>
-                    <option value="hero">Hero</option>
-                    <option value="tiles">Tiles</option>
+                    {form.kind !== 'fresh' && <option value="hero">Hero</option>}
+                    {form.kind !== 'fresh' && <option value="tiles">Tiles</option>}
                   </select>
                 </div>
                 <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Limit</label><input value={form.limit} onChange={e => setForm(f => ({...f, limit: e.target.value}))} className={inp} placeholder="e.g. 10" /></div>
               </div>
+
+              {form.kind === 'fresh' && (
+                <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Columns</label>
+                  <select value={form.columns} onChange={e => setForm(f => ({...f, columns: e.target.value as any}))} className={inp}>
+                    <option value="">Auto (3)</option>
+                    <option value="2">2 columns</option>
+                    <option value="3">3 columns</option>
+                    <option value="4">4 columns</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex items-center gap-2 flex-shrink-0">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 rounded-xl">Cancel</button>

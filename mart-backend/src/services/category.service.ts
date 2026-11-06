@@ -1,8 +1,23 @@
 import { query } from '../database/db';
 import { v4 as uuidv4 } from 'uuid';
-import { badRequest } from '../utils/apiError';
+import { badRequest, conflict } from '../utils/apiError';
 
 export const PRODUCT_PREFIX_PATTERN = /^[A-Z]{2,6}$/;
+
+// A category slug is a stable key used in links and Home/Fresh configs. Keep it
+// to lowercase words joined by single hyphens so every reference is unambiguous.
+export const CATEGORY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function normalizeCategorySlug(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw badRequest('Category slug is required');
+  }
+  const slug = value.trim().toLowerCase();
+  if (!CATEGORY_SLUG_PATTERN.test(slug)) {
+    throw badRequest('Category slug must be lowercase letters, numbers and single hyphens (e.g. leafy-greens)');
+  }
+  return slug;
+}
 
 export function normalizeProductPrefix(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) {
@@ -45,14 +60,27 @@ export class CategoryService {
 
   static async create(data: Partial<MartCategory>): Promise<MartCategory> {
     const id = uuidv4();
+    const name = typeof data.name === 'string' ? data.name.trim() : '';
+    if (!name) throw badRequest('Category name is required');
+    const slug = normalizeCategorySlug(data.slug);
     const productPrefix = normalizeProductPrefix(data.productPrefix);
-    const result = await query<MartCategory>(
-      `INSERT INTO mart_categories (id, name, slug, product_prefix, icon, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, slug, product_prefix as "productPrefix", icon, sort_order as "sortOrder", is_active as "isActive"`,
-      [id, data.name, data.slug, productPrefix, data.icon || null, data.sortOrder || 0]
-    );
-    return result.rows[0];
+
+    const existing = await query(`SELECT 1 FROM mart_categories WHERE LOWER(slug) = $1`, [slug]);
+    if (existing.rows.length) throw conflict('Category slug is already used');
+
+    try {
+      const result = await query<MartCategory>(
+        `INSERT INTO mart_categories (id, name, slug, product_prefix, icon, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, name, slug, product_prefix as "productPrefix", icon, sort_order as "sortOrder", is_active as "isActive"`,
+        [id, name, slug, productPrefix, data.icon || null, data.sortOrder || 0]
+      );
+      return result.rows[0];
+    } catch (err: any) {
+      // The check above can lose a race; the unique constraint is the source of truth.
+      if (err?.code === '23505') throw conflict('Category slug is already used');
+      throw err;
+    }
   }
 
   static async update(id: string, data: Partial<MartCategory>): Promise<MartCategory | null> {
@@ -60,8 +88,15 @@ export class CategoryService {
     const params: unknown[] = [];
     let i = 1;
 
+    let slug: string | undefined;
+    if (data.slug !== undefined) {
+      slug = normalizeCategorySlug(data.slug);
+      const duplicate = await query(`SELECT 1 FROM mart_categories WHERE LOWER(slug) = $1 AND id <> $2`, [slug, id]);
+      if (duplicate.rows.length) throw conflict('Category slug is already used');
+    }
+
     if (data.name !== undefined) { fields.push(`name = $${i++}`); params.push(data.name); }
-    if (data.slug !== undefined) { fields.push(`slug = $${i++}`); params.push(data.slug); }
+    if (slug !== undefined) { fields.push(`slug = $${i++}`); params.push(slug); }
     if (data.productPrefix !== undefined) {
       const productPrefix = normalizeProductPrefix(data.productPrefix);
       const existing = await query<{ productPrefix: string | null; count: string }>(
@@ -87,12 +122,18 @@ export class CategoryService {
     fields.push(`updated_at = NOW()`);
     params.push(id);
 
-    const result = await query<MartCategory>(
-      `UPDATE mart_categories SET ${fields.join(', ')} WHERE id = $${i}
-       RETURNING id, name, slug, product_prefix as "productPrefix", icon, sort_order as "sortOrder", is_active as "isActive"`,
-      params
-    );
-    return result.rows[0] || null;
+    try {
+      const result = await query<MartCategory>(
+        `UPDATE mart_categories SET ${fields.join(', ')} WHERE id = $${i}
+         RETURNING id, name, slug, product_prefix as "productPrefix", icon, sort_order as "sortOrder", is_active as "isActive"`,
+        params
+      );
+      return result.rows[0] || null;
+    } catch (err: any) {
+      // A concurrent update can pass the duplicate check; the unique index wins.
+      if (err?.code === '23505') throw conflict('Category slug is already used');
+      throw err;
+    }
   }
 
   static async delete(id: string): Promise<void> {

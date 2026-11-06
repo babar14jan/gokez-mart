@@ -164,6 +164,12 @@ describe('B. sections can only be created for known, renderable types', () => {
     const insert = [...calls].reverse().find(c => /INSERT INTO mart_home_sections/.test(c.text))!;
     assert.equal(insert.params[4], 3, 'sort order should be MAX+1');
   });
+
+  test('the Fresh page config is a creatable kind', async () => {
+    await HomeSectionService.create('store-1', { kind: 'fresh', title: 'Fresh' });
+    const insert = [...calls].reverse().find(c => /INSERT INTO mart_home_sections/.test(c.text))!;
+    assert.equal(insert.params[1], 'fresh');
+  });
 });
 
 describe('C. the public read is store-scoped and enabled-only', () => {
@@ -250,6 +256,13 @@ describe('E. route wiring and the seed migration', () => {
     assert.match(sql, /'todays_combos'     THEN 1/);
     assert.match(sql, /'top_picks'         THEN 2/);
     assert.match(sql, /is_enabled = section_key IN \('todays_combos', 'top_picks'\)/);
+  });
+
+  test('migration 122 allows and seeds the Fresh page config', () => {
+    const sql = read('mart-backend/src/database/migrations/122_home_sections_fresh_kind.sql');
+    assert.match(sql, /'fresh'/);
+    assert.match(sql, /categorySlugs/);
+    assert.match(sql, /INSERT INTO mart_home_sections/);
   });
 });
 

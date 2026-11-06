@@ -330,8 +330,17 @@ export default function App() {
   // just to browse: no keyboard and no cursor in the search box. The search
   // entry points (the home search box, the desktop navbar search) keep auto-focus.
   const [catalogSearchAutoFocus, setCatalogSearchAutoFocus] = useState(true);
+  // The middle nav button opens the admin-configured Fresh page; every search
+  // entry point opens the full-catalogue search.
+  const [catalogSearchMode, setCatalogSearchMode] = useState<'catalog' | 'fresh'>('catalog');
   const openCatalogSearch = (autoFocus = true) => {
+    setCatalogSearchMode('catalog');
     setCatalogSearchAutoFocus(autoFocus);
+    setCatalogSearchOpen(true);
+  };
+  const openFreshPage = () => {
+    setCatalogSearchMode('fresh');
+    setCatalogSearchAutoFocus(false);
     setCatalogSearchOpen(true);
   };
   const [loading, setLoading] = useState(true);
@@ -809,6 +818,16 @@ export default function App() {
     .map(section => ({ section, items: resolveSectionItems(section, products, categories) }))
     .filter(entry => entry.items.length > 0);
 
+  // Fresh page config (a `fresh` Home Section row). It never renders as a home
+  // shelf; it only drives the middle nav button. Fall back to Vegetables when
+  // the head store has not configured one.
+  const freshSection = homeSections.find(
+    section => section.isEnabled && (section.kind === 'fresh' || section.sectionKey === 'fresh')
+  );
+  const freshCategorySlugs = freshSection?.config?.categorySlugs?.length
+    ? freshSection.config.categorySlugs
+    : ['vegetables'];
+
   // Account tab — show login modal if not logged in, but still navigate
   const handleNavChange = (v: View) => {
     setCatalogSearchOpen(false);
@@ -1257,7 +1276,7 @@ export default function App() {
       floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
       bottomNav={!checkoutActive ? (
         <div className="sm:hidden shrink-0">
-          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={() => openCatalogSearch(false)} />
+          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={openFreshPage} />
         </div>
       ) : null}
     >
@@ -1371,6 +1390,11 @@ export default function App() {
           products={products}
           searchPrompt={searchPrompt}
           autoFocus={catalogSearchAutoFocus}
+          mode={catalogSearchMode}
+          freshCategorySlugs={freshCategorySlugs}
+          freshColumns={freshSection?.config?.columns ?? 3}
+          freshLimit={freshSection?.config?.limit ?? null}
+          freshLayout={freshSection?.layout === 'row' ? 'row' : 'grid'}
           onClose={() => setCatalogSearchOpen(false)}
           onOpenCart={() => handleCheckout()}
           onRefresh={() => refreshCatalog(activeStoreId, selectedZone?.id, { force: true })}
@@ -1442,16 +1466,15 @@ export default function App() {
                     See all
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                   {visibleCategories.map(cat => (
                     <button key={cat.id} type="button" onClick={() => {
                       setPendingCategorySlug(cat.slug || null);
                       handleNavChange('categories');
-                    }} className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 transition-colors hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-emerald-700 dark:hover:bg-emerald-900/20">
-                      <span className="flex h-6 w-6 items-center justify-center overflow-hidden">
-                        <CategoryIcon icon={cat.icon} name={cat.name} className="h-6 w-6 object-contain" />
-                      </span>
-                      <span className="whitespace-nowrap text-xs font-medium text-gray-800 dark:text-slate-200">{cat.name}</span>
+                    }}
+                      className="flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-2 py-2.5 text-center text-gray-700 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                      <CategoryIcon icon={cat.icon} name={cat.name} className="h-7 w-7 object-contain" />
+                      <span className="line-clamp-2 text-[10px] font-semibold leading-tight">{cat.name}</span>
                     </button>
                   ))}
                 </div>

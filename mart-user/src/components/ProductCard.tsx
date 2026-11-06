@@ -46,12 +46,12 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
           aria-label={`View ${product.name}`}
           className="absolute inset-0 z-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gokez-500"
         />
-        <div className="pointer-events-none relative z-10 aspect-square overflow-hidden bg-white p-1.5 dark:bg-slate-800">
+        <div className="pointer-events-none relative z-10 aspect-square overflow-hidden bg-white dark:bg-slate-800">
           <SmartImage
             src={product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
             alt={product.name}
             className="h-full w-full"
-            imgClassName={`object-contain ${finePointer ? 'transition-transform duration-300 group-hover:scale-[1.04]' : ''} ${isOutOfStock ? 'opacity-40' : ''}`}
+            imgClassName={`object-cover ${finePointer ? 'transition-transform duration-300 group-hover:scale-[1.03]' : ''} ${isOutOfStock ? 'opacity-40' : ''}`}
             fallback={
               <div className="flex h-full w-full items-center justify-center bg-white text-gokez-300 dark:bg-slate-800 dark:text-slate-500">
                 <Leaf className="h-8 w-8" aria-hidden="true" />
@@ -71,8 +71,13 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
             </div>
           )}
 
+        </div>
+
+        <div className="pointer-events-none relative flex flex-1 flex-col px-2 pb-2.5 pt-1.5 dark:bg-slate-800">
+          {/* Straddles the image/text boundary so it breaks the divider line,
+              nudged right and down from the old in-image corner. */}
           {!isOutOfStock && (
-            <div className="pointer-events-auto absolute bottom-1.5 right-1.5 z-20">
+            <div className="pointer-events-auto absolute -top-[26px] right-0.5 z-20">
               <CartQuantityControl
                 variant="card"
                 quantity={qty}
@@ -82,9 +87,6 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
               />
             </div>
           )}
-        </div>
-
-        <div className="pointer-events-none flex flex-1 flex-col px-2 pb-2.5 pt-1.5 dark:bg-slate-800">
           <div className="mb-0.5 min-h-[2.6em]">
             <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3] text-ink dark:text-white">{primaryName}</p>
             {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
