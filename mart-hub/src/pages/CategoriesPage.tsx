@@ -55,7 +55,7 @@ export default function CategoriesPage() {
       const url = res.data.data.url;
       setForm(f => ({ ...f, icon: url }));
       setIconPreview(url);
-    } catch { alert('Upload failed'); } finally { setUploading(false); }
+    } catch (e: any) { alert(e?.response?.data?.error || 'Upload failed'); } finally { setUploading(false); }
   };
 
   const handleSave = async () => {
@@ -65,7 +65,7 @@ export default function CategoriesPage() {
       if (editing) await categoriesApi.update(editing.id, data);
       else await categoriesApi.create(data);
       setShowModal(false); await load();
-    } catch { alert('Failed to save'); } finally { setSaving(false); }
+    } catch (e: any) { alert(e?.response?.data?.error || 'Failed to save'); } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
