@@ -21,8 +21,8 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
       <div
         className={`flex items-center overflow-hidden rounded-lg transition-[width] duration-200 ease-out ${disabled ? 'opacity-40' : ''} ${
           quantity === 0
-            ? 'h-[30px] w-[72px] border-[1.5px] border-gokez-600 bg-white shadow-[0_1px_4px_rgba(20,32,26,0.14)]'
-            : 'h-[30px] w-[88px] border border-gokez-700 bg-gokez-600 p-0.5'
+            ? 'h-[30px] w-[72px] border-2 border-gokez-600 bg-white'
+            : 'h-[30px] w-[88px] border border-gokez-700 bg-gradient-to-r from-gokez-700 via-gokez-500 to-gokez-700 p-0.5'
         }`}
       >
         {quantity === 0 ? (
