@@ -873,6 +873,9 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       return;
     }
 
+    if (!campaign.requires_scheduled_delivery && scheduledSlot) {
+      resetScheduleState();
+    }
     setLocalAppliedCampaign(campaign);
     setAppliedCouponCode(couponCode);
     setCampaignDiscount(disc);

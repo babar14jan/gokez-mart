@@ -87,8 +87,8 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
               />
             </div>
           )}
-          <div className="mb-0.5 min-h-[2.6em]">
-            <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3] text-ink dark:text-white">{primaryName}</p>
+          <div className={`mb-0.5 ${secondaryName ? 'min-h-[2.6em]' : ''}`}>
+            <p className={`${secondaryName ? 'line-clamp-2' : ''} text-[13px] font-semibold leading-[1.3] text-ink dark:text-white`}>{primaryName}</p>
             {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
           </div>
           <p className="text-[11px] font-medium leading-none text-gray-500 dark:text-slate-400">
