@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, writeFile, readFile, stat } from 'fs/promises';
 import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
 import { ProductService, MartProduct, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
@@ -447,7 +447,7 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneId, zoneName, deliveryPreference, deliveryNote, scheduledFor, campaignId, couponCode, latitude, longitude } = req.body;
+  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneId, zoneName, deliveryPreference, deliveryNote, scheduledFor, scheduledLabel, campaignId, couponCode, latitude, longitude } = req.body;
   let suppliedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
   // A signed-in order is identified by the verified phone, not by the name the
   // client posts. An account that never saved a name sends the 'Customer'
@@ -528,7 +528,7 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     storeId: resolvedStoreId,
     storeName,
     zoneId: zone?.id,
-    zoneName: zone?.name ?? zoneName, deliveryPreference, deliveryNote, scheduledFor,
+    zoneName: zone?.name ?? zoneName, deliveryPreference, deliveryNote, scheduledFor, scheduledLabel,
     latitude: hasCoordinates ? latitude : null,
     longitude: hasCoordinates ? longitude : null,
     campaignId: campaignId || null,
@@ -903,17 +903,112 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
 
 // Create catalog product — super_admin only (name + photo + category, no price/store)
 export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { name, localName, searchAliases, description, photoUrl, photos, photoVariants, imageAssetIds, categoryId } = req.body;
+  const { name, localName, searchAliases, description, photoUrl, photos, photoVariants, imageAssetIds, categoryId, photoLocalPath } = req.body;
   if (!name?.trim()) { res.status(400).json({ success: false, error: 'name is required' }); return; }
+
+  let resolvedPhotoUrl = photoUrl;
+  let resolvedPhotos = photos;
+  let resolvedPhotoVariants = photoVariants;
+  let resolvedImageAssetIds = imageAssetIds;
+
+  if (typeof photoLocalPath === 'string' && photoLocalPath.trim()) {
+    const uploadsDir = path.resolve(__dirname, '../../uploads');
+    const raw = photoLocalPath.trim();
+    const candidates: string[] = [];
+    if (path.isAbsolute(raw)) {
+      candidates.push(raw);
+    } else {
+      const cleaned = raw.replace(/^\.?\//, '');
+      candidates.push(path.join(uploadsDir, cleaned));
+      candidates.push(path.join(uploadsDir, 'products', cleaned));
+      if (!cleaned.startsWith('products/') && !cleaned.startsWith('products\\')) {
+        candidates.push(path.join(uploadsDir, 'products', path.basename(cleaned)));
+      }
+    }
+    let resolvedFile: string | null = null;
+    for (const c of candidates) {
+      const full = path.resolve(c);
+      if (!full.startsWith(`${uploadsDir}${path.sep}`)) continue;
+      try {
+        const info = await stat(full);
+        if (info.isFile()) { resolvedFile = full; break; }
+      } catch {}
+    }
+    if (!resolvedFile) {
+      res.status(400).json({ success: false, error: 'Local image file not found' });
+      return;
+    }
+
+    const buffer = await readFile(resolvedFile);
+    const baseName = path.basename(resolvedFile).replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+    const images = await prepareProductImages(buffer);
+    const assetId = uuidv4();
+    const filenames = new Map<PreparedImage, string>();
+    const entries = Object.entries(images) as Array<[keyof PreparedProductImages, PreparedImage]>;
+    for (const [variantName, variant] of entries) {
+      if (!filenames.has(variant)) {
+        filenames.set(variant, `products/${assetId}-${baseName || 'product'}-${variantName}.${variant.extension}`);
+      }
+    }
+
+    if (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+      await mkdir(path.join(uploadsDir, 'products'), { recursive: true });
+      await Promise.all([...filenames].map(([variant, variantFilename]) => writeFile(path.join(uploadsDir, variantFilename), variant.buffer)));
+      const localUrl = (variant: PreparedImage) => `${req.protocol}://${req.get('host')}/uploads/${filenames.get(variant)!}`;
+      const pv = { assetId, thumbnailUrl: localUrl(images.thumbnail), largeUrl: localUrl(images.large) };
+      await ProductImageAssetService.createPending({
+        id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: pv.thumbnailUrl, largeUrl: pv.largeUrl,
+        thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'local',
+      });
+      resolvedPhotoUrl = pv.largeUrl;
+      resolvedPhotos = [pv.largeUrl];
+      resolvedPhotoVariants = [pv];
+      resolvedImageAssetIds = [assetId];
+    } else {
+      const uploaded = await Promise.all([...filenames].map(async ([variant, variantFilename]) => {
+        const uploadRes = await fetch(`${config.supabase.url}/storage/v1/object/${config.supabase.bucket}/${variantFilename}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${config.supabase.serviceRoleKey}`,
+            'Content-Type': variant.mimeType,
+            'x-upsert': 'false',
+            'cache-control': 'max-age=31536000, immutable',
+          },
+          body: variant.buffer,
+          signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
+        });
+        if (!uploadRes.ok) {
+          await uploadRes.text();
+          throw new Error('Upload failed. Please try again.');
+        }
+        return [variant, `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}/${variantFilename}`] as const;
+      }));
+      const urls = new Map(uploaded);
+      const pv = {
+        assetId,
+        thumbnailUrl: urls.get(images.thumbnail)!,
+        largeUrl: urls.get(images.large)!,
+      };
+      await ProductImageAssetService.createPending({
+        id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: pv.thumbnailUrl, largeUrl: pv.largeUrl,
+        thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'supabase',
+      });
+      resolvedPhotoUrl = pv.largeUrl;
+      resolvedPhotos = [pv.largeUrl];
+      resolvedPhotoVariants = [pv];
+      resolvedImageAssetIds = [assetId];
+    }
+  }
+
   const product = await ProductService.createCatalogProduct({
     name: name.trim(),
     localName,
     searchAliases,
     description,
-    photoUrl,
-    photos,
-    photoVariants,
-    imageAssetIds,
+    photoUrl: resolvedPhotoUrl,
+    photos: resolvedPhotos,
+    photoVariants: resolvedPhotoVariants,
+    imageAssetIds: resolvedImageAssetIds,
     adminId: req.admin!.id,
     categoryId,
   });
@@ -1413,11 +1508,11 @@ export const adminBatchDispatch = asyncHandler(async (req: AdminRequest, res: Re
 });
 
 export const adminUpdateOrderStatus = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod } = req.body;
+  const { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod, forceReadyPickup } = req.body;
   if (paymentMethod !== undefined && paymentMethod !== 'cash' && paymentMethod !== 'upi') {
     res.status(400).json({ success: false, error: 'Payment method must be Cash or UPI' }); return;
   }
-  const order = await OrderService.transitionStatus(req.params.id, status, req.admin!, deliveryAssigneeId, cancellationReason, paymentMethod);
+  const order = await OrderService.transitionStatus(req.params.id, status, req.admin!, deliveryAssigneeId, cancellationReason, paymentMethod, forceReadyPickup === true);
   if (status === 'failed_delivery' && failureReason) await query(`UPDATE mart_orders SET failure_reason = $1 WHERE id = $2`, [failureReason, req.params.id]);
   if (status === 'cancelled' && cancellationReason) await query(`UPDATE mart_orders SET cancellation_reason = $1 WHERE id = $2`, [cancellationReason, req.params.id]);
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload } from 'lucide-react';
+import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload, FileSpreadsheet, Download } from 'lucide-react';
 import { categoriesApi, catalogApi, productsApi } from '../services/api';
+import * as XLSX from 'xlsx';
 import CategoryIcon from '../components/CategoryIcon';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
@@ -22,7 +23,7 @@ interface CatalogProduct {
   categoryIcon: string | null;
 }
 
-interface Category { id: string; name: string; icon: string; }
+interface Category { id: string; name: string; slug?: string; icon: string; }
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 const parseSearchAliases = (value: string) => value.split(',').map(alias => alias.trim()).filter(Boolean);
@@ -50,6 +51,127 @@ export default function CatalogPage() {
   const [bulkItems, setBulkItems] = useState<BulkUploadItem[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
+
+  // Excel upload state
+  interface ExcelRow { name: string; localName: string; searchAliases: string; categoryRaw: string; categoryId: string; description: string; photoPath: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; }
+  const [showExcelUpload, setShowExcelUpload] = useState(false);
+  const [excelRows, setExcelRows] = useState<ExcelRow[]>([]);
+  const [excelUploading, setExcelUploading] = useState(false);
+  const [excelProgress, setExcelProgress] = useState(0);
+
+  const resolveCategory = (raw: string) => {
+    const v = raw.trim().toLowerCase();
+    if (!v) return '';
+    const c = categories.find(cat => cat.id === raw.trim() || cat.name.toLowerCase() === v || (cat.slug || '').toLowerCase() === v);
+    return c?.id || '';
+  };
+
+  const recomputeRowError = (row: ExcelRow): ExcelRow => {
+    const name = row.name.trim();
+    const rawCat = row.categoryRaw.trim();
+    const categoryId = row.categoryId || resolveCategory(rawCat);
+    let error: string | undefined;
+    if (!name) error = 'Name required';
+    else if (!rawCat) error = 'Category required';
+    else if (!categoryId) error = 'Category not found';
+    return { ...row, categoryId, error };
+  };
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Product Name *', 'Local Name', 'Search aliases (hidden from customers)', 'Category', 'Description', 'Photo path (optional)'],
+      ['Fresh Tomatoes', 'Tamatar', 'Tomato, Tamatar', 'Fresh Vegetables', 'Fresh red tomatoes', 'uploads/products/tomato.jpg'],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Catalog');
+    XLSX.writeFile(wb, 'catalog-bulk-upload-template.xlsx');
+  };
+
+  const handleExcelFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const result = ev.target?.result;
+        if (!result) return;
+        const wb = isCsv
+          ? XLSX.read(result as string, { type: 'string' })
+          : XLSX.read(new Uint8Array(result as ArrayBuffer), { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+        if (!rows.length) { alert('Empty file'); return; }
+        const first = rows[0].map((c: any) => String(c).trim().toLowerCase());
+        const hasHeader = first.some(c => c.includes('product') || c.includes('name') || c.includes('category') || c.includes('description') || c.includes('alias') || c.includes('local') || c.includes('hindi'));
+        const header = hasHeader ? first : [];
+        const dataRows = hasHeader ? rows.slice(1) : rows;
+        const findCol = (candidates: string[]) => header.findIndex(h => candidates.some(c => h === c || h.includes(c)));
+        const colMap = header.length
+          ? { name: findCol(['product name', 'product', 'name']), local: findCol(['local name', 'local', 'hindi']), alias: findCol(['search aliases', 'alias', 'search']), cat: findCol(['category']), desc: findCol(['description']), photo: findCol(['photo', 'image', 'local storage path', 'photo path', 'image path']) }
+          : { name: 0, local: 1, alias: 2, cat: 3, desc: 4, photo: 5 };
+        const get = (row: any[], i: number) => (i >= 0 ? String(row[i] ?? '').trim() : '');
+        const parsed: ExcelRow[] = dataRows
+          .filter(r => Array.isArray(r) && r.some((c: any) => String(c).trim() !== ''))
+          .map(r => {
+            const rawCat = get(r, colMap.cat);
+            const row: ExcelRow = {
+              name: get(r, colMap.name),
+              localName: get(r, colMap.local),
+              searchAliases: get(r, colMap.alias),
+              categoryRaw: rawCat,
+              categoryId: resolveCategory(rawCat),
+              description: get(r, colMap.desc),
+              photoPath: get(r, colMap.photo),
+              status: 'pending',
+            };
+            return recomputeRowError(row);
+          });
+        if (!parsed.length) { alert('No data rows found'); return; }
+        setExcelRows(parsed);
+        setShowExcelUpload(true);
+      } catch (err) {
+        if (file.name.toLowerCase().endsWith('.numbers')) {
+          alert('Apple Numbers (.numbers) files are not supported directly. In Numbers, use File > Export To > Excel or CSV, then upload the exported file.');
+        } else {
+          alert('Failed to read file. Please use .xlsx, .xls, or .csv format.');
+        }
+      }
+    };
+    if (isCsv) reader.readAsText(file);
+    else reader.readAsArrayBuffer(file);
+  };
+
+  const handleExcelUpload = async () => {
+    const pending = excelRows.filter(i => i.status === 'pending' && !i.error);
+    if (!pending.length) return;
+    setExcelUploading(true);
+    setExcelProgress(0);
+    let done = 0;
+    for (let idx = 0; idx < excelRows.length; idx++) {
+      const item = excelRows[idx];
+      if (item.status !== 'pending' || item.error) { done++; setExcelProgress(Math.round((done / excelRows.length) * 100)); continue; }
+      setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, status: 'uploading' } : r));
+      try {
+        await catalogApi.create({
+          name: item.name.trim(),
+          localName: item.localName || undefined,
+          searchAliases: parseSearchAliases(item.searchAliases),
+          description: item.description || undefined,
+          categoryId: item.categoryId || undefined,
+          photoLocalPath: item.photoPath || undefined,
+        });
+        setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, status: 'done' } : r));
+      } catch (e: any) {
+        setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, status: 'error', error: e?.response?.data?.error || 'Failed' } : r));
+      }
+      done++;
+      setExcelProgress(Math.round((done / excelRows.length) * 100));
+    }
+    setExcelUploading(false);
+    await load();
+  };
 
   const handleBulkFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -203,6 +325,14 @@ export default function CatalogPage() {
             <Upload className="w-3.5 h-3.5" /> Bulk Upload
             <input type="file" accept="image/*" multiple className="hidden" onChange={e => { handleBulkFileSelect(e); setShowBulkUpload(true); }} />
           </label>
+          <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
+            <FileSpreadsheet className="w-3.5 h-3.5" /> Upload Excel
+            <input type="file" accept=".xlsx,.xls,.csv,.numbers" className="hidden" onChange={handleExcelFileSelect} />
+          </label>
+          <button onClick={handleDownloadTemplate}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
+            <Download className="w-3.5 h-3.5" /> Template
+          </button>
           <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
             <Plus className="w-3.5 h-3.5" /> Add Product
           </button>
@@ -355,7 +485,7 @@ export default function CatalogPage() {
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" maxLength={40} autoFocus />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Local / Hindi Name</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Local Name</label>
                 <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo" maxLength={30} />
               </div>
               <div>
@@ -518,6 +648,156 @@ export default function CatalogPage() {
                     className="flex-1 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
                     {bulkUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                     {bulkUploading ? 'Uploading...' : `Upload ${bulkItems.filter(i => i.status === 'pending').length} product${bulkItems.filter(i => i.status === 'pending').length !== 1 ? 's' : ''}`}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Excel Upload Modal ── */}
+      {showExcelUpload && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !excelUploading && setShowExcelUpload(false)} />
+          <div className="relative bg-white dark:bg-slate-800 w-full sm:max-w-3xl rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">Bulk Upload from Excel</p>
+                <p className="text-xs text-gray-500 mt-0.5">Name &amp; Category are required. Category accepts name or slug.</p>
+                <p className="text-xs text-gray-400 mt-0.5">Expected columns: Product Name *, Local Name, Search aliases (hidden from customers), Category, Description, Photo path (optional)</p>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="text-[10px] border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50 dark:bg-slate-700/50 text-gray-500 dark:text-slate-400">
+                      <tr>
+                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Product Name *</th>
+                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Local Name</th>
+                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Search aliases (hidden from customers)</th>
+                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Category</th>
+                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Description</th>
+                        <th className="px-2 py-1">Photo path (optional)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-gray-700 dark:text-slate-300">
+                      <tr>
+                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Fresh Tomatoes</td>
+                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Tamatar</td>
+                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Tomato, Tamatar</td>
+                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Fresh Vegetables</td>
+                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Fresh red tomatoes</td>
+                        <td className="px-2 py-1">uploads/products/tomato.jpg</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {!excelUploading && (
+                <button onClick={() => { setShowExcelUpload(false); setExcelRows([]); setExcelProgress(0); }}
+                  className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              )}
+            </div>
+
+            {excelUploading && (
+              <div className="px-5 pt-3 flex-shrink-0">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-semibold text-gray-700 dark:text-slate-300">Uploading...</p>
+                  <p className="text-xs text-gray-500">{excelProgress}%</p>
+                </div>
+                <div className="w-full h-2 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${excelProgress}%` }} />
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-auto flex-1 p-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-gray-500 dark:text-slate-400">
+                    <th className="pb-2 pr-2">Product Name *</th>
+                    <th className="pb-2 pr-2">Local Name</th>
+                    <th className="pb-2 pr-2">Search aliases (hidden from customers)</th>
+                    <th className="pb-2 pr-2">Category *</th>
+                    <th className="pb-2 pr-2">Description</th>
+                    <th className="pb-2 pr-2">Photo path (optional)</th>
+                    <th className="pb-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {excelRows.map((row, idx) => (
+                    <tr key={idx} className={`border-t border-gray-100 dark:border-slate-700 ${row.status === 'done' ? 'bg-emerald-50 dark:bg-emerald-900/10' : row.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
+                      <td className="py-2 pr-2">
+                        <input type="text" value={row.name} disabled={excelUploading}
+                          onChange={e => setExcelRows(prev => prev.map((r, i) => i === idx ? recomputeRowError({ ...r, name: e.target.value }) : r))}
+                          className="w-full px-2 py-1 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:opacity-60" />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input type="text" value={row.localName} disabled={excelUploading}
+                          onChange={e => setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, localName: e.target.value } : r))}
+                          className="w-full px-2 py-1 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:opacity-60" />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input type="text" value={row.searchAliases} disabled={excelUploading}
+                          onChange={e => setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, searchAliases: e.target.value } : r))}
+                          className="w-full px-2 py-1 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:opacity-60" />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <select value={row.categoryId} disabled={excelUploading}
+                          onChange={e => setExcelRows(prev => prev.map((r, i) => i === idx ? recomputeRowError({ ...r, categoryId: e.target.value, categoryRaw: categories.find(c => c.id === e.target.value)?.name || r.categoryRaw }) : r))}
+                          className="w-full px-2 py-1 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:opacity-60">
+                          <option value="">Select</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}{c.slug ? ` (${c.slug})` : ''}</option>)}
+                        </select>
+                        {row.error && <p className="text-[10px] text-red-500 mt-0.5">{row.error}</p>}
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input type="text" value={row.description} disabled={excelUploading}
+                          onChange={e => setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, description: e.target.value } : r))}
+                          className="w-full px-2 py-1 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:opacity-60" />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input type="text" value={row.photoPath} disabled={excelUploading}
+                          onChange={e => setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, photoPath: e.target.value } : r))}
+                          className="w-full px-2 py-1 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:opacity-60"
+                          placeholder="uploads/products/..." />
+                      </td>
+                      <td className="py-2 text-center">
+                        {row.status === 'done' && <span className="text-emerald-500">✓</span>}
+                        {row.status === 'error' && <span className="text-red-500">✗</span>}
+                        {row.status === 'uploading' && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
+                        {row.status === 'pending' && !excelUploading && (
+                          <button onClick={() => setExcelRows(prev => prev.filter((_, i) => i !== idx))}>
+                            <X className="w-4 h-4 text-gray-300 hover:text-red-400" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {excelRows.length === 0 && (
+                <div className="text-center py-10 text-gray-500 text-sm">No rows</div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0 flex gap-3">
+              {excelRows.some(i => i.status === 'done') && !excelUploading ? (
+                <button onClick={() => { setShowExcelUpload(false); setExcelRows([]); setExcelProgress(0); }}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 transition-colors">
+                  Done
+                </button>
+              ) : (
+                <>
+                  <button onClick={() => { setShowExcelUpload(false); setExcelRows([]); }} disabled={excelUploading}
+                    className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button onClick={handleExcelUpload}
+                    disabled={excelUploading || excelRows.filter(i => i.status === 'pending' && !i.error).length === 0}
+                    className="flex-1 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
+                    {excelUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {excelUploading ? 'Uploading...' : `Upload ${excelRows.filter(i => i.status === 'pending' && !i.error).length} product${excelRows.filter(i => i.status === 'pending' && !i.error).length !== 1 ? 's' : ''}`}
                   </button>
                 </>
               )}

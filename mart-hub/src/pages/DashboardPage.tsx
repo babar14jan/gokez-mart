@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('today');
+  const [scheduledView, setScheduledView] = useState(false);
   // The range to return to when Custom is clicked a second time (the date
   // range toggles closed instead of staying stuck open).
   const prevRangeRef = useRef<Range>('today');
@@ -138,22 +139,43 @@ export default function DashboardPage() {
   }, [refreshLive]);
 
   const filtered = useMemo(() => {
+    if (scheduledView) {
+      return allOrders.filter(o => o.deliveryPreference === 'scheduled' && !['delivered','cancelled','failed_delivery','terminated'].includes(o.status));
+    }
     const { start, end } = rangeBounds(range, customFrom, customTo);
     return allOrders.filter(o => {
       const d = new Date(o.createdAt);
       if (start && d < start) return false;
       if (end && d > end) return false;
+      if (range === 'today' && o.deliveryPreference === 'scheduled' && !['delivered','cancelled','failed_delivery','terminated'].includes(o.status) && new Date(o.scheduledFor) >= new Date(new Date().setHours(0,0,0,0) + 86400000)) return false;
       return true;
     });
-  }, [allOrders, range, customFrom, customTo]);
+  }, [allOrders, range, customFrom, customTo, scheduledView]);
 
-  const kpis = useMemo(() => ({
-    total:     summary.placed,
-    pending:   summary.pending,
-    delivered: summary.delivered,
-    cancelled: summary.cancelled,
-    revenue:   summary.revenue,
-  }), [summary]);
+  const kpis = useMemo(() => {
+    if (scheduledView) {
+      return {
+        total:     filtered.length,
+        pending:   filtered.filter(o => o.status === 'pending').length,
+        delivered: filtered.filter(o => o.status === 'delivered').length,
+        cancelled: filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length,
+        revenue:   0,
+      };
+    }
+    return {
+      total:     summary.placed,
+      pending:   summary.pending,
+      delivered: summary.delivered,
+      cancelled: summary.cancelled,
+      revenue:   summary.revenue,
+    };
+  }, [scheduledView, filtered, summary]);
+
+  const displayCustomerAgg = useMemo(() => {
+    if (!scheduledView) return customerAgg;
+    const phones = new Set(filtered.map(o => o.guestPhone).filter(Boolean));
+    return { totalCustomers: phones.size, newCustomers: phones.size, repeatCustomers: 0, avgOrders: 0, top: [] };
+  }, [scheduledView, filtered, customerAgg]);
 
   const rangeLabel = range === 'custom'
     ? `${customFrom || '…'} – ${customTo || '…'}`
@@ -167,16 +189,9 @@ export default function DashboardPage() {
 
       {/* Greeting */}
       <div className="space-y-1">
-        {/* Row 1: greeting word */}
-        <div className="px-0.5">
-          <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 leading-tight">
-            {greetingWord()},
-          </p>
-        </div>
-
-        {/* Row 2: name — full width */}
+        {/* Greeting + name on one line */}
         <p className="text-base font-extrabold text-gray-900 dark:text-white leading-tight px-0.5">
-          {name || 'there'}
+          {greetingWord()}, {name || 'there'}
         </p>
 
         {/* Row 3: role subtitle — full width */}
@@ -188,16 +203,25 @@ export default function DashboardPage() {
       {/* Date range tabs */}
       <div className="flex items-center gap-2 flex-wrap">
         {RANGES.map(r => (
-          <button key={r.id} onClick={() => handleRangeClick(r.id)}
+          <button key={r.id} onClick={() => { setScheduledView(false); handleRangeClick(r.id); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              range === r.id
+              !scheduledView && range === r.id
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
             }`}>
-            {r.id === 'custom' && <Calendar className="w-3 h-3" />}
-            {r.label}
+            {r.id === 'custom' && <Calendar className="w-3 h-3 hidden sm:inline" />}
+            <span className="hidden md:inline">{r.label}</span>
+            <span className="md:hidden">{r.id === 'yesterday' ? 'Yest' : r.label}</span>
           </button>
         ))}
+        <button onClick={() => setScheduledView(true)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            scheduledView
+              ? 'bg-indigo-500 text-white shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-indigo-300'
+          }`}>
+          Scheduled
+        </button>
         {range === 'custom' && (
           <div className="flex items-center gap-2">
             <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
@@ -215,7 +239,7 @@ export default function DashboardPage() {
           { label: 'Total Orders',  value: kpis.total,                    sub: `${kpis.delivered} delivered · ${kpis.cancelled} cancelled`, icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
           { label: 'Pending',       value: Math.max(kpis.total - kpis.delivered - kpis.cancelled, 0), sub: `${kpis.pending} awaiting confirmation`, icon: Clock, gradient: 'from-amber-500 to-amber-600', href: '/orders' },
           { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: `₹${(kpis.revenue + summary.couponAmount).toFixed(0)} order value − ₹${summary.couponAmount.toFixed(0)} coupons`, icon: TrendingUp, gradient: 'from-blue-500 to-blue-600', href: null },
-          ...(canSeeCustomers ? [{ label: 'Unique Customers', value: customerAgg.totalCustomers, sub: `${customerAgg.newCustomers} new · ${customerAgg.repeatCustomers} repeat`, icon: Users, gradient: 'from-cyan-500 to-cyan-600', href: null }] : []),
+          ...(canSeeCustomers ? [{ label: 'Unique Customers', value: displayCustomerAgg.totalCustomers, sub: scheduledView ? `${displayCustomerAgg.totalCustomers} scheduled` : `${displayCustomerAgg.newCustomers} new · ${displayCustomerAgg.repeatCustomers} repeat`, icon: Users, gradient: 'from-cyan-500 to-cyan-600', href: null }] : []),
         ].map(k => {
           const inner = (
             <div onClick={() => k.href && navigate(k.href)}
@@ -247,7 +271,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-gray-500 dark:text-slate-400" />
               <h2 className="page-card-title">Recent Orders</h2>
-              <span className="text-[10px] text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{rangeLabel}</span>
+            <span className="text-[10px] text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{scheduledView ? 'Scheduled' : rangeLabel}</span>
             </div>
             <Link to="/orders" className="text-xs font-medium text-emerald-600 hover:text-emerald-700">View all →</Link>
           </div>

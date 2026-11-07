@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { SettingsService } from './settings.service';
 import { InventoryService } from './inventory.service';
 import { ZoneService } from './zone.service';
-import { evaluateStoreOpen, formatIstDateTime, isNextDayIst, isValidScheduledDelivery, isWithinFirstOpeningHour } from '../utils/storeHours';
+import { evaluateStoreOpen, formatIstDateTime, formatIstScheduledRange, isNextDayIst, isValidScheduledDelivery, isWithinFirstOpeningHour } from '../utils/storeHours';
 import { FunnelCartService } from './funnelCart.service';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 import { parseSellingUnit } from '../utils/unitConversion';
@@ -53,6 +53,8 @@ export interface CreateOrderDto {
   deliveryNote?: string;
   /** Customer-chosen delivery window for a scheduled order (ISO instant). */
   scheduledFor?: string | null;
+  /** Customer-facing label for the chosen delivery window (e.g. "08 Nov · 9–10 AM"). */
+  scheduledLabel?: string | null;
   items: OrderItem[];
   paymentMethod?: 'cod' | 'upi' | 'phonepay' | null;
   notes?: string;
@@ -114,6 +116,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
               o.placed_outside_hours as "placedOutsideHours",
               o.closed_reason as "closedReason",
               o.scheduled_for as "scheduledFor",
+              o.scheduled_label as "scheduledLabel",
               o.confirmed_next_open as "confirmedNextOpen",
               COALESCE((
                 SELECT json_agg(json_build_object(
@@ -646,8 +649,12 @@ export class OrderService {
         attribution?.last_source ?? null,
         attribution?.last_medium ?? null,
         attribution?.last_campaign ?? null,
-        attribution?.last_qr_code_id ?? null]
+         attribution?.last_qr_code_id ?? null]
       );
+
+      if (data.scheduledLabel) {
+        await client.query(`UPDATE mart_orders SET scheduled_label = $1 WHERE id = $2`, [data.scheduledLabel, orderId]);
+      }
 
       await client.query(
         `UPDATE mart_customers
@@ -737,6 +744,7 @@ export class OrderService {
         itemSavings,
         freeDeliverySaving,
         total,
+        scheduledLabel: data.scheduledLabel || null,
         whatsappMessage: this.buildWhatsAppMessage({
           orderNumber, guestName: data.guestName,
           guestPhone: data.guestPhone, // display format for WhatsApp
@@ -837,9 +845,14 @@ export class OrderService {
   // Every money/count figure is derived live from the order rows in the window —
   // nothing is read from materialised counters (mart_customers.order_count /
   // total_spent) that could drift when an order is cancelled or backfilled.
-  static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | null) {
-    const { where, params } = buildOrderWindow(range, from, to, storeId);
-    const result = await query<{
+   static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | null) {
+     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId);
+     // Today's snapshot must not be polluted by scheduled orders that belong
+     // to a future delivery slot — they are handled in the scheduled queue.
+     const where = range === 'today'
+       ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
+       : baseWhere;
+     const result = await query<{
       placed: number; pending: number; delivered: number; cancelled: number;
       revenue: string | number; delivered_revenue: string | number;
       delivery_collected: string | number;
@@ -849,7 +862,7 @@ export class OrderService {
          COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
          COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
          COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated')), 0)::float AS revenue,
+          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue,
          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivered_revenue,
          COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_collected,
          COUNT(*) FILTER (WHERE o.status = 'delivered' AND o.delivery_charge = 0)::int AS free_deliveries,
@@ -881,8 +894,11 @@ export class OrderService {
   // Customer card figures for the Analytics Customers tab. Spend remains based
   // on delivered orders, while a customer becomes returning as soon as they
   // place a later non-terminal order after a delivery under the same mobile.
-  static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | null, topCount = 10) {
-    const { where, params } = buildOrderWindow(range, from, to, storeId);
+   static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | null, topCount = 10) {
+     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId);
+     const where = range === 'today'
+       ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
+       : baseWhere;
     const phoneIdentity = `NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '')`;
     const storeScope = storeId ? `AND o.store_id = $${params.length}` : '';
     const aggSql = `SELECT
@@ -910,10 +926,10 @@ export class OrderService {
            AND ${phoneIdentity} IS NOT NULL ${storeScope}
          GROUP BY 1
        ), active_customers AS (
-         SELECT s.phone, BOOL_OR(s.created_at > f.first_delivered_at) AS is_returning
-         FROM scoped_orders s
-         JOIN first_deliveries f ON f.phone = s.phone
-         GROUP BY s.phone
+          SELECT s.phone, COALESCE(BOOL_OR(s.created_at > f.first_delivered_at), false) AS is_returning
+          FROM scoped_orders s
+          LEFT JOIN first_deliveries f ON f.phone = s.phone
+          GROUP BY s.phone
        )
        SELECT COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE NOT is_returning)::int AS new_customers,
@@ -1021,7 +1037,7 @@ export class OrderService {
         ...row,
         items,
         fulfilment,
-        scheduledForLabel: formatIstDateTime(row.scheduledFor),
+        scheduledForLabel: row.scheduledLabel || formatIstScheduledRange(row.scheduledFor),
         cancellationPolicy: getCancellationPolicy(row),
       };
     });
@@ -1030,7 +1046,7 @@ export class OrderService {
   static async updateStoreFulfilment(
     orderId: string,
     targetStoreId: string,
-    status: 'prepared' | 'delivered',
+    status: 'prepared' | 'delivered' | 'picked_up',
     actor: { id: string; role: string; storeId: string | null },
   ) {
     return transaction(async client => {
@@ -1055,27 +1071,31 @@ export class OrderService {
       );
       const currentStatus = currentFulfilment.rows[0]?.status as string | undefined;
       if (!currentStatus) throw notFound('Store fulfilment not found');
-      const expectedStatus = status === 'prepared' ? 'pending' : 'prepared';
-      if (currentStatus !== expectedStatus) {
-        throw badRequest(
-          status === 'prepared'
-            ? 'A store fulfilment can start preparing only once'
-            : 'Mark the store fulfilment as preparing before it is ready for pickup'
-        );
-      }
+       const expectedStatus = status === 'prepared' ? 'pending' : status === 'delivered' ? 'prepared' : 'delivered';
+       if (currentStatus !== expectedStatus) {
+         throw badRequest(
+           status === 'prepared'
+             ? 'A store fulfilment can start preparing only once'
+             : status === 'delivered'
+               ? 'Mark the store fulfilment as preparing before it is ready for pickup'
+               : 'Mark the store fulfilment as ready for pickup before it is picked up'
+         );
+       }
 
-      const fulfilmentResult = await client.query(
-        `UPDATE mart_order_store_fulfilments
-            SET status = $3,
-                prepared_at = CASE WHEN $3 = 'prepared' THEN NOW() ELSE prepared_at END,
-                prepared_by = CASE WHEN $3 = 'prepared' THEN $4 ELSE prepared_by END,
-                delivered_at = CASE WHEN $3 = 'delivered' THEN NOW() ELSE delivered_at END,
-                delivered_by = CASE WHEN $3 = 'delivered' THEN $4 ELSE delivered_by END,
-                updated_at = NOW()
-          WHERE order_id = $1 AND store_id = $2
-          RETURNING store_id as "storeId", status, prepared_at as "preparedAt", delivered_at as "deliveredAt"`,
-        [orderId, targetStoreId, status, actor.id]
-      );
+       const fulfilmentResult = await client.query(
+         `UPDATE mart_order_store_fulfilments
+             SET status = $3,
+                 prepared_at = CASE WHEN $3 = 'prepared' THEN NOW() ELSE prepared_at END,
+                 prepared_by = CASE WHEN $3 = 'prepared' THEN $4 ELSE prepared_by END,
+                 delivered_at = CASE WHEN $3 = 'delivered' THEN NOW() ELSE delivered_at END,
+                 delivered_by = CASE WHEN $3 = 'delivered' THEN $4 ELSE delivered_by END,
+                 picked_up_at = CASE WHEN $3 = 'picked_up' THEN NOW() ELSE picked_up_at END,
+                 picked_up_by = CASE WHEN $3 = 'picked_up' THEN $4 ELSE picked_up_by END,
+                 updated_at = NOW()
+           WHERE order_id = $1 AND store_id = $2
+           RETURNING store_id as "storeId", status, prepared_at as "preparedAt", delivered_at as "deliveredAt", picked_up_at as "pickedUpAt"`,
+         [orderId, targetStoreId, status, actor.id]
+       );
       const fulfilment = fulfilmentResult.rows[0]!;
       return { ...fulfilment, ...order };
     });
@@ -1469,7 +1489,8 @@ export class OrderService {
     actor: { id: string; username: string; role: string; storeId: string | null },
     deliveryAssigneeId?: string,
     cancellationReason?: string,
-    paymentMethod?: 'cash' | 'upi'
+    paymentMethod?: 'cash' | 'upi',
+    forceReadyPickup?: boolean
   ) {
     if (status === 'delivered' && !['cash', 'upi'].includes(paymentMethod || '')) {
       throw badRequest('Record Cash or UPI payment before marking this order delivered');
@@ -1492,9 +1513,19 @@ export class OrderService {
       const actorResult = await client.query(
         `SELECT COALESCE(name, username) as name FROM mart_admins WHERE id = $1`, [actor.id]
       );
-      const actorName = actorResult.rows[0]?.name || actor.username;
+       const actorName = actorResult.rows[0]?.name || actor.username;
 
-      const processingRoles = ['super_admin', 'store_owner', 'store_manager', 'staff'];
+       if (status === 'ready_to_pickup') {
+         const fulfilmentRows = await client.query(
+           `SELECT status FROM mart_order_store_fulfilments WHERE order_id = $1`, [id]
+         );
+         const notReady = (fulfilmentRows.rows as Array<{ status: string }>).filter(row => row.status !== 'delivered');
+         if (notReady.length && !forceReadyPickup) {
+           throw Object.assign(new Error('One or more member stores are not ready for pickup'), { status: 409 });
+         }
+       }
+
+       const processingRoles = ['super_admin', 'store_owner', 'store_manager', 'staff'];
       const assignmentRoles = ['super_admin', 'store_owner', 'store_manager'];
       const outsideAreaRoles = ['super_admin', 'store_owner', 'store_manager'];
       const isAssignedHandler = existing.deliveryById === actor.id;
@@ -1551,9 +1582,23 @@ export class OrderService {
           [paymentMethod === 'cash' ? 'cod' : 'upi', id]
         );
       }
-      if (status === 'delivered') {
-        try {
-          if (settings.inventory_tracking === 'true') {
+       if (status === 'delivered') {
+         await client.query(
+           `UPDATE mart_order_store_fulfilments
+               SET status = 'picked_up',
+                   delivered_at = COALESCE(delivered_at, NOW()),
+                   delivered_by = COALESCE(delivered_by, $2),
+                   picked_up_at = NOW(),
+                   picked_up_by = $2,
+                   updated_at = NOW()
+             WHERE order_id = $1
+               AND status IN ('pending', 'prepared', 'delivered')`,
+           [id, actor.id]
+         );
+       }
+       if (status === 'delivered') {
+         try {
+           if (settings.inventory_tracking === 'true') {
             const items = await this.getInventoryItemsForOrder(id, client);
             await InventoryService.deductForOrder(
               id,
@@ -1742,11 +1787,12 @@ export class OrderService {
         `UPDATE mart_orders
             SET delivery_preference = 'scheduled',
                 scheduled_for = $1,
+                scheduled_label = NULL,
                 confirmed_next_open = false,
                 updated_at = NOW()
           WHERE id = $2
           RETURNING id, order_number as "orderNumber", status, store_id as "storeId",
-                    scheduled_for as "scheduledFor"`,
+                    scheduled_for as "scheduledFor", scheduled_label as "scheduledLabel"`,
         [scheduledFor.toISOString(), id],
       );
       await client.query(
@@ -1757,7 +1803,7 @@ export class OrderService {
       return updated.rows[0];
     });
 
-    return { ...order, scheduledForLabel: formatIstDateTime(order.scheduledFor) };
+    return { ...order, scheduledForLabel: order.scheduledLabel || formatIstScheduledRange(order.scheduledFor) };
   }
 
   /**
@@ -1779,7 +1825,8 @@ export class OrderService {
       const current = await client.query(
         `SELECT o.id, o.status, o.store_id as "storeId", o.customer_id as "customerId",
                 o.order_number as "orderNumber", o.placed_outside_hours as "placedOutsideHours",
-                o.scheduled_for as "scheduledFor"
+                o.scheduled_for as "scheduledFor",
+              o.scheduled_label as "scheduledLabel"
          FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
         [id]
       );
@@ -1875,6 +1922,7 @@ export class OrderService {
                 o.cancellation_reason as "cancellationReason",
                 o.delivery_preference as "deliveryPreference",
                 o.scheduled_for as "scheduledFor",
+              o.scheduled_label as "scheduledLabel",
                 o.promised_delivery_at as "promisedDeliveryAt",
                 o.cancellation_window_ends_at as "cancellationWindowEndsAt"
          FROM mart_orders o
@@ -1938,7 +1986,8 @@ export class OrderService {
       const current = await client.query(
         `SELECT o.id, o.status, o.order_number as "orderNumber", o.store_id as "storeId",
                 o.guest_name as "guestName", o.delivery_preference as "deliveryPreference",
-                o.scheduled_for as "scheduledFor", o.promised_delivery_at as "promisedDeliveryAt",
+                o.scheduled_for as "scheduledFor",
+              o.scheduled_label as "scheduledLabel", o.promised_delivery_at as "promisedDeliveryAt",
                 o.cancellation_window_ends_at as "cancellationWindowEndsAt",
                 o.cancellation_requested_at as "cancellationRequestedAt",
                 o.cancellation_request_decision as "cancellationRequestDecision"
@@ -2045,7 +2094,7 @@ export class OrderService {
     // Same IST formatting as the admin hub so both surfaces agree on timestamps.
     return result.rows.map(row => ({
       ...row,
-      scheduledForLabel: formatIstDateTime(row.scheduledFor),
+      scheduledForLabel: row.scheduledLabel || formatIstScheduledRange(row.scheduledFor),
       cancellationPolicy: getCancellationPolicy(row),
     }));
   }
