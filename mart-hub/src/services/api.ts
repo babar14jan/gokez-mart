@@ -183,10 +183,10 @@ export const ordersApi = {
     api.get('/admin/orders', { params, fresh: opts?.fresh }),
   getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string }, opts?: FetchOpts) =>
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
-  updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi') =>
-    api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod }),
+  updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi', forceReadyPickup?: boolean) =>
+    api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod, forceReadyPickup }),
   declineCancellationRequest: (id: string) => api.put(`/admin/orders/${id}/cancellation-request/decline`),
-  updateFulfilment: (id: string, storeId: string, status: 'prepared' | 'delivered') =>
+  updateFulfilment: (id: string, storeId: string, status: 'prepared' | 'delivered' | 'picked_up') =>
     api.put(`/admin/orders/${id}/fulfilments/${storeId}`, { status }),
   // Manage an order's lines: send delivered quantities per line (0 removes the
   // line) and/or add new products. The backend recalculates totals, restores
@@ -497,7 +497,7 @@ export const complianceApi = {
 export const catalogApi = {
   getAll: (params?: { categoryId?: string; search?: string }) =>
     api.get('/admin/catalog', { params }),
-  create: (data: { name: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; photoVariants?: Array<{ assetId?: string; thumbnailUrl: string; largeUrl: string }>; imageAssetIds?: string[]; categoryId?: string }) =>
+  create: (data: { name: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; photoVariants?: Array<{ assetId?: string; thumbnailUrl: string; largeUrl: string }>; imageAssetIds?: string[]; categoryId?: string; photoLocalPath?: string }) =>
     api.post('/admin/catalog', data),
   update: (id: string, data: { name?: string; localName?: string; searchAliases?: string[]; description?: string; photoUrl?: string; photos?: string[]; photoVariants?: Array<{ assetId?: string; thumbnailUrl: string; largeUrl: string }>; imageAssetIds?: string[]; categoryId?: string }) =>
     api.put(`/admin/catalog/${id}`, data),

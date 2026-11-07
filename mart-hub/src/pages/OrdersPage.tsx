@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  ClipboardList, CalendarClock, ChevronDown, Phone, MapPin,
+  ClipboardList, Calendar, CalendarClock, ChevronDown, Phone, MapPin,
   Navigation, Package, XCircle, CheckSquare, Square,
   Truck, Clock, IndianRupee, Search, X,
 } from 'lucide-react';
@@ -86,7 +86,7 @@ const STATUS_LABELS: Record<string, string> = {
 const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
 
 const FULFILMENT_LABELS: Record<string, string> = {
-  pending: 'Waiting to prepare', prepared: 'Preparing', delivered: 'Ready for Pickup', cancelled: 'Cancelled',
+  pending: 'Waiting to prepare', prepared: 'Preparing', delivered: 'Ready for Pickup', picked_up: 'Picked up', cancelled: 'Cancelled',
 };
 const FULFILMENT_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300',
@@ -307,6 +307,8 @@ export default function OrdersPage() {
   const [assigneeId, setAssigneeId] = useState('');
   const [detailsOrder, setDetailsOrder] = useState<any | null>(null);
   const [confirmNextOpenOrder, setConfirmNextOpenOrder] = useState<any | null>(null);
+  const [confirmPrepare, setConfirmPrepare] = useState<{ order: any; mode: 'status' | 'fulfilment'; storeId?: string } | null>(null);
+  const [confirmAssignOrder, setConfirmAssignOrder] = useState<{ order: any; assigneeId: string } | null>(null);
   const [rescheduleOrder, setRescheduleOrder] = useState<any | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState('');
   const [manageOpen, setManageOpen] = useState(false);
@@ -362,8 +364,16 @@ export default function OrdersPage() {
     if (order.placedOutsideHours) return null;
     const threshold = STALE_MINS[order.status];
     if (!threshold) return null;
-    const mins = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000);
-    return mins >= threshold ? mins : null;
+    // Scheduled orders should be timed from the chosen delivery slot start,
+    // not from placement; only flag after 30 min past that start time.
+    const isScheduled = order.deliveryPreference === 'scheduled' && order.scheduledFor;
+    const baseTime = isScheduled
+      ? new Date(order.scheduledFor).getTime()
+      : new Date(order.createdAt).getTime();
+    const effectiveThreshold = isScheduled ? Math.max(threshold, 30) : threshold;
+    const mins = Math.floor((Date.now() - baseTime) / 60000);
+    if (mins < 0) return null;
+    return mins >= effectiveThreshold ? mins : null;
   };
 
   const handleTerminate = async (id: string, reason: string) => {
@@ -505,18 +515,28 @@ export default function OrdersPage() {
     finally { setUpdating(null); }
   };
 
-  const assignForDelivery = async (orderId: string) => {
-    if (!assigneeId) return;
+  const performAssignForDelivery = async (orderId: string, assignee: string) => {
     setUpdating(orderId);
     try {
-      await ordersApi.updateStatus(orderId, 'ready_to_pickup', undefined, undefined, assigneeId);
+      await ordersApi.updateStatus(orderId, 'ready_to_pickup', undefined, undefined, assignee, undefined, true);
       setAssigningOrder(null); setAssigneeId(''); await load();
     } finally { setUpdating(null); }
   };
 
+  const assignForDelivery = (orderId: string) => {
+    if (!assigneeId) return;
+    const order = allOrders.find(o => o.id === orderId);
+    const notReady = (order?.memberStoreFulfilments || []).filter((f: any) => f.status !== 'delivered');
+    if (notReady.length) {
+      setConfirmAssignOrder({ order, assigneeId });
+      return;
+    }
+    performAssignForDelivery(orderId, assigneeId);
+  };
+
   const updateFulfilment = async (
     order: any,
-    status: 'prepared' | 'delivered',
+    status: 'prepared' | 'delivered' | 'picked_up',
     storeId?: string,
   ) => {
     const targetStoreId = storeId || order.fulfilment?.storeId || getActiveStoreId();
@@ -560,7 +580,7 @@ export default function OrdersPage() {
       }
       if (isScheduledQueue) {
         if (o.deliveryPreference !== 'scheduled' || TERMINAL.includes(o.status)) return false;
-      } else if (dateRange === 'today' && o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status)) {
+      } else if (dateRange === 'today' && o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status) && new Date(o.scheduledFor) >= new Date(new Date().setHours(0,0,0,0) + 86400000)) {
         return false;
       }
       if (!isScheduledQueue && statusFilter && o.status !== statusFilter) return false;
@@ -580,17 +600,23 @@ export default function OrdersPage() {
   }, [allOrders, dateBounds, dateRange, statusFilter, deliveryPreferenceFilter, search]);
 
   const statusCounts = useMemo(() => {
+    const isScheduledQueue = deliveryPreferenceFilter === 'scheduled';
     const { start, end } = dateBounds;
     const base = allOrders.filter(o => {
-      const d = orderBrowseDate(o);
-      if (start && d < start) return false;
-      if (end && d > end) return false;
+      if (isScheduledQueue) {
+        if (o.deliveryPreference !== 'scheduled' || TERMINAL.includes(o.status)) return false;
+      } else {
+        if (o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status) && new Date(o.scheduledFor) >= new Date(new Date().setHours(0,0,0,0) + 86400000)) return false;
+        const d = orderBrowseDate(o);
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+      }
       return true;
     });
     return Object.fromEntries(
       STATUS_TABS.map(t => [t.id, t.id === '' ? base.length : base.filter(o => o.status === t.id).length])
     );
-  }, [allOrders, dateBounds]);
+  }, [allOrders, dateBounds, deliveryPreferenceFilter]);
 
   if (loading) return <PageSkeleton />;
 
@@ -605,9 +631,11 @@ export default function OrdersPage() {
               dateRange === tab.id
                 ? 'bg-emerald-500 text-white shadow-sm'
                 : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
-            }`}>
-            {tab.label}
-          </button>
+             }`}>
+             {tab.id === 'custom' && <Calendar className="w-3 h-3 hidden sm:inline" />}
+             <span className="hidden sm:inline">{tab.label}</span>
+             <span className="sm:hidden">{tab.id === 'yesterday' ? 'Yest' : tab.label}</span>
+           </button>
         ))}
         <button type="button" onClick={() => {
           if (deliveryPreferenceFilter !== 'scheduled') setDateRange(null);
@@ -616,8 +644,8 @@ export default function OrdersPage() {
         }}
           className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
             deliveryPreferenceFilter === 'scheduled'
-              ? 'bg-emerald-500 text-white shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
+              ? 'bg-indigo-500 text-white shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-indigo-300'
           }`}>
           Scheduled
         </button>
@@ -885,7 +913,7 @@ export default function OrdersPage() {
                       ) : (
                         <button onClick={e => { e.stopPropagation(); window.open(`tel:${order.guestPhone}`); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
-                          <Phone className="w-3.5 h-3.5" />
+                          <Phone className="w-3.5 h-3.5 hidden sm:inline" />
                           <span className="text-xs font-semibold">{order.guestPhone}</span>
                         </button>
                       )}
@@ -1019,7 +1047,7 @@ export default function OrdersPage() {
                           {canPrepare && (
                             <button
                               type="button"
-                              onClick={e => { e.stopPropagation(); updateFulfilment(order, 'prepared', f.storeId); }}
+                              onClick={e => { e.stopPropagation(); if (order.deliveryPreference === 'scheduled') { setConfirmPrepare({ order, mode: 'fulfilment', storeId: f.storeId }); return; } updateFulfilment(order, 'prepared', f.storeId); }}
                               disabled={isSaving}
                               className="ml-1 underline decoration-dotted underline-offset-2 disabled:opacity-50"
                             >
@@ -1034,6 +1062,16 @@ export default function OrdersPage() {
                               className="ml-1 underline decoration-dotted underline-offset-2 disabled:opacity-50"
                             >
                               {isSaving ? 'Saving…' : 'Ready for pickup'}
+                            </button>
+                          )}
+                          {f.status === 'delivered' && canManageMaster && (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); updateFulfilment(order, 'picked_up', f.storeId); }}
+                              disabled={isSaving}
+                              className="ml-1 underline decoration-dotted underline-offset-2 disabled:opacity-50"
+                            >
+                              {isSaving ? 'Saving…' : 'Mark picked up'}
                             </button>
                           )}
                         </span>
@@ -1093,7 +1131,14 @@ export default function OrdersPage() {
                     {/* Primary next action */}
                     {nextAction && order.status !== 'preparing' && !(order.status === 'pending' && order.placedOutsideHours && canManage) && (
                       <button
-                        onClick={e => updateStatus(order.id, nextAction.status, e)}
+                        onClick={e => {
+                          if (nextAction.status === 'preparing' && order.deliveryPreference === 'scheduled') {
+                            e.stopPropagation();
+                            setConfirmPrepare({ order, mode: 'status' });
+                            return;
+                          }
+                          updateStatus(order.id, nextAction.status, e);
+                        }}
                         disabled={isUpdating}
                         className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold rounded-xl transition-all disabled:opacity-50 ${nextAction.color}`}>
                         {isUpdating
@@ -1238,7 +1283,7 @@ export default function OrdersPage() {
                         </span>
                         {canMarkPrepared && (
                           <button
-                            onClick={e => { e.stopPropagation(); updateFulfilment(order, 'prepared'); }}
+                            onClick={e => { e.stopPropagation(); if (order.deliveryPreference === 'scheduled') { setConfirmPrepare({ order, mode: 'fulfilment' }); return; } updateFulfilment(order, 'prepared'); }}
                             disabled={fulfilmentUpdating === `${order.id}:${fulfilment?.storeId}`}
                             className="flex-1 min-w-[132px] py-2.5 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 rounded-xl disabled:opacity-50"
                           >
@@ -1498,6 +1543,38 @@ export default function OrdersPage() {
           confirmLabel="Confirm"
           onConfirm={() => handleConfirmNextOpen(confirmNextOpenOrder)}
           onCancel={() => setConfirmNextOpenOrder(null)}
+        />
+      )}
+
+      {confirmPrepare && (
+        <ConfirmDialog
+          title="Start preparing scheduled order?"
+          message={`Order #${confirmPrepare.order.orderNumber} is scheduled. Start preparing now?`}
+          confirmLabel="Start preparing"
+          danger={false}
+          onConfirm={async () => {
+            if (confirmPrepare.mode === 'status') {
+              await updateStatus(confirmPrepare.order.id, 'preparing');
+            } else {
+              await updateFulfilment(confirmPrepare.order, 'prepared', confirmPrepare.storeId);
+            }
+            setConfirmPrepare(null);
+          }}
+          onCancel={() => setConfirmPrepare(null)}
+        />
+      )}
+
+      {confirmAssignOrder && (
+        <ConfirmDialog
+          title="Member stores not ready"
+          message={`Some member stores are not marked ready for pickup. Proceed and mark them ready now?`}
+          confirmLabel="Proceed"
+          danger={false}
+          onConfirm={async () => {
+            await performAssignForDelivery(confirmAssignOrder.order.id, confirmAssignOrder.assigneeId);
+            setConfirmAssignOrder(null);
+          }}
+          onCancel={() => setConfirmAssignOrder(null)}
         />
       )}
 

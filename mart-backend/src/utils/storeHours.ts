@@ -452,3 +452,35 @@ export function formatIstDateTime(value: string | Date | null | undefined): stri
   const meridiem = h24 < 12 ? 'AM' : 'PM';
   return `${Number(parts.day)} ${parts.month}, ${h12}:${parts.minute} ${meridiem}`;
 }
+
+export function formatIstScheduledRange(value: string | Date | null | undefined): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  const instant = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(instant.getTime())) return null;
+
+  const parts: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat('en-US', {
+    timeZone: STORE_TIMEZONE, year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(instant)) parts[part.type] = part.value;
+
+  const day = Number(parts.day);
+  const month = parts.month;
+  const startMin = Number(parts.hour) * 60 + Number(parts.minute);
+  const endMin = startMin + 60;
+  const fmt = (mins: number) => {
+    const h24 = Math.floor(mins / 60) % 24;
+    const mm = mins % 60;
+    const h = h24 % 12 === 0 ? 12 : h24 % 12;
+    return mm === 0 ? `${h}` : `${h}:${String(mm).padStart(2, '0')}`;
+  };
+  const startMer = startMin < 720 ? 'AM' : 'PM';
+  const endMer = endMin < 720 || endMin >= 1440 ? (endMin >= 1440 ? 'AM' : 'PM') : 'PM';
+  // simplify meridiem based on end hour
+  const endHour24 = Math.floor((endMin % 1440) / 60);
+  const endMeridiem = endHour24 < 12 ? 'AM' : 'PM';
+  const range = startMer === endMeridiem
+    ? `${fmt(startMin)}–${fmt(endMin % 1440)} ${endMeridiem}`
+    : `${fmt(startMin)} ${startMer}–${fmt(endMin % 1440)} ${endMeridiem}`;
+  return `${day} ${month} · ${range}`;
+}
