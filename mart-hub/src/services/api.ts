@@ -181,7 +181,7 @@ export interface FetchOpts { fresh?: boolean }
 export const ordersApi = {
   getAll: (params?: { storeId?: string; status?: string; deliveryPreference?: string; phone?: string; q?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
     api.get('/admin/orders', { params, fresh: opts?.fresh }),
-  getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string }, opts?: FetchOpts) =>
+  getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; dateBasis?: 'created' | 'browse' }, opts?: FetchOpts) =>
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi', forceReadyPickup?: boolean) =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod, forceReadyPickup }),
@@ -234,7 +234,7 @@ export interface CustomerStats {
 export const customersApi = {
   getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; search?: string; sort?: CustomerSort; limit?: number; offset?: number; range?: SummaryRange; from?: string; to?: string }) =>
     api.get('/admin/customers', { params }),
-  getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number }, opts?: FetchOpts) =>
+  getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number; dateBasis?: 'created' | 'browse' }, opts?: FetchOpts) =>
     api.get('/admin/analytics/customers', { params, fresh: opts?.fresh }),
 };
 
