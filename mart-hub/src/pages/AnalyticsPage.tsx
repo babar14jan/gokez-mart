@@ -20,7 +20,7 @@ function getYesterdayStr() {
   return toDateStr(d);
 }
 
-const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, delivered: 0, cancelled: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
+const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
 
 // Live refresh for tab cards: instant on order events (weak-network friendly)
 // plus a quiet 30s poll so a lost event can never leave stale figures up.
