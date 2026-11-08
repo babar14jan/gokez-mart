@@ -78,7 +78,7 @@ export default function DashboardPage() {
   };
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
-  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, delivered: 0, cancelled: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 });
+  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 });
   const [customerAgg, setCustomerAgg] = useState<CustomerAggregates>({ totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
   const { name, role } = useAuthStore();
   const canSeeCustomers = !!role && ['super_admin', 'store_owner', 'store_manager'].includes(role);
@@ -156,11 +156,20 @@ export default function DashboardPage() {
 
   const kpis = useMemo(() => {
     if (scheduledView) {
+      const preparing = filtered.filter(o => o.status === 'preparing').length;
+      const readyToPickup = filtered.filter(o => o.status === 'ready_to_pickup').length;
+      const outForDelivery = filtered.filter(o => o.status === 'out_for_delivery').length;
+      const pickedUp = filtered.filter(o => o.status === 'picked_up').length;
       return {
         total:     filtered.length,
         pending:   filtered.filter(o => o.status === 'pending').length,
         delivered: filtered.filter(o => o.status === 'delivered').length,
         cancelled: filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length,
+        preparing,
+        readyToPickup,
+        outForDelivery,
+        pickedUp,
+        inProgress: preparing + readyToPickup + outForDelivery + pickedUp,
         revenue:   0,
       };
     }
@@ -169,6 +178,11 @@ export default function DashboardPage() {
       pending:   summary.pending,
       delivered: summary.delivered,
       cancelled: summary.cancelled,
+      preparing: summary.preparing,
+      readyToPickup: summary.readyToPickup,
+      outForDelivery: summary.outForDelivery,
+      pickedUp: summary.pickedUp,
+      inProgress: summary.preparing + summary.readyToPickup + summary.outForDelivery + summary.pickedUp,
       revenue:   summary.revenue,
     };
   }, [scheduledView, filtered, summary]);
@@ -182,6 +196,12 @@ export default function DashboardPage() {
   const rangeLabel = range === 'custom'
     ? `${customFrom || '…'} – ${customTo || '…'}`
     : RANGES.find(r => r.id === range)?.label || '';
+  const inProgressSub = [
+    kpis.preparing > 0 ? `${kpis.preparing} preparing` : '',
+    kpis.readyToPickup > 0 ? `${kpis.readyToPickup} ready` : '',
+    kpis.outForDelivery > 0 ? `${kpis.outForDelivery} out` : '',
+    kpis.pickedUp > 0 ? `${kpis.pickedUp} picked up` : '',
+  ].filter(Boolean).join(' · ') || 'No active orders';
   const navigate = useNavigate();
 
   if (loading) return <PageSkeleton />;
@@ -239,7 +259,7 @@ export default function DashboardPage() {
       <div className={`grid grid-cols-2 sm:grid-cols-3 ${canSeeCustomers ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3 items-stretch`}>
         {[
           { label: 'Total Orders',  value: kpis.total,                    sub: `${kpis.delivered} delivered · ${kpis.cancelled} cancelled`, icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
-          { label: 'Pending',       value: Math.max(kpis.total - kpis.delivered - kpis.cancelled, 0), sub: `${kpis.pending} awaiting confirmation`, icon: Clock, gradient: 'from-amber-500 to-amber-600', href: '/orders' },
+          { label: 'In-progress',   value: kpis.inProgress,               sub: inProgressSub, icon: Clock, gradient: 'from-amber-500 to-amber-600', href: null },
           { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: `₹${(kpis.revenue + summary.couponAmount).toFixed(0)} order value − ₹${summary.couponAmount.toFixed(0)} coupons`, icon: TrendingUp, gradient: 'from-blue-500 to-blue-600', href: null },
           ...(canSeeCustomers ? [{ label: 'Unique Customers', value: displayCustomerAgg.totalCustomers, sub: scheduledView ? `${displayCustomerAgg.totalCustomers} scheduled` : `${displayCustomerAgg.newCustomers} new · ${displayCustomerAgg.repeatCustomers} repeat`, icon: Users, gradient: 'from-cyan-500 to-cyan-600', href: null }] : []),
         ].map(k => {
@@ -353,8 +373,6 @@ export default function DashboardPage() {
             ) : (() => {
               const bars = range === 'today'
                 ? [
-                    { label: 'Pending',    keys: ['pending'],                                                    color: 'bg-amber-400',   textColor: 'text-amber-600 dark:text-amber-400' },
-                    { label: 'Confirmed',  keys: ['confirmed'],                                                  color: 'bg-blue-400',    textColor: 'text-blue-600 dark:text-blue-400' },
                     { label: 'Preparing',  keys: ['preparing', 'ready_to_pickup'],                              color: 'bg-indigo-400',  textColor: 'text-indigo-600 dark:text-indigo-400' },
                     { label: 'On Way',     keys: ['out_for_delivery', 'picked_up'],                             color: 'bg-violet-400',  textColor: 'text-violet-600 dark:text-violet-400' },
                     { label: 'Delivered',  keys: ['delivered'],                                                  color: 'bg-emerald-500', textColor: 'text-emerald-600 dark:text-emerald-400' },
@@ -363,7 +381,7 @@ export default function DashboardPage() {
                 : [
                     { label: 'Delivered',  keys: ['delivered'],                                                  color: 'bg-emerald-500', textColor: 'text-emerald-600 dark:text-emerald-400' },
                     { label: 'Cancelled',  keys: ['cancelled', 'failed_delivery', 'terminated'],                color: 'bg-red-400',     textColor: 'text-red-500 dark:text-red-400' },
-                    { label: 'In Progress',keys: ['pending','confirmed','preparing','ready_to_pickup','out_for_delivery','picked_up'], color: 'bg-amber-400', textColor: 'text-amber-600 dark:text-amber-400' },
+                    { label: 'In Progress',keys: ['preparing','ready_to_pickup','out_for_delivery','picked_up'], color: 'bg-amber-400', textColor: 'text-amber-600 dark:text-amber-400' },
                   ];
 
               const counts = bars.map(b => ({
