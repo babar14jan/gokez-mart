@@ -1206,7 +1206,7 @@ export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Respon
 // orders table (never from stored customer counters), scoped to a range and,
 // for non-super admins, to the caller's store.
 export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to } = req.query;
+  const { range, from, to, dateBasis } = req.query;
   const allowed = range === 'today' || range === '7d' || range === '30d' || range === 'last_month' || range === 'custom' || range === 'all';
   if (range === 'custom' && (typeof from !== 'string' || typeof to !== 'string')) {
     res.status(400).json({ success: false, error: 'Custom range requires from and to dates' });
@@ -1220,7 +1220,8 @@ export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, r
     allowed ? (range as string) : 'all',
     typeof from === 'string' ? from : undefined,
     typeof to === 'string' ? to : undefined,
-    storeId
+    storeId,
+    { dateBasis: dateBasis === 'browse' ? 'browse' : 'created' }
   );
   res.json({ success: true, data: summary });
 });
@@ -1229,7 +1230,7 @@ export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, r
 // spend) — computed live from delivered orders, so stored counters that never
 // get reversed on cancellation can't mislead the cards.
 export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to, top } = req.query;
+  const { range, from, to, top, dateBasis } = req.query;
   const allowed = range === 'today' || range === '7d' || range === '30d' || range === 'last_month' || range === 'custom' || range === 'all';
   if (range === 'custom' && (typeof from !== 'string' || typeof to !== 'string')) {
     res.status(400).json({ success: false, error: 'Custom range requires from and to dates' });
@@ -1241,7 +1242,8 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
     typeof from === 'string' ? from : undefined,
     typeof to === 'string' ? to : undefined,
     storeId,
-    top && !Number.isNaN(parseInt(top as string)) ? Math.min(parseInt(top as string), 100) : 10
+    top && !Number.isNaN(parseInt(top as string)) ? Math.min(parseInt(top as string), 100) : 10,
+    { dateBasis: dateBasis === 'browse' ? 'browse' : 'created' }
   );
   res.json({ success: true, data });
 });
@@ -1844,9 +1846,9 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
 
   // Each query binds its own placeholders, so the window builder is told where
   // its parameters start.
-  const listWindow = buildOrderWindow(range, from, to, null, { startIndex: 5 });
-  const countWindow = buildOrderWindow(range, from, to, null, { startIndex: 4 });
-  const statsWindow = buildOrderWindow(range, from, to, null, { startIndex: 1 });
+  const listWindow = buildOrderWindow(range, from, to, null, { startIndex: 5, dateBasis: 'browse' });
+  const countWindow = buildOrderWindow(range, from, to, null, { startIndex: 4, dateBasis: 'browse' });
+  const statsWindow = buildOrderWindow(range, from, to, null, { startIndex: 1, dateBasis: 'browse' });
   const newWindow = buildOrderWindow(range, from, to, null, {
     column: 'fd.first_delivered_at',
     startIndex: 1 + statsWindow.params.length,

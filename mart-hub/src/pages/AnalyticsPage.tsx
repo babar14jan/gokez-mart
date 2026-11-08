@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { TrendingUp, ShoppingBag, CreditCard, Wallet, Smartphone, CheckCircle, XCircle, Package, Tag, Calendar } from 'lucide-react';
 import { ordersApi, productsApi, type OrderSummary, type SummaryRange } from '../services/api';
+import { orderBrowseDate } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
@@ -8,7 +9,8 @@ import PageSkeleton from '../components/PageSkeleton';
 type Tab = 'revenue' | 'orders' | 'products';
 type DateRange = 'today' | 'yesterday' | 'all' | 'custom';
 
-const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const mapDateRange = (r: DateRange): SummaryRange =>
   r === 'today' ? 'today' : r === 'all' ? 'all' : 'custom';
@@ -140,8 +142,7 @@ function getDateBounds(range: DateRange, customFrom: string, customTo: string): 
     return { start, end };
   }
   if (range === 'custom' && customFrom && customTo) {
-    const end = new Date(customTo); end.setHours(23, 59, 59, 999);
-    return { start: new Date(customFrom), end };
+    return { start: new Date(`${customFrom}T00:00:00`), end: new Date(`${customTo}T23:59:59.999`) };
   }
   return { start: null, end: null };
 }
@@ -149,7 +150,7 @@ function getDateBounds(range: DateRange, customFrom: string, customTo: string): 
 function filterByDate(orders: any[], range: DateRange, customFrom: string, customTo: string) {
   const { start, end } = getDateBounds(range, customFrom, customTo);
   return orders.filter(o => {
-    const d = new Date(o.createdAt);
+    const d = orderBrowseDate(o);
     if (start && d < start) return false;
     if (end && d > end) return false;
     return true;
@@ -181,6 +182,7 @@ function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; ra
       range: mapDateRange(p.range),
       from: p.range === 'yesterday' ? yesterday : (p.customFrom || undefined),
       to: p.range === 'yesterday' ? yesterday : (p.customTo || undefined),
+      dateBasis: 'browse',
     }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
   }, [paramsRef]);
@@ -198,7 +200,7 @@ function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; ra
   const dailyRevenue = days.map(d => ({
     label: showLabel(days.indexOf(d)) ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '',
     fullLabel: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-    value: Math.round(delivered.filter(o => new Date(o.createdAt).toDateString() === d.toDateString()).reduce((s, o) => s + o.total, 0)),
+    value: Math.round(delivered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString()).reduce((s, o) => s + o.total, 0)),
   }));
 
   const paymentBreakdown = ['cod', 'upi', 'phonepay'].map(m => ({
@@ -213,7 +215,7 @@ function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; ra
   const peakDay = dailyRevenue.reduce((a, b) => (b.value > a.value ? b : a), dailyRevenue[0]);
 
   const dailyTable = days.map(d => {
-    const dayOrders = filtered.filter(o => new Date(o.createdAt).toDateString() === d.toDateString());
+    const dayOrders = filtered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString());
     const dayDelivered = dayOrders.filter(o => o.status === 'delivered');
     return {
       date: d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }),
@@ -297,6 +299,7 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
       range: mapDateRange(p.range),
       from: p.range === 'yesterday' ? yesterday : (p.customFrom || undefined),
       to: p.range === 'yesterday' ? yesterday : (p.customTo || undefined),
+      dateBasis: 'browse',
     }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
   }, [paramsRef]);
@@ -308,9 +311,9 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
   const completionRate = summary.placed ? Math.round((summary.delivered / summary.placed) * 100) : 0;
 
   const now = new Date();
-  const thisWeek = orders.filter(o => new Date(o.createdAt) >= new Date(now.getTime() - 7 * 86400000)).length;
-  const lastWeek = orders.filter(o => { const d = new Date(o.createdAt); return d >= new Date(now.getTime() - 14 * 86400000) && d < new Date(now.getTime() - 7 * 86400000); }).length;
-  const twoWeeksAgo = orders.filter(o => { const d = new Date(o.createdAt); return d >= new Date(now.getTime() - 21 * 86400000) && d < new Date(now.getTime() - 14 * 86400000); }).length;
+  const thisWeek = orders.filter(o => orderBrowseDate(o) >= new Date(now.getTime() - 7 * 86400000)).length;
+  const lastWeek = orders.filter(o => { const d = orderBrowseDate(o); return d >= new Date(now.getTime() - 14 * 86400000) && d < new Date(now.getTime() - 7 * 86400000); }).length;
+  const twoWeeksAgo = orders.filter(o => { const d = orderBrowseDate(o); return d >= new Date(now.getTime() - 21 * 86400000) && d < new Date(now.getTime() - 14 * 86400000); }).length;
   const growth = lastWeek === 0 ? null : Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
 
   const days = useMemo(() => getDays(range, customFrom, customTo), [range, customFrom, customTo]);
@@ -319,7 +322,7 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
   const dailyOrders = days.map(d => ({
     label: showLabel(days.indexOf(d)) ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '',
     fullLabel: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-    value: filtered.filter(o => new Date(o.createdAt).toDateString() === d.toDateString()).length,
+    value: filtered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString()).length,
   }));
 
   const weekBars = [
@@ -329,7 +332,7 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
   ];
 
   const dailyTable = days.map(d => {
-    const dayOrders = filtered.filter(o => new Date(o.createdAt).toDateString() === d.toDateString());
+    const dayOrders = filtered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString());
     return {
       date: d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }),
       total: dayOrders.length,

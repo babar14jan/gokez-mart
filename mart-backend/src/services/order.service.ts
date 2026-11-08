@@ -9,6 +9,7 @@ import { FunnelCartService } from './funnelCart.service';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 import { parseSellingUnit } from '../utils/unitConversion';
 import { CUSTOMER_CANCELLATION_MESSAGES, getCancellationPolicy } from '../utils/cancellationPolicy';
+import { ORDER_BROWSE_DATE_SQL } from '../utils/orderDate';
 
 // Reasons a customer may give for cancelling, chosen from the order screen. The
 // keys are what is stored in mart_orders.cancellation_reason; only these values
@@ -185,16 +186,20 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
 // backend reports.
 //
 // `column` lets callers window on a different timestamp (e.g. delivered_at),
-// and `startIndex` keeps placeholder numbering correct when the caller has
-// already bound earlier parameters in the same statement.
+// `dateBasis: 'browse'` windows on the date the order belongs to in the hub
+// (scheduled slot / delivery / terminal event), and `startIndex` keeps
+// placeholder numbering correct when the caller has already bound earlier
+// parameters in the same statement.
 export function buildOrderWindow(
   range: string,
   from?: string,
   to?: string,
   storeId?: string | null,
-  opts?: { column?: string; startIndex?: number },
+  opts?: { column?: string; startIndex?: number; dateBasis?: 'created' | 'browse' },
 ): { where: string; clause: string; params: unknown[] } {
-  const column = opts?.column || 'o.created_at';
+  const column = opts?.dateBasis === 'browse'
+    ? ORDER_BROWSE_DATE_SQL
+    : (opts?.column || 'o.created_at');
   const startIndex = opts?.startIndex || 1;
   const params: unknown[] = [];
   const clauses: string[] = [];
@@ -845,8 +850,8 @@ export class OrderService {
   // Every money/count figure is derived live from the order rows in the window —
   // nothing is read from materialised counters (mart_customers.order_count /
   // total_spent) that could drift when an order is cancelled or backfilled.
-   static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | null) {
-     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId);
+   static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | null, opts?: { dateBasis?: 'created' | 'browse' }) {
+     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId, { dateBasis: opts?.dateBasis });
      // Today's snapshot must not be polluted by scheduled orders that belong
      // to a future delivery slot — they are handled in the scheduled queue.
      const where = range === 'today'
@@ -872,8 +877,10 @@ export class OrderService {
       params
     );
     const row = result.rows[0];
-    // Revenue = value of everything placed in the window that wasn't cancelled,
-    // net of offers (o.total is already subtotal + delivery − campaign_discount).
+    // Revenue = value of everything delivered in the window, net of offers
+    // (o.total is already subtotal + delivery − campaign_discount). The window
+    // uses the browse date when requested, so a scheduled order placed earlier
+    // but delivered today counts today.
     const revenue = Number(row?.revenue ?? 0);
     const delivered = row?.delivered ?? 0;
     const deliveredRevenue = Number(row?.delivered_revenue ?? 0);
@@ -894,8 +901,8 @@ export class OrderService {
   // Customer card figures for the Analytics Customers tab. Spend remains based
   // on delivered orders, while a customer becomes returning as soon as they
   // place a later non-terminal order after a delivery under the same mobile.
-   static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | null, topCount = 10) {
-     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId);
+   static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | null, topCount = 10, opts?: { dateBasis?: 'created' | 'browse' }) {
+     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId, { dateBasis: opts?.dateBasis });
      const where = range === 'today'
        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
        : baseWhere;

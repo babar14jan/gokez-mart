@@ -4,6 +4,7 @@ import { ShoppingBag, ClipboardList, TrendingUp, Clock, XCircle, Calendar, Users
 import { ordersApi, customersApi, type OrderSummary, type CustomerAggregates } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { orderDisplayName } from '../utils/orderName';
+import { orderBrowseDate } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
@@ -105,6 +106,7 @@ export default function DashboardPage() {
       range: (range === 'yesterday' ? 'custom' : range) as import('../services/api').SummaryRange,
       from: range === 'yesterday' ? yesterday : (custom ? customFrom : undefined),
       to: range === 'yesterday' ? yesterday : (custom ? customTo : undefined),
+      dateBasis: 'browse' as const,
     };
     ordersApi.getSummary(params, { fresh })
       .then(r => { if (id === reqId.current) setSummary(r.data.data); })
@@ -144,7 +146,7 @@ export default function DashboardPage() {
     }
     const { start, end } = rangeBounds(range, customFrom, customTo);
     return allOrders.filter(o => {
-      const d = new Date(o.createdAt);
+      const d = orderBrowseDate(o);
       if (start && d < start) return false;
       if (end && d > end) return false;
       if (range === 'today' && o.deliveryPreference === 'scheduled' && !['delivered','cancelled','failed_delivery','terminated'].includes(o.status) && new Date(o.scheduledFor) >= new Date(new Date().setHours(0,0,0,0) + 86400000)) return false;
