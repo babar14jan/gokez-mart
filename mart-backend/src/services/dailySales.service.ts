@@ -1,5 +1,6 @@
 import { query } from '../database/db';
 import { badRequest, notFound } from '../utils/apiError';
+import { ORDER_BROWSE_DATE_SQL } from '../utils/orderDate';
 
 // Daily sales ledger. App-side figures are recomputed live from mart_orders
 // (never stored), so they stay in sync with the dashboard KPIs. Offline
@@ -15,8 +16,8 @@ const TERMINAL = "('cancelled','failed_delivery','terminated')";
 // IST-calendar-day bounds for a `YYYY-MM-DD` local date, matching how
 // buildOrderWindow treats custom dates.
 const dayBounds = (date: string, startIndex = 1) => ({
-  clause: `o.created_at >= ((${`$${startIndex}`}::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
-           AND o.created_at < (((${`$${startIndex + 1}`}::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`,
+  clause: `${ORDER_BROWSE_DATE_SQL} >= ((${`$${startIndex}`}::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+           AND ${ORDER_BROWSE_DATE_SQL} < (((${`$${startIndex + 1}`}::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`,
   params: [date, date],
 });
 
@@ -145,7 +146,7 @@ export class DailySalesService {
       cod_value: string | number; upi_value: string | number;
     }>(
       `SELECT
-         (o.created_at AT TIME ZONE 'Asia/Kolkata')::date::text AS day,
+         (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date::text AS day,
          COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
          COUNT(*) FILTER (WHERE o.status IN ${TERMINAL})::int AS cancelled,
          COALESCE(SUM(o.subtotal + o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS subtotal_value,
@@ -156,8 +157,8 @@ export class DailySalesService {
          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND o.payment_method IN ('upi','phonepay')), 0)::float AS upi_value
        FROM mart_orders o
        WHERE o.store_id = $1
-         AND o.created_at >= (($2::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
-         AND o.created_at <  (((($3::date + 1))::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+         AND ${ORDER_BROWSE_DATE_SQL} >= (($2::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+         AND ${ORDER_BROWSE_DATE_SQL} <  (((($3::date + 1))::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
        GROUP BY 1 ORDER BY 1`,
       [storeId, from, to]
     );

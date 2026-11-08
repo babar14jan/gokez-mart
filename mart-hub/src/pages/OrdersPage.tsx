@@ -7,6 +7,7 @@ import {
 import { ordersApi, teamApi } from '../services/api';
 import { printReceipt } from '../utils/printReceipt';
 import { orderDisplayName } from '../utils/orderName';
+import { orderBrowseDate } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
@@ -48,20 +49,6 @@ const PIPELINE = [
 ];
 
 const TERMINAL = ['delivered', 'cancelled', 'failed_delivery', 'terminated'];
-
-const orderBrowseDate = (order: any): Date => {
-  if (order.deliveryPreference === 'scheduled' && !TERMINAL.includes(order.status) && order.scheduledFor) {
-    return new Date(order.scheduledFor);
-  }
-  if (order.status === 'delivered' && order.deliveredAt) return new Date(order.deliveredAt);
-  if (TERMINAL.includes(order.status)) {
-    const terminalEvent = [...(order.statusEvents || [])]
-      .reverse()
-      .find((event: any) => event.toStatus === order.status);
-    if (terminalEvent?.createdAt) return new Date(terminalEvent.createdAt);
-  }
-  return new Date(order.createdAt);
-};
 
 const STATUS_COLORS: Record<string, string> = {
   pending:          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
