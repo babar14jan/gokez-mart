@@ -859,6 +859,7 @@ export class OrderService {
        : baseWhere;
      const result = await query<{
       placed: number; pending: number; delivered: number; cancelled: number;
+      preparing: number; ready_to_pickup: number; out_for_delivery: number; picked_up: number;
       revenue: string | number; delivered_revenue: string | number;
       delivery_collected: string | number;
       free_deliveries: number; coupon_orders: number; coupon_amount: string | number;
@@ -867,6 +868,10 @@ export class OrderService {
          COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
          COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
          COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
+         COUNT(*) FILTER (WHERE o.status = 'preparing')::int AS preparing,
+         COUNT(*) FILTER (WHERE o.status = 'ready_to_pickup')::int AS ready_to_pickup,
+         COUNT(*) FILTER (WHERE o.status = 'out_for_delivery')::int AS out_for_delivery,
+         COUNT(*) FILTER (WHERE o.status = 'picked_up')::int AS picked_up,
           COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue,
          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivered_revenue,
          COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_collected,
@@ -889,6 +894,10 @@ export class OrderService {
       pending: row?.pending ?? 0,
       delivered,
       cancelled: row?.cancelled ?? 0,
+      preparing: row?.preparing ?? 0,
+      readyToPickup: row?.ready_to_pickup ?? 0,
+      outForDelivery: row?.out_for_delivery ?? 0,
+      pickedUp: row?.picked_up ?? 0,
       revenue,
       avgOrderValue: delivered ? deliveredRevenue / delivered : 0,
       deliveryCollected: Number(row?.delivery_collected ?? 0),

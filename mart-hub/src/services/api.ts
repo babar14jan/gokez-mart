@@ -168,6 +168,10 @@ export interface OrderSummary {
   pending: number;
   delivered: number;
   cancelled: number;
+  preparing: number;
+  readyToPickup: number;
+  outForDelivery: number;
+  pickedUp: number;
   revenue: number;
   avgOrderValue: number;
   deliveryCollected: number;
