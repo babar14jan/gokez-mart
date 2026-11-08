@@ -202,6 +202,13 @@ export default function DashboardPage() {
     kpis.outForDelivery > 0 ? `${kpis.outForDelivery} out` : '',
     kpis.pickedUp > 0 ? `${kpis.pickedUp} picked up` : '',
   ].filter(Boolean).join(' · ') || 'No active orders';
+  const scheduledValue = filtered.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const scheduledCoupon = filtered.reduce((sum, order) => sum + Number(order.campaignDiscount || 0), 0);
+  const displayRevenue = scheduledView ? scheduledValue : kpis.revenue;
+  const displayCouponAmount = scheduledView ? scheduledCoupon : summary.couponAmount;
+  const revenueSub = scheduledView && filtered.length === 0
+    ? 'No scheduled orders'
+    : `₹${(displayRevenue + displayCouponAmount).toFixed(0)} order value − ₹${displayCouponAmount.toFixed(0)} coupons`;
   const navigate = useNavigate();
 
   if (loading) return <PageSkeleton />;
@@ -260,7 +267,7 @@ export default function DashboardPage() {
         {[
           { label: 'Total Orders',  value: kpis.total,                    sub: `${kpis.delivered} delivered · ${kpis.cancelled} cancelled`, icon: ClipboardList, gradient: 'from-emerald-500 to-emerald-600', href: '/orders' },
           { label: 'In-progress',   value: kpis.inProgress,               sub: inProgressSub, icon: Clock, gradient: 'from-amber-500 to-amber-600', href: null },
-          { label: 'Revenue',       value: `₹${kpis.revenue.toFixed(0)}`, sub: `₹${(kpis.revenue + summary.couponAmount).toFixed(0)} order value − ₹${summary.couponAmount.toFixed(0)} coupons`, icon: TrendingUp, gradient: 'from-blue-500 to-blue-600', href: null },
+          { label: scheduledView ? 'Scheduled Value' : 'Revenue', value: `₹${displayRevenue.toFixed(0)}`, sub: revenueSub, icon: TrendingUp, gradient: 'from-blue-500 to-blue-600', href: null },
           ...(canSeeCustomers ? [{ label: 'Unique Customers', value: displayCustomerAgg.totalCustomers, sub: scheduledView ? `${displayCustomerAgg.totalCustomers} scheduled` : `${displayCustomerAgg.newCustomers} new · ${displayCustomerAgg.repeatCustomers} repeat`, icon: Users, gradient: 'from-cyan-500 to-cyan-600', href: null }] : []),
         ].map(k => {
           const inner = (
