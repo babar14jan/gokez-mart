@@ -42,7 +42,7 @@ export default function ConfirmDialog({
             className={`flex-1 py-2.5 text-sm font-semibold text-white rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70 ${
               danger ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'
             }`}>
-            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</> : confirmLabel}
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> {confirmLabel}…</> : confirmLabel}
           </button>
         </div>
       </div>
