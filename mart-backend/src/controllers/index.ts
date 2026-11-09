@@ -1332,7 +1332,18 @@ export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest,
   const rangeRaw = typeof req.query.range === 'string' ? req.query.range : '30d';
   const range = ['5d', '10d', '30d', 'all'].includes(rangeRaw) ? rangeRaw : '30d';
   const storeId = resolveStoreId(req);
-  const data = await OrderService.getTopSellingProducts(range, storeId);
+  if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
+    throw forbidden('Top selling stats are available to head store managers and owners only');
+  }
+  const zoneRows = await query<{ storeId: string }>(
+    `SELECT zs.store_id AS "storeId"
+       FROM mart_zones z
+       JOIN mart_zone_stores zs ON zs.zone_id = z.id
+      WHERE z.primary_store_id = $1 AND z.is_active = true`,
+    [storeId]
+  );
+  const storeIds = zoneRows.rows.length ? zoneRows.rows.map(r => r.storeId) : [storeId];
+  const data = await OrderService.getTopSellingProducts(range, storeIds);
   res.json({ success: true, data });
 });
 

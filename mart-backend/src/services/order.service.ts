@@ -2076,12 +2076,12 @@ export class OrderService {
     });
   }
 
-  static async getTopSellingProducts(range = '30d', storeId?: string | null) {
+  static async getTopSellingProducts(range = '30d', storeIds?: string[] | null) {
     const params: unknown[] = [];
     const conditions: string[] = [`o.status = 'delivered'`];
-    if (storeId) {
-      conditions.push(`o.store_id = $${params.length + 1}`);
-      params.push(storeId);
+    if (storeIds && storeIds.length) {
+      conditions.push(`o.store_id = ANY($${params.length + 1}::uuid[])`);
+      params.push(storeIds);
     }
     const dateCol = `COALESCE(o.delivered_at, o.created_at)`;
     if (range === '5d') conditions.push(`${dateCol} >= NOW() - INTERVAL '5 days'`);
