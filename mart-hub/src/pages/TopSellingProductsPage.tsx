@@ -113,20 +113,21 @@ export default function TopSellingProductsPage() {
         </div>
       ) : (
         <div className="page-card overflow-hidden">
-          <div className="grid grid-cols-[3rem_1fr_1fr_6rem] gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+          <div className="grid grid-cols-[3rem_1fr_6rem] gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
             <span>#</span>
             <span>Product</span>
-            <span>Hindi name</span>
             <span className="text-right">Orders</span>
           </div>
           {visible.map((product, index) => (
             <div
               key={product.id}
-              className="grid grid-cols-[3rem_1fr_1fr_6rem] gap-2 px-4 py-2.5 border-b border-gray-50 dark:border-slate-800 last:border-0 items-center"
+              className="grid grid-cols-[3rem_1fr_6rem] gap-2 px-4 py-2.5 border-b border-gray-50 dark:border-slate-800 last:border-0 items-center"
             >
               <span className="text-xs font-bold text-gray-500 dark:text-slate-400">{index + 1}</span>
-              <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">{product.name}</span>
-              <span className="text-xs text-gray-600 dark:text-slate-300 truncate">{product.hindiName || '—'}</span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-900 dark:text-white">{product.name}</p>
+                <p className="text-[11px] text-gray-500 dark:text-slate-400">{product.hindiName || '—'}</p>
+              </div>
               <span className="text-xs font-bold text-gray-900 dark:text-white text-right">{product.orderCount}</span>
             </div>
           ))}
