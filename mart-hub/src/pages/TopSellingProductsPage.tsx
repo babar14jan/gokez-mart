@@ -66,8 +66,7 @@ export default function TopSellingProductsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">Top selling products</h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-gray-500 dark:text-slate-400">
             Delivered orders only. Ranked by number of orders.
           </p>
         </div>

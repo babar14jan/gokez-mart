@@ -156,6 +156,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/categories': 'Categories', '/customers': 'Customers',
     '/analytics': 'Analytics', '/inventory': 'Inventory',
     '/daily-sales': 'Sales Overview',
+    '/top-selling': 'Top selling',
     '/profile': 'My Profile', '/change-password': 'Change Password',
     '/stores': 'Stores', '/zones': 'Zones', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Requests',
@@ -264,7 +265,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
+              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <div className="flex items-center gap-1 -ml-1 min-w-0">
                   <button onClick={() => navigate(-1)}
                     className="p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">
