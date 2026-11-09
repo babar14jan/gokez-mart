@@ -20,6 +20,7 @@ interface TopProduct {
   categoryName: string;
   orderCount: number;
   quantitySold: number;
+  unit: string;
 }
 
 export default function TopSellingProductsPage() {
@@ -131,7 +132,7 @@ export default function TopSellingProductsPage() {
               </div>
               <div className="text-right">
                 <p className="text-xs font-bold text-gray-900 dark:text-white">{product.orderCount}</p>
-                <p className="text-[10px] text-gray-500 dark:text-slate-400">{product.quantitySold} units</p>
+                <p className="text-[10px] text-gray-500 dark:text-slate-400">{product.quantitySold} {product.unit || 'units'}</p>
               </div>
             </div>
           ))}

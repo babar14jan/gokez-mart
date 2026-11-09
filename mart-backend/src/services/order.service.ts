@@ -2089,7 +2089,7 @@ export class OrderService {
     else if (range === '30d') conditions.push(`${dateCol} >= NOW() - INTERVAL '30 days'`);
     const where = conditions.join(' AND ');
     const result = await query<{
-      id: string; name: string; hindiName: string | null; categoryId: string | null; categoryName: string | null; orderCount: number; quantitySold: number;
+      id: string; name: string; hindiName: string | null; categoryId: string | null; categoryName: string | null; orderCount: number; quantitySold: number; unit: string;
     }>(
       `SELECT COALESCE(p.id::text, 'name:' || md5(oi.product_name)) AS id,
               COALESCE(p.name, oi.product_name) AS name,
@@ -2097,7 +2097,8 @@ export class OrderService {
               p.category_id AS "categoryId",
               COALESCE(c.name, 'Uncategorised') AS "categoryName",
               COUNT(DISTINCT o.id)::int AS "orderCount",
-              COALESCE(SUM(oi.quantity), 0)::int AS "quantitySold"
+              COALESCE(SUM(oi.quantity), 0)::int AS "quantitySold",
+              COALESCE(MAX(oi.unit), '') AS "unit"
          FROM mart_orders o
          JOIN mart_order_items oi ON oi.order_id = o.id
          LEFT JOIN mart_products p ON p.id = oi.product_id
@@ -2118,6 +2119,7 @@ export class OrderService {
         categoryName: r.categoryName || 'Uncategorised',
         orderCount: Number(r.orderCount || 0),
         quantitySold: Number(r.quantitySold || 0),
+        unit: r.unit || '',
       })),
     };
   }
