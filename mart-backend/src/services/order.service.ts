@@ -2076,7 +2076,7 @@ export class OrderService {
     });
   }
 
-  static async getTopSellingProducts(range = '30d', storeIds?: string[] | null) {
+  static async getTopSellingProducts(range = '30d', storeIds?: string[] | null, from?: string, to?: string) {
     const params: unknown[] = [];
     const conditions: string[] = [`o.status = 'delivered'`];
     if (storeIds && storeIds.length) {
@@ -2087,6 +2087,14 @@ export class OrderService {
     if (range === '5d') conditions.push(`${dateCol} >= NOW() - INTERVAL '5 days'`);
     else if (range === '10d') conditions.push(`${dateCol} >= NOW() - INTERVAL '10 days'`);
     else if (range === '30d') conditions.push(`${dateCol} >= NOW() - INTERVAL '30 days'`);
+    else if (range === 'custom' && from && to) {
+      const fromIndex = params.length + 1;
+      params.push(from);
+      const toIndex = params.length + 1;
+      params.push(to);
+      conditions.push(`${dateCol} >= (($${fromIndex}::date)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
+      conditions.push(`${dateCol} < ((($${toIndex}::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
+    }
     const where = conditions.join(' AND ');
     const result = await query<{
       id: string; name: string; hindiName: string | null; categoryId: string | null; categoryName: string | null; orderCount: number; quantitySold: number; unit: string;

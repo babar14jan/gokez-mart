@@ -1330,7 +1330,9 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
 
 export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
   const rangeRaw = typeof req.query.range === 'string' ? req.query.range : '30d';
-  const range = ['5d', '10d', '30d', 'all'].includes(rangeRaw) ? rangeRaw : '30d';
+  const range = ['5d', '10d', '30d', 'all', 'custom'].includes(rangeRaw) ? rangeRaw : '30d';
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
   const storeId = resolveStoreId(req);
   if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
     throw forbidden('Top selling stats are available to head store managers and owners only');
@@ -1343,7 +1345,7 @@ export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest,
     [storeId]
   );
   const storeIds = zoneRows.rows.length ? zoneRows.rows.map(r => r.storeId) : [storeId];
-  const data = await OrderService.getTopSellingProducts(range, storeIds);
+  const data = await OrderService.getTopSellingProducts(range, storeIds, from, to);
   res.json({ success: true, data });
 });
 

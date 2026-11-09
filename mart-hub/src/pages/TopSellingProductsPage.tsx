@@ -3,13 +3,14 @@ import { topSellingApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import PageSkeleton from '../components/PageSkeleton';
 
-type Range = '5d' | '10d' | '30d' | 'all';
+type Range = '5d' | '10d' | '30d' | 'all' | 'custom';
 
 const RANGE_TABS: { id: Range; label: string; short: string }[] = [
   { id: '5d', label: 'Last 5 days', short: '5D' },
   { id: '10d', label: 'Last 10 days', short: '10D' },
   { id: '30d', label: 'Last 30 days', short: '30D' },
   { id: 'all', label: 'All', short: 'All' },
+  { id: 'custom', label: 'Custom', short: 'Custom' },
 ];
 
 interface TopProduct {
@@ -26,16 +27,19 @@ interface TopProduct {
 export default function TopSellingProductsPage() {
   const storeId = getActiveStoreId();
   const [range, setRange] = useState<Range>('30d');
+  const [customFrom, setCustomFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [customTo, setCustomTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [category, setCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<string[]>([]);
   const [products, setProducts] = useState<TopProduct[]>([]);
 
   useEffect(() => {
+    if (range === 'custom' && (!customFrom || !customTo)) return;
     let cancelled = false;
     setLoading(true);
     topSellingApi
-      .get(range, storeId, { fresh: true })
+      .get(range, storeId, range === 'custom' ? customFrom : undefined, range === 'custom' ? customTo : undefined, { fresh: true })
       .then(res => {
         if (cancelled) return;
         const data = res.data?.data || {};
@@ -51,7 +55,7 @@ export default function TopSellingProductsPage() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [range, storeId]);
+  }, [range, storeId, customFrom, customTo]);
 
   useEffect(() => {
     setCategory('All');
@@ -90,6 +94,14 @@ export default function TopSellingProductsPage() {
           </button>
         ))}
       </div>
+
+      {range === 'custom' && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+          <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
+          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
+        </div>
+      )}
 
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         {categoryTabs.map(cat => (

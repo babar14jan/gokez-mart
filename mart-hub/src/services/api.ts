@@ -661,6 +661,6 @@ export const dailySalesApi = {
 };
 
 export const topSellingApi = {
-  get: (range: '5d' | '10d' | '30d' | 'all', storeId?: string, opts?: FetchOpts) =>
-    api.get('/admin/analytics/top-products', { params: { range, storeId }, fresh: opts?.fresh }),
+  get: (range: '5d' | '10d' | '30d' | 'all' | 'custom', storeId?: string, from?: string, to?: string, opts?: FetchOpts) =>
+    api.get('/admin/analytics/top-products', { params: { range, storeId, from, to }, fresh: opts?.fresh }),
 };
