@@ -5,11 +5,11 @@ import PageSkeleton from '../components/PageSkeleton';
 
 type Range = '5d' | '10d' | '30d' | 'all';
 
-const RANGE_TABS: { id: Range; label: string }[] = [
-  { id: '5d', label: 'Last 5 days' },
-  { id: '10d', label: 'Last 10 days' },
-  { id: '30d', label: 'Last 30 days' },
-  { id: 'all', label: 'All' },
+const RANGE_TABS: { id: Range; label: string; short: string }[] = [
+  { id: '5d', label: 'Last 5 days', short: '5D' },
+  { id: '10d', label: 'Last 10 days', short: '10D' },
+  { id: '30d', label: 'Last 30 days', short: '30D' },
+  { id: 'all', label: 'All', short: 'All' },
 ];
 
 interface TopProduct {
@@ -83,7 +83,8 @@ export default function TopSellingProductsPage() {
                 : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
             }`}
           >
-            {tab.label}
+            <span className="sm:hidden">{tab.short}</span>
+            <span className="hidden sm:inline">{tab.label}</span>
           </button>
         ))}
       </div>
