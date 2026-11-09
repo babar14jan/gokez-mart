@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
   Store, ShoppingBag, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb, MapPin,
-  TrendingUp,
+  TrendingUp, RotateCcw,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, authApi } from '../services/api';
@@ -30,6 +30,7 @@ export const NAV_ALL: NavItem[] = [
   { label: 'Products',           href: '/products',            icon: ShoppingBag,     roles: ['super_admin', 'store_owner', 'store_manager', 'staff'], section: 'Daily Work' },
   { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'staff'], section: 'Daily Work' },
   { label: 'Sales',              href: '/daily-sales',         icon: TrendingUp,      roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Daily Work' },
+  { label: 'Top Selling',      href: '/top-selling',        icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
   { label: 'My Deliveries',      href: '/delivery',            icon: Truck,           roles: ['delivery_staff', 'staff'], section: 'Daily Work' },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
   { label: 'Catalog',            href: '/catalog',             icon: LayoutList,      roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
@@ -48,6 +49,7 @@ export const NAV_ALL: NavItem[] = [
   { label: 'Subscriptions',      href: '/subscriptions',       icon: CreditCard,      roles: ['super_admin'], section: 'Administration' },
   { label: 'Store Requests',     href: '/store-applications',  icon: Inbox,           roles: ['super_admin'], section: 'Administration' },
   { label: 'Users',              href: '/users',               icon: UserCog,         roles: ['super_admin'], section: 'Administration' },
+  { label: 'Restore Order',      href: '/restore-order',       icon: RotateCcw,       roles: ['super_admin'], section: 'Administration' },
   { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'], section: 'Administration' },
 ];
 
@@ -154,6 +156,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/categories': 'Categories', '/customers': 'Customers',
     '/analytics': 'Analytics', '/inventory': 'Inventory',
     '/daily-sales': 'Sales Overview',
+    '/top-selling': 'Top selling',
     '/profile': 'My Profile', '/change-password': 'Change Password',
     '/stores': 'Stores', '/zones': 'Zones', '/users': 'Users', '/compliance': 'Compliance', '/more': 'More',
     '/store-applications': 'Store Requests',
@@ -262,7 +265,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left */}
             <div className="lg:hidden">
-              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
+              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <div className="flex items-center gap-1 -ml-1 min-w-0">
                   <button onClick={() => navigate(-1)}
                     className="p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">

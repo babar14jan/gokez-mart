@@ -213,6 +213,20 @@ export const ordersApi = {
     api.post('/admin/orders/batch-dispatch', { orderIds }),
   terminate: (id: string, reason: string, customReason?: string) =>
     api.put(`/admin/orders/${id}/terminate`, { reason, customReason }),
+  lookupRestore: (phone: string) =>
+    api.get('/admin/orders/restore/lookup', { params: { phone }, fresh: true }),
+  restore: (data: {
+    phone: string;
+    cartId: string;
+    status: string;
+    orderNumber?: string;
+    storeId?: string;
+    deliveryCharge?: number;
+    paymentMethod?: 'cod' | 'upi' | 'phonepay';
+    guestName?: string;
+    guestAddress?: string;
+    notes?: string;
+  }) => api.post('/admin/orders/restore', data),
 };
 
 // ── Customers ─────────────────────────────────────────────────────────────────
@@ -644,4 +658,9 @@ export const dailySalesApi = {
   }) => api.put(`/admin/daily-sales/entries/${data.id}`, data),
   removeEntry: (id: string, storeId?: string) =>
     api.delete(`/admin/daily-sales/entries/${id}`, { params: { storeId } }),
+};
+
+export const topSellingApi = {
+  get: (range: '5d' | '10d' | '30d' | 'all' | 'custom', storeId?: string, from?: string, to?: string, opts?: FetchOpts) =>
+    api.get('/admin/analytics/top-products', { params: { range, storeId, from, to }, fresh: opts?.fresh }),
 };
