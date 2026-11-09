@@ -98,6 +98,8 @@ router.delete('/admin/users/:id', authenticate, requireSuperAdmin, ctrl.adminDel
 
 // ── Admin orders ──────────────────────────────────────────────────────────────
 router.get('/admin/orders',            authenticate, ctrl.adminGetOrders);       // ?storeId=
+router.get('/admin/orders/restore/lookup', authenticate, requireSuperAdmin, ctrl.adminLookupRestorableOrder); // ?phone=
+router.post('/admin/orders/restore',       authenticate, requireSuperAdmin, ctrl.adminRestoreOrder);
 router.get('/admin/analytics/summary', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetAnalyticsSummary); // ?range=&from=&to=&storeId=
 router.get('/admin/analytics/customers', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetCustomerAggregates); // ?range=&from=&to=&storeId=&top=
 router.get('/admin/daily-sales',          authenticate, ctrl.adminGetDailySales);         // ?mode=today|yesterday|month|all|custom&from=&to=&storeId=

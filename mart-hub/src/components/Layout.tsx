@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
   Store, ShoppingBag, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb, MapPin,
-  TrendingUp,
+  TrendingUp, RotateCcw,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, authApi } from '../services/api';
@@ -48,6 +48,7 @@ export const NAV_ALL: NavItem[] = [
   { label: 'Subscriptions',      href: '/subscriptions',       icon: CreditCard,      roles: ['super_admin'], section: 'Administration' },
   { label: 'Store Requests',     href: '/store-applications',  icon: Inbox,           roles: ['super_admin'], section: 'Administration' },
   { label: 'Users',              href: '/users',               icon: UserCog,         roles: ['super_admin'], section: 'Administration' },
+  { label: 'Restore Order',      href: '/restore-order',       icon: RotateCcw,       roles: ['super_admin'], section: 'Administration' },
   { label: 'Compliance',         href: '/compliance',          icon: Shield,          roles: ['super_admin'], section: 'Administration' },
 ];
 
