@@ -89,12 +89,12 @@ export default function TopSellingProductsPage() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         {categoryTabs.map(cat => (
           <button
             key={cat}
             onClick={() => setCategory(cat)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            className={`flex-shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               category === cat
                 ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
                 : 'bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700'
