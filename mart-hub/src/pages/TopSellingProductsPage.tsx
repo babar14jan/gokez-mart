@@ -19,6 +19,7 @@ interface TopProduct {
   categoryId: string | null;
   categoryName: string;
   orderCount: number;
+  quantitySold: number;
 }
 
 export default function TopSellingProductsPage() {
@@ -128,7 +129,10 @@ export default function TopSellingProductsPage() {
                 <p className="text-xs font-semibold text-gray-900 dark:text-white">{product.name}</p>
                 <p className="text-[11px] text-gray-500 dark:text-slate-400">{product.hindiName || '—'}</p>
               </div>
-              <span className="text-xs font-bold text-gray-900 dark:text-white text-right">{product.orderCount}</span>
+              <div className="text-right">
+                <p className="text-xs font-bold text-gray-900 dark:text-white">{product.orderCount}</p>
+                <p className="text-[10px] text-gray-500 dark:text-slate-400">{product.quantitySold} units</p>
+              </div>
             </div>
           ))}
         </div>
