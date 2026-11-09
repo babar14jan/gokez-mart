@@ -8,6 +8,7 @@ import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_R
 import { ProductService, MartProduct, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
 import { CategoryService } from '../services/category.service';
 import { OrderService, buildOrderWindow, CUSTOMER_CANCEL_REASONS, CustomerCancelReason } from '../services/order.service';
+import { OrderRestoreService, RESTORE_STATUSES, RestoreStatus, RestorePaymentMethod } from '../services/orderRestore.service';
 import { CUSTOMER_CANCELLATION_MESSAGES } from '../utils/cancellationPolicy';
 import { SettingsService } from '../services/settings.service';
 import { ZoneService } from '../services/zone.service';
@@ -1202,6 +1203,80 @@ export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Respon
   });
 });
 
+export const adminLookupRestorableOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const phone = typeof req.query.phone === 'string' ? req.query.phone : '';
+  if (!phone.trim()) {
+    res.status(400).json({ success: false, error: 'Phone number is required' });
+    return;
+  }
+  const data = await OrderRestoreService.lookup(phone);
+  res.json({ success: true, data });
+});
+
+export const adminRestoreOrder = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone : '';
+  const cartId = typeof req.body?.cartId === 'string' ? req.body.cartId : '';
+  const statusRaw = req.body?.status;
+  const status = typeof statusRaw === 'string' && (RESTORE_STATUSES as readonly string[]).includes(statusRaw)
+    ? statusRaw as RestoreStatus
+    : null;
+  if (!status) {
+    res.status(400).json({ success: false, error: 'Choose a valid order status' });
+    return;
+  }
+  const paymentRaw = req.body?.paymentMethod;
+  const paymentMethod = paymentRaw === undefined || paymentRaw === null || paymentRaw === ''
+    ? undefined
+    : paymentRaw === 'cod' || paymentRaw === 'upi' || paymentRaw === 'phonepay'
+      ? paymentRaw as RestorePaymentMethod
+      : null;
+  if (paymentMethod === null) {
+    res.status(400).json({ success: false, error: 'Choose a valid payment method' });
+    return;
+  }
+  const deliveryChargeRaw = req.body?.deliveryCharge;
+  const deliveryCharge = deliveryChargeRaw === undefined || deliveryChargeRaw === null || deliveryChargeRaw === ''
+    ? undefined
+    : Number(deliveryChargeRaw);
+  if (deliveryCharge !== undefined && (!Number.isFinite(deliveryCharge) || deliveryCharge < 0)) {
+    res.status(400).json({ success: false, error: 'Delivery charge must be zero or more' });
+    return;
+  }
+
+  const result = await OrderRestoreService.restore({
+    phone,
+    cartId,
+    status,
+    orderNumber: typeof req.body?.orderNumber === 'string' && req.body.orderNumber.trim()
+      ? req.body.orderNumber.trim()
+      : undefined,
+    storeId: typeof req.body?.storeId === 'string' && req.body.storeId ? req.body.storeId : undefined,
+    deliveryCharge,
+    paymentMethod: paymentMethod || undefined,
+    guestName: typeof req.body?.guestName === 'string' ? req.body.guestName : undefined,
+    guestAddress: typeof req.body?.guestAddress === 'string' ? req.body.guestAddress : undefined,
+    notes: typeof req.body?.notes === 'string' ? req.body.notes : undefined,
+  }, {
+    id: req.admin!.id,
+    username: req.admin!.username,
+    role: req.admin!.role,
+    storeId: req.admin!.storeId,
+  });
+
+  emitOrderEvent({
+    type: 'order.created',
+    order: {
+      id: result.orderId,
+      orderNumber: result.orderNumber,
+      status: result.status,
+      total: result.total,
+      storeId: result.storeId,
+    },
+  });
+
+  res.status(201).json({ success: true, data: result });
+});
+
 // KPI summary for the hub Dashboard + Analytics cards. Computed live from the
 // orders table (never from stored customer counters), scoped to a range and,
 // for non-super admins, to the caller's store.
@@ -1252,6 +1327,27 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
 // App-side figures come live from mart_orders. Offline counter sales are
 // itemised rows in mart_offline_sales (one per product sold), so the day's
 // cash/UPI split is a SUM over the rows staff actually entered.
+
+export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const rangeRaw = typeof req.query.range === 'string' ? req.query.range : '30d';
+  const range = ['5d', '10d', '30d', 'all', 'custom'].includes(rangeRaw) ? rangeRaw : '30d';
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  const storeId = resolveStoreId(req);
+  if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
+    throw forbidden('Top selling stats are available to head store managers and owners only');
+  }
+  const zoneRows = await query<{ storeId: string }>(
+    `SELECT zs.store_id AS "storeId"
+       FROM mart_zones z
+       JOIN mart_zone_stores zs ON zs.zone_id = z.id
+      WHERE z.primary_store_id = $1 AND z.is_active = true`,
+    [storeId]
+  );
+  const storeIds = zoneRows.rows.length ? zoneRows.rows.map(r => r.storeId) : [storeId];
+  const data = await OrderService.getTopSellingProducts(range, storeIds, from, to);
+  res.json({ success: true, data });
+});
 
 export const adminGetDailySalesDay = asyncHandler(async (req: AdminRequest, res: Response) => {
   await assertDailySalesAccess(req);
