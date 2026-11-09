@@ -2076,6 +2076,50 @@ export class OrderService {
     });
   }
 
+  static async getTopSellingProducts(range = '30d', storeId?: string | null) {
+    const params: unknown[] = [];
+    const conditions: string[] = [`o.status = 'delivered'`];
+    if (storeId) {
+      conditions.push(`o.store_id = $${params.length + 1}`);
+      params.push(storeId);
+    }
+    const dateCol = `COALESCE(o.delivered_at, o.created_at)`;
+    if (range === '5d') conditions.push(`${dateCol} >= NOW() - INTERVAL '5 days'`);
+    else if (range === '10d') conditions.push(`${dateCol} >= NOW() - INTERVAL '10 days'`);
+    else if (range === '30d') conditions.push(`${dateCol} >= NOW() - INTERVAL '30 days'`);
+    const where = conditions.join(' AND ');
+    const result = await query<{
+      id: string; name: string; hindiName: string | null; categoryId: string | null; categoryName: string | null; orderCount: number;
+    }>(
+      `SELECT COALESCE(p.id::text, 'name:' || md5(oi.product_name)) AS id,
+              COALESCE(p.name, oi.product_name) AS name,
+              p.local_name AS "hindiName",
+              p.category_id AS "categoryId",
+              COALESCE(c.name, 'Uncategorised') AS "categoryName",
+              COUNT(DISTINCT o.id)::int AS "orderCount"
+         FROM mart_orders o
+         JOIN mart_order_items oi ON oi.order_id = o.id
+         LEFT JOIN mart_products p ON p.id = oi.product_id
+         LEFT JOIN mart_categories c ON c.id = p.category_id
+        WHERE ${where}
+        GROUP BY p.id, COALESCE(p.name, oi.product_name), p.local_name, p.category_id, c.name, oi.product_name
+        ORDER BY "orderCount" DESC, name ASC`,
+      params
+    );
+    const categories = [...new Set(result.rows.map(r => r.categoryName || 'Uncategorised'))].sort();
+    return {
+      categories,
+      products: result.rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        hindiName: r.hindiName,
+        categoryId: r.categoryId,
+        categoryName: r.categoryName || 'Uncategorised',
+        orderCount: Number(r.orderCount || 0),
+      })),
+    };
+  }
+
   static async trackByPhone(phone: string) {
     return this.findAll({ phone, limit: 10 });
   }

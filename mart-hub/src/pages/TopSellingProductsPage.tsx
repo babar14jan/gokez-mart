@@ -1,0 +1,137 @@
+import { useEffect, useMemo, useState } from 'react';
+import { topSellingApi } from '../services/api';
+import { getActiveStoreId } from '../utils/store';
+import PageSkeleton from '../components/PageSkeleton';
+
+type Range = '5d' | '10d' | '30d' | 'all';
+
+const RANGE_TABS: { id: Range; label: string }[] = [
+  { id: '5d', label: 'Last 5 days' },
+  { id: '10d', label: 'Last 10 days' },
+  { id: '30d', label: 'Last 30 days' },
+  { id: 'all', label: 'All' },
+];
+
+interface TopProduct {
+  id: string;
+  name: string;
+  hindiName: string | null;
+  categoryId: string | null;
+  categoryName: string;
+  orderCount: number;
+}
+
+export default function TopSellingProductsPage() {
+  const storeId = getActiveStoreId();
+  const [range, setRange] = useState<Range>('30d');
+  const [category, setCategory] = useState<string>('All');
+  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [products, setProducts] = useState<TopProduct[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    topSellingApi
+      .get(range, storeId, { fresh: true })
+      .then(res => {
+        if (cancelled) return;
+        const data = res.data?.data || {};
+        setCategories(Array.isArray(data.categories) ? data.categories : []);
+        setProducts(Array.isArray(data.products) ? data.products : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCategories([]);
+        setProducts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [range, storeId]);
+
+  useEffect(() => {
+    setCategory('All');
+  }, [range]);
+
+  const visible = useMemo(
+    () => (category === 'All' ? products : products.filter(p => p.categoryName === category)),
+    [products, category],
+  );
+
+  const categoryTabs = useMemo(() => ['All', ...categories], [categories]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white">Top selling products</h1>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+            Delivered orders only. Ranked by number of orders.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-700 pb-2">
+        {RANGE_TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setRange(tab.id)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              range === tab.id
+                ? 'bg-emerald-500 text-white'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {categoryTabs.map(cat => (
+          <button
+            key={cat}
+            onClick={() => setCategory(cat)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              category === cat
+                ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
+                : 'bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <PageSkeleton />
+      ) : visible.length === 0 ? (
+        <div className="page-card p-8 text-center text-sm text-gray-500 dark:text-slate-400">
+          No delivered orders in this period.
+        </div>
+      ) : (
+        <div className="page-card overflow-hidden">
+          <div className="grid grid-cols-[3rem_1fr_1fr_6rem] gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+            <span>#</span>
+            <span>Product</span>
+            <span>Hindi name</span>
+            <span className="text-right">Orders</span>
+          </div>
+          {visible.map((product, index) => (
+            <div
+              key={product.id}
+              className="grid grid-cols-[3rem_1fr_1fr_6rem] gap-2 px-4 py-2.5 border-b border-gray-50 dark:border-slate-800 last:border-0 items-center"
+            >
+              <span className="text-xs font-bold text-gray-500 dark:text-slate-400">{index + 1}</span>
+              <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">{product.name}</span>
+              <span className="text-xs text-gray-600 dark:text-slate-300 truncate">{product.hindiName || '—'}</span>
+              <span className="text-xs font-bold text-gray-900 dark:text-white text-right">{product.orderCount}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

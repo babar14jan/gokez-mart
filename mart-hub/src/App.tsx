@@ -43,6 +43,7 @@ const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazyWithRetry(() => import('./pages/CarouselPage'));
 const HomeSectionsPage = lazyWithRetry(() => import('./pages/HomeSectionsPage'));
 const DailySalesPage = lazyWithRetry(() => import('./pages/DailySalesPage'));
+const TopSellingProductsPage = lazyWithRetry(() => import('./pages/TopSellingProductsPage'));
 const PromotionsPage = lazyWithRetry(() => import('./pages/PromotionsPage'));
 const RestoreOrderPage = lazyWithRetry(() => import('./pages/RestoreOrderPage'));
 
@@ -89,9 +90,9 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
-  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/daily-sales', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
-  store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/daily-sales', '/catalog', '/stores', '/feedback', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/top-selling', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
+  store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
+  store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
   staff:           ['/', '/orders', '/products', '/inventory', '/delivery', '/profile', '/change-password', '/more'],
 };
@@ -213,6 +214,7 @@ export default function App() {
         <Route path="/carousel"          element={<ProtectedRoute path="/carousel"><CarouselPage /></ProtectedRoute>} />
         <Route path="/home-sections"     element={<ProtectedRoute path="/home-sections"><HomeSectionsPage /></ProtectedRoute>} />
         <Route path="/daily-sales"      element={<ProtectedRoute path="/daily-sales"><DailySalesPage /></ProtectedRoute>} />
+        <Route path="/top-selling"     element={<ProtectedRoute path="/top-selling"><TopSellingProductsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>

@@ -30,6 +30,7 @@ export const NAV_ALL: NavItem[] = [
   { label: 'Products',           href: '/products',            icon: ShoppingBag,     roles: ['super_admin', 'store_owner', 'store_manager', 'staff'], section: 'Daily Work' },
   { label: 'Inventory',          href: '/inventory',           icon: Boxes,           roles: ['super_admin', 'store_owner', 'store_manager', 'staff'], section: 'Daily Work' },
   { label: 'Sales',              href: '/daily-sales',         icon: TrendingUp,      roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Daily Work' },
+  { label: 'Top Selling',      href: '/top-selling',        icon: Package,         roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
   { label: 'My Deliveries',      href: '/delivery',            icon: Truck,           roles: ['delivery_staff', 'staff'], section: 'Daily Work' },
   { label: 'Analytics',          href: '/analytics',           icon: BarChart3,       roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
   { label: 'Catalog',            href: '/catalog',             icon: LayoutList,      roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },

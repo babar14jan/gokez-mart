@@ -1328,6 +1328,14 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
 // itemised rows in mart_offline_sales (one per product sold), so the day's
 // cash/UPI split is a SUM over the rows staff actually entered.
 
+export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const rangeRaw = typeof req.query.range === 'string' ? req.query.range : '30d';
+  const range = ['5d', '10d', '30d', 'all'].includes(rangeRaw) ? rangeRaw : '30d';
+  const storeId = resolveStoreId(req);
+  const data = await OrderService.getTopSellingProducts(range, storeId);
+  res.json({ success: true, data });
+});
+
 export const adminGetDailySalesDay = asyncHandler(async (req: AdminRequest, res: Response) => {
   await assertDailySalesAccess(req);
   const date = typeof req.query.date === 'string' ? req.query.date : '';

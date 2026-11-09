@@ -659,3 +659,8 @@ export const dailySalesApi = {
   removeEntry: (id: string, storeId?: string) =>
     api.delete(`/admin/daily-sales/entries/${id}`, { params: { storeId } }),
 };
+
+export const topSellingApi = {
+  get: (range: '5d' | '10d' | '30d' | 'all', storeId?: string, opts?: FetchOpts) =>
+    api.get('/admin/analytics/top-products', { params: { range, storeId }, fresh: opts?.fresh }),
+};
