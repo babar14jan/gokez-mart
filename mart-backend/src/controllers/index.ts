@@ -3423,15 +3423,19 @@ export const adminRestockProduct = asyncHandler(async (req: AdminRequest, res: R
   const idempotencyKey = req.header('Idempotency-Key');
   if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
   const storeId = await resolveManagedStoreId(req);
-  const { qty, stockUnit, note } = req.body;
+  const { qty, stockUnit, note, unitCost } = req.body;
   if (!qty || isNaN(parseFloat(qty)) || parseFloat(qty) <= 0) {
     res.status(400).json({ success: false, error: 'qty must be a positive number' }); return;
   }
   if (!stockUnit) {
     res.status(400).json({ success: false, error: 'stockUnit is required' }); return;
   }
+  const cost = unitCost == null ? null : Number(unitCost);
+  if (cost != null && (!Number.isFinite(cost) || cost < 0)) {
+    res.status(400).json({ success: false, error: 'unitCost must be non-negative' }); return;
+  }
   const result = await InventoryService.restock(
-    req.params.productId, storeId, parseFloat(qty), stockUnit, note || null, req.admin!.id, idempotencyKey
+    req.params.productId, storeId, parseFloat(qty), stockUnit, note || null, req.admin!.id, idempotencyKey, cost
   );
   res.json({ success: true, data: result });
 });

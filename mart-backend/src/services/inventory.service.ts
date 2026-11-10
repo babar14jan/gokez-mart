@@ -13,7 +13,24 @@ export class InventoryService {
               sp.price::float, sp.availability_status as "availabilityStatus",
               sp.stock_quantity::float as "stockQuantity",
               sp.low_stock_threshold::float as "lowStockThreshold",
-              c.name as "categoryName"
+              c.name as "categoryName",
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                  'changeQty', l.change_qty::float,
+                  'note', l.note,
+                  'createdBy', l.name,
+                  'createdByUsername', l.username,
+                  'createdAt', l.created_at
+                ) ORDER BY l.created_at DESC)
+                FROM (
+                  SELECT l.change_qty, l.note, l.created_at, a.name, a.username
+                    FROM mart_inventory_log l
+                   LEFT JOIN mart_admins a ON a.id = l.created_by
+                   WHERE l.product_id = sp.product_id AND l.store_id = sp.store_id AND l.reason = 'restock'
+                   ORDER BY l.created_at DESC
+                   LIMIT 2
+                ) l
+              ), '[]'::json) as "recentRestocks"
        FROM mart_store_products sp
        JOIN mart_products p ON p.id = sp.product_id
        LEFT JOIN mart_categories c ON c.id = p.category_id

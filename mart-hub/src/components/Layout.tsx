@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useThemeStore } from '../store/themeStore';
 import {
   Home, Package, Image as ImageIcon,
@@ -10,7 +10,7 @@ import {
   TrendingUp, RotateCcw,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
-import { storesApi, authApi } from '../services/api';
+import { storesApi, authApi, inventoryApi } from '../services/api';
 import { useHeaderAction } from '../store/headerActionStore';
 import LiveOrderToasts from './LiveOrderToasts';
 
@@ -86,6 +86,7 @@ export const BOTTOM_NAV: Record<string, { label: string; href: string; icon: Rea
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { username, name, storeId, role, canAccessDailySales, logout, isSuperAdmin } = useAuthStore();
   const { onAction, label } = useHeaderAction();
   // Fail closed. An absent or unrecognised role yields an empty sidebar rather
@@ -102,8 +103,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
   const [activeStoreId, setActiveStoreId] = useState<string>(
-    localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-0000-000000000001'
+    localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-000000000001'
   );
+  const [inventoryStores, setInventoryStores] = useState<Array<{ id: string; name: string; isOwn?: boolean }>>([]);
 
   useEffect(() => {
     if (!username) return;
@@ -130,6 +132,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       setActiveStoreId(storeId || localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-0000-000000000001');
     }
   }, [username, storeId]);
+
+  useEffect(() => {
+    if (pathname !== '/inventory' || isSuperAdmin()) return;
+    inventoryApi.getStores().then(r => {
+      const list = r.data.data || [];
+      setInventoryStores(list);
+    }).catch(() => setInventoryStores([]));
+  }, [pathname, isSuperAdmin]);
 
   const handleStoreChange = (id: string) => {
     setActiveStoreId(id);
@@ -330,6 +340,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     is driven by activeStoreId so it shows the selected store name. */}
                 <option value="" disabled>Select store</option>
                 {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
+
+            {pathname === '/inventory' && !isSuperAdmin() && inventoryStores.length > 1 && (
+              <select
+                value={searchParams.get('store') || 'all'}
+                onChange={e => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set('store', e.target.value);
+                  setSearchParams(next, { replace: true });
+                }}
+                aria-label="Select store to manage inventory for"
+                className="max-w-[34vw] lg:max-w-[22vw] text-[11px] lg:text-xs border border-black/15 dark:border-slate-600 rounded-xl px-2.5 py-1 lg:px-3 lg:py-1.5 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-300 focus:outline-none focus:border-gray-900 dark:focus:border-emerald-500 font-semibold"
+              >
+                <option value="all">Zone-All</option>
+                {inventoryStores.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}{s.isOwn ? ' — Head' : ''}</option>
+                ))}
               </select>
             )}
 

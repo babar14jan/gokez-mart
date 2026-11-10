@@ -533,10 +533,10 @@ export const inventoryApi = {
   getAll:     (storeId?: string, opts?: FetchOpts) => api.get('/admin/inventory', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),
   bulkRestock: (items: Array<{ productId: string; qty: number; stockUnit: string }>, note: string, storeId?: string, idempotencyKey?: string) =>
     api.post('/admin/inventory/bulk-restock', { items, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
-  restock:    (productId: string, qty: number, note: string, storeId?: string, stockUnit?: string, idempotencyKey?: string) =>
-    api.post(`/admin/inventory/${productId}/restock`, { qty, note, stockUnit }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
-  setStock:   (productId: string, qty: number, storeId?: string, idempotencyKey?: string) =>
-    api.put(`/admin/inventory/${productId}/stock`, { qty }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  restock:    (productId: string, qty: number, note: string, storeId?: string, stockUnit?: string, idempotencyKey?: string, unitCost?: number) =>
+    api.post(`/admin/inventory/${productId}/restock`, { qty, note, stockUnit, unitCost }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  setStock:   (productId: string, qty: number, storeId?: string, idempotencyKey?: string, stockUnit?: string) =>
+    api.put(`/admin/inventory/${productId}/stock`, { qty, stockUnit }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
   getHistory: (productId: string, storeId?: string) =>
     api.get(`/admin/inventory/${productId}/history`, { params: storeId ? { storeId } : {} }),
   recordPurchase: (productId: string, quantity: number, unit: string, unitCost: number, note?: string, storeId?: string, idempotencyKey?: string) =>
