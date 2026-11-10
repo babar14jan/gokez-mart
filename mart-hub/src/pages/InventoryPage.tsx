@@ -276,12 +276,18 @@ export default function InventoryPage() {
                       onBlur={() => window.setTimeout(() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, showSuggestions: false } : r)), 120)}
                       onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, query: e.target.value, productId: '' } : r))}
                       placeholder="Search product"
-                      className={inp} />
+                      className={inp + ' pr-9'} />
+                    {row.query && (
+                      <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, query: '', productId: '', showSuggestions: false } : r))}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-slate-400">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {row.showSuggestions && (
-                      <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
+                      <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
                         {items.filter(item => {
                           const q = row.query.trim().toLowerCase();
-                          return !q || item.name.toLowerCase().includes(q) || (item.localName || '').toLowerCase().includes(q);
+                          return q ? (item.name.toLowerCase().startsWith(q) || (item.localName || '').toLowerCase().startsWith(q)) : false;
                         }).slice(0, 8).map(item => (
                           <button key={item.productId} type="button" onMouseDown={e => e.preventDefault()}
                             onClick={() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, productId: item.productId, query: `${item.name}${item.localName ? ` (${item.localName})` : ''}`, unit: item.stockUnit || r.unit, showSuggestions: false } : r))}
