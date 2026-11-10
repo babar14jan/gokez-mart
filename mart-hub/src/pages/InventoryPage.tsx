@@ -46,6 +46,7 @@ function formatStock(qty: number, unit: string): string {
 }
 
 const DEFAULT_LOW_THRESHOLD = 5; // used when no threshold is explicitly set
+const roundMoney = (n: number) => Math.round(n * 100) / 100;
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
 function stockStatus(item: InventoryItem): 'untracked' | 'out' | 'low' | 'ok' {
@@ -78,7 +79,7 @@ export default function InventoryPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showPurchase, setShowPurchase] = useState(false);
   const [purchaseSaving, setPurchaseSaving] = useState(false);
-  const [purchaseForm, setPurchaseForm] = useState({ productId: '', quantity: '', unit: 'kg', unitCost: '', note: '' });
+  const [purchaseForm, setPurchaseForm] = useState({ productId: '', quantity: '', unit: 'kg', unitCost: '', totalCost: '', note: '' });
   const [showMovements, setShowMovements] = useState(false);
   const [movements, setMovements] = useState<any[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
@@ -298,7 +299,7 @@ export default function InventoryPage() {
               <input type="text" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search inventory..." className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-9 pr-8 text-xs text-gray-900 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
               {searchQuery && <button onClick={() => setSearchQuery('')} aria-label="Clear inventory search" className="absolute right-2 top-1/2 -translate-y-1/2"><X className="h-3.5 w-3.5 text-gray-500 hover:text-gray-700" /></button>}
             </div>
-            <button onClick={() => { setPurchaseForm({ productId: '', quantity: '', unit: items[0]?.stockUnit || 'kg', unitCost: '', note: '' }); setPurchaseQuery(''); setShowPurchase(true); }}
+            <button onClick={() => { setPurchaseForm({ productId: '', quantity: '', unit: items[0]?.stockUnit || 'kg', unitCost: '', totalCost: '', note: '' }); setPurchaseQuery(''); setShowPurchase(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
               <Plus className="w-3.5 h-3.5" /> Record Purchase
             </button>
@@ -561,17 +562,53 @@ export default function InventoryPage() {
               )}
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <input type="number" value={purchaseForm.quantity} onChange={e => setPurchaseForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty" className={inp} />
+              <input type="number" value={purchaseForm.quantity} onChange={e => {
+                const value = e.target.value;
+                setPurchaseForm(f => {
+                  const next = { ...f, quantity: value };
+                  const q = Number(value); const u = Number(next.unitCost); const t = Number(next.totalCost);
+                  if (value && next.unitCost && Number.isFinite(q) && q > 0) next.totalCost = String(roundMoney(q * u));
+                  else if (value && next.totalCost && Number.isFinite(q) && q > 0 && !next.unitCost) next.unitCost = String(roundMoney(t / q));
+                  return next;
+                });
+              }} placeholder="Qty" className={inp} />
               <select value={purchaseForm.unit} onChange={e => setPurchaseForm(f => ({ ...f, unit: e.target.value }))} className={inp}>
                 {STOCK_UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
               </select>
-              <input type="number" value={purchaseForm.unitCost} onChange={e => setPurchaseForm(f => ({ ...f, unitCost: e.target.value }))} placeholder="Cost/unit" className={inp} />
+              <input type="number" value={purchaseForm.unitCost} onChange={e => {
+                const value = e.target.value;
+                setPurchaseForm(f => {
+                  const next = { ...f, unitCost: value };
+                  const q = Number(next.quantity); const u = Number(value); const t = Number(next.totalCost);
+                  if (value && next.quantity && Number.isFinite(u) && u >= 0) next.totalCost = String(roundMoney(q * u));
+                  else if (value && next.totalCost && Number.isFinite(u) && u > 0 && !next.quantity) next.quantity = String(roundMoney(t / u));
+                  return next;
+                });
+              }} placeholder="Cost/unit" className={inp} />
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Total cost (optional)</label>
+              <input type="number" value={purchaseForm.totalCost} onChange={e => {
+                const value = e.target.value;
+                setPurchaseForm(f => {
+                  const next = { ...f, totalCost: value };
+                  const q = Number(next.quantity); const u = Number(next.unitCost); const t = Number(value);
+                  if (value && next.quantity && Number.isFinite(t) && t >= 0) next.unitCost = q > 0 ? String(roundMoney(t / q)) : next.unitCost;
+                  else if (value && next.unitCost && Number.isFinite(t) && t >= 0 && !next.quantity && u > 0) next.quantity = String(roundMoney(t / u));
+                  return next;
+                });
+              }} placeholder="Total cost" className={inp} />
             </div>
             <input type="text" value={purchaseForm.note} onChange={e => setPurchaseForm(f => ({ ...f, note: e.target.value }))} placeholder="Note (optional)" className={inp} />
             <button disabled={purchaseSaving} onClick={async () => {
+              const qty = Number(purchaseForm.quantity);
+              const unitCost = purchaseForm.unitCost.trim()
+                ? Number(purchaseForm.unitCost)
+                : (purchaseForm.totalCost.trim() && qty > 0 ? Number(purchaseForm.totalCost) / qty : NaN);
+              const finalQty = qty > 0 ? qty : (purchaseForm.totalCost.trim() && purchaseForm.unitCost.trim() ? Number(purchaseForm.totalCost) / Number(purchaseForm.unitCost) : 0);
               setPurchaseSaving(true);
               try {
-                await inventoryApi.recordPurchase(purchaseForm.productId, Number(purchaseForm.quantity), purchaseForm.unit, Number(purchaseForm.unitCost), purchaseForm.note, selectedStoreId, crypto.randomUUID());
+                await inventoryApi.recordPurchase(purchaseForm.productId, finalQty, purchaseForm.unit, unitCost, purchaseForm.note, selectedStoreId, crypto.randomUUID());
                 setShowPurchase(false);
                 await load();
               } catch (e: any) { alert(e?.response?.data?.error || 'Purchase failed'); }
