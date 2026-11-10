@@ -16,6 +16,7 @@ export interface CartItem {
   mrp?: number;
   quantity: number;
   photoUrl: string | null;
+  smallUrl?: string | null;
   thumbnailUrl?: string | null;
 }
 
@@ -55,7 +56,7 @@ export const useCartStore = create<CartState>()(
           if (existing) {
             return { items: state.items.map(i => i.productId === product.id && i.unit === u ? { ...i, quantity: i.quantity + 1 } : i) };
           }
-          return { items: [...state.items, { productId: product.id, sourceStoreId: product.storeId, categoryId: product.categoryId, productName: product.name, unit: u, price: p, mrp, quantity: 1, photoUrl: product.photoUrl, thumbnailUrl: product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || null }] };
+          return { items: [...state.items, { productId: product.id, sourceStoreId: product.storeId, categoryId: product.categoryId, productName: product.name, unit: u, price: p, mrp, quantity: 1, photoUrl: product.photoUrl, smallUrl: product.smallUrl || product.photoVariants?.[0]?.smallUrl || null, thumbnailUrl: product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || null }] };
         });
         if (isFirstCartInteraction) track('cart_started');
         track('cart_added', { productId: product.id, productName: product.name, unit: u, quantity: 1 });

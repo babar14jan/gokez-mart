@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fetch from 'node-fetch';
-import { mkdir, writeFile, readFile, stat } from 'fs/promises';
+import { mkdir, writeFile, readFile, stat, readdir, unlink } from 'fs/promises';
 import path from 'path';
 import { asyncHandler, AdminRequest, ADMIN_TOKEN_TYPE, isValidAdminRole, ADMIN_ROLE_LIST } from '../middleware';
 import { ProductService, MartProduct, normalizeSearchAliases, normalizeProductName, normalizeLocalName } from '../services/product.service';
@@ -119,6 +119,7 @@ export async function recoverAutomaticOrderTransitions(): Promise<void> {
 
 type PreparedImage = { buffer: Buffer; extension: string; mimeType: string };
 type PreparedProductImages = {
+  small: PreparedImage;
   thumbnail: PreparedImage;
   large: PreparedImage;
 };
@@ -185,14 +186,15 @@ async function prepareProductImages(buffer: Buffer): Promise<PreparedProductImag
       height: maxDimension,
       fit: 'inside',
       withoutEnlargement: true,
-    }).webp({ quality: maxDimension <= 160 ? 72 : maxDimension <= 480 ? 76 : 82, effort: 4 }).toBuffer(),
+    }).webp({ quality: maxDimension <= 240 ? 76 : maxDimension <= 480 ? 80 : 82, effort: 4 }).toBuffer(),
     extension: 'webp',
     mimeType: 'image/webp',
   });
 
-  const thumbnail = await encode(160);
-  const large = sourceMax <= 160 ? thumbnail : await encode(480);
-  return { thumbnail, large };
+  const small = await encode(240);
+  const thumbnail = sourceMax <= 240 ? small : await encode(480);
+  const large = sourceMax <= 480 ? thumbnail : await encode(800);
+  return { small, thumbnail, large };
 }
 
 // Helper: resolve storeId from request (admin JWT or query param storeId)
@@ -893,10 +895,14 @@ export const adminGetCatalog = asyncHandler(async (req: AdminRequest, res: Respo
       const generatedByLargeUrl = new Map(generated.map(variant => [variant.largeUrl, variant]));
       const existingByLargeUrl = new Map(existing
         .filter(variant => typeof variant?.largeUrl === 'string')
-        .map(variant => [String(variant.largeUrl), variant]));
+        .map(variant => [String(variant.largeUrl), {
+          smallUrl: typeof variant.smallUrl === 'string' && variant.smallUrl ? variant.smallUrl : (typeof variant.thumbnailUrl === 'string' ? variant.thumbnailUrl : String(variant.largeUrl)),
+          thumbnailUrl: typeof variant.thumbnailUrl === 'string' && variant.thumbnailUrl ? variant.thumbnailUrl : String(variant.largeUrl),
+          largeUrl: String(variant.largeUrl),
+        }]));
       const photoVariants = photos.map(largeUrl => generatedByLargeUrl.get(largeUrl)
         || existingByLargeUrl.get(largeUrl)
-        || { thumbnailUrl: largeUrl, largeUrl });
+        || { smallUrl: largeUrl, thumbnailUrl: largeUrl, largeUrl });
       return { ...row, photos, photoVariants };
     }),
   });
@@ -952,14 +958,20 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
       }
     }
 
-    if (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+    await mkdir(path.join(uploadsDir, 'originals'), { recursive: true });
+    const originalExt = path.extname(resolvedFile) || '.bin';
+    const originalLocalPath = `originals/${assetId}-${baseName || 'product'}${originalExt}`;
+    await writeFile(path.join(uploadsDir, originalLocalPath), buffer);
+
+    if (config.env !== 'production' || !config.supabase.url || !config.supabase.serviceRoleKey) {
       await mkdir(path.join(uploadsDir, 'products'), { recursive: true });
       await Promise.all([...filenames].map(([variant, variantFilename]) => writeFile(path.join(uploadsDir, variantFilename), variant.buffer)));
       const localUrl = (variant: PreparedImage) => `${req.protocol}://${req.get('host')}/uploads/${filenames.get(variant)!}`;
-      const pv = { assetId, thumbnailUrl: localUrl(images.thumbnail), largeUrl: localUrl(images.large) };
+      const pv = { assetId, smallUrl: localUrl(images.small), thumbnailUrl: localUrl(images.thumbnail), largeUrl: localUrl(images.large) };
       await ProductImageAssetService.createPending({
-        id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: pv.thumbnailUrl, largeUrl: pv.largeUrl,
-        thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'local',
+        id: assetId, uploadedBy: req.admin!.id, smallUrl: pv.smallUrl, thumbnailUrl: pv.thumbnailUrl, largeUrl: pv.largeUrl,
+        smallKey: filenames.get(images.small)!, thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!,
+        originalLocalPath, storageDriver: 'local',
       });
       resolvedPhotoUrl = pv.largeUrl;
       resolvedPhotos = [pv.largeUrl];
@@ -982,17 +994,20 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
           await uploadRes.text();
           throw new Error('Upload failed. Please try again.');
         }
-        return [variant, `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}/${variantFilename}`] as const;
+        const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
+        return [variant, `${storageBase}/${variantFilename}`] as const;
       }));
       const urls = new Map(uploaded);
       const pv = {
         assetId,
+        smallUrl: urls.get(images.small)!,
         thumbnailUrl: urls.get(images.thumbnail)!,
         largeUrl: urls.get(images.large)!,
       };
       await ProductImageAssetService.createPending({
-        id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: pv.thumbnailUrl, largeUrl: pv.largeUrl,
-        thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'supabase',
+        id: assetId, uploadedBy: req.admin!.id, smallUrl: pv.smallUrl, thumbnailUrl: pv.thumbnailUrl, largeUrl: pv.largeUrl,
+        smallKey: filenames.get(images.small)!, thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!,
+        originalLocalPath, storageDriver: 'supabase',
       });
       resolvedPhotoUrl = pv.largeUrl;
       resolvedPhotos = [pv.largeUrl];
@@ -2979,7 +2994,8 @@ export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res
     signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
   });
   if (!uploadRes.ok) { res.status(500).json({ success: false, error: 'Upload failed' }); return; }
-  const publicUrl = `${config.supabase.url}/storage/v1/object/public/${bucket}/${filename}`;
+  const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');
+  const publicUrl = `${storageBase}/${filename}`;
   await CustomerAuthService.updateProfile(req.customer!.id, { photoUrl: publicUrl });
   res.json({ success: true, data: { url: publicUrl } });
 });
@@ -3169,15 +3185,21 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
       }
     }
 
-    if (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
-      const uploadsDir = path.resolve(__dirname, '../../uploads');
+    const uploadsDir = path.resolve(__dirname, '../../uploads');
+    await mkdir(path.join(uploadsDir, 'originals'), { recursive: true });
+    const originalExt = path.extname(req.file.originalname) || '.bin';
+    const originalLocalPath = `originals/${assetId}-${baseName || 'product'}${originalExt}`;
+    await writeFile(path.join(uploadsDir, originalLocalPath), req.file.buffer);
+
+    if (config.env !== 'production' || !config.supabase.url || !config.supabase.serviceRoleKey) {
       await mkdir(path.join(uploadsDir, 'products'), { recursive: true });
       await Promise.all([...filenames].map(([variant, variantFilename]) => writeFile(path.join(uploadsDir, variantFilename), variant.buffer)));
       const localUrl = (variant: PreparedImage) => `${req.protocol}://${req.get('host')}/uploads/${filenames.get(variant)!}`;
-      const photoVariants = { assetId, thumbnailUrl: localUrl(images.thumbnail), largeUrl: localUrl(images.large) };
+      const photoVariants = { assetId, smallUrl: localUrl(images.small), thumbnailUrl: localUrl(images.thumbnail), largeUrl: localUrl(images.large) };
       await ProductImageAssetService.createPending({
-        id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
-        thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'local',
+        id: assetId, uploadedBy: req.admin!.id, smallUrl: photoVariants.smallUrl, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
+        smallKey: filenames.get(images.small)!, thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!,
+        originalLocalPath, storageDriver: 'local',
       });
       res.json({ success: true, data: { url: photoVariants.largeUrl, ...photoVariants, photoVariants } });
       return;
@@ -3199,17 +3221,20 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
         await uploadRes.text();
         throw new Error('Upload failed. Please try again.');
       }
-      return [variant, `${config.supabase.url}/storage/v1/object/public/${bucket}/${variantFilename}`] as const;
+      const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
+      return [variant, `${storageBase}/${variantFilename}`] as const;
     }));
     const urls = new Map(uploaded);
     const photoVariants = {
       assetId,
+      smallUrl: urls.get(images.small)!,
       thumbnailUrl: urls.get(images.thumbnail)!,
       largeUrl: urls.get(images.large)!,
     };
     await ProductImageAssetService.createPending({
-      id: assetId, uploadedBy: req.admin!.id, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
-      thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!, storageDriver: 'supabase',
+      id: assetId, uploadedBy: req.admin!.id, smallUrl: photoVariants.smallUrl, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
+      smallKey: filenames.get(images.small)!, thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!,
+      originalLocalPath, storageDriver: 'supabase',
     });
     res.json({ success: true, data: { url: photoVariants.largeUrl, ...photoVariants, photoVariants } });
     return;
@@ -3247,7 +3272,8 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
     return;
   }
 
-  const publicUrl = `${config.supabase.url}/storage/v1/object/public/${bucket}/${filename}`;
+  const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');
+  const publicUrl = `${storageBase}/${filename}`;
   res.json({ success: true, data: { url: publicUrl } });
 });
 
@@ -3727,4 +3753,161 @@ export const getRecommendations = asyncHandler(async (req: Request, res: Respons
   );
   res.set('Cache-Control', 'no-store');
   res.json({ success: true, data: result });
+});
+
+export const adminCleanStorage = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (req.admin?.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Super admin access required' });
+    return;
+  }
+
+  const dryRun = req.body?.dryRun !== false;
+  const uploadsDir = path.resolve(__dirname, '../../uploads');
+  const productsDir = path.join(uploadsDir, 'products');
+
+  const assetRows = (await query<{
+    id: string;
+    productId: string | null;
+    status: string;
+    createdAt: Date;
+    smallKey: string | null;
+    thumbnailKey: string | null;
+    largeKey: string | null;
+  }>(`
+    SELECT id, product_id as "productId", status, created_at as "createdAt",
+           small_key as "smallKey", thumbnail_key as "thumbnailKey", large_key as "largeKey"
+      FROM mart_product_image_assets
+  `)).rows;
+
+  const productRows = (await query<{ id: string }>(`SELECT id FROM mart_products`)).rows;
+  const productIds = new Set(productRows.map(row => row.id));
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+  const liveAssets = assetRows.filter(asset => {
+    if (asset.productId && productIds.has(asset.productId)) return true;
+    if (asset.status === 'pending' && new Date(asset.createdAt).getTime() > oneHourAgo) return true;
+    return false;
+  });
+  const orphanedAssets = assetRows.filter(asset => !liveAssets.includes(asset));
+
+  const preservedKeys = new Set<string>();
+  for (const asset of liveAssets) {
+    for (const key of [asset.smallKey, asset.thumbnailKey, asset.largeKey]) {
+      if (key) preservedKeys.add(key);
+    }
+  }
+
+  // Preserve files still referenced directly by products, including legacy
+  // uploads that predate image-asset tracking.
+  const productImageRows = (await query<{ photoUrl: string | null; photos: unknown; photoVariants: unknown }>(`
+    SELECT photo_url as "photoUrl", photos, photo_variants as "photoVariants" FROM mart_products
+  `)).rows;
+  const keyFromUrl = (value: unknown): string | null => {
+    if (typeof value !== 'string' || !value) return null;
+    const uploadMatch = value.match(/\/uploads\/(.+)$/);
+    if (uploadMatch) return uploadMatch[1];
+    const supabaseMatch = value.match(/\/object\/public\/[^/]+\/(.+)$/);
+    if (supabaseMatch) return decodeURIComponent(supabaseMatch[1]);
+    if (/^products\//.test(value)) return value;
+    return null;
+  };
+  for (const product of productImageRows) {
+    for (const key of [keyFromUrl(product.photoUrl)]) if (key) preservedKeys.add(key);
+    if (Array.isArray(product.photos)) for (const photo of product.photos) {
+      const key = keyFromUrl(photo);
+      if (key) preservedKeys.add(key);
+    }
+    if (Array.isArray(product.photoVariants)) for (const variant of product.photoVariants) {
+      if (variant && typeof variant === 'object') {
+        for (const value of Object.values(variant as Record<string, unknown>)) {
+          const key = keyFromUrl(value);
+          if (key) preservedKeys.add(key);
+        }
+      }
+    }
+  }
+
+  const localFiles = await readdir(productsDir).catch(() => [] as string[]);
+  const localKeys = localFiles.map(file => `products/${file}`);
+  const localToDelete = localKeys.filter(key => !preservedKeys.has(key));
+
+  const supabaseKeys: string[] = [];
+  if (config.env === 'production' && config.supabase.url && config.supabase.serviceRoleKey) {
+    let offset = 0;
+    while (true) {
+      const listRes = await fetch(`${config.supabase.url}/storage/v1/object/list/${config.supabase.bucket}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.supabase.serviceRoleKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prefix: 'products/', limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
+        signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
+      });
+      if (!listRes.ok) break;
+      const rows = await listRes.json() as Array<{ name?: string; id?: string | null }>;
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      for (const row of rows) {
+        if (!row?.name || !row.id) continue;
+        const key = row.name.startsWith('products/') ? row.name : `products/${row.name}`;
+        supabaseKeys.push(key);
+      }
+      if (rows.length < 1000) break;
+      offset += rows.length;
+    }
+  }
+
+  const supabaseToDelete = supabaseKeys.filter(key => !preservedKeys.has(key));
+
+  if (!dryRun) {
+    await Promise.all(localToDelete.map(async key => {
+      const target = path.resolve(uploadsDir, key);
+      if (!target.startsWith(`${uploadsDir}${path.sep}`)) return;
+      try { await unlink(target); } catch (error: any) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }));
+
+    for (let i = 0; i < supabaseToDelete.length; i += 100) {
+      const batch = supabaseToDelete.slice(i, i + 100);
+      if (batch.length === 0) continue;
+      const deleteRes = await fetch(`${config.supabase.url}/storage/v1/object/${config.supabase.bucket}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${config.supabase.serviceRoleKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prefixes: batch }),
+        signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
+      });
+      if (!deleteRes.ok) {
+        await deleteRes.text();
+        throw new Error('Storage cleanup failed');
+      }
+    }
+
+    if (orphanedAssets.length > 0) {
+      await query(
+        `DELETE FROM mart_product_image_assets WHERE id = ANY($1::uuid[])`,
+        [orphanedAssets.map(asset => asset.id)]
+      );
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      dryRun,
+      preservedAssets: liveAssets.length,
+      orphanedAssets: orphanedAssets.length,
+      scannedLocalFiles: localKeys.length,
+      deletedLocalFiles: dryRun ? 0 : localToDelete.length,
+      pendingLocalFiles: localToDelete.length,
+      scannedSupabaseFiles: supabaseKeys.length,
+      deletedSupabaseFiles: dryRun ? 0 : supabaseToDelete.length,
+      pendingSupabaseFiles: supabaseToDelete.length,
+      sampleLocalFiles: localToDelete.slice(0, 20),
+      sampleSupabaseFiles: supabaseToDelete.slice(0, 20),
+    },
+  });
 });

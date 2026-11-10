@@ -131,7 +131,7 @@ function OrderDetailSheet({
                   <div className="flex items-center gap-2.5">
                     <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0">
                       <SmartImage
-                        src={item.thumbnailUrl || item.photoUrl}
+                        src={item.smallUrl || item.thumbnailUrl || item.photoUrl}
                         alt={item.productName}
                         className="h-full w-full"
                         imgClassName="object-cover"

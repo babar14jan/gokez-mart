@@ -152,7 +152,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
               <p className="text-sm">{query ? 'No products match your search' : 'No products in this category'}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-6 gap-2">
               {filteredProducts.map(p => <ProductCard key={p.id} product={p} />)}
             </div>
           )}

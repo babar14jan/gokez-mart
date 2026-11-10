@@ -221,6 +221,7 @@ Mobile commands live in `mart-mobile/package.json`: `start`, `android`, `ios`,
 | `MART_CORS_ORIGIN` | Yes in production | Comma-separated HTTPS page origins, for example `https://mart.gokez.com,https://hub.gokez.com` |
 | `MART_PUBLIC_API_URL` | Production promotions | Public API base including `/api/v1`; used to build promotion click-tracking URLs |
 | `MART_CUSTOMER_APP_URL` | Optional | Customer storefront origin used to resolve promotion destinations; defaults to the first CORS origin |
+| `MART_STORAGE_PUBLIC_BASE_URL` | Optional | Public base URL for stored images; defaults to Supabase public URL or local `/uploads` |
 | `SUPABASE_URL` | For uploads | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | For uploads | Server-side Supabase key |
 | `SUPABASE_BUCKET` | No | Defaults to `mart-products` |

@@ -93,10 +93,10 @@ function gridCols(section: HomeSection): string {
   if (kind === 'combo' || kind === 'todays_combos' || kind === 'top_picks') return 'grid-cols-2';
   if (section.config?.columns === 4) return 'grid-cols-4';
   if (section.config?.columns === 3) return 'grid-cols-3';
-  return 'grid-cols-3 sm:grid-cols-4';
+  return 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-6';
 }
 
-const productGridCols = 'grid-cols-3';
+const productGridCols = 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-6';
 // Slightly wider than the catalogue grid so the next card remains visible as a
 // natural cue that this row continues horizontally.
 const homeRowCardWidth = 'w-[calc((100%-1.25rem)/2.85)] min-w-[calc((100%-1.25rem)/2.85)]';

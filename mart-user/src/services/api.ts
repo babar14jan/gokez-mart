@@ -182,7 +182,7 @@ export interface Product {
   /** Fulfilling store for a zone catalogue listing; never displayed to customers. */
   storeId?: string;
   searchAliases: string[];
-  photoUrl: string | null; price: number; unit: string;
+  photoUrl: string | null; smallUrl?: string | null; thumbnailUrl?: string | null; largeUrl?: string | null; price: number; unit: string;
   approxWeight: string | null;
   weightOptions: Array<{ label: string; price: number }> | null;
   discountPercent: number; isAvailable: boolean;
@@ -191,9 +191,7 @@ export interface Product {
   /** Catalog photo gallery. Falls back to the primary photo when absent. */
   photos?: string[] | null;
   /** Responsive image URLs, ordered to match the photo gallery. */
-  photoVariants?: Array<{ thumbnailUrl: string; largeUrl: string }> | null;
-  thumbnailUrl?: string | null;
-  largeUrl?: string | null;
+  photoVariants?: Array<{ smallUrl?: string | null; thumbnailUrl: string; largeUrl: string }> | null;
   /** A fixed combo/bundle sold as one product. Drives the "Today's Combos" section. */
   isBundle: boolean;
 }
