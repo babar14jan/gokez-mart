@@ -300,6 +300,7 @@ export class DailySalesService {
     notes: string | null,
     adminId: string | null,
     otherAmount?: number,
+    customUnitPrice?: number,
   ): Promise<{ id: string }> {
     if (!isDate(date)) throw badRequest('date must be YYYY-MM-DD');
     assertNotFuture(date);
@@ -340,9 +341,10 @@ export class DailySalesService {
     if (!product) throw badRequest('That product is not listed for this store');
 
     const discount = num(product.discount_percent);
-    const unitPrice = discount > 0
+    const defaultUnitPrice = discount > 0
       ? Math.round(num(product.price) * (1 - discount / 100))
       : num(product.price);
+    const unitPrice = Number.isFinite(customUnitPrice) && customUnitPrice! > 0 ? round2(customUnitPrice!) : defaultUnitPrice;
     const total = round2(unitPrice * quantity);
 
     const inserted = await query<{ id: string }>(
@@ -392,6 +394,7 @@ export class DailySalesService {
     paymentMethod: 'cash' | 'upi',
     notes: string | null,
     otherAmount?: number,
+    customUnitPrice?: number,
   ): Promise<{ id: string }> {
     if (!isDate(date)) throw badRequest('date must be YYYY-MM-DD');
     assertNotFuture(date);
@@ -433,9 +436,10 @@ export class DailySalesService {
     if (!product) throw badRequest('That product is not listed for this store');
 
     const discount = num(product.discount_percent);
-    const unitPrice = discount > 0
+    const defaultUnitPrice = discount > 0
       ? Math.round(num(product.price) * (1 - discount / 100))
       : num(product.price);
+    const unitPrice = Number.isFinite(customUnitPrice) && customUnitPrice! > 0 ? round2(customUnitPrice!) : defaultUnitPrice;
     const total = round2(unitPrice * quantity);
 
     const updated = await query<{ id: string }>(

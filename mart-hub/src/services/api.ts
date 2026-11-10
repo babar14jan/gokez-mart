@@ -669,11 +669,11 @@ export const dailySalesApi = {
   getEntries: (date: string, storeId?: string, opts?: FetchOpts) =>
     api.get("/admin/daily-sales/entries", { params: { date, storeId }, fresh: opts?.fresh }),
   addEntry: (data: {
-    date: string; productId?: string; quantity: number; amount?: number;
+    date: string; productId?: string; quantity: number; amount?: number; unitPrice?: number;
     paymentMethod: 'cash' | 'upi'; notes?: string | null; storeId?: string;
   }) => api.post("/admin/daily-sales/entries", data),
   updateEntry: (data: {
-    id: string; date: string; productId?: string; quantity: number; amount?: number;
+    id: string; date: string; productId?: string; quantity: number; amount?: number; unitPrice?: number;
     paymentMethod: 'cash' | 'upi'; notes?: string | null; storeId?: string;
   }) => api.put(`/admin/daily-sales/entries/${data.id}`, data),
   removeEntry: (id: string, storeId?: string) =>

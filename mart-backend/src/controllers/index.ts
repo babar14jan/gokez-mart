@@ -1463,6 +1463,7 @@ export const adminAddOfflineSale = asyncHandler(async (req: AdminRequest, res: R
   const result = await DailySalesService.addEntry(
     storeId, date, productId || null, quantity, paymentMethod, notes, req.admin?.id ?? null,
     productId ? undefined : amount,
+    typeof req.body?.unitPrice === 'number' ? req.body.unitPrice : undefined,
   );
   res.status(201).json({ success: true, data: result });
 });

@@ -82,6 +82,9 @@ export default function InventoryPage() {
   const [showMovements, setShowMovements] = useState(false);
   const [movements, setMovements] = useState<any[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [adjustForm, setAdjustForm] = useState({ productId: '', quantity: '', reason: 'damage', note: '' });
 
   const { role } = useAuthStore();
   const canManageTracking = role === 'super_admin' || role === 'store_owner' || role === 'store_manager';
@@ -298,6 +301,10 @@ export default function InventoryPage() {
             <button onClick={async () => { setShowMovements(true); setMovementsLoading(true); try { const res = await inventoryApi.getMovements(selectedStoreId); setMovements(res.data.data || []); } finally { setMovementsLoading(false); } }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
               <History className="w-3.5 h-3.5" /> Ledger
+            </button>
+            <button onClick={() => { setAdjustForm({ productId: items[0]?.productId || '', quantity: '', reason: 'damage', note: '' }); setShowAdjust(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-red-400 hover:text-red-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
+              <AlertTriangle className="w-3.5 h-3.5" /> Adjust Stock
             </button>
             <button onClick={enterEditMode}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
@@ -571,6 +578,46 @@ export default function InventoryPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stock adjustment modal */}
+      {showAdjust && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Adjust Stock</h3>
+              <button onClick={() => setShowAdjust(false)}><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <select value={adjustForm.productId} onChange={e => setAdjustForm(f => ({ ...f, productId: e.target.value }))} className={inp}>
+              {items.map(item => <option key={item.productId} value={item.productId}>{item.name}</option>)}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="number" value={adjustForm.quantity} onChange={e => setAdjustForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty (+/-)" className={inp} />
+              <select value={adjustForm.reason} onChange={e => setAdjustForm(f => ({ ...f, reason: e.target.value }))} className={inp}>
+                <option value="damage">Damage</option>
+                <option value="spoiled">Spoiled</option>
+                <option value="expired">Expired</option>
+                <option value="lost">Lost</option>
+                <option value="missing">Missing</option>
+                <option value="consumption">Consumption</option>
+                <option value="quality_rejection">Quality rejection</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <input type="text" value={adjustForm.note} onChange={e => setAdjustForm(f => ({ ...f, note: e.target.value }))} placeholder="Note (optional)" className={inp} />
+            <button disabled={adjustSaving} onClick={async () => {
+              setAdjustSaving(true);
+              try {
+                await inventoryApi.adjustStock(adjustForm.productId, Number(adjustForm.quantity), adjustForm.reason, adjustForm.note, selectedStoreId, crypto.randomUUID());
+                setShowAdjust(false);
+                await load();
+              } catch (e: any) { alert(e?.response?.data?.error || 'Adjustment failed'); }
+              finally { setAdjustSaving(false); }
+            }} className="w-full py-2.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl disabled:opacity-50">
+              {adjustSaving ? 'Saving...' : 'Save Adjustment'}
+            </button>
           </div>
         </div>
       )}
