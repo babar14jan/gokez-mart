@@ -228,6 +228,17 @@ router.get('/admin/inventory/settings',                 authenticate, ctrl.admin
 router.put('/admin/inventory/settings',                 authenticate, ctrl.adminUpdateInventorySettings);
 router.post('/admin/inventory/bulk-restock',            authenticate, ctrl.adminBulkRestock);
 router.post('/admin/inventory/:productId/restock',      authenticate, ctrl.adminRestockProduct);
+router.post('/admin/inventory/adjust',                 authenticate, ctrl.adminAdjustStock);
+router.post('/admin/inventory/returns/customer',       authenticate, ctrl.adminCustomerReturn);
+router.post('/admin/inventory/returns/supplier',       authenticate, ctrl.adminSupplierReturn);
+router.post('/admin/inventory/stocktake',              authenticate, ctrl.adminStocktake);
+router.post('/admin/inventory/transfers',              authenticate, ctrl.adminCreateTransfer);
+router.post('/admin/inventory/transfers/:id/receive',  authenticate, ctrl.adminReceiveTransfer);
+router.get('/admin/inventory/transfers',               authenticate, ctrl.adminListTransfers);
+router.post('/admin/inventory/purchase',               authenticate, ctrl.adminRecordPurchase);
+router.get('/admin/inventory/movements',              authenticate, ctrl.adminGetInventoryMovements);
+router.get('/admin/inventory/valuation',              authenticate, ctrl.adminGetInventoryValuation);
+router.get('/admin/inventory/profitability',          authenticate, ctrl.adminGetInventoryProfitability);
 router.put('/admin/inventory/:productId/stock',         authenticate, ctrl.adminSetProductStock);
 router.get('/admin/inventory/:productId/history',       authenticate, ctrl.adminGetInventoryHistory);
 

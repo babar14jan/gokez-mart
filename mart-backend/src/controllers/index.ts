@@ -1463,6 +1463,7 @@ export const adminAddOfflineSale = asyncHandler(async (req: AdminRequest, res: R
   const result = await DailySalesService.addEntry(
     storeId, date, productId || null, quantity, paymentMethod, notes, req.admin?.id ?? null,
     productId ? undefined : amount,
+    typeof req.body?.unitPrice === 'number' ? req.body.unitPrice : undefined,
   );
   res.status(201).json({ success: true, data: result });
 });
@@ -3422,15 +3423,19 @@ export const adminRestockProduct = asyncHandler(async (req: AdminRequest, res: R
   const idempotencyKey = req.header('Idempotency-Key');
   if (!idempotencyKey) { res.status(400).json({ success: false, error: 'Idempotency-Key is required' }); return; }
   const storeId = await resolveManagedStoreId(req);
-  const { qty, stockUnit, note } = req.body;
+  const { qty, stockUnit, note, unitCost } = req.body;
   if (!qty || isNaN(parseFloat(qty)) || parseFloat(qty) <= 0) {
     res.status(400).json({ success: false, error: 'qty must be a positive number' }); return;
   }
   if (!stockUnit) {
     res.status(400).json({ success: false, error: 'stockUnit is required' }); return;
   }
+  const cost = unitCost == null ? null : Number(unitCost);
+  if (cost != null && (!Number.isFinite(cost) || cost < 0)) {
+    res.status(400).json({ success: false, error: 'unitCost must be non-negative' }); return;
+  }
   const result = await InventoryService.restock(
-    req.params.productId, storeId, parseFloat(qty), stockUnit, note || null, req.admin!.id, idempotencyKey
+    req.params.productId, storeId, parseFloat(qty), stockUnit, note || null, req.admin!.id, idempotencyKey, cost
   );
   res.json({ success: true, data: result });
 });
@@ -3827,35 +3832,101 @@ export const adminCleanStorage = asyncHandler(async (req: AdminRequest, res: Res
     }
   }
 
-  const localFiles = await readdir(productsDir).catch(() => [] as string[]);
-  const localKeys = localFiles.map(file => `products/${file}`);
-  const localToDelete = localKeys.filter(key => !preservedKeys.has(key));
-
-  const supabaseKeys: string[] = [];
-  if (config.env === 'production' && config.supabase.url && config.supabase.serviceRoleKey) {
-    let offset = 0;
-    while (true) {
-      const listRes = await fetch(`${config.supabase.url}/storage/v1/object/list/${config.supabase.bucket}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.supabase.serviceRoleKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prefix: 'products/', limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
-        signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
-      });
-      if (!listRes.ok) break;
-      const rows = await listRes.json() as Array<{ name?: string; id?: string | null }>;
-      if (!Array.isArray(rows) || rows.length === 0) break;
-      for (const row of rows) {
-        if (!row?.name || !row.id) continue;
-        const key = row.name.startsWith('products/') ? row.name : `products/${row.name}`;
-        supabaseKeys.push(key);
+  const collectFromRows = (rows: Array<Record<string, unknown>>) => {
+    for (const row of rows) {
+      for (const value of Object.values(row)) {
+        if (typeof value === 'string') {
+          const key = keyFromUrl(value);
+          if (key) preservedKeys.add(key);
+          else if (/\.(webp|png|jpe?g|gif|svg)$/i.test(value) && !value.includes('://')) preservedKeys.add(value);
+        } else if (value && typeof value === 'object') {
+          const stack = [value];
+          while (stack.length) {
+            const current = stack.pop();
+            if (Array.isArray(current)) stack.push(...current);
+            else if (current && typeof current === 'object') {
+              for (const nested of Object.values(current as Record<string, unknown>)) {
+                if (typeof nested === 'string') {
+                  const key = keyFromUrl(nested);
+                  if (key) preservedKeys.add(key);
+                  else if (/\.(webp|png|jpe?g|gif|svg)$/i.test(nested) && !nested.includes('://')) preservedKeys.add(nested);
+                } else if (nested && typeof nested === 'object') stack.push(nested);
+              }
+            }
+          }
+        }
       }
-      if (rows.length < 1000) break;
-      offset += rows.length;
+    }
+  };
+
+  const extraQueries = [
+    `SELECT logo_url as "logoUrl" FROM mart_stores`,
+    `SELECT icon FROM mart_categories`,
+    `SELECT image_url as "imageUrl" FROM mart_carousel_slides`,
+    `SELECT image_url as "imageUrl" FROM mart_campaigns`,
+    `SELECT image_url as "imageUrl" FROM mart_promotions`,
+    `SELECT config FROM mart_home_sections`,
+    `SELECT value FROM mart_settings`,
+  ];
+  for (const sql of extraQueries) {
+    try {
+      const result = await query<Record<string, unknown>>(sql);
+      collectFromRows(result.rows as Array<Record<string, unknown>>);
+    } catch {
+      // Ignore optional/missing tables or columns during cleanup.
     }
   }
+
+  const walkLocal = async (dir: string, prefix: string): Promise<string[]> => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [] as Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>);
+    const keys: string[] = [];
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      const key = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) {
+        if (entry.name === 'originals') continue;
+        keys.push(...await walkLocal(fullPath, `${key}/`));
+      } else if (entry.isFile()) {
+        keys.push(key);
+      }
+    }
+    return keys;
+  };
+  const localKeys = await walkLocal(uploadsDir, '');
+  const localToDelete = localKeys.filter(key => !key.startsWith('originals/') && !preservedKeys.has(key));
+
+  const listSupabasePrefix = async (prefix: string): Promise<string[]> => {
+    const keys: string[] = [];
+    if (!(config.env === 'production' && config.supabase.url && config.supabase.serviceRoleKey)) return keys;
+    const walk = async (currentPrefix: string) => {
+      let offset = 0;
+      while (true) {
+        const listRes = await fetch(`${config.supabase.url}/storage/v1/object/list/${config.supabase.bucket}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.supabase.serviceRoleKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prefix: currentPrefix, limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
+          signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
+        });
+        if (!listRes.ok) break;
+        const rows = await listRes.json() as Array<{ name?: string; id?: string | null }>;
+        if (!Array.isArray(rows) || rows.length === 0) break;
+        for (const row of rows) {
+          if (!row?.name) continue;
+          const key = currentPrefix ? `${currentPrefix}${row.name}` : row.name;
+          if (row.id) keys.push(key);
+          else await walk(`${key}/`);
+        }
+        if (rows.length < 1000) break;
+        offset += rows.length;
+      }
+    };
+    await walk(prefix);
+    return keys;
+  };
+  const supabaseKeys = await listSupabasePrefix('');
 
   const supabaseToDelete = supabaseKeys.filter(key => !preservedKeys.has(key));
 
@@ -3908,6 +3979,188 @@ export const adminCleanStorage = asyncHandler(async (req: AdminRequest, res: Res
       pendingSupabaseFiles: supabaseToDelete.length,
       sampleLocalFiles: localToDelete.slice(0, 20),
       sampleSupabaseFiles: supabaseToDelete.slice(0, 20),
+    },
+  });
+});
+
+
+export const adminRecordPurchase = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { productId, quantity, unit, unitCost, note } = req.body || {};
+  if (!productId) { res.status(400).json({ success: false, error: 'productId is required' }); return; }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) { res.status(400).json({ success: false, error: 'quantity must be positive' }); return; }
+  if (!unit || typeof unit !== 'string') { res.status(400).json({ success: false, error: 'unit is required' }); return; }
+  const cost = Number(unitCost);
+  if (!Number.isFinite(cost) || cost < 0) { res.status(400).json({ success: false, error: 'unitCost must be non-negative' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.receivePurchase(storeId, String(productId), qty, unit, cost, req.admin!.id, note || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+export const adminGetInventoryMovements = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const productId = typeof req.query.productId === 'string' ? req.query.productId : undefined;
+  const limit = Math.min(parseInt(String(req.query.limit || '100'), 10) || 100, 500);
+  const conditions = ['store_id = $1'];
+  const params: unknown[] = [storeId];
+  let i = 2;
+  if (productId) { conditions.push(`product_id = $${i++}`); params.push(productId); }
+  params.push(limit);
+  const result = await query(
+    `SELECT m.id, m.product_id as "productId", p.name as "productName", p.local_name as "productLocalName",
+            m.store_id as "storeId", m.movement_type as "movementType",
+            m.quantity_in::float as "quantityIn", m.quantity_out::float as "quantityOut",
+            m.previous_balance::float as "previousBalance", m.new_balance::float as "newBalance",
+            m.unit, m.unit_cost::float as "unitCost", m.total_cost::float as "totalCost",
+            m.source_type as "sourceType", m.source_id as "sourceId", m.batch_id as "batchId",
+            m.created_by as "createdBy", m.created_at as "createdAt", m.reason, m.remarks
+       FROM mart_inventory_movements m
+       LEFT JOIN mart_products p ON p.id = m.product_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY m.created_at DESC
+      LIMIT $${i}`,
+    params
+  );
+  res.json({ success: true, data: result.rows });
+});
+
+
+export const adminAdjustStock = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { productId, quantity, reason, note } = req.body || {};
+  if (!productId) { res.status(400).json({ success: false, error: 'productId is required' }); return; }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty === 0) { res.status(400).json({ success: false, error: 'quantity must be non-zero' }); return; }
+  const allowed = ['damage','spoiled','expired','lost','missing','consumption','quality_rejection','other'];
+  if (!allowed.includes(reason)) { res.status(400).json({ success: false, error: 'Invalid adjustment reason' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.adjustStock(String(productId), storeId, qty, reason, note || null, req.admin!.id, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+
+export const adminCreateTransfer = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const sourceStoreId = await resolveManagedStoreId(req);
+  const { destinationStoreId, items, notes } = req.body || {};
+  if (!destinationStoreId) { res.status(400).json({ success: false, error: 'destinationStoreId is required' }); return; }
+  if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, error: 'items are required' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.createTransfer(sourceStoreId, String(destinationStoreId), items, req.admin!.id, notes || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+export const adminReceiveTransfer = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { id } = req.params;
+  const { lines } = req.body || {};
+  if (!Array.isArray(lines) || lines.length === 0) { res.status(400).json({ success: false, error: 'lines are required' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.receiveTransfer(String(id), lines, req.admin!.id);
+  res.json({ success: true, data: result });
+});
+
+export const adminListTransfers = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const result = await query(
+    `SELECT t.id, t.source_store_id as "sourceStoreId", t.destination_store_id as "destinationStoreId",
+            t.status, t.notes, t.created_at as "createdAt", t.updated_at as "updatedAt",
+            ss.name as "sourceStoreName", ds.name as "destinationStoreName"
+       FROM mart_stock_transfers t
+       JOIN mart_stores ss ON ss.id = t.source_store_id
+       JOIN mart_stores ds ON ds.id = t.destination_store_id
+      WHERE t.source_store_id = $1 OR t.destination_store_id = $1
+      ORDER BY t.created_at DESC
+      LIMIT 100`,
+    [storeId]
+  );
+  res.json({ success: true, data: result.rows });
+});
+
+
+export const adminCustomerReturn = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { orderId, productId, quantity, condition, note, unit } = req.body || {};
+  if (!orderId || !productId) { res.status(400).json({ success: false, error: 'orderId and productId are required' }); return; }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) { res.status(400).json({ success: false, error: 'quantity must be positive' }); return; }
+  if (condition !== 'resalable' && condition !== 'damaged') { res.status(400).json({ success: false, error: 'condition must be resalable or damaged' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.recordCustomerReturn(String(orderId), String(productId), storeId, qty, String(unit || 'pcs'), condition, req.admin!.id, note || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+export const adminSupplierReturn = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { productId, quantity, unit, unitCost, note } = req.body || {};
+  if (!productId) { res.status(400).json({ success: false, error: 'productId is required' }); return; }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) { res.status(400).json({ success: false, error: 'quantity must be positive' }); return; }
+  const cost = Number(unitCost ?? 0);
+  if (!Number.isFinite(cost) || cost < 0) { res.status(400).json({ success: false, error: 'unitCost must be non-negative' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.recordSupplierReturn(String(productId), storeId, qty, String(unit || 'pcs'), cost, req.admin!.id, note || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+export const adminStocktake = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { items, note } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, error: 'items are required' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.reconcileStock(storeId, items, req.admin!.id, note || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+
+export const adminGetInventoryValuation = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const asOf = typeof req.query.asOf === 'string' ? req.query.asOf : new Date().toISOString();
+  const result = await query(
+    `SELECT sp.product_id as "productId", p.name,
+            sp.stock_quantity::float as "quantity", sp.stock_unit as "unit",
+            COALESCE(latest.unit_cost::float, 0) as "unitCost",
+            (COALESCE(sp.stock_quantity, 0) * COALESCE(latest.unit_cost::float, 0))::float as "value"
+       FROM mart_store_products sp
+       JOIN mart_products p ON p.id = sp.product_id
+       LEFT JOIN LATERAL (
+         SELECT m.unit_cost
+           FROM mart_inventory_movements m
+          WHERE m.store_id = sp.store_id AND m.product_id = sp.product_id
+            AND m.created_at <= $2::timestamptz
+          ORDER BY m.created_at DESC, m.id DESC
+          LIMIT 1
+       ) latest ON true
+      WHERE sp.store_id = $1
+      ORDER BY p.name ASC`,
+    [storeId, asOf]
+  );
+  const totalValue = result.rows.reduce((sum: number, row: any) => sum + (row.value || 0), 0);
+  res.json({ success: true, data: { asOf, totalValue, items: result.rows } });
+});
+
+export const adminGetInventoryProfitability = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const from = typeof req.query.from === 'string' ? req.query.from : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const to = typeof req.query.to === 'string' ? req.query.to : new Date().toISOString().slice(0, 10);
+  const [online, offline, cogs, wastage] = await Promise.all([
+    query<{ revenue: number }>(`SELECT COALESCE(SUM(total), 0)::float AS revenue FROM mart_orders WHERE store_id = $1 AND status = 'delivered' AND created_at::date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+    query<{ revenue: number }>(`SELECT COALESCE(SUM(total), 0)::float AS revenue FROM mart_offline_sales WHERE store_id = $1 AND sale_date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+    query<{ cogs: number }>(`SELECT COALESCE(SUM(total_cost), 0)::float AS cogs FROM mart_inventory_movements WHERE store_id = $1 AND movement_type = 'sale' AND created_at::date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+    query<{ wastage: number }>(`SELECT COALESCE(SUM(total_cost), 0)::float AS wastage FROM mart_inventory_movements WHERE store_id = $1 AND movement_type = 'damage' AND created_at::date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+  ]);
+  const onlineRevenue = online.rows[0]?.revenue || 0;
+  const offlineRevenue = offline.rows[0]?.revenue || 0;
+  const totalRevenue = onlineRevenue + offlineRevenue;
+  const totalCogs = cogs.rows[0]?.cogs || 0;
+  const totalWastage = wastage.rows[0]?.wastage || 0;
+  res.json({
+    success: true,
+    data: {
+      from, to,
+      onlineRevenue, offlineRevenue, totalRevenue,
+      cogs: totalCogs,
+      wastage: totalWastage,
+      grossProfit: totalRevenue - totalCogs,
     },
   });
 });
