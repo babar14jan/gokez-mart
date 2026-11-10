@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Package, Pencil, Loader2, X,
   AlertTriangle, CheckCircle,
-  History, Plus, Search,
+  History, Plus, ArrowDownCircle, Search,
 } from 'lucide-react';
 import { inventoryApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
@@ -27,6 +27,13 @@ interface InventoryItem {
   recentRestocks?: Array<{ changeQty: number; note: string | null; createdBy?: string | null; createdByUsername?: string | null; createdAt: string }>;
   storeId?: string;
   storeName?: string;
+}
+
+interface LogEntry {
+  id: string; changeQty: number; reason: string;
+  orderNumber: string | null; note: string | null;
+  createdAt: string; createdByName: string | null; createdByUsername: string | null;
+  stockUnit: string | null;
 }
 
 const STOCK_UNITS = ['kg', 'litre', 'pcs', 'bunch', 'packet'];
@@ -76,6 +83,9 @@ export default function InventoryPage() {
   const [adjustForm, setAdjustForm] = useState({ productId: '', quantity: '', reason: 'damage', note: '' });
   const [adjustQuery, setAdjustQuery] = useState('');
   const [adjustShowSuggestions, setAdjustShowSuggestions] = useState(false);
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [history, setHistory] = useState<LogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [showBulkUpdate, setShowBulkUpdate] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkRows, setBulkRows] = useState<Array<{ key: string; productId: string; query: string; showSuggestions: boolean; action: 'add' | 'remove' | 'set'; qty: string; unit: string; cost: string; reason: string; note: string }>>([]);
@@ -192,6 +202,15 @@ export default function InventoryPage() {
     } finally { setMovementsLoading(false); }
   };
 
+  const openHistory = async (item: InventoryItem) => {
+    setHistoryItem(item);
+    setHistoryLoading(true);
+    try {
+      const res = await inventoryApi.getHistory(item.productId, item.storeId || selectedStoreId);
+      setHistory(res.data.data || []);
+    } finally { setHistoryLoading(false); }
+  };
+
   if (activeTab === 'ledger') {
     return (
       <div className="space-y-4">
@@ -261,15 +280,15 @@ export default function InventoryPage() {
   if (showBulkUpdate) {
     return (
       <div className="mx-auto w-full max-w-6xl space-y-4">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Bulk Update</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-gray-300 dark:border-slate-700 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b-2 border-gray-200 dark:border-slate-700">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">Bulk Update</h2>
             <button onClick={() => setShowBulkUpdate(false)} className="text-xs font-semibold text-emerald-600 hover:underline">Back to Inventory</button>
           </div>
           <div className="p-4">
             <div className="flex flex-col gap-2">
               {bulkRows.map((row) => (
-                <div key={row.key} className="grid grid-cols-1 gap-2 rounded-xl border border-gray-100 p-3 dark:border-slate-700 sm:grid-cols-12">
+                <div key={row.key} className="grid grid-cols-1 gap-2 rounded-xl border-2 border-gray-200 p-3 dark:border-slate-700 sm:grid-cols-12">
                   <div className="relative sm:col-span-3">
                     <input type="text" value={row.query}
                       onFocus={() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, showSuggestions: true } : r))}
@@ -312,7 +331,14 @@ export default function InventoryPage() {
                     </div>
                   ) : (
                     <>
-                      <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' sm:col-span:1'} />
+                      {row.action === 'set' ? (
+                        <div className="flex flex-wrap items-center gap-2 sm:col-span-1">
+                          <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' flex-1 min-w-[80px]'} />
+                          <input type="text" value={row.unit} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, unit: e.target.value } : r))} placeholder="Unit" className={inp + ' w-24'} />
+                        </div>
+                      ) : (
+                        <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' sm:col-span:1'} />
+                      )}
                       {row.action === 'remove' && (
                         <select value={row.reason} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, reason: e.target.value } : r))} className={inp + ' sm:col-span:2'}>
                           <option value="damage">Damage</option>
@@ -325,23 +351,21 @@ export default function InventoryPage() {
                           <option value="other">Other</option>
                         </select>
                       )}
-                      {row.action === 'set' && (
-                        <input type="text" value={row.unit} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, unit: e.target.value } : r))} placeholder="Unit" className={inp + ' sm:col-span:1'} />
-                      )}
                     </>
                   )}
                   <input type="text" value={row.note} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, note: e.target.value } : r))} placeholder="Note" className={inp + ' sm:col-span-2'} />
-                  <button onClick={() => setBulkRows(rows => rows.filter(r => r.key !== row.key))} className="text-red-500 text-xs">Remove</button>
+                  <div className="flex items-center justify-between gap-2 sm:col-span-12">
+                    <button onClick={() => setBulkRows(rows => rows.filter(r => r.key !== row.key))} className="text-red-500 text-xs">Remove</button>
+                    <button onClick={() => setBulkRows(rows => [...rows, { key: crypto.randomUUID(), productId: '', query: '', showSuggestions: false, action: 'add', qty: '', unit: items[0]?.stockUnit || 'kg', cost: '', reason: 'damage', note: '' }])} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-xs font-semibold rounded-xl">
+                      <Plus className="w-3.5 h-3.5" /> Add row
+                    </button>
+                  </div>
                 </div>
               ))}
-              <button onClick={() => setBulkRows(rows => [...rows, { key: crypto.randomUUID(), productId: '', query: '', showSuggestions: false, action: 'add', qty: '', unit: items[0]?.stockUnit || 'kg', cost: '', reason: 'damage', note: '' }])}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-xs font-semibold rounded-xl">
-                <Plus className="w-3.5 h-3.5" /> Add row
-              </button>
             </div>
           </div>
         </div>
-        <div className="border-t border-gray-100 dark:border-slate-700 px-4 py-3 flex gap-3">
+        <div className="border-t-2 border-gray-200 dark:border-slate-700 px-4 py-3 flex gap-3">
           <button onClick={() => setShowBulkUpdate(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl">Cancel</button>
           <button disabled={bulkSaving} onClick={saveBulkUpdate}
             className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50">
@@ -520,6 +544,13 @@ export default function InventoryPage() {
                       <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
                     )}
                   </div>
+
+                  {/* View mode: history button */}
+                  <button onClick={() => openHistory(item)}
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
+                    title="Stock history">
+                    <History className="w-4 h-4" />
+                  </button>
 
                 </div>
               );
@@ -733,6 +764,66 @@ export default function InventoryPage() {
             }} className="w-full py-2.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl disabled:opacity-50">
               {adjustSaving ? 'Saving...' : 'Save Adjustment'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* History drawer */}
+      {historyItem && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => setHistoryItem(null)}>
+          <div className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[80vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">Stock History</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 truncate max-w-[260px]">{historyItem.name}</p>
+              </div>
+              <button onClick={() => setHistoryItem(null)} className="p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-700">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {historyLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : history.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">
+                  <History className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No history yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {history.map(entry => {
+                    const isPos = entry.changeQty > 0;
+                    const label = entry.reason === 'restock' ? 'Restock' : entry.reason === 'order_deducted' ? 'Order' : 'Manual correction';
+                    const date = new Date(entry.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+                    return (
+                      <div key={entry.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-slate-700">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${isPos ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
+                          {isPos ? <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <ArrowDownCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-gray-700 dark:text-slate-300">{label}</span>
+                            <span className={`text-sm font-bold ${isPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                              {isPos ? '+' : ''}{entry.changeQty} {entry.stockUnit || ''}
+                            </span>
+                          </div>
+                          {entry.orderNumber && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">Order #{entry.orderNumber}</p>}
+                          {entry.note && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{entry.note}</p>}
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{entry.createdByName || entry.createdByUsername || 'System'}</span>
+                            <span className="text-[10px] text-gray-500 dark:text-slate-400">{date}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
