@@ -4103,3 +4103,57 @@ export const adminStocktake = asyncHandler(async (req: AdminRequest, res: Respon
   const result = await InventoryService.reconcileStock(storeId, items, req.admin!.id, note || null, idempotencyKey);
   res.json({ success: true, data: result });
 });
+
+
+export const adminGetInventoryValuation = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const asOf = typeof req.query.asOf === 'string' ? req.query.asOf : new Date().toISOString();
+  const result = await query(
+    `SELECT sp.product_id as "productId", p.name,
+            sp.stock_quantity::float as "quantity", sp.stock_unit as "unit",
+            COALESCE(latest.unit_cost::float, 0) as "unitCost",
+            (COALESCE(sp.stock_quantity, 0) * COALESCE(latest.unit_cost::float, 0))::float as "value"
+       FROM mart_store_products sp
+       JOIN mart_products p ON p.id = sp.product_id
+       LEFT JOIN LATERAL (
+         SELECT m.unit_cost
+           FROM mart_inventory_movements m
+          WHERE m.store_id = sp.store_id AND m.product_id = sp.product_id
+            AND m.created_at <= $2::timestamptz
+          ORDER BY m.created_at DESC, m.id DESC
+          LIMIT 1
+       ) latest ON true
+      WHERE sp.store_id = $1
+      ORDER BY p.name ASC`,
+    [storeId, asOf]
+  );
+  const totalValue = result.rows.reduce((sum: number, row: any) => sum + (row.value || 0), 0);
+  res.json({ success: true, data: { asOf, totalValue, items: result.rows } });
+});
+
+export const adminGetInventoryProfitability = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const from = typeof req.query.from === 'string' ? req.query.from : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const to = typeof req.query.to === 'string' ? req.query.to : new Date().toISOString().slice(0, 10);
+  const [online, offline, cogs, wastage] = await Promise.all([
+    query<{ revenue: number }>(`SELECT COALESCE(SUM(total), 0)::float AS revenue FROM mart_orders WHERE store_id = $1 AND status = 'delivered' AND created_at::date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+    query<{ revenue: number }>(`SELECT COALESCE(SUM(total), 0)::float AS revenue FROM mart_offline_sales WHERE store_id = $1 AND sale_date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+    query<{ cogs: number }>(`SELECT COALESCE(SUM(total_cost), 0)::float AS cogs FROM mart_inventory_movements WHERE store_id = $1 AND movement_type = 'sale' AND created_at::date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+    query<{ wastage: number }>(`SELECT COALESCE(SUM(total_cost), 0)::float AS wastage FROM mart_inventory_movements WHERE store_id = $1 AND movement_type = 'damage' AND created_at::date BETWEEN $2::date AND $3::date`, [storeId, from, to]),
+  ]);
+  const onlineRevenue = online.rows[0]?.revenue || 0;
+  const offlineRevenue = offline.rows[0]?.revenue || 0;
+  const totalRevenue = onlineRevenue + offlineRevenue;
+  const totalCogs = cogs.rows[0]?.cogs || 0;
+  const totalWastage = wastage.rows[0]?.wastage || 0;
+  res.json({
+    success: true,
+    data: {
+      from, to,
+      onlineRevenue, offlineRevenue, totalRevenue,
+      cogs: totalCogs,
+      wastage: totalWastage,
+      grossProfit: totalRevenue - totalCogs,
+    },
+  });
+});
