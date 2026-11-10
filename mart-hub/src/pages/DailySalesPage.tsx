@@ -74,6 +74,7 @@ export default function DailySalesPage() {
   const [otherAmount, setOtherAmount] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [quantity, setQuantity] = useState('1');
+  const [unitPrice, setUnitPrice] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | ''>('');
   const [notes, setNotes] = useState('');
   const [adding, setAdding] = useState(false);
@@ -152,6 +153,7 @@ export default function DailySalesPage() {
     setIsOtherProduct(false);
     setProductQuery('');
     setOtherAmount('');
+    setUnitPrice('');
     setShowSuggestions(false);
   };
 
@@ -160,6 +162,7 @@ export default function DailySalesPage() {
     setIsOtherProduct(true);
     setProductQuery('Other');
     setOtherAmount('');
+    setUnitPrice('');
     setShowSuggestions(false);
     setFormError('');
   };
@@ -190,12 +193,14 @@ export default function DailySalesPage() {
         productId: selectedProduct?.id,
         quantity: parsedQuantity,
         amount: isOtherProduct ? parsedOtherAmount : undefined,
+        unitPrice: !isOtherProduct && unitPrice.trim() ? Number(unitPrice) : undefined,
         paymentMethod,
         notes: notes.trim(),
         storeId,
       });
       clearProduct();
       setQuantity('1');
+      setUnitPrice('');
       setNotes('');
       setShowEntryForm(false);
       await Promise.all([loadEntries(entryDate), load(mode, customFrom, customTo)]);
@@ -216,6 +221,7 @@ export default function DailySalesPage() {
     setIsOtherProduct(!product && entry.productId === null);
     setOtherAmount(entry.productId === null ? String(entry.total) : '');
     setQuantity(String(entry.quantity));
+    setUnitPrice(entry.unitPrice != null ? String(entry.unitPrice) : '');
     setPaymentMethod(entry.paymentMethod);
     setNotes(entry.notes || '');
     setFormError('');
@@ -236,6 +242,7 @@ export default function DailySalesPage() {
         productId: selectedProduct?.id,
         quantity: parsedQuantity,
         amount: isOtherProduct ? parsedOtherAmount : undefined,
+        unitPrice: !isOtherProduct && unitPrice.trim() ? Number(unitPrice) : undefined,
         paymentMethod,
         notes: notes.trim(),
         storeId,
@@ -417,6 +424,17 @@ export default function DailySalesPage() {
               onChange={e => setQuantity(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" />
           </div>}
+
+          {!isOtherProduct && selectedProduct && (
+            <div className="lg:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Unit price (optional)</label>
+              <input type="number" min="0" step="0.01" value={unitPrice}
+                onChange={e => setUnitPrice(e.target.value)}
+                placeholder={String(selectedUnitPrice)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" />
+              <p className="mt-1 text-[10px] text-slate-400">System price: {inr(selectedUnitPrice)}</p>
+            </div>
+          )}
 
           <div className="lg:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Payment *</label>
