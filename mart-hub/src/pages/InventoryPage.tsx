@@ -181,7 +181,13 @@ export default function InventoryPage() {
         || item.name.toLowerCase().includes(query)
         || (item.localName || '').toLowerCase().includes(query)
         || (item.searchAliases ?? []).some((alias: string) => alias.toLowerCase().includes(query));
-      const matchesStatus = statusFilter === 'all' || (statusFilter === 'combo' ? Boolean(item.isBundle) : stockStatus(item) === statusFilter);
+      const matchesStatus =
+        statusFilter === 'all'
+        || (statusFilter === 'combo'
+          ? Boolean(item.isBundle)
+          : statusFilter === 'untracked'
+            ? !item.isBundle && stockStatus(item) === 'untracked'
+            : stockStatus(item) === statusFilter);
       const matchesCategory = categoryFilter === 'all' || item.categoryName === categoryFilter;
       return matchesQuery && matchesStatus && matchesCategory;
     });
