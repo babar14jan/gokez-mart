@@ -747,7 +747,12 @@ export default function InventoryPage() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <input type="number" value={adjustForm.quantity} onChange={e => setAdjustForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty (+/-)" className={inp} />
+              <div className="flex items-center gap-2">
+                <input type="number" value={adjustForm.quantity} onChange={e => setAdjustForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty (+/-)" className={inp} />
+                <span className="shrink-0 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  {items.find(i => i.productId === adjustForm.productId)?.stockUnit || items.find(i => i.productId === adjustForm.productId)?.sellingUnit || 'unit'}
+                </span>
+              </div>
               <select value={adjustForm.reason} onChange={e => setAdjustForm(f => ({ ...f, reason: e.target.value }))} className={inp}>
                 <option value="damage">Damage</option>
                 <option value="spoiled">Spoiled</option>
