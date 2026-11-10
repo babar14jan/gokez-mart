@@ -4004,15 +4004,17 @@ export const adminGetInventoryMovements = asyncHandler(async (req: AdminRequest,
   if (productId) { conditions.push(`product_id = $${i++}`); params.push(productId); }
   params.push(limit);
   const result = await query(
-    `SELECT id, product_id as "productId", store_id as "storeId", movement_type as "movementType",
-            quantity_in::float as "quantityIn", quantity_out::float as "quantityOut",
-            previous_balance::float as "previousBalance", new_balance::float as "newBalance",
-            unit, unit_cost::float as "unitCost", total_cost::float as "totalCost",
-            source_type as "sourceType", source_id as "sourceId", batch_id as "batchId",
-            created_by as "createdBy", created_at as "createdAt", reason, remarks
-       FROM mart_inventory_movements
+    `SELECT m.id, m.product_id as "productId", p.name as "productName", p.local_name as "productLocalName",
+            m.store_id as "storeId", m.movement_type as "movementType",
+            m.quantity_in::float as "quantityIn", m.quantity_out::float as "quantityOut",
+            m.previous_balance::float as "previousBalance", m.new_balance::float as "newBalance",
+            m.unit, m.unit_cost::float as "unitCost", m.total_cost::float as "totalCost",
+            m.source_type as "sourceType", m.source_id as "sourceId", m.batch_id as "batchId",
+            m.created_by as "createdBy", m.created_at as "createdAt", m.reason, m.remarks
+       FROM mart_inventory_movements m
+       LEFT JOIN mart_products p ON p.id = m.product_id
       WHERE ${conditions.join(' AND ')}
-      ORDER BY created_at DESC
+      ORDER BY m.created_at DESC
       LIMIT $${i}`,
     params
   );

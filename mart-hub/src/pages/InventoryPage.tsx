@@ -77,12 +77,14 @@ export default function InventoryPage() {
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [history, setHistory] = useState<LogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'stock' | 'ledger'>('stock');
+  const [movementSearch, setMovementSearch] = useState('');
+  const [movements, setMovements] = useState<any[]>([]);
+  const [movementsLoading, setMovementsLoading] = useState(false);
   const [showPurchase, setShowPurchase] = useState(false);
   const [purchaseSaving, setPurchaseSaving] = useState(false);
   const [purchaseForm, setPurchaseForm] = useState({ productId: '', quantity: '', unit: 'kg', unitCost: '', totalCost: '', note: '' });
   const [showMovements, setShowMovements] = useState(false);
-  const [movements, setMovements] = useState<any[]>([]);
-  const [movementsLoading, setMovementsLoading] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [adjustForm, setAdjustForm] = useState({ productId: '', quantity: '', reason: 'damage', note: '' });
@@ -216,6 +218,55 @@ export default function InventoryPage() {
 
   const pendingCount = Object.values(editRows).filter(r => r.qty !== '' && !isNaN(parseFloat(r.qty)) && parseFloat(r.qty) !== 0).length;
 
+  const loadMovements = async () => {
+    setMovementsLoading(true);
+    try {
+      const res = await inventoryApi.getMovements(selectedStoreId);
+      setMovements(res.data.data || []);
+    } finally { setMovementsLoading(false); }
+  };
+
+  if (activeTab === 'ledger') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Inventory Movement Ledger</h2>
+          <button onClick={() => setActiveTab('stock')} className="text-xs font-semibold text-emerald-600 hover:underline">Back to Stock</button>
+        </div>
+        <input type="text" value={movementSearch} onChange={e => setMovementSearch(e.target.value)}
+          placeholder="Search product, reason or source"
+          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+        {movementsLoading ? <p className="text-sm text-gray-500">Loading...</p> : (
+          <div className="space-y-2">
+            {movements.filter(m => {
+              const q = movementSearch.trim().toLowerCase();
+              if (!q) return true;
+              return [m.productName, m.productLocalName, m.movementType, m.reason, m.remarks, m.sourceType]
+                .some(value => String(value || '').toLowerCase().includes(q));
+            }).map(m => (
+              <div key={m.id} className="rounded-xl border border-gray-100 bg-white p-3 text-xs dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-gray-900 dark:text-white">{m.productName || m.productId}{m.productLocalName ? ` (${m.productLocalName})` : ''}</span>
+                  <span className="text-gray-500">{m.createdAt ? new Date(m.createdAt).toLocaleString() : ''}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-gray-600 dark:text-slate-300">
+                  <span className="font-semibold">{m.movementType}</span>
+                  <span>In: {m.quantityIn}</span>
+                  <span>Out: {m.quantityOut}</span>
+                  <span>Balance: {m.newBalance}</span>
+                  {m.totalCost != null && <span>Cost: {m.totalCost}</span>}
+                </div>
+                <div className="mt-1 text-gray-500 dark:text-slate-400">
+                  {m.reason}{m.remarks ? ` · ${m.remarks}` : ''}{m.sourceType ? ` · ${m.sourceType}` : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (loading) return <PageSkeleton />;
 
   if (!trackingEnabled && !managingMemberStore) return (
@@ -310,6 +361,10 @@ export default function InventoryPage() {
             <button onClick={() => { setAdjustForm({ productId: items[0]?.productId || '', quantity: '', reason: 'damage', note: '' }); setShowAdjust(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-red-400 hover:text-red-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
               <AlertTriangle className="w-3.5 h-3.5" /> Adjust Stock
+            </button>
+            <button onClick={() => { setActiveTab('ledger'); void loadMovements(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
+              <History className="w-3.5 h-3.5" /> View Ledger
             </button>
             <button onClick={enterEditMode}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
