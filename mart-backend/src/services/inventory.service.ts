@@ -52,7 +52,7 @@ export class InventoryService {
       availability_status: string;
     }> } = await client.query(
       `SELECT stock_quantity::float, stock_unit, availability_status
-       FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
+       FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
       [productId, storeId]
     );
     if (!cur.rows[0]) throw notFound('That product is no longer available in this store');
@@ -217,7 +217,7 @@ export class InventoryService {
       if (prior.rows.length) return { productId, storeId, duplicate: true };
     }
     const cur = await client.query(
-      `SELECT stock_quantity::float FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
+      `SELECT stock_quantity::float FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
       [productId, storeId]
     );
     const previous = cur.rows[0]?.stock_quantity ?? null;

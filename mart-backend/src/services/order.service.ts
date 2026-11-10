@@ -426,6 +426,61 @@ export class OrderService {
           quantity: item.quantity,
         });
       }
+      // Quantity-level availability/shortage handling. Overselling is allowed
+      // when auto_out_of_stock is off; otherwise the order must fit the recorded
+      // stock. Bundles are checked against their component stock.
+      if (settings.inventory_tracking === 'true') {
+        for (const item of resolvedItems) {
+          const sourceStoreId = item.sourceStoreId || data.storeId;
+          const stockRows = await client.query(
+            `SELECT sp.stock_quantity::float, sp.stock_unit
+               FROM mart_store_products sp
+              WHERE sp.product_id = $1 AND sp.store_id = $2
+              FOR UPDATE OF sp`,
+            [item.productId, sourceStoreId]
+          );
+          const stockRow = stockRows.rows[0];
+          if (stockRow && stockRow.stock_quantity !== null && stockRow.stock_unit) {
+            const { deductionPerQty, baseUnit } = parseSellingUnit(item.unit);
+            if (baseUnit === stockRow.stock_unit) {
+              const requested = deductionPerQty * item.quantity;
+              if (stockRow.stock_quantity < requested) {
+                if (enforceInventoryAvailability) {
+                  throw badRequest(`Insufficient stock for ${item.productName}`);
+                }
+                console.warn(`[inventory] shortage for ${item.productName}: requested ${requested}, available ${stockRow.stock_quantity}`);
+              }
+            }
+          }
+
+          const components = bundleComponentsByProduct.get(item.productId);
+          if (components?.length) {
+            for (const component of components) {
+              const componentRows = await client.query(
+                `SELECT sp.stock_quantity::float, sp.stock_unit
+                   FROM mart_store_products sp
+                  WHERE sp.product_id = $1 AND sp.store_id = $2
+                  FOR UPDATE OF sp`,
+                [component.productId, sourceStoreId]
+              );
+              const componentStock = componentRows.rows[0];
+              if (componentStock && componentStock.stock_quantity !== null && componentStock.stock_unit) {
+                const { deductionPerQty, baseUnit } = parseSellingUnit(component.unit);
+                if (baseUnit === componentStock.stock_unit) {
+                  const requested = deductionPerQty * component.quantity * item.quantity;
+                  if (componentStock.stock_quantity < requested) {
+                    if (enforceInventoryAvailability) {
+                      throw badRequest(`Insufficient stock for ${component.name}`);
+                    }
+                    console.warn(`[inventory] shortage for ${component.name}: requested ${requested}, available ${componentStock.stock_quantity}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
       const subtotal = resolvedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
       // Item-level discount = list price minus the effective price the customer
       // paid, summed across lines. Only counts lines where the list price is
