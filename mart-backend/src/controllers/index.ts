@@ -3827,35 +3827,101 @@ export const adminCleanStorage = asyncHandler(async (req: AdminRequest, res: Res
     }
   }
 
-  const localFiles = await readdir(productsDir).catch(() => [] as string[]);
-  const localKeys = localFiles.map(file => `products/${file}`);
-  const localToDelete = localKeys.filter(key => !preservedKeys.has(key));
-
-  const supabaseKeys: string[] = [];
-  if (config.env === 'production' && config.supabase.url && config.supabase.serviceRoleKey) {
-    let offset = 0;
-    while (true) {
-      const listRes = await fetch(`${config.supabase.url}/storage/v1/object/list/${config.supabase.bucket}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${config.supabase.serviceRoleKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prefix: 'products/', limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
-        signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
-      });
-      if (!listRes.ok) break;
-      const rows = await listRes.json() as Array<{ name?: string; id?: string | null }>;
-      if (!Array.isArray(rows) || rows.length === 0) break;
-      for (const row of rows) {
-        if (!row?.name || !row.id) continue;
-        const key = row.name.startsWith('products/') ? row.name : `products/${row.name}`;
-        supabaseKeys.push(key);
+  const collectFromRows = (rows: Array<Record<string, unknown>>) => {
+    for (const row of rows) {
+      for (const value of Object.values(row)) {
+        if (typeof value === 'string') {
+          const key = keyFromUrl(value);
+          if (key) preservedKeys.add(key);
+          else if (/\.(webp|png|jpe?g|gif|svg)$/i.test(value) && !value.includes('://')) preservedKeys.add(value);
+        } else if (value && typeof value === 'object') {
+          const stack = [value];
+          while (stack.length) {
+            const current = stack.pop();
+            if (Array.isArray(current)) stack.push(...current);
+            else if (current && typeof current === 'object') {
+              for (const nested of Object.values(current as Record<string, unknown>)) {
+                if (typeof nested === 'string') {
+                  const key = keyFromUrl(nested);
+                  if (key) preservedKeys.add(key);
+                  else if (/\.(webp|png|jpe?g|gif|svg)$/i.test(nested) && !nested.includes('://')) preservedKeys.add(nested);
+                } else if (nested && typeof nested === 'object') stack.push(nested);
+              }
+            }
+          }
+        }
       }
-      if (rows.length < 1000) break;
-      offset += rows.length;
+    }
+  };
+
+  const extraQueries = [
+    `SELECT logo_url as "logoUrl" FROM mart_stores`,
+    `SELECT icon FROM mart_categories`,
+    `SELECT image_url as "imageUrl" FROM mart_carousel_slides`,
+    `SELECT image_url as "imageUrl" FROM mart_campaigns`,
+    `SELECT image_url as "imageUrl" FROM mart_promotions`,
+    `SELECT config FROM mart_home_sections`,
+    `SELECT value FROM mart_settings`,
+  ];
+  for (const sql of extraQueries) {
+    try {
+      const result = await query<Record<string, unknown>>(sql);
+      collectFromRows(result.rows as Array<Record<string, unknown>>);
+    } catch {
+      // Ignore optional/missing tables or columns during cleanup.
     }
   }
+
+  const walkLocal = async (dir: string, prefix: string): Promise<string[]> => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [] as Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>);
+    const keys: string[] = [];
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      const key = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) {
+        if (entry.name === 'originals') continue;
+        keys.push(...await walkLocal(fullPath, `${key}/`));
+      } else if (entry.isFile()) {
+        keys.push(key);
+      }
+    }
+    return keys;
+  };
+  const localKeys = await walkLocal(uploadsDir, '');
+  const localToDelete = localKeys.filter(key => !key.startsWith('originals/') && !preservedKeys.has(key));
+
+  const listSupabasePrefix = async (prefix: string): Promise<string[]> => {
+    const keys: string[] = [];
+    if (!(config.env === 'production' && config.supabase.url && config.supabase.serviceRoleKey)) return keys;
+    const walk = async (currentPrefix: string) => {
+      let offset = 0;
+      while (true) {
+        const listRes = await fetch(`${config.supabase.url}/storage/v1/object/list/${config.supabase.bucket}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.supabase.serviceRoleKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prefix: currentPrefix, limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
+          signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
+        });
+        if (!listRes.ok) break;
+        const rows = await listRes.json() as Array<{ name?: string; id?: string | null }>;
+        if (!Array.isArray(rows) || rows.length === 0) break;
+        for (const row of rows) {
+          if (!row?.name) continue;
+          const key = currentPrefix ? `${currentPrefix}${row.name}` : row.name;
+          if (row.id) keys.push(key);
+          else await walk(`${key}/`);
+        }
+        if (rows.length < 1000) break;
+        offset += rows.length;
+      }
+    };
+    await walk(prefix);
+    return keys;
+  };
+  const supabaseKeys = await listSupabasePrefix('');
 
   const supabaseToDelete = supabaseKeys.filter(key => !preservedKeys.has(key));
 
