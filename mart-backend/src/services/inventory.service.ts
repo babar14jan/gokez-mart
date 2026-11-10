@@ -85,6 +85,16 @@ export class InventoryService {
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [productId, storeId, qty, qty < 0 ? 'manual_correction' : 'restock', note || null, createdBy, idempotencyKey || null]
     );
+    await client.query(
+      `INSERT INTO mart_inventory_movements
+         (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance,
+          unit, reason, remarks, created_by, idempotency_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [productId, storeId, qty < 0 ? 'adjustment' : 'restock',
+       qty < 0 ? 0 : qty, qty < 0 ? Math.abs(qty) : 0,
+       current, newQty, effectiveStockUnit,
+       qty < 0 ? 'manual_correction' : 'restock', note || null, createdBy, idempotencyKey || null]
+    );
 
     return { productId, storeId, previousQty: current, newQty, stockUnit };
     });
@@ -156,6 +166,13 @@ export class InventoryService {
            (product_id, store_id, change_qty, reason, reference_id)
          VALUES ($1, $2, $3, 'order_deducted', $4)`,
         [item.productId, lineStoreId, -deduction, deductionReferenceId]
+      );
+      await client.query(
+        `INSERT INTO mart_inventory_movements
+           (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance,
+            unit, source_type, source_id, reason)
+         VALUES ($1, $2, 'sale', 0, $3, $4, $5, $6, 'order', $7, 'order_deducted')`,
+        [item.productId, lineStoreId, deduction, row.stock_quantity, newQty, baseUnit, deductionReferenceId]
       );
 
       results.push({ productId: item.productId, newQty, wentOutOfStock, isLow });
@@ -235,6 +252,16 @@ export class InventoryService {
          (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)
        VALUES ($1, $2, $3, 'manual_correction', 'Stock set manually', $4, $5)`,
       [productId, storeId, diff, createdBy, idempotencyKey || null]
+    );
+
+    const movementIn = diff > 0 ? diff : 0;
+    const movementOut = diff < 0 ? Math.abs(diff) : 0;
+    await client.query(
+      `INSERT INTO mart_inventory_movements
+         (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance,
+          unit, reason, remarks, created_by, idempotency_key)
+       VALUES ($1, $2, 'adjustment', $3, $4, $5, $6, $7, 'manual_correction', 'Stock set manually', $8, $9)`,
+      [productId, storeId, movementIn, movementOut, previous, qty, stockUnit, createdBy, idempotencyKey || null]
     );
 
     return { productId, storeId, previousQty: previous, newQty: qty, stockUnit };
