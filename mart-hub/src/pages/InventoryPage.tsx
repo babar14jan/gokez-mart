@@ -28,6 +28,7 @@ interface InventoryItem {
   storeId?: string;
   storeName?: string;
   isBundle?: boolean;
+  comboComponents?: Array<{ productId: string; name: string; quantity: number; unit: string; price: number }> | null;
 }
 
 interface LogEntry {
@@ -543,26 +544,41 @@ export default function InventoryPage() {
                     ) : null}
                   </div>
 
-                  {/* Current stock + history */}
+                  {/* Current stock / combo breakdown */}
                   <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center">
-                    <div className="text-right flex-shrink-0 min-w-[48px]">
-                      {item.stockQuantity !== null ? (
-                        <>
-                          <p className={`text-sm font-bold tabular-nums ${stockColor}`}>
-                            {formatStock(item.stockQuantity!, item.stockUnit || 'units')}
+                    {item.isBundle ? (
+                      <div className="text-right flex-shrink-0 min-w-[48px] max-w-[260px]">
+                        <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300">
+                          {(item.comboComponents || []).map(c => `${c.name} · ${c.quantity} ${c.unit} · ₹${c.price}`).join(', ')}
+                        </p>
+                        {typeof item.price === 'number' && (
+                          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                            Combo · ₹{item.price}/{item.sellingUnit || 'combo'}
                           </p>
-                        </>
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-right flex-shrink-0 min-w-[48px]">
+                          {item.stockQuantity !== null ? (
+                            <>
+                              <p className={`text-sm font-bold tabular-nums ${stockColor}`}>
+                                {formatStock(item.stockQuantity!, item.stockUnit || 'units')}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
+                          )}
+                        </div>
 
-                    {/* View mode: history button */}
-                    <button onClick={() => openHistory(item)}
-                      className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
-                      title="Stock history">
-                      <History className="w-4 h-4" />
-                    </button>
+                        {/* View mode: history button */}
+                        <button onClick={() => openHistory(item)}
+                          className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
+                          title="Stock history">
+                          <History className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
 
                 </div>
