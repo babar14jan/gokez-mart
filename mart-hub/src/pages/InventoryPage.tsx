@@ -193,7 +193,7 @@ export default function InventoryPage() {
 
   const outCount = items.filter(i => stockStatus(i) === 'out').length;
   const lowCount = items.filter(i => stockStatus(i) === 'low').length;
-  const untrackedCount = items.filter(i => stockStatus(i) === 'untracked').length;
+  const untrackedCount = items.filter(i => !i.isBundle && stockStatus(i) === 'untracked').length;
   const comboCount = items.filter(i => i.isBundle).length;
 
 
