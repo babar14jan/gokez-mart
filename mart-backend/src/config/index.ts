@@ -42,6 +42,9 @@ export const config = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
     bucket: process.env.SUPABASE_BUCKET || 'mart-products',
   },
+  storage: {
+    publicBaseUrl: process.env.MART_STORAGE_PUBLIC_BASE_URL || '',
+  },
   cors: {
     origins: configuredOrigins,
   },

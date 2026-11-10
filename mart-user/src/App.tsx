@@ -1111,7 +1111,7 @@ export default function App() {
                 {(successData.items || []).map((item: any, i: number) => (
                   <div key={i} className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 dark:bg-slate-700 flex-shrink-0">
                     <SmartImage
-                      src={item.thumbnailUrl || item.photoUrl}
+                      src={item.smallUrl || item.thumbnailUrl || item.photoUrl}
                       alt={item.productName}
                       className="h-full w-full"
                       imgClassName="object-cover"
@@ -1484,7 +1484,7 @@ export default function App() {
 
           {/* Products */}
           {loading || catalogError ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2.5">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse shadow-sm">
                   <div className="aspect-square bg-gray-100" />
@@ -1550,7 +1550,7 @@ export default function App() {
                     <div className="flex items-center gap-2 mb-3">
                       <h2 className="text-base font-bold text-gray-900 dark:text-white">{cat.name}</h2>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2.5">
                       {catProducts.map(product => (
                         <ProductCard key={product.id} product={product} />
                       ))}
@@ -1567,7 +1567,7 @@ export default function App() {
                     <div className="flex items-center justify-between mb-3">
                       <h2 className="text-sm font-bold text-gray-900 dark:text-white">📦 Others</h2>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2.5">
                       {uncat.map(product => (
                         <ProductCard key={product.id} product={product} />
                       ))}

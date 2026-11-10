@@ -4,9 +4,10 @@ import { categoriesApi, catalogApi, productsApi } from '../services/api';
 import * as XLSX from 'xlsx';
 import CategoryIcon from '../components/CategoryIcon';
 import SmartImage from '../components/SmartImage';
+import { useAuthStore } from '../store/authStore';
 import PageSkeleton from '../components/PageSkeleton';
 
-interface ProductImageVariant { assetId?: string; thumbnailUrl: string; largeUrl: string; }
+interface ProductImageVariant { assetId?: string; smallUrl?: string; thumbnailUrl: string; largeUrl: string; }
 
 interface CatalogProduct {
   id: string;
@@ -44,6 +45,8 @@ export default function CatalogPage() {
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [cleaningStorage, setCleaningStorage] = useState(false);
+  const [storageResult, setStorageResult] = useState<any>(null);
 
   // Bulk image upload state
   interface BulkUploadItem { file: File; name: string; preview: string; categoryId: string; status: 'pending' | 'uploading' | 'done' | 'error'; }
@@ -312,6 +315,21 @@ export default function CatalogPage() {
     } finally { setDeleting(false); }
   };
 
+  const isSuperAdmin = useAuthStore(s => s.isSuperAdmin());
+
+  const handleCleanStorage = async (dryRun: boolean) => {
+    setCleaningStorage(true);
+    try {
+      const res = await productsApi.cleanStorage(dryRun);
+      setStorageResult(res.data.data);
+      if (!dryRun) await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Storage cleanup failed');
+    } finally {
+      setCleaningStorage(false);
+    }
+  };
+
   if (loading) return <PageSkeleton />;
 
   return (
@@ -319,7 +337,6 @@ export default function CatalogPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500 dark:text-slate-400">Master product list — name &amp; photo only. Stores browse this when adding products.</p>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
             <Upload className="w-3.5 h-3.5" /> Bulk Upload
@@ -333,11 +350,41 @@ export default function CatalogPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
             <Download className="w-3.5 h-3.5" /> Template
           </button>
+          {isSuperAdmin && (
+            <button onClick={() => handleCleanStorage(true)} disabled={cleaningStorage}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-red-400 hover:text-red-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50">
+              {cleaningStorage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              Clean Storage
+            </button>
+          )}
           <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
             <Plus className="w-3.5 h-3.5" /> Add Product
           </button>
         </div>
       </div>
+
+      {storageResult && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg p-5 space-y-3">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Storage Cleanup {storageResult.dryRun ? '(Dry Run)' : ''}</h3>
+            <div className="text-xs text-gray-600 dark:text-slate-300 space-y-1">
+              <p>Preserved assets: {storageResult.preservedAssets}</p>
+              <p>Orphaned assets: {storageResult.orphanedAssets}</p>
+              <p>Local files scanned: {storageResult.scannedLocalFiles}; unused: {storageResult.pendingLocalFiles}</p>
+              <p>Supabase files scanned: {storageResult.scannedSupabaseFiles}; unused: {storageResult.pendingSupabaseFiles}</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setStorageResult(null)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl">Close</button>
+              {storageResult.dryRun && (storageResult.pendingLocalFiles > 0 || storageResult.pendingSupabaseFiles > 0) && (
+                <button onClick={() => handleCleanStorage(false)} disabled={cleaningStorage}
+                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-red-500 rounded-xl disabled:opacity-50">
+                  {cleaningStorage ? 'Cleaning...' : 'Clean Now'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">

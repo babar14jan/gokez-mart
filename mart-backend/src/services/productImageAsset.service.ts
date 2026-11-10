@@ -13,10 +13,13 @@ type ProductImageAsset = {
   id: string;
   productId: string | null;
   uploadedBy: string | null;
+  smallUrl: string;
   thumbnailUrl: string;
   largeUrl: string;
+  smallKey: string;
   thumbnailKey: string;
   largeKey: string;
+  originalLocalPath: string | null;
   storageDriver: StorageDriver;
   status: AssetStatus;
 };
@@ -28,9 +31,9 @@ export class ProductImageAssetService {
   static async createPending(asset: Omit<ProductImageAsset, 'productId' | 'status'>): Promise<void> {
     await query(
       `INSERT INTO mart_product_image_assets
-         (id, uploaded_by, thumbnail_url, large_url, thumbnail_key, large_key, storage_driver)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [asset.id, asset.uploadedBy, asset.thumbnailUrl, asset.largeUrl, asset.thumbnailKey, asset.largeKey, asset.storageDriver]
+         (id, uploaded_by, small_url, thumbnail_url, large_url, small_key, thumbnail_key, large_key, original_local_path, storage_driver)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [asset.id, asset.uploadedBy, asset.smallUrl, asset.thumbnailUrl, asset.largeUrl, asset.smallKey, asset.thumbnailKey, asset.largeKey, asset.originalLocalPath, asset.storageDriver]
     );
   }
 
@@ -95,19 +98,19 @@ export class ProductImageAssetService {
     );
   }
 
-  static async getCatalogAssetVariants(productIds: string[]): Promise<Map<string, Array<{ assetId: string; thumbnailUrl: string; largeUrl: string }>>> {
+  static async getCatalogAssetVariants(productIds: string[]): Promise<Map<string, Array<{ assetId: string; smallUrl: string; thumbnailUrl: string; largeUrl: string }>>> {
     if (!productIds.length) return new Map();
-    const result = await query<{ productId: string; assetId: string; thumbnailUrl: string; largeUrl: string }>(
-      `SELECT product_id as "productId", id as "assetId", thumbnail_url as "thumbnailUrl", large_url as "largeUrl"
+    const result = await query<{ productId: string; assetId: string; smallUrl: string; thumbnailUrl: string; largeUrl: string }>(
+      `SELECT product_id as "productId", id as "assetId", small_url as "smallUrl", thumbnail_url as "thumbnailUrl", large_url as "largeUrl"
          FROM mart_product_image_assets
         WHERE product_id = ANY($1::uuid[]) AND status = 'active'
         ORDER BY product_id, sort_order`,
       [productIds]
     );
-    const byProduct = new Map<string, Array<{ assetId: string; thumbnailUrl: string; largeUrl: string }>>();
+    const byProduct = new Map<string, Array<{ assetId: string; smallUrl: string; thumbnailUrl: string; largeUrl: string }>>();
     for (const asset of result.rows) {
       const entries = byProduct.get(asset.productId) || [];
-      entries.push({ assetId: asset.assetId, thumbnailUrl: asset.thumbnailUrl, largeUrl: asset.largeUrl });
+      entries.push({ assetId: asset.assetId, smallUrl: asset.smallUrl || asset.thumbnailUrl, thumbnailUrl: asset.thumbnailUrl, largeUrl: asset.largeUrl });
       byProduct.set(asset.productId, entries);
     }
     return byProduct;
@@ -115,8 +118,8 @@ export class ProductImageAssetService {
 
   static async cleanupDue(): Promise<void> {
     const due = await query<ProductImageAsset>(
-      `SELECT id, product_id as "productId", uploaded_by as "uploadedBy", thumbnail_url as "thumbnailUrl", large_url as "largeUrl",
-              thumbnail_key as "thumbnailKey", large_key as "largeKey", storage_driver as "storageDriver", status
+      `SELECT id, product_id as "productId", uploaded_by as "uploadedBy", small_url as "smallUrl", thumbnail_url as "thumbnailUrl", large_url as "largeUrl",
+              small_key as "smallKey", thumbnail_key as "thumbnailKey", large_key as "largeKey", original_local_path as "originalLocalPath", storage_driver as "storageDriver", status
          FROM mart_product_image_assets
         WHERE (status = 'pending' AND created_at <= NOW() - INTERVAL '${PENDING_UPLOAD_TTL}')
            OR (status = 'cleanup_queued' AND cleanup_after <= NOW())
@@ -156,7 +159,7 @@ export class ProductImageAssetService {
         'Authorization': `Bearer ${config.supabase.serviceRoleKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prefixes: [asset.thumbnailKey, asset.largeKey] }),
+      body: JSON.stringify({ prefixes: [asset.smallKey, asset.thumbnailKey, asset.largeKey] }),
       signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
     });
     if (!response.ok) {

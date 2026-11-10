@@ -219,6 +219,7 @@ router.delete('/admin/home-sections/:id',      authenticate, requireRole('super_
 router.post('/admin/home-sections/reorder',    authenticate, requireRole('super_admin', 'store_owner'), ctrl.adminReorderHomeSections);
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
+router.post('/admin/storage/clean',    authenticate, requireSuperAdmin, ctrl.adminCleanStorage);
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
 router.get('/admin/inventory',                          authenticate, ctrl.adminGetInventory);

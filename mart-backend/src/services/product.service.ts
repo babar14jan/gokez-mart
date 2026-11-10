@@ -16,6 +16,7 @@ export interface MartProduct {
   photoUrl: string | null;
   photos: string[];
   photoVariants: ProductImageVariant[];
+  smallUrl: string | null;
   thumbnailUrl: string | null;
   largeUrl: string | null;
   price: number;
@@ -33,6 +34,7 @@ export interface MartProduct {
 }
 
 export interface ProductImageVariant {
+  smallUrl: string;
   thumbnailUrl: string;
   largeUrl: string;
 }
@@ -47,13 +49,15 @@ function normalizePhotoVariants(value: unknown, photos: unknown, photoUrl: unkno
     const fallback = legacyPhotos[index] || legacyPhotos[0] || '';
     const largeUrl = typeof source.largeUrl === 'string' && source.largeUrl ? source.largeUrl : fallback;
     const thumbnailUrl = typeof source.thumbnailUrl === 'string' && source.thumbnailUrl ? source.thumbnailUrl : largeUrl;
-    return { thumbnailUrl, largeUrl };
+    const smallUrl = typeof source.smallUrl === 'string' && source.smallUrl ? source.smallUrl : thumbnailUrl;
+    return { smallUrl, thumbnailUrl, largeUrl };
   }).filter(variant => Boolean(variant.largeUrl));
 }
 
 function decorateProductImages<T extends { photoUrl: string | null; photos: unknown; photoVariants?: unknown }>(product: T): T & {
   photos: string[];
   photoVariants: ProductImageVariant[];
+  smallUrl: string | null;
   thumbnailUrl: string | null;
   largeUrl: string | null;
 } {
@@ -67,6 +71,7 @@ function decorateProductImages<T extends { photoUrl: string | null; photos: unkn
     photoUrl: product.photoUrl || primary?.largeUrl || null,
     photos: photos.length ? photos : photoVariants.map(variant => variant.largeUrl),
     photoVariants,
+    smallUrl: primary?.smallUrl || primary?.thumbnailUrl || product.photoUrl || null,
     thumbnailUrl: primary?.thumbnailUrl || product.photoUrl || null,
     largeUrl: primary?.largeUrl || product.photoUrl || null,
   };
