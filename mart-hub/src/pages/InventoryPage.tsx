@@ -266,10 +266,10 @@ export default function InventoryPage() {
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Bulk Update</h2>
             <button onClick={() => setShowBulkUpdate(false)} className="text-xs font-semibold text-emerald-600 hover:underline">Back to Inventory</button>
           </div>
-          <div className="p-4 overflow-x-auto">
-            <div className="grid gap-2 rounded-xl border border-gray-100 p-3 dark:border-slate-700 sm:grid-cols-12 min-w-[760px]">
+          <div className="p-4">
+            <div className="flex flex-col gap-2 rounded-xl border border-gray-100 p-3 dark:border-slate-700">
               {bulkRows.map((row) => (
-                <div key={row.key} className="grid gap-2 rounded-xl border border-gray-100 p-3 dark:border-slate-700 sm:grid-cols-12">
+                <div key={row.key} className="grid grid-cols-1 gap-2 rounded-xl border border-gray-100 p-3 dark:border-slate-700 sm:grid-cols-12">
                   <div className="relative sm:col-span-3">
                     <input type="text" value={row.query}
                       onFocus={() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, showSuggestions: true } : r))}
