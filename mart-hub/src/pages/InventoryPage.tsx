@@ -616,7 +616,9 @@ export default function InventoryPage() {
                       }}
                       className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
                       <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
-                      {item.localName && <span className="text-xs text-slate-400">{item.localName}</span>}
+                      <span className="text-xs text-slate-400">
+                        {item.localName ? `${item.localName} · ` : ''}{item.stockQuantity != null ? `${item.stockQuantity} ${item.stockUnit || item.sellingUnit}` : 'Not tracked'}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -740,7 +742,9 @@ export default function InventoryPage() {
                       }}
                       className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
                       <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
-                      {item.localName && <span className="text-xs text-slate-400">{item.localName}</span>}
+                      <span className="text-xs text-slate-400">
+                        {item.localName ? `${item.localName} · ` : ''}{item.stockQuantity != null ? `${item.stockQuantity} ${item.stockUnit || item.sellingUnit}` : 'Not tracked'}
+                      </span>
                     </button>
                   ))}
                 </div>
