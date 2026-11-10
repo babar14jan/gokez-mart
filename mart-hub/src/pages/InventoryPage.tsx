@@ -267,7 +267,7 @@ export default function InventoryPage() {
             <button onClick={() => setShowBulkUpdate(false)} className="text-xs font-semibold text-emerald-600 hover:underline">Back to Inventory</button>
           </div>
           <div className="p-4">
-            <div className="flex flex-col gap-2 rounded-xl border border-gray-100 p-3 dark:border-slate-700">
+            <div className="flex flex-col gap-2">
               {bulkRows.map((row) => (
                 <div key={row.key} className="grid grid-cols-1 gap-2 rounded-xl border border-gray-100 p-3 dark:border-slate-700 sm:grid-cols-12">
                   <div className="relative sm:col-span-3">
@@ -304,20 +304,31 @@ export default function InventoryPage() {
                     <option value="remove">Remove</option>
                     <option value="set">Set</option>
                   </select>
-                  <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' sm:col-span-1'} />
-                  <input type="text" value={row.unit} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, unit: e.target.value } : r))} placeholder="Unit" className={inp + ' sm:col-span-1'} />
-                  {row.action === 'add' && <input type="number" value={row.cost} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, cost: e.target.value } : r))} placeholder="Cost/unit" className={inp + ' sm:col-span-2'} />}
-                  {row.action === 'remove' && (
-                    <select value={row.reason} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, reason: e.target.value } : r))} className={inp + ' sm:col-span-2'}>
-                      <option value="damage">Damage</option>
-                      <option value="spoiled">Spoiled</option>
-                      <option value="expired">Expired</option>
-                      <option value="lost">Lost</option>
-                      <option value="missing">Missing</option>
-                      <option value="consumption">Consumption</option>
-                      <option value="quality_rejection">Quality rejection</option>
-                      <option value="other">Other</option>
-                    </select>
+                  {row.action === 'add' ? (
+                    <div className="flex flex-wrap items-center gap-2 sm:col-span-4">
+                      <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' flex-1 min-w-[80px]'} />
+                      <input type="text" value={row.unit} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, unit: e.target.value } : r))} placeholder="Unit" className={inp + ' flex-1 min-w-[80px]'} />
+                      <input type="number" value={row.cost} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, cost: e.target.value } : r))} placeholder="Cost/unit" className={inp + ' flex-1 min-w-[80px]'} />
+                    </div>
+                  ) : (
+                    <>
+                      <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' sm:col-span:1'} />
+                      {row.action === 'remove' && (
+                        <select value={row.reason} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, reason: e.target.value } : r))} className={inp + ' sm:col-span:2'}>
+                          <option value="damage">Damage</option>
+                          <option value="spoiled">Spoiled</option>
+                          <option value="expired">Expired</option>
+                          <option value="lost">Lost</option>
+                          <option value="missing">Missing</option>
+                          <option value="consumption">Consumption</option>
+                          <option value="quality_rejection">Quality rejection</option>
+                          <option value="other">Other</option>
+                        </select>
+                      )}
+                      {row.action === 'set' && (
+                        <input type="text" value={row.unit} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, unit: e.target.value } : r))} placeholder="Unit" className={inp + ' sm:col-span:1'} />
+                      )}
+                    </>
                   )}
                   <input type="text" value={row.note} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, note: e.target.value } : r))} placeholder="Note" className={inp + ' sm:col-span-2'} />
                   <button onClick={() => setBulkRows(rows => rows.filter(r => r.key !== row.key))} className="text-red-500 text-xs">Remove</button>
