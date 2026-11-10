@@ -432,6 +432,7 @@ export default function DailySalesPage() {
                 onChange={e => setUnitPrice(e.target.value)}
                 placeholder={String(selectedUnitPrice)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" />
+              <p className="mt-1 text-[10px] text-slate-400">System price: {inr(selectedUnitPrice)}</p>
             </div>
           )}
 
