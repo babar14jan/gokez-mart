@@ -85,6 +85,10 @@ export default function InventoryPage() {
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [adjustForm, setAdjustForm] = useState({ productId: '', quantity: '', reason: 'damage', note: '' });
+  const [adjustQuery, setAdjustQuery] = useState('');
+  const [adjustShowSuggestions, setAdjustShowSuggestions] = useState(false);
+  const [purchaseQuery, setPurchaseQuery] = useState('');
+  const [purchaseShowSuggestions, setPurchaseShowSuggestions] = useState(false);
 
   const { role } = useAuthStore();
   const canManageTracking = role === 'super_admin' || role === 'store_owner' || role === 'store_manager';
@@ -294,7 +298,7 @@ export default function InventoryPage() {
               <input type="text" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search inventory..." className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-9 pr-8 text-xs text-gray-900 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
               {searchQuery && <button onClick={() => setSearchQuery('')} aria-label="Clear inventory search" className="absolute right-2 top-1/2 -translate-y-1/2"><X className="h-3.5 w-3.5 text-gray-500 hover:text-gray-700" /></button>}
             </div>
-            <button onClick={() => { setPurchaseForm({ productId: items[0]?.productId || '', quantity: '', unit: items[0]?.stockUnit || 'kg', unitCost: '', note: '' }); setShowPurchase(true); }}
+            <button onClick={() => { setPurchaseForm({ productId: '', quantity: '', unit: items[0]?.stockUnit || 'kg', unitCost: '', note: '' }); setPurchaseQuery(''); setShowPurchase(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
               <Plus className="w-3.5 h-3.5" /> Record Purchase
             </button>
@@ -529,12 +533,33 @@ export default function InventoryPage() {
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">Record Purchase</h3>
               <button onClick={() => setShowPurchase(false)}><X className="w-4 h-4 text-gray-500" /></button>
             </div>
-            <select value={purchaseForm.productId} onChange={e => {
-              const item = items.find(i => i.productId === e.target.value);
-              setPurchaseForm(f => ({ ...f, productId: e.target.value, unit: item?.stockUnit || f.unit }));
-            }} className={inp}>
-              {items.map(item => <option key={item.productId} value={item.productId}>{item.name}</option>)}
-            </select>
+            <div className="relative">
+              <input type="text" value={purchaseQuery}
+                onFocus={() => setPurchaseShowSuggestions(true)}
+                onBlur={() => window.setTimeout(() => setPurchaseShowSuggestions(false), 120)}
+                onChange={e => { setPurchaseQuery(e.target.value); setPurchaseForm(f => ({ ...f, productId: '' })); }}
+                placeholder="Search product name or Hindi name"
+                className={inp} />
+              {purchaseShowSuggestions && (
+                <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
+                  {items.filter(item => {
+                    const q = purchaseQuery.trim().toLowerCase();
+                    return !q || item.name.toLowerCase().includes(q) || (item.localName || '').toLowerCase().includes(q) || (item.searchAliases ?? []).some((a: string) => a.toLowerCase().includes(q));
+                  }).slice(0, 12).map(item => (
+                    <button key={item.productId} type="button" onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        setPurchaseForm(f => ({ ...f, productId: item.productId, unit: item.stockUnit || f.unit }));
+                        setPurchaseQuery(`${item.name}${item.localName ? ` (${item.localName})` : ''}`);
+                        setPurchaseShowSuggestions(false);
+                      }}
+                      className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
+                      {item.localName && <span className="text-xs text-slate-400">{item.localName}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <input type="number" value={purchaseForm.quantity} onChange={e => setPurchaseForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty" className={inp} />
               <select value={purchaseForm.unit} onChange={e => setPurchaseForm(f => ({ ...f, unit: e.target.value }))} className={inp}>
@@ -590,9 +615,33 @@ export default function InventoryPage() {
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">Adjust Stock</h3>
               <button onClick={() => setShowAdjust(false)}><X className="w-4 h-4 text-gray-500" /></button>
             </div>
-            <select value={adjustForm.productId} onChange={e => setAdjustForm(f => ({ ...f, productId: e.target.value }))} className={inp}>
-              {items.map(item => <option key={item.productId} value={item.productId}>{item.name}</option>)}
-            </select>
+            <div className="relative">
+              <input type="text" value={adjustQuery}
+                onFocus={() => setAdjustShowSuggestions(true)}
+                onBlur={() => window.setTimeout(() => setAdjustShowSuggestions(false), 120)}
+                onChange={e => { setAdjustQuery(e.target.value); setAdjustForm(f => ({ ...f, productId: '' })); }}
+                placeholder="Search product name or Hindi name"
+                className={inp} />
+              {adjustShowSuggestions && (
+                <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
+                  {items.filter(item => {
+                    const q = adjustQuery.trim().toLowerCase();
+                    return !q || item.name.toLowerCase().includes(q) || (item.localName || '').toLowerCase().includes(q) || (item.searchAliases ?? []).some((a: string) => a.toLowerCase().includes(q));
+                  }).slice(0, 12).map(item => (
+                    <button key={item.productId} type="button" onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        setAdjustForm(f => ({ ...f, productId: item.productId }));
+                        setAdjustQuery(`${item.name}${item.localName ? ` (${item.localName})` : ''}`);
+                        setAdjustShowSuggestions(false);
+                      }}
+                      className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
+                      {item.localName && <span className="text-xs text-slate-400">{item.localName}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <input type="number" value={adjustForm.quantity} onChange={e => setAdjustForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty (+/-)" className={inp} />
               <select value={adjustForm.reason} onChange={e => setAdjustForm(f => ({ ...f, reason: e.target.value }))} className={inp}>
