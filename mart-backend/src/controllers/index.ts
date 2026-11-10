@@ -4031,3 +4031,40 @@ export const adminAdjustStock = asyncHandler(async (req: AdminRequest, res: Resp
   const result = await InventoryService.adjustStock(String(productId), storeId, qty, reason, note || null, req.admin!.id, idempotencyKey);
   res.json({ success: true, data: result });
 });
+
+
+export const adminCreateTransfer = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const sourceStoreId = await resolveManagedStoreId(req);
+  const { destinationStoreId, items, notes } = req.body || {};
+  if (!destinationStoreId) { res.status(400).json({ success: false, error: 'destinationStoreId is required' }); return; }
+  if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, error: 'items are required' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.createTransfer(sourceStoreId, String(destinationStoreId), items, req.admin!.id, notes || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+export const adminReceiveTransfer = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { id } = req.params;
+  const { lines } = req.body || {};
+  if (!Array.isArray(lines) || lines.length === 0) { res.status(400).json({ success: false, error: 'lines are required' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.receiveTransfer(String(id), lines, req.admin!.id);
+  res.json({ success: true, data: result });
+});
+
+export const adminListTransfers = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const result = await query(
+    `SELECT t.id, t.source_store_id as "sourceStoreId", t.destination_store_id as "destinationStoreId",
+            t.status, t.notes, t.created_at as "createdAt", t.updated_at as "updatedAt",
+            ss.name as "sourceStoreName", ds.name as "destinationStoreName"
+       FROM mart_stock_transfers t
+       JOIN mart_stores ss ON ss.id = t.source_store_id
+       JOIN mart_stores ds ON ds.id = t.destination_store_id
+      WHERE t.source_store_id = $1 OR t.destination_store_id = $1
+      ORDER BY t.created_at DESC
+      LIMIT 100`,
+    [storeId]
+  );
+  res.json({ success: true, data: result.rows });
+});

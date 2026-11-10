@@ -229,6 +229,9 @@ router.put('/admin/inventory/settings',                 authenticate, ctrl.admin
 router.post('/admin/inventory/bulk-restock',            authenticate, ctrl.adminBulkRestock);
 router.post('/admin/inventory/:productId/restock',      authenticate, ctrl.adminRestockProduct);
 router.post('/admin/inventory/adjust',                 authenticate, ctrl.adminAdjustStock);
+router.post('/admin/inventory/transfers',              authenticate, ctrl.adminCreateTransfer);
+router.post('/admin/inventory/transfers/:id/receive',  authenticate, ctrl.adminReceiveTransfer);
+router.get('/admin/inventory/transfers',               authenticate, ctrl.adminListTransfers);
 router.post('/admin/inventory/purchase',               authenticate, ctrl.adminRecordPurchase);
 router.get('/admin/inventory/movements',              authenticate, ctrl.adminGetInventoryMovements);
 router.put('/admin/inventory/:productId/stock',         authenticate, ctrl.adminSetProductStock);

@@ -474,4 +474,139 @@ export class InventoryService {
       return { productId, storeId, previousQty: current, newQty, stockUnit: cur.stock_unit };
     });
   }
+
+  static async createTransfer(
+    sourceStoreId: string,
+    destinationStoreId: string,
+    items: Array<{ productId: string; quantity: number; unit: string }>,
+    createdBy: string | null,
+    notes: string | null = null,
+    idempotencyKey?: string
+  ) {
+    if (sourceStoreId === destinationStoreId) throw badRequest('Source and destination stores must differ');
+    return transaction(async (client) => {
+      if (idempotencyKey) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+      }
+      const transfer = (await client.query(
+        `INSERT INTO mart_stock_transfers (source_store_id, destination_store_id, notes, created_by)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [sourceStoreId, destinationStoreId, notes, createdBy]
+      )).rows[0];
+      const transferId = transfer.id;
+
+      for (const item of items) {
+        if (!Number.isFinite(item.quantity) || item.quantity <= 0) throw badRequest('Transfer quantity must be positive');
+        const sourceRow = (await client.query(
+          `SELECT stock_quantity::float, stock_unit, availability_status
+             FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+          [item.productId, sourceStoreId]
+        )).rows[0];
+        if (!sourceRow) throw notFound('Product is not listed in the source store');
+        if (sourceRow.stock_unit !== item.unit) throw badRequest('Transfer unit must match source stock unit');
+        if (sourceRow.stock_quantity !== null && sourceRow.stock_quantity < item.quantity) {
+          throw badRequest('Insufficient stock for transfer');
+        }
+        const newQty = sourceRow.stock_quantity === null ? null : Number((sourceRow.stock_quantity - item.quantity).toFixed(3));
+        if (newQty !== null) {
+          await client.query(
+            `UPDATE mart_store_products SET stock_quantity = $1, updated_at = NOW() WHERE product_id = $2 AND store_id = $3`,
+            [newQty, item.productId, sourceStoreId]
+          );
+        }
+        await client.query(
+          `INSERT INTO mart_inventory_movements
+             (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance, unit, source_type, source_id, reason)
+           VALUES ($1, $2, 'transfer_out', 0, $3, $4, $5, $6, 'transfer', $7, 'store_transfer')`,
+          [item.productId, sourceStoreId, item.quantity, sourceRow.stock_quantity, newQty, item.unit, transferId]
+        );
+        await client.query(
+          `INSERT INTO mart_stock_transfer_lines (transfer_id, product_id, quantity, unit, in_transit_quantity, status)
+           VALUES ($1, $2, $3, $4, $3, 'in_transit')`,
+          [transferId, item.productId, item.quantity, item.unit]
+        );
+      }
+      return { transferId, status: 'in_transit' };
+    });
+  }
+
+  static async receiveTransfer(
+    transferId: string,
+    lines: Array<{ lineId: string; receivedQuantity: number }>,
+    receivedBy: string | null
+  ) {
+    return transaction(async (client) => {
+      const transfer = (await client.query(
+        `SELECT id, source_store_id, destination_store_id, status FROM mart_stock_transfers WHERE id = $1 FOR UPDATE`,
+        [transferId]
+      )).rows[0];
+      if (!transfer) throw notFound('Transfer not found');
+      if (transfer.status === 'cancelled') throw badRequest('Transfer is cancelled');
+
+      let partial = false;
+      for (const input of lines) {
+        const line = (await client.query(
+          `SELECT id, product_id, quantity, unit, in_transit_quantity, received_quantity
+             FROM mart_stock_transfer_lines WHERE id = $1 AND transfer_id = $2 FOR UPDATE`,
+          [input.lineId, transferId]
+        )).rows[0];
+        if (!line) throw notFound('Transfer line not found');
+        const received = Number(input.receivedQuantity);
+        if (!Number.isFinite(received) || received < 0 || received > Number(line.in_transit_quantity)) {
+          throw badRequest('Invalid received quantity');
+        }
+        if (received === 0) { partial = true; continue; }
+
+        // Ensure destination listing exists.
+        const destRow = (await client.query(
+          `SELECT stock_quantity::float, stock_unit FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+          [line.product_id, transfer.destination_store_id]
+        )).rows[0];
+        if (!destRow) {
+          await client.query(
+            `INSERT INTO mart_store_products (product_id, store_id, stock_quantity, stock_unit, availability_status, is_available, price, unit)
+             SELECT $1, $2, 0, $3, 'available', true, sp.price, sp.unit
+               FROM mart_store_products sp
+              WHERE sp.product_id = $1 AND sp.store_id = $3
+             ON CONFLICT DO NOTHING`,
+            [line.product_id, transfer.destination_store_id, line.unit, transfer.source_store_id]
+          );
+        }
+        const destCurrent = destRow?.stock_quantity ?? 0;
+        const destNew = Number((destCurrent + received).toFixed(3));
+        await client.query(
+          `UPDATE mart_store_products SET stock_quantity = $1, stock_unit = COALESCE(stock_unit, $2), updated_at = NOW()
+           WHERE product_id = $3 AND store_id = $4`,
+          [destNew, line.unit, line.product_id, transfer.destination_store_id]
+        );
+        await client.query(
+          `INSERT INTO mart_inventory_movements
+             (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance, unit, source_type, source_id, reason)
+           VALUES ($1, $2, 'transfer_in', $3, 0, $4, $5, $6, 'transfer', $7, 'store_transfer')`,
+          [line.product_id, transfer.destination_store_id, received, destCurrent, destNew, line.unit, transferId]
+        );
+        const newInTransit = Number((Number(line.in_transit_quantity) - received).toFixed(3));
+        await client.query(
+          `UPDATE mart_stock_transfer_lines
+              SET in_transit_quantity = $1, received_quantity = received_quantity + $2,
+                  status = CASE WHEN $1 <= 0 THEN 'received' ELSE 'partial' END, updated_at = NOW()
+            WHERE id = $3`,
+          [newInTransit, received, line.id]
+        );
+        if (newInTransit > 0) partial = true;
+      }
+
+      const allLines = (await client.query(
+        `SELECT in_transit_quantity FROM mart_stock_transfer_lines WHERE transfer_id = $1`,
+        [transferId]
+      )).rows;
+      const anyInTransit = allLines.some((row: any) => Number(row.in_transit_quantity) > 0);
+      const newStatus = anyInTransit ? 'partial' : 'received';
+      await client.query(
+        `UPDATE mart_stock_transfers SET status = $1, received_by = $2, updated_at = NOW() WHERE id = $3`,
+        [newStatus, receivedBy, transferId]
+      );
+      return { transferId, status: newStatus, partial: anyInTransit };
+    });
+  }
 }
