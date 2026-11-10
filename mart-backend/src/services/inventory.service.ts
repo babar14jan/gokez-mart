@@ -14,6 +14,19 @@ export class InventoryService {
               sp.stock_quantity::float as "stockQuantity",
               sp.low_stock_threshold::float as "lowStockThreshold",
               p.is_bundle as "isBundle",
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                  'productId', bc.component_product_id,
+                  'name', p2.name,
+                  'quantity', bc.quantity,
+                  'unit', bc.deduction_unit,
+                  'price', sp2.price
+                ))
+                FROM mart_bundle_components bc
+                JOIN mart_store_products sp2 ON sp2.store_id = bc.store_id AND sp2.product_id = bc.component_product_id
+                JOIN mart_products p2 ON p2.id = bc.component_product_id
+                WHERE bc.store_id = sp.store_id AND bc.bundle_product_id = p.id
+              ), '[]'::json) as "comboComponents",
               c.name as "categoryName",
               COALESCE((
                 SELECT json_agg(json_build_object(

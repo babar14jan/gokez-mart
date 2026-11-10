@@ -28,6 +28,7 @@ interface InventoryItem {
   storeId?: string;
   storeName?: string;
   isBundle?: boolean;
+  comboComponents?: Array<{ productId: string; name: string; quantity: number; unit: string; price: number }> | null;
 }
 
 interface LogEntry {
@@ -66,7 +67,7 @@ export default function InventoryPage() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [enablingTracking, setEnablingTracking] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'stock_asc' | 'stock_desc'>('name');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out' | 'untracked' | 'ok'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out' | 'untracked' | 'ok' | 'combo'>('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -181,7 +182,13 @@ export default function InventoryPage() {
         || item.name.toLowerCase().includes(query)
         || (item.localName || '').toLowerCase().includes(query)
         || (item.searchAliases ?? []).some((alias: string) => alias.toLowerCase().includes(query));
-      const matchesStatus = statusFilter === 'all' || stockStatus(item) === statusFilter;
+      const matchesStatus =
+        statusFilter === 'all'
+        || (statusFilter === 'combo'
+          ? Boolean(item.isBundle)
+          : statusFilter === 'untracked'
+            ? !item.isBundle && stockStatus(item) === 'untracked'
+            : stockStatus(item) === statusFilter);
       const matchesCategory = categoryFilter === 'all' || item.categoryName === categoryFilter;
       return matchesQuery && matchesStatus && matchesCategory;
     });
@@ -193,7 +200,8 @@ export default function InventoryPage() {
 
   const outCount = items.filter(i => stockStatus(i) === 'out').length;
   const lowCount = items.filter(i => stockStatus(i) === 'low').length;
-  const untrackedCount = items.filter(i => stockStatus(i) === 'untracked').length;
+  const untrackedCount = items.filter(i => !i.isBundle && stockStatus(i) === 'untracked').length;
+  const comboCount = items.filter(i => i.isBundle).length;
 
 
   const loadMovements = async () => {
@@ -419,6 +427,7 @@ export default function InventoryPage() {
           { key: 'all', label: `All ${items.length}`, color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200' },
           { key: 'out', label: `Out ${outCount}`, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
           { key: 'low', label: `Low ${lowCount}`, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+          { key: 'combo', label: `Combo ${comboCount}`, color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' },
           ...(untrackedCount > 0 ? [{ key: 'untracked', label: `Untracked ${untrackedCount}`, color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' }] : []),
         ].map(pill => (
           <button key={pill.key} onClick={() => setStatusFilter(pill.key as any)}
@@ -535,25 +544,42 @@ export default function InventoryPage() {
                     ) : null}
                   </div>
 
-                  {/* Current stock */}
-                  <div className="text-right flex-shrink-0 min-w-[48px]">
-                    {item.stockQuantity !== null ? (
-                      <>
-                        <p className={`text-sm font-bold tabular-nums ${stockColor}`}>
-                          {formatStock(item.stockQuantity!, item.stockUnit || 'units')}
+                  {/* Current stock / combo breakdown */}
+                  <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center">
+                    {item.isBundle ? (
+                      <div className="text-right flex-shrink-0 min-w-[48px] max-w-[260px]">
+                        <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300">
+                          {(item.comboComponents || []).map(c => `${c.name} · ${c.quantity} ${c.unit} · ₹${c.price}`).join(', ')}
                         </p>
-                      </>
+                        {typeof item.price === 'number' && (
+                          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                            Combo · ₹{item.price}/{item.sellingUnit || 'combo'}
+                          </p>
+                        )}
+                      </div>
                     ) : (
-                      <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
+                      <>
+                        <div className="text-right flex-shrink-0 min-w-[48px]">
+                          {item.stockQuantity !== null ? (
+                            <>
+                              <p className={`text-sm font-bold tabular-nums ${stockColor}`}>
+                                {formatStock(item.stockQuantity!, item.stockUnit || 'units')}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
+                          )}
+                        </div>
+
+                        {/* View mode: history button */}
+                        <button onClick={() => openHistory(item)}
+                          className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
+                          title="Stock history">
+                          <History className="w-4 h-4" />
+                        </button>
+                      </>
                     )}
                   </div>
-
-                  {/* View mode: history button */}
-                  <button onClick={() => openHistory(item)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
-                    title="Stock history">
-                    <History className="w-4 h-4" />
-                  </button>
 
                 </div>
               );
