@@ -541,6 +541,12 @@ export default function InventoryPage() {
                 onChange={e => { setPurchaseQuery(e.target.value); setPurchaseForm(f => ({ ...f, productId: '' })); }}
                 placeholder="Search product name or Hindi name"
                 className={inp} />
+              {purchaseQuery && (
+                <button type="button" onClick={() => { setPurchaseQuery(''); setPurchaseForm(f => ({ ...f, productId: '' })); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
               {purchaseShowSuggestions && (
                 <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
                   {items.filter(item => {
@@ -659,6 +665,12 @@ export default function InventoryPage() {
                 onChange={e => { setAdjustQuery(e.target.value); setAdjustForm(f => ({ ...f, productId: '' })); }}
                 placeholder="Search product name or Hindi name"
                 className={inp} />
+              {adjustQuery && (
+                <button type="button" onClick={() => { setAdjustQuery(''); setAdjustForm(f => ({ ...f, productId: '' })); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
               {adjustShowSuggestions && (
                 <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
                   {items.filter(item => {
