@@ -354,10 +354,6 @@ export default function InventoryPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
               <Plus className="w-3.5 h-3.5" /> Record Purchase
             </button>
-            <button onClick={async () => { setShowMovements(true); setMovementsLoading(true); try { const res = await inventoryApi.getMovements(selectedStoreId); setMovements(res.data.data || []); } finally { setMovementsLoading(false); } }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
-              <History className="w-3.5 h-3.5" /> Ledger
-            </button>
             <button onClick={() => { setAdjustForm({ productId: items[0]?.productId || '', quantity: '', reason: 'damage', note: '' }); setShowAdjust(true); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-red-400 hover:text-red-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
               <AlertTriangle className="w-3.5 h-3.5" /> Adjust Stock
