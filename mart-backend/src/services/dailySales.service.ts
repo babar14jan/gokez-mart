@@ -1,5 +1,7 @@
 import { query } from '../database/db';
 import { badRequest, notFound } from '../utils/apiError';
+import { SettingsService } from './settings.service';
+import { InventoryService } from './inventory.service';
 import { ORDER_BROWSE_DATE_SQL } from '../utils/orderDate';
 
 // Daily sales ledger. App-side figures are recomputed live from mart_orders
@@ -354,7 +356,31 @@ export class DailySalesService {
         unitPrice, quantity, total, paymentMethod, notes ?? null, adminId,
       ]
     );
-    return { id: inserted.rows[0].id };
+    const saleId = inserted.rows[0].id;
+
+    try {
+      const settings = await SettingsService.getPublic(storeId);
+      if (settings.inventory_tracking === 'true') {
+        const result = await InventoryService.deductForOrder(
+          saleId,
+          storeId,
+          [{ productId: product.id, quantity, sellingUnit: product.unit, storeId }],
+          (settings.auto_out_of_stock ?? 'on_zero') === 'on_zero',
+          parseFloat(settings.low_stock_threshold ?? '5'),
+          undefined,
+          saleId,
+        );
+        const cogs = result.reduce((sum: number, row: any) => sum + (row.totalCost || 0), 0);
+        await query(
+          `UPDATE mart_offline_sales SET cost_of_goods = $1, gross_profit = $2 WHERE id = $3`,
+          [round2(cogs), round2(total - cogs), saleId]
+        );
+      }
+    } catch (err) {
+      console.error(`[inventory] offline sale deduction skipped for ${saleId}:`, err);
+    }
+
+    return { id: saleId };
   }
 
   static async updateEntry(
@@ -425,6 +451,23 @@ export class DailySalesService {
   }
 
   static async removeEntry(id: string, storeId: string): Promise<boolean> {
+    const entry = (await query<{ productId: string | null; quantity: string; unit: string }>(
+      `SELECT product_id as "productId", quantity, unit FROM mart_offline_sales WHERE id = $1 AND store_id = $2`,
+      [id, storeId]
+    )).rows[0];
+    if (!entry) throw notFound('Offline sale not found');
+
+    if (entry.productId) {
+      try {
+        const settings = await SettingsService.getPublic(storeId);
+        if (settings.inventory_tracking === 'true') {
+          await InventoryService.restock(entry.productId, storeId, -Number(entry.quantity), entry.unit, 'Offline sale deleted', null, undefined, null);
+        }
+      } catch (err) {
+        console.error(`[inventory] offline sale restore skipped for ${id}:`, err);
+      }
+    }
+
     const { rows } = await query(
       `DELETE FROM mart_offline_sales WHERE id = $1 AND store_id = $2 RETURNING 1`,
       [id, storeId]

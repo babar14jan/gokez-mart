@@ -37,7 +37,7 @@ export class InventoryService {
     qty: number,
     stockUnit: string,
     note: string | null,
-    createdBy: string,
+    createdBy: string | null,
     idempotencyKey?: string,
     unitCost?: number | null,
     transactionClient?: any
@@ -214,7 +214,7 @@ export class InventoryService {
         [item.productId, lineStoreId, deduction, row.stock_quantity, newQty, baseUnit, unitCost, totalCost, deductionReferenceId, firstBatchId]
       );
 
-      results.push({ productId: item.productId, newQty, wentOutOfStock, isLow });
+      results.push({ productId: item.productId, newQty, wentOutOfStock, isLow, totalCost, unitCost });
     }
 
     return results;
@@ -264,7 +264,7 @@ export class InventoryService {
     quantity: number,
     unit: string,
     unitCost: number,
-    createdBy: string,
+    createdBy: string | null,
     note: string | null = null,
     idempotencyKey?: string
   ) {
