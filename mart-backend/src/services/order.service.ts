@@ -149,7 +149,9 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
                 'price', oi.price::float,
                 'quantity', oi.quantity,
                 'total', oi.total::float,
-                'photoUrl', p.photo_url
+                'photoUrl', p.photo_url,
+                'smallUrl', COALESCE(p.photo_variants -> 0 ->> 'smallUrl', p.photo_variants -> 0 ->> 'thumbnailUrl', p.photo_url),
+                'thumbnailUrl', COALESCE(p.photo_variants -> 0 ->> 'thumbnailUrl', p.photo_url)
               )) as items,
               COALESCE((
                 SELECT json_agg(json_build_object(

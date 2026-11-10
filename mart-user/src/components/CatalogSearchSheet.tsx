@@ -118,7 +118,7 @@ export default function CatalogSearchSheet({
   }, [query, results, products, activeCategoryId, freshMode, freshLimit]);
   const gridCols = !query && freshMode && freshLayout === 'grid'
     ? freshColumns === 2 ? 'grid-cols-2' : freshColumns === 4 ? 'grid-cols-4' : 'grid-cols-3'
-    : 'grid-cols-3';
+    : 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-6';
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -260,7 +260,7 @@ export default function CatalogSearchSheet({
                       className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
                         <SmartImage
-                          src={product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
+                          src={product.smallUrl || product.thumbnailUrl || product.photoVariants?.[0]?.smallUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
                           alt=""
                           className="h-full w-full"
                           imgClassName="object-cover"

@@ -139,6 +139,7 @@ export const productsApi = {
   getBundleComponents: (id: string, storeId?: string) => api.get(`/admin/products/${id}/components`, { params: storeId ? { storeId } : {} }),
   update: (id: string, data: any) => api.put(`/admin/products/${id}`, data),
   delete: (id: string, storeId?: string) => api.delete(`/admin/products/${id}`, { params: storeId ? { storeId } : {} }),
+  cleanStorage: (dryRun = true) => api.post('/admin/storage/clean', { dryRun }),
   uploadPhoto: (file: File, maxDimension?: number, profile?: 'product') => {
     const form = new FormData();
     form.append('photo', file);
