@@ -795,6 +795,15 @@ export class OrderService {
         await FunnelCartService.markConverted(data.funnelSessionId, orderId, client);
       }
 
+      if (settings.inventory_tracking === 'true') {
+        await InventoryService.reserveForOrder(orderId, data.storeId, resolvedItems.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          sellingUnit: item.unit,
+          storeId: item.sourceStoreId,
+        })), client);
+      }
+
       return {
         orderId,
         orderNumber,
@@ -1206,6 +1215,9 @@ export class OrderService {
           );
         }
       } catch { /* non-blocking — don't fail order status update */ }
+      try { await InventoryService.consumeForOrder(id); } catch { /* non-blocking */ }
+    } else if (order && ['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
+      try { await InventoryService.releaseForOrder(id); } catch { /* non-blocking */ }
     }
 
     return order;

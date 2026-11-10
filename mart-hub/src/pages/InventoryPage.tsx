@@ -46,6 +46,7 @@ function formatStock(qty: number, unit: string): string {
 }
 
 const DEFAULT_LOW_THRESHOLD = 5; // used when no threshold is explicitly set
+const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
 function stockStatus(item: InventoryItem): 'untracked' | 'out' | 'low' | 'ok' {
   // If manually marked out_of_stock, treat as out
@@ -75,6 +76,12 @@ export default function InventoryPage() {
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [history, setHistory] = useState<LogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [showPurchase, setShowPurchase] = useState(false);
+  const [purchaseSaving, setPurchaseSaving] = useState(false);
+  const [purchaseForm, setPurchaseForm] = useState({ productId: '', quantity: '', unit: 'kg', unitCost: '', note: '' });
+  const [showMovements, setShowMovements] = useState(false);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [movementsLoading, setMovementsLoading] = useState(false);
 
   const { role } = useAuthStore();
   const canManageTracking = role === 'super_admin' || role === 'store_owner' || role === 'store_manager';
@@ -284,6 +291,14 @@ export default function InventoryPage() {
               <input type="text" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search inventory..." className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-9 pr-8 text-xs text-gray-900 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
               {searchQuery && <button onClick={() => setSearchQuery('')} aria-label="Clear inventory search" className="absolute right-2 top-1/2 -translate-y-1/2"><X className="h-3.5 w-3.5 text-gray-500 hover:text-gray-700" /></button>}
             </div>
+            <button onClick={() => { setPurchaseForm({ productId: items[0]?.productId || '', quantity: '', unit: items[0]?.stockUnit || 'kg', unitCost: '', note: '' }); setShowPurchase(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Record Purchase
+            </button>
+            <button onClick={async () => { setShowMovements(true); setMovementsLoading(true); try { const res = await inventoryApi.getMovements(selectedStoreId); setMovements(res.data.data || []); } finally { setMovementsLoading(false); } }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
+              <History className="w-3.5 h-3.5" /> Ledger
+            </button>
             <button onClick={enterEditMode}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
               <Pencil className="w-3.5 h-3.5" /> Update Stock
@@ -495,6 +510,66 @@ export default function InventoryPage() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Record purchase modal */}
+      {showPurchase && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Record Purchase</h3>
+              <button onClick={() => setShowPurchase(false)}><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <select value={purchaseForm.productId} onChange={e => {
+              const item = items.find(i => i.productId === e.target.value);
+              setPurchaseForm(f => ({ ...f, productId: e.target.value, unit: item?.stockUnit || f.unit }));
+            }} className={inp}>
+              {items.map(item => <option key={item.productId} value={item.productId}>{item.name}</option>)}
+            </select>
+            <div className="grid grid-cols-3 gap-2">
+              <input type="number" value={purchaseForm.quantity} onChange={e => setPurchaseForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty" className={inp} />
+              <select value={purchaseForm.unit} onChange={e => setPurchaseForm(f => ({ ...f, unit: e.target.value }))} className={inp}>
+                {STOCK_UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+              </select>
+              <input type="number" value={purchaseForm.unitCost} onChange={e => setPurchaseForm(f => ({ ...f, unitCost: e.target.value }))} placeholder="Cost/unit" className={inp} />
+            </div>
+            <input type="text" value={purchaseForm.note} onChange={e => setPurchaseForm(f => ({ ...f, note: e.target.value }))} placeholder="Note (optional)" className={inp} />
+            <button disabled={purchaseSaving} onClick={async () => {
+              setPurchaseSaving(true);
+              try {
+                await inventoryApi.recordPurchase(purchaseForm.productId, Number(purchaseForm.quantity), purchaseForm.unit, Number(purchaseForm.unitCost), purchaseForm.note, selectedStoreId, crypto.randomUUID());
+                setShowPurchase(false);
+                await load();
+              } catch (e: any) { alert(e?.response?.data?.error || 'Purchase failed'); }
+              finally { setPurchaseSaving(false); }
+            }} className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50">
+              {purchaseSaving ? 'Saving...' : 'Save Purchase'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Movement ledger modal */}
+      {showMovements && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Inventory Movement Ledger</h3>
+              <button onClick={() => setShowMovements(false)}><X className="w-4 h-4 text-gray-500" /></button>
+            </div>
+            <div className="overflow-y-auto p-4 space-y-2">
+              {movementsLoading ? <p className="text-sm text-gray-500">Loading...</p> : movements.map(m => (
+                <div key={m.id} className="text-xs border border-gray-100 dark:border-slate-700 rounded-xl p-2">
+                  <div className="flex justify-between font-semibold">
+                    <span>{m.movementType}</span>
+                    <span>{m.createdAt ? new Date(m.createdAt).toLocaleString() : ''}</span>
+                  </div>
+                  <div>In: {m.quantityIn} · Out: {m.quantityOut} · Balance: {m.newBalance} · Cost: {m.totalCost ?? '-'}</div>
+                  <div className="text-gray-500">{m.reason}{m.remarks ? ` · ${m.remarks}` : ''}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

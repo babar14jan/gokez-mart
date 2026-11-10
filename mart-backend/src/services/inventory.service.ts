@@ -38,9 +38,11 @@ export class InventoryService {
     stockUnit: string,
     note: string | null,
     createdBy: string,
-    idempotencyKey?: string
+    idempotencyKey?: string,
+    unitCost?: number | null,
+    transactionClient?: any
   ) {
-    return transaction(async (client) => {
+    const run = async (client: any) => {
     if (idempotencyKey) {
       await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
       const prior = await client.query(`SELECT 1 FROM mart_inventory_log WHERE idempotency_key = $1`, [idempotencyKey]);
@@ -88,16 +90,18 @@ export class InventoryService {
     await client.query(
       `INSERT INTO mart_inventory_movements
          (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance,
-          unit, reason, remarks, created_by, idempotency_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          unit, unit_cost, total_cost, reason, remarks, created_by, idempotency_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [productId, storeId, qty < 0 ? 'adjustment' : 'restock',
        qty < 0 ? 0 : qty, qty < 0 ? Math.abs(qty) : 0,
        current, newQty, effectiveStockUnit,
+       unitCost ?? null, unitCost == null ? null : Number((qty * unitCost).toFixed(2)),
        qty < 0 ? 'manual_correction' : 'restock', note || null, createdBy, idempotencyKey || null]
     );
 
     return { productId, storeId, previousQty: current, newQty, stockUnit };
-    });
+    };
+    return transactionClient ? run(transactionClient) : transaction(run);
   }
 
   static async deductForOrder(
@@ -154,6 +158,40 @@ export class InventoryService {
       const isLow = newQty > 0 && newQty <= threshold;
       const newStatus = wentOutOfStock ? 'out_of_stock' : row.availability_status;
 
+      const batches = (await client.query(
+        `SELECT id, quantity_remaining::float, unit_cost::float
+           FROM mart_purchase_batches
+          WHERE store_id = $1 AND product_id = $2 AND status = 'active' AND quantity_remaining > 0
+          ORDER BY received_at ASC, id ASC
+          FOR UPDATE`,
+        [lineStoreId, item.productId]
+      )).rows;
+      let remainingToConsume = deduction;
+      let totalCost = 0;
+      let firstBatchId: string | null = null;
+      for (const batch of batches) {
+        if (remainingToConsume <= 0) break;
+        const consumed = Math.min(Number(batch.quantity_remaining), remainingToConsume);
+        totalCost += consumed * Number(batch.unit_cost);
+        remainingToConsume -= consumed;
+        await client.query(
+          `UPDATE mart_purchase_batches
+              SET quantity_remaining = quantity_remaining - $1,
+                  status = CASE WHEN quantity_remaining - $1 <= 0 THEN 'exhausted' ELSE status END
+            WHERE id = $2`,
+          [consumed, batch.id]
+        );
+        if (!firstBatchId) firstBatchId = batch.id;
+      }
+      if (remainingToConsume > 0) {
+        const fallbackBatch = (await client.query(
+          `SELECT unit_cost::float FROM mart_purchase_batches WHERE store_id = $1 AND product_id = $2 ORDER BY received_at DESC, id DESC LIMIT 1`,
+          [lineStoreId, item.productId]
+        )).rows[0];
+        totalCost += remainingToConsume * Number(fallbackBatch?.unit_cost ?? 0);
+      }
+      const unitCost = deduction > 0 ? totalCost / deduction : 0;
+
       await client.query(
         `UPDATE mart_store_products
          SET stock_quantity = $1, availability_status = $2, is_available = $3, updated_at = NOW()
@@ -167,12 +205,13 @@ export class InventoryService {
          VALUES ($1, $2, $3, 'order_deducted', $4)`,
         [item.productId, lineStoreId, -deduction, deductionReferenceId]
       );
+
       await client.query(
         `INSERT INTO mart_inventory_movements
            (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance,
-            unit, source_type, source_id, reason)
-         VALUES ($1, $2, 'sale', 0, $3, $4, $5, $6, 'order', $7, 'order_deducted')`,
-        [item.productId, lineStoreId, deduction, row.stock_quantity, newQty, baseUnit, deductionReferenceId]
+            unit, unit_cost, total_cost, source_type, source_id, batch_id, reason)
+         VALUES ($1, $2, 'sale', 0, $3, $4, $5, $6, $7, $8, 'order', $9, $10, 'order_deducted')`,
+        [item.productId, lineStoreId, deduction, row.stock_quantity, newQty, baseUnit, unitCost, totalCost, deductionReferenceId, firstBatchId]
       );
 
       results.push({ productId: item.productId, newQty, wentOutOfStock, isLow });
@@ -217,6 +256,48 @@ export class InventoryService {
       results.push(result);
     }
     return results;
+  }
+
+  static async receivePurchase(
+    storeId: string,
+    productId: string,
+    quantity: number,
+    unit: string,
+    unitCost: number,
+    createdBy: string,
+    note: string | null = null,
+    idempotencyKey?: string
+  ) {
+    return transaction(async (client) => {
+      if (idempotencyKey) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+        const prior = await client.query(`SELECT 1 FROM mart_inventory_log WHERE idempotency_key = $1`, [idempotencyKey]);
+        if (prior.rows.length) return { productId, storeId, duplicate: true };
+      }
+      const receipt = await client.query(
+        `INSERT INTO mart_purchase_receipts (store_id, total_cost, created_by, notes)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [storeId, Number((quantity * unitCost).toFixed(2)), createdBy, note]
+      );
+      const receiptId = receipt.rows[0].id;
+      const batch = await client.query(
+        `INSERT INTO mart_purchase_batches
+           (store_id, product_id, quantity_received, quantity_remaining, unit, unit_cost, received_at)
+         VALUES ($1, $2, $3, $3, $4, $5, NOW()) RETURNING id`,
+        [storeId, productId, quantity, unit, unitCost]
+      );
+      const batchId = batch.rows[0].id;
+      await client.query(
+        `INSERT INTO mart_purchase_receipt_lines
+           (receipt_id, product_id, batch_id, quantity, unit, unit_cost, total_cost)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [receiptId, productId, batchId, quantity, unit, unitCost, Number((quantity * unitCost).toFixed(2))]
+      );
+      await client.query(`UPDATE mart_purchase_receipt_lines SET batch_id = $1 WHERE receipt_id = $2 AND product_id = $3`, [batchId, receiptId, productId]);
+
+      const restockResult = await this.restock(productId, storeId, quantity, unit, note, createdBy, idempotencyKey, unitCost, client);
+      return { ...restockResult, receiptId, batchId, unitCost };
+    });
   }
 
   static async setStock(
@@ -266,5 +347,78 @@ export class InventoryService {
 
     return { productId, storeId, previousQty: previous, newQty: qty, stockUnit };
     });
+  }
+
+  static async reserveForOrder(
+    orderId: string,
+    storeId: string,
+    items: Array<{ productId: string; quantity: number; sellingUnit: string; storeId?: string | null }>,
+    transactionClient?: any
+  ) {
+    const run = async (client: any) => {
+      const existing = await client.query(`SELECT 1 FROM mart_stock_reservations WHERE order_id = $1`, [orderId]);
+      if (existing.rows.length) return { duplicate: true };
+      for (const item of items) {
+        const lineStoreId = item.storeId || storeId;
+        const { deductionPerQty, baseUnit } = parseSellingUnit(item.sellingUnit);
+        const stockRow = (await client.query(
+          `SELECT stock_unit FROM mart_store_products WHERE product_id = $1 AND store_id = $2`,
+          [item.productId, lineStoreId]
+        )).rows[0];
+        if (!stockRow || stockRow.stock_unit !== baseUnit) continue;
+        const quantity = deductionPerQty * item.quantity;
+        await client.query(
+          `INSERT INTO mart_stock_reservations (order_id, product_id, store_id, quantity, status)
+           VALUES ($1, $2, $3, $4, 'reserved')
+           ON CONFLICT (order_id, product_id, store_id) DO NOTHING`,
+          [orderId, item.productId, lineStoreId, quantity]
+        );
+        await client.query(
+          `UPDATE mart_store_products SET reserved_stock = reserved_stock + $1, updated_at = NOW()
+           WHERE product_id = $2 AND store_id = $3`,
+          [quantity, item.productId, lineStoreId]
+        );
+      }
+      return { reserved: true };
+    };
+    return transactionClient ? run(transactionClient) : transaction(run);
+  }
+
+  static async releaseForOrder(orderId: string, transactionClient?: any) {
+    const run = async (client: any) => {
+      const reservations = (await client.query(
+        `SELECT product_id, store_id, quantity FROM mart_stock_reservations WHERE order_id = $1 AND status = 'reserved'`,
+        [orderId]
+      )).rows;
+      for (const reservation of reservations) {
+        await client.query(
+          `UPDATE mart_store_products SET reserved_stock = GREATEST(0, reserved_stock - $1), updated_at = NOW()
+           WHERE product_id = $2 AND store_id = $3`,
+          [reservation.quantity, reservation.product_id, reservation.store_id]
+        );
+      }
+      await client.query(`UPDATE mart_stock_reservations SET status = 'released', updated_at = NOW() WHERE order_id = $1 AND status = 'reserved'`, [orderId]);
+      return { released: reservations.length };
+    };
+    return transactionClient ? run(transactionClient) : transaction(run);
+  }
+
+  static async consumeForOrder(orderId: string, transactionClient?: any) {
+    const run = async (client: any) => {
+      const reservations = (await client.query(
+        `SELECT product_id, store_id, quantity FROM mart_stock_reservations WHERE order_id = $1 AND status = 'reserved'`,
+        [orderId]
+      )).rows;
+      for (const reservation of reservations) {
+        await client.query(
+          `UPDATE mart_store_products SET reserved_stock = GREATEST(0, reserved_stock - $1), updated_at = NOW()
+           WHERE product_id = $2 AND store_id = $3`,
+          [reservation.quantity, reservation.product_id, reservation.store_id]
+        );
+      }
+      await client.query(`UPDATE mart_stock_reservations SET status = 'consumed', updated_at = NOW() WHERE order_id = $1 AND status = 'reserved'`, [orderId]);
+      return { consumed: reservations.length };
+    };
+    return transactionClient ? run(transactionClient) : transaction(run);
   }
 }
