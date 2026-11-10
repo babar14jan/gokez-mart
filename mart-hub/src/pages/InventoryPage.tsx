@@ -27,6 +27,7 @@ interface InventoryItem {
   recentRestocks?: Array<{ changeQty: number; note: string | null; createdBy?: string | null; createdByUsername?: string | null; createdAt: string }>;
   storeId?: string;
   storeName?: string;
+  isBundle?: boolean;
 }
 
 interface LogEntry {
@@ -192,6 +193,7 @@ export default function InventoryPage() {
 
   const outCount = items.filter(i => stockStatus(i) === 'out').length;
   const lowCount = items.filter(i => stockStatus(i) === 'low').length;
+  const untrackedCount = items.filter(i => stockStatus(i) === 'untracked').length;
 
 
   const loadMovements = async () => {
@@ -417,7 +419,7 @@ export default function InventoryPage() {
           { key: 'all', label: `All ${items.length}`, color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200' },
           { key: 'out', label: `Out ${outCount}`, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
           { key: 'low', label: `Low ${lowCount}`, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
-          { key: 'untracked', label: `Untracked ${items.filter(i => stockStatus(i) === 'untracked').length}`, color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' },
+          ...(untrackedCount > 0 ? [{ key: 'untracked', label: `Untracked ${untrackedCount}`, color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' }] : []),
         ].map(pill => (
           <button key={pill.key} onClick={() => setStatusFilter(pill.key as any)}
             className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${statusFilter === pill.key ? 'bg-emerald-500 text-white' : pill.color}`}>
@@ -508,6 +510,7 @@ export default function InventoryPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.name}</p>
+                      {item.isBundle && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full"><CheckCircle className="w-2.5 h-2.5" />Combo</span>}
                       {s === 'out' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Out</span>}
                       {s === 'low' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Low</span>}
                       {s === 'ok' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full"><CheckCircle className="w-2.5 h-2.5" />OK</span>}

@@ -13,6 +13,7 @@ export class InventoryService {
               sp.price::float, sp.availability_status as "availabilityStatus",
               sp.stock_quantity::float as "stockQuantity",
               sp.low_stock_threshold::float as "lowStockThreshold",
+              p.is_bundle as "isBundle",
               c.name as "categoryName",
               COALESCE((
                 SELECT json_agg(json_build_object(
