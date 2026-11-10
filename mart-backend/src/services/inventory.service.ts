@@ -421,4 +421,57 @@ export class InventoryService {
     };
     return transactionClient ? run(transactionClient) : transaction(run);
   }
+
+  static async adjustStock(
+    productId: string,
+    storeId: string,
+    qty: number,
+    reason: string,
+    note: string | null,
+    createdBy: string | null,
+    idempotencyKey?: string
+  ) {
+    return transaction(async (client) => {
+      if (idempotencyKey) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+        const prior = await client.query(`SELECT 1 FROM mart_inventory_log WHERE idempotency_key = $1`, [idempotencyKey]);
+        if (prior.rows.length) return { productId, storeId, duplicate: true };
+      }
+      const cur = (await client.query(
+        `SELECT stock_quantity::float, stock_unit, availability_status
+           FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+        [productId, storeId]
+      )).rows[0];
+      if (!cur) throw notFound('That product is no longer available in this store');
+      const current = cur.stock_quantity ?? 0;
+      const newQty = Math.max(0, current + qty);
+      const movementType = ['damage','spoiled','expired','lost','missing'].includes(reason) ? 'damage' : 'adjustment';
+      const newStatus = newQty <= 0 ? 'out_of_stock' : cur.availability_status;
+      await client.query(
+        `UPDATE mart_store_products
+            SET stock_quantity = $1, availability_status = $2, is_available = $3, updated_at = NOW()
+          WHERE product_id = $4 AND store_id = $5`,
+        [newQty, newStatus, newStatus === 'available', productId, storeId]
+      );
+      await client.query(
+        `INSERT INTO mart_inventory_log (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)
+         VALUES ($1, $2, $3, 'manual_correction', $4, $5, $6)`,
+        [productId, storeId, qty, note || reason, createdBy, idempotencyKey || null]
+      );
+      await client.query(
+        `INSERT INTO mart_inventory_movements
+           (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance,
+            unit, reason, remarks, created_by, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [productId, storeId, movementType, qty > 0 ? qty : 0, qty < 0 ? Math.abs(qty) : 0,
+         current, newQty, cur.stock_unit, reason, note, createdBy, idempotencyKey || null]
+      );
+      await client.query(
+        `INSERT INTO mart_stock_adjustments (store_id, product_id, quantity, reason, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [storeId, productId, qty, reason, note, createdBy]
+      );
+      return { productId, storeId, previousQty: current, newQty, stockUnit: cur.stock_unit };
+    });
+  }
 }

@@ -4017,3 +4017,17 @@ export const adminGetInventoryMovements = asyncHandler(async (req: AdminRequest,
   );
   res.json({ success: true, data: result.rows });
 });
+
+
+export const adminAdjustStock = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { productId, quantity, reason, note } = req.body || {};
+  if (!productId) { res.status(400).json({ success: false, error: 'productId is required' }); return; }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty === 0) { res.status(400).json({ success: false, error: 'quantity must be non-zero' }); return; }
+  const allowed = ['damage','spoiled','expired','lost','missing','consumption','quality_rejection','other'];
+  if (!allowed.includes(reason)) { res.status(400).json({ success: false, error: 'Invalid adjustment reason' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.adjustStock(String(productId), storeId, qty, reason, note || null, req.admin!.id, idempotencyKey);
+  res.json({ success: true, data: result });
+});
