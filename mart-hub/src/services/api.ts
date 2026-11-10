@@ -543,6 +543,21 @@ export const inventoryApi = {
     api.post('/admin/inventory/purchase', { productId, quantity, unit, unitCost, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
   getMovements: (storeId?: string, productId?: string, limit?: number) =>
     api.get('/admin/inventory/movements', { params: { ...(storeId ? { storeId } : {}), ...(productId ? { productId } : {}), ...(limit ? { limit } : {}) } }),
+  adjustStock: (productId: string, quantity: number, reason: string, note?: string, storeId?: string, idempotencyKey?: string) =>
+    api.post('/admin/inventory/adjust', { productId, quantity, reason, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  createTransfer: (destinationStoreId: string, items: Array<{ productId: string; quantity: number; unit: string }>, notes?: string, storeId?: string, idempotencyKey?: string) =>
+    api.post('/admin/inventory/transfers', { destinationStoreId, items, notes }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  receiveTransfer: (transferId: string, lines: Array<{ lineId: string; receivedQuantity: number }>, idempotencyKey?: string) =>
+    api.post(`/admin/inventory/transfers/${transferId}/receive`, { lines }, { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  listTransfers: (storeId?: string) => api.get('/admin/inventory/transfers', { params: storeId ? { storeId } : {} }),
+  customerReturn: (orderId: string, productId: string, quantity: number, condition: 'resalable' | 'damaged', unit?: string, note?: string, storeId?: string, idempotencyKey?: string) =>
+    api.post('/admin/inventory/returns/customer', { orderId, productId, quantity, condition, unit, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  supplierReturn: (productId: string, quantity: number, unit: string, unitCost?: number, note?: string, storeId?: string, idempotencyKey?: string) =>
+    api.post('/admin/inventory/returns/supplier', { productId, quantity, unit, unitCost, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  stocktake: (items: Array<{ productId: string; countedQuantity: number; unit: string }>, note?: string, storeId?: string, idempotencyKey?: string) =>
+    api.post('/admin/inventory/stocktake', { items, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  getValuation: (storeId?: string, asOf?: string) => api.get('/admin/inventory/valuation', { params: { ...(storeId ? { storeId } : {}), ...(asOf ? { asOf } : {}) } }),
+  getProfitability: (from?: string, to?: string, storeId?: string) => api.get('/admin/inventory/profitability', { params: { ...(from ? { from } : {}), ...(to ? { to } : {}), ...(storeId ? { storeId } : {}) } }),
 };
 
 // ── Team Management ───────────────────────────────────────────────────────────
