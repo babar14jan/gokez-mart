@@ -4068,3 +4068,38 @@ export const adminListTransfers = asyncHandler(async (req: AdminRequest, res: Re
   );
   res.json({ success: true, data: result.rows });
 });
+
+
+export const adminCustomerReturn = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { orderId, productId, quantity, condition, note, unit } = req.body || {};
+  if (!orderId || !productId) { res.status(400).json({ success: false, error: 'orderId and productId are required' }); return; }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) { res.status(400).json({ success: false, error: 'quantity must be positive' }); return; }
+  if (condition !== 'resalable' && condition !== 'damaged') { res.status(400).json({ success: false, error: 'condition must be resalable or damaged' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.recordCustomerReturn(String(orderId), String(productId), storeId, qty, String(unit || 'pcs'), condition, req.admin!.id, note || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+export const adminSupplierReturn = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { productId, quantity, unit, unitCost, note } = req.body || {};
+  if (!productId) { res.status(400).json({ success: false, error: 'productId is required' }); return; }
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) { res.status(400).json({ success: false, error: 'quantity must be positive' }); return; }
+  const cost = Number(unitCost ?? 0);
+  if (!Number.isFinite(cost) || cost < 0) { res.status(400).json({ success: false, error: 'unitCost must be non-negative' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.recordSupplierReturn(String(productId), storeId, qty, String(unit || 'pcs'), cost, req.admin!.id, note || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});
+
+export const adminStocktake = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const { items, note } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ success: false, error: 'items are required' }); return; }
+  const idempotencyKey = req.header('Idempotency-Key') || undefined;
+  const result = await InventoryService.reconcileStock(storeId, items, req.admin!.id, note || null, idempotencyKey);
+  res.json({ success: true, data: result });
+});

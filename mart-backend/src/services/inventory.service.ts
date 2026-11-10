@@ -609,4 +609,142 @@ export class InventoryService {
       return { transferId, status: newStatus, partial: anyInTransit };
     });
   }
+
+  static async recordCustomerReturn(
+    orderId: string,
+    productId: string,
+    storeId: string,
+    quantity: number,
+    unit: string,
+    condition: 'resalable' | 'damaged',
+    createdBy: string | null,
+    note: string | null = null,
+    idempotencyKey?: string
+  ) {
+    return transaction(async (client) => {
+      if (idempotencyKey) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+        const prior = await client.query(`SELECT 1 FROM mart_inventory_log WHERE idempotency_key = $1`, [idempotencyKey]);
+        if (prior.rows.length) return { duplicate: true };
+      }
+      const saleMovement = (await client.query(
+        `SELECT unit_cost::float FROM mart_inventory_movements
+          WHERE source_type = 'order' AND source_id = $1 AND product_id = $2 AND movement_type = 'sale'
+          ORDER BY created_at DESC LIMIT 1`,
+        [orderId, productId]
+      )).rows[0];
+      const unitCost = saleMovement?.unit_cost ?? null;
+
+      if (condition === 'resalable') {
+        const cur = (await client.query(
+          `SELECT stock_quantity::float, stock_unit, availability_status
+             FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+          [productId, storeId]
+        )).rows[0];
+        if (!cur) throw notFound('That product is no longer available in this store');
+        const current = cur.stock_quantity ?? 0;
+        const newQty = Number((current + quantity).toFixed(3));
+        await client.query(
+          `UPDATE mart_store_products SET stock_quantity = $1, updated_at = NOW() WHERE product_id = $2 AND store_id = $3`,
+          [newQty, productId, storeId]
+        );
+        await client.query(
+          `INSERT INTO mart_inventory_log (product_id, store_id, change_qty, reason, reference_id, note, created_by, idempotency_key)
+           VALUES ($1, $2, $3, 'restock', $4, $5, $6, $7)`,
+          [productId, storeId, quantity, orderId, note || 'Customer return (resalable)', createdBy, idempotencyKey || null]
+        );
+        await client.query(
+          `INSERT INTO mart_inventory_movements
+             (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance, unit, unit_cost, source_type, source_id, reason, remarks, created_by, idempotency_key)
+           VALUES ($1, $2, 'return_in', $3, 0, $4, $5, $6, $7, 'order', $8, 'customer_return', $9, $10, $11)`,
+          [productId, storeId, quantity, current, newQty, unit, unitCost, orderId, note, createdBy, idempotencyKey || null]
+        );
+      }
+      return { productId, storeId, quantity, condition };
+    });
+  }
+
+  static async recordSupplierReturn(
+    productId: string,
+    storeId: string,
+    quantity: number,
+    unit: string,
+    unitCost: number | null,
+    createdBy: string | null,
+    note: string | null = null,
+    idempotencyKey?: string
+  ) {
+    return transaction(async (client) => {
+      if (idempotencyKey) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+        const prior = await client.query(`SELECT 1 FROM mart_inventory_log WHERE idempotency_key = $1`, [idempotencyKey]);
+        if (prior.rows.length) return { productId, storeId, duplicate: true };
+      }
+      const cur = (await client.query(
+        `SELECT stock_quantity::float, stock_unit FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+        [productId, storeId]
+      )).rows[0];
+      if (!cur) throw notFound('That product is no longer available in this store');
+      const current = cur.stock_quantity ?? 0;
+      const newQty = Math.max(0, Number((current - quantity).toFixed(3)));
+      await client.query(
+        `UPDATE mart_store_products SET stock_quantity = $1, updated_at = NOW() WHERE product_id = $2 AND store_id = $3`,
+        [newQty, productId, storeId]
+      );
+      await client.query(
+        `INSERT INTO mart_inventory_log (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)
+         VALUES ($1, $2, $3, 'manual_correction', $4, $5, $6)`,
+        [productId, storeId, -quantity, note || 'Supplier return', createdBy, idempotencyKey || null]
+      );
+      await client.query(
+        `INSERT INTO mart_inventory_movements
+           (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance, unit, unit_cost, source_type, reason, remarks, created_by, idempotency_key)
+         VALUES ($1, $2, 'return_out', 0, $3, $4, $5, $6, $7, 'supplier', 'supplier_return', $8, $9, $10)`,
+        [productId, storeId, quantity, current, newQty, unit, unitCost, note, createdBy, idempotencyKey || null]
+      );
+      return { productId, storeId, previousQty: current, newQty };
+    });
+  }
+
+  static async reconcileStock(
+    storeId: string,
+    items: Array<{ productId: string; countedQuantity: number; unit: string }>,
+    createdBy: string | null,
+    note: string | null = null,
+    idempotencyKey?: string
+  ) {
+    return transaction(async (client) => {
+      if (idempotencyKey) {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [idempotencyKey]);
+      }
+      const results = [];
+      for (const item of items) {
+        const cur = (await client.query(
+          `SELECT stock_quantity::float, stock_unit FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+          [item.productId, storeId]
+        )).rows[0];
+        if (!cur) throw notFound('That product is no longer available in this store');
+        const current = cur.stock_quantity ?? 0;
+        const variance = Number((item.countedQuantity - current).toFixed(3));
+        if (variance === 0) { results.push({ productId: item.productId, variance: 0, newQty: current }); continue; }
+        await client.query(
+          `UPDATE mart_store_products SET stock_quantity = $1, updated_at = NOW() WHERE product_id = $2 AND store_id = $3`,
+          [item.countedQuantity, item.productId, storeId]
+        );
+        await client.query(
+          `INSERT INTO mart_inventory_log (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)
+           VALUES ($1, $2, $3, 'manual_correction', $4, $5, $6)`,
+          [item.productId, storeId, variance, note || 'Stocktake reconciliation', createdBy, idempotencyKey || null]
+        );
+        await client.query(
+          `INSERT INTO mart_inventory_movements
+             (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance, unit, source_type, reason, remarks, created_by, idempotency_key)
+           VALUES ($1, $2, 'reconciliation', $3, $4, $5, $6, $7, 'stocktake', 'stocktake', $8, $9, $10)`,
+          [item.productId, storeId, variance > 0 ? variance : 0, variance < 0 ? Math.abs(variance) : 0, current, item.countedQuantity, item.unit, note, createdBy, idempotencyKey || null]
+        );
+        results.push({ productId: item.productId, variance, newQty: item.countedQuantity });
+      }
+      return { reconciled: results.length, results };
+    });
+  }
 }
