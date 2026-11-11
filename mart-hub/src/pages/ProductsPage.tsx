@@ -7,6 +7,7 @@ import {
 import { productsApi, categoriesApi, inventoryApi, catalogApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
+import { useZoneSelectionStore } from '../store/zoneSelectionStore';
 import ConfirmDialog from '../components/ConfirmDialog';
 import SmartImage from '../components/SmartImage';
 import { useToast, ToastContainer } from '../hooks/useToast';
@@ -58,9 +59,13 @@ function stockStatus(p: Product): 'untracked' | 'out' | 'low' | 'ok' {
 
 export default function ProductsPage() {
   const { role } = useAuthStore();
-  const [selectedStoreId, setSelectedStoreId] = useState<string>(() => getActiveStoreId());
-  const [manageableStores, setManageableStores] = useState<Array<{ id: string; name: string; address?: string | null; isOwn?: boolean }>>([]);
-  const canSwitchStores = role !== 'super_admin' && manageableStores.length > 1;
+  // Zone selection is shared with the header dropdown (Layout) through
+  // zoneSelectionStore — it is deliberately not kept in the URL, so raw store
+  // ids stay out of the address bar. Falls back to the active store until the
+  // manageable-store list resolves the default (head store first).
+  const zoneProductsStore = useZoneSelectionStore(s => s.productsStore);
+  const setZoneProductsStore = useZoneSelectionStore(s => s.setProductsStore);
+  const selectedStoreId = zoneProductsStore || getActiveStoreId();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,13 +190,18 @@ export default function ProductsPage() {
     if (role === 'super_admin') return;
     inventoryApi.getStores().then(r => {
       const list = r.data.data || [];
-      setManageableStores(list);
-      setSelectedStoreId(prev => {
-        if (list.some((s: any) => s.id === prev)) return prev;
-        const own = list.find((s: any) => s.isOwn)?.id;
-        return own || list[0]?.id || prev;
-      });
+      // Keep the persisted pick (or the active store) when the user can still
+      // manage it; only fall back to the head/first store when it is gone.
+      const stored = useZoneSelectionStore.getState().productsStore;
+      const current = stored || getActiveStoreId();
+      if (list.some((s: any) => s.id === current)) {
+        if (!stored) setZoneProductsStore(current);
+        return;
+      }
+      const own = list.find((s: any) => s.isOwn)?.id || list[0]?.id;
+      if (own) setZoneProductsStore(own);
     }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   const load = async (fresh = false) => {
@@ -213,16 +223,16 @@ export default function ProductsPage() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [selectedStoreId]);
 
-  const handleStoreChange = (id: string) => {
-    if (id === selectedStoreId) return;
+  // The store can now be switched from the header zone dropdown, so keep the
+  // page in a clean state whenever the selection changes.
+  useEffect(() => {
     setShowModal(false);
     setShowComboModal(false);
     setReorderMode(false);
     setEditing(null);
     setSearchQuery('');
     setLoading(true);
-    setSelectedStoreId(id);
-  };
+  }, [selectedStoreId]);
 
   // ── Filtered + sorted product list ───────────────────────────────────────
   const displayProducts = useMemo(() => {
@@ -536,23 +546,8 @@ export default function ProductsPage() {
   return (
     <div className="space-y-4" onClick={() => { setShowFilterMenu(false); setShowSortMenu(false); }}>
 
-      {/* Zone-head store picker — a head store manages the listings and
-          prices of every store tagged into its active zone. */}
-      {canSwitchStores && (
-        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 flex-shrink-0">Zone store</span>
-          <select
-            value={selectedStoreId}
-            onChange={e => handleStoreChange(e.target.value)}
-            aria-label="Select store to manage products for"
-            className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-gray-900 dark:text-white focus:outline-none cursor-pointer"
-          >
-            {manageableStores.map(s => (
-              <option key={s.id} value={s.id}>{s.name}{s.isOwn ? ' — Head store' : ''}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      {/* The zone-head store picker lives in the app header now, next to the
+           page title — same place as the Inventory picker. */}
 
       {/* Search bar */}
       <div className="relative">
@@ -744,9 +739,10 @@ export default function ProductsPage() {
 
       <ToastContainer toasts={toasts} />
 
-      {/* Mobile sticky reorder bar */}
+      {/* Mobile sticky reorder bar — floats above the bottom nav (80px + the
+          iPhone home-indicator safe area) instead of under it. */}
       {reorderMode && (
-        <div className="sm:hidden fixed bottom-20 left-0 right-0 z-40 px-4">
+        <div className="sm:hidden fixed left-0 right-0 z-50 px-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px)+0.5rem)]">
           <div className="flex gap-2 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 p-2">
             <button onClick={cancelReorder}
               className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 transition-all">

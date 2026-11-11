@@ -69,13 +69,13 @@ const navItems = [
     if (zones.length <= 1) {
       if (!selectedZone) return null;
       return (
-        <button type="button" onClick={triggerMyLocation} className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+        <button type="button" onClick={triggerMyLocation} className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
           {locationBusy
             ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
             : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
-          <div className="text-left">
+          <div className="min-w-0 text-left">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
-            <p className="text-sm font-bold text-white leading-tight">
+            <p className="truncate text-sm font-bold text-white leading-tight">
               {selectedZone.name}
             </p>
           </div>
@@ -85,13 +85,13 @@ const navItems = [
     return (
     <div className="relative">
       <button onClick={() => setZoneOpen(o => !o)}
-        className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+        className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
         {locationBusy
           ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
           : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
-        <div className="text-left">
+        <div className="min-w-0 text-left">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
-          <p className="text-sm font-bold text-white leading-tight">
+          <p className="truncate text-sm font-bold text-white leading-tight">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
         </div>
@@ -139,31 +139,34 @@ const navItems = [
           Profile header and the OTP/brand bars so every header matches. */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[56px] flex items-center gap-3">
 
-        {/* Location / account identity — left */}
-        <div className="flex items-center gap-1.5">
+        {/* Location / account identity — left. flex-1 + min-w-0 gives it half of
+            the free space so the centred nav never moves when the identity
+            changes width (zone picker vs. account greeting). */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {activeView === 'account' ? <AccountGreeting /> : <ZoneDropdown />}
         </div>
 
         {/* ── Desktop layout ── */}
-        {/* Center: nav items + Cart */}
-        <nav className="hidden sm:flex items-center gap-1 mx-auto">
+        {/* Center: nav items + Cart. Pinned to the container centre by the two
+            equal-width side slots so the nav is stable across views. */}
+        <nav className="hidden sm:flex shrink-0 items-center gap-1">
           {navItems.map(({ id, label, Icon }) => {
             const isActive = activeView === id;
             return (
-              <button key={id} onClick={() => onNavChange(id)}
-                className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
+              <button key={id} onClick={() => onNavChange(id)} aria-label={label}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4 ${
                   isActive ? 'bg-white text-gokez-800 shadow-sm' : 'text-white/80 hover:bg-white/10 hover:text-white'
                 }`}>
                 <Icon className="w-4 h-4" />
-                {label}
+                <span className="hidden lg:inline">{label}</span>
               </button>
             );
           })}
           {/* Cart in center */}
-          <button onClick={onCheckout}
-            className="relative ml-1 flex items-center gap-1.5 rounded-full bg-saffron-400 px-4 py-2 text-sm font-bold text-saffron-900 shadow-sm transition-colors hover:bg-saffron-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80">
+          <button onClick={onCheckout} aria-label="Cart"
+            className="relative ml-1 flex items-center gap-1.5 rounded-full bg-saffron-400 px-3 py-2 text-sm font-bold text-saffron-900 shadow-sm transition-colors hover:bg-saffron-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4">
             <ShoppingCart className="w-4 h-4" />
-            Cart
+            <span className="hidden lg:inline">Cart</span>
             {totalItems > 0 && (
               <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-gokez-800 shadow-sm">
                 {totalItems > 9 ? '9+' : totalItems}
@@ -171,6 +174,10 @@ const navItems = [
             )}
           </button>
         </nav>
+
+        {/* Right slot — balances the left identity so the nav stays centred.
+            Empty by design; never renders content. */}
+        <div className="hidden flex-1 sm:block" aria-hidden="true" />
       </div>
 
       {/* Row 2: Search — the Categories view owns its own category-scoped filter. */}

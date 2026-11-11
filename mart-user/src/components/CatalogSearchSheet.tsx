@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, X, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, RefreshCw, Search, X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
@@ -117,8 +117,8 @@ export default function CatalogSearchSheet({
     return freshMode && freshLimit && freshLimit > 0 ? list.slice(0, freshLimit) : list;
   }, [query, results, products, activeCategoryId, freshMode, freshLimit]);
   const gridCols = !query && freshMode && freshLayout === 'grid'
-    ? freshColumns === 2 ? 'grid-cols-2' : freshColumns === 4 ? 'grid-cols-4' : 'grid-cols-3'
-    : 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-6';
+    ? freshColumns === 2 ? 'grid-cols-2 md:grid-cols-6' : freshColumns === 4 ? 'grid-cols-4 md:grid-cols-6' : 'grid-cols-3 md:grid-cols-6'
+    : 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6';
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -214,42 +214,68 @@ export default function CatalogSearchSheet({
   }, [onRefresh]);
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Search products" onClick={handleSurfaceClick}>
-      <button type="button" aria-label="Close product search" onClick={onClose}
-        className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
-      <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
+    <div className="fixed inset-0 z-50 md:top-[calc(3.5rem+env(safe-area-inset-top,0px)+1px)] md:z-30" role="dialog" aria-modal="true" aria-label="Search products" onClick={handleSurfaceClick}>
+      <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900">
         <div className={`shrink-0 ${query ? 'bg-yellow-100/60 dark:bg-yellow-950/40' : 'bg-white dark:bg-slate-900'}`}>
-          <PageHeader onBack={onClose} backLabel="Back to home" position="static" backStyle="square" backSize="sm">
-            <div className="relative min-w-0 flex-1">
-              <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
+          {/* Mobile chrome only. On desktop the site header stays visible above
+              the search page, so its cart is the shopper's cart — no need to
+              repeat it in the search bar. */}
+          <div className="md:hidden">
+            <PageHeader onBack={onClose} backLabel="Back to home" position="static" backStyle="square" backSize="sm">
+              <div className="relative min-w-0 flex-1">
+                <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
+                  value={search} onChange={event => setSearch(event.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={searchPrompt}
+                  className="w-full rounded-xl border-0 bg-white py-2 pl-4 pr-11 text-sm text-gray-900 shadow-sm ring-1 ring-black/5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/70 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
+                {search && (
+                  <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+                    <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+
+              {/* Cart — appears only once the shopper has added something; taps straight to checkout. */}
+              {totalItems > 0 && (
+                <button type="button" onClick={onOpenCart} aria-label={`View cart, ${totalItems} ${totalItems === 1 ? 'item' : 'items'}`}
+                  className="relative mr-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10">
+                  <ShoppingCart className="h-6 w-6" />
+                  <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-[#14532d] ring-1 ring-black/5">
+                    {totalItems}
+                  </span>
+                </button>
+              )}
+            </PageHeader>
+          </div>
+
+          {/* Desktop: the search field lives in the page body, under the site
+              header, with a "Back to home" control on its left. */}
+          <div className="mx-auto hidden w-full max-w-6xl items-center gap-2 px-3 pb-4 pt-4 sm:px-6 md:flex lg:px-8">
+            <button type="button" onClick={onClose} aria-label="Back to home"
+              className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-gray-100 px-3 py-3.5 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-600 dark:hover:bg-slate-600">
+              <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
+              <span>Back to home</span>
+            </button>
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-400 dark:text-slate-400" />
+              <input autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
                 value={search} onChange={event => setSearch(event.target.value)}
-                onKeyDown={handleKeyDown}
                 placeholder={searchPrompt}
-                className="w-full rounded-xl border-0 bg-white py-2 pl-4 pr-11 text-sm text-gray-900 shadow-sm ring-1 ring-black/5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/70 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
+                className="w-full rounded-2xl border-0 bg-gray-100 py-3.5 pl-11 pr-11 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400" />
               {search && (
                 <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
-                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+                  className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
                   <X className="h-3.5 w-3.5" strokeWidth={2.5} />
                 </button>
               )}
             </div>
-
-            {/* Cart — appears only once the shopper has added something; taps straight to checkout. */}
-            {totalItems > 0 && (
-              <button type="button" onClick={onOpenCart} aria-label={`View cart, ${totalItems} ${totalItems === 1 ? 'item' : 'items'}`}
-                className="relative mr-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10">
-                <ShoppingCart className="h-6 w-6" />
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-[#14532d] ring-1 ring-black/5">
-                  {totalItems}
-                </span>
-              </button>
-            )}
-          </PageHeader>
+          </div>
 
           {/* Live suggestions — compact white rows inside the yellow search area, bounded so results stay reachable. */}
           {query && suggestions.length > 0 && (
             <div className="border-b border-yellow-200/60 px-3 pt-2 dark:border-yellow-900/40">
-              <div className="max-h-56 space-y-1 overflow-y-auto" onScroll={dismissKeyboard}>
+              <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto md:px-6 lg:px-8" onScroll={dismissKeyboard}>
                 {suggestions.map(product => {
                   const category = categoryById.get(product.categoryId);
                   const localName = product.localName?.trim() && product.localName.trim() !== product.name.trim()
@@ -284,7 +310,7 @@ export default function CatalogSearchSheet({
           )}
         </div>
 
-        <div ref={resultsRef} className="relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-white px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900" onScroll={dismissKeyboard}>
+        <div ref={resultsRef} className="relative mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto overscroll-y-contain bg-white px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900 md:px-6 lg:px-8" onScroll={dismissKeyboard}>
           {(refreshing || pullDistance > 0) && (
             <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2" style={{ opacity: refreshing ? 1 : Math.min(1, pullDistance / 40) }} aria-live="polite">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md ring-1 ring-black/5 dark:bg-slate-800/90 dark:ring-white/10">
@@ -347,9 +373,9 @@ export default function CatalogSearchSheet({
             </h2>
             {displayed.length ? (
               freshMode && !query && freshLayout === 'row' ? (
-                <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
+                <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide md:mx-0 md:grid md:grid-cols-6 md:gap-2.5 md:overflow-visible md:px-0 md:pb-0">
                   {displayed.map(product => (
-                    <div key={product.id} className="w-[calc((100%-1.25rem)/2.85)] min-w-[calc((100%-1.25rem)/2.85)] flex-shrink-0">
+                    <div key={product.id} className="w-[calc((100%-1.25rem)/2.85)] min-w-[calc((100%-1.25rem)/2.85)] flex-shrink-0 md:w-auto md:min-w-0 md:shrink">
                       <ProductCard product={product} />
                     </div>
                   ))}

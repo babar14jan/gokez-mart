@@ -13,7 +13,6 @@ import StoreClosedCard from './components/StoreClosedCard';
 import BottomNav from './components/BottomNav';
 import AppShell from './components/AppShell';
 import ProductCard from './components/ProductCard';
-import CategoryIcon from './components/CategoryIcon';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import HomeSections, { resolveSectionItems } from './components/HomeSections';
@@ -1444,8 +1443,8 @@ export default function App() {
             <div className="pb-6">
               <button type="button" onClick={() => openCatalogSearch()}
                 className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
-                <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-white py-3.5 pl-11 pr-4 text-sm text-gray-500 shadow-md transition-shadow hover:shadow-lg dark:bg-slate-700 dark:text-slate-300 dark:ring-1 dark:ring-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-400 dark:text-slate-400" />
+                <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-gray-100 py-3.5 pl-11 pr-4 text-sm text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text max-w-full truncate">{searchPrompt}</span></span>
               </button>
               <HomeCarousel />
             </div>
@@ -1466,17 +1465,24 @@ export default function App() {
                     See all
                   </button>
                 </div>
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                  {visibleCategories.map(cat => (
-                    <button key={cat.id} type="button" onClick={() => {
-                      setPendingCategorySlug(cat.slug || null);
-                      handleNavChange('categories');
-                    }}
-                      className="flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50 px-2 py-2.5 text-center text-gray-700 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-                      <CategoryIcon icon={cat.icon} name={cat.name} className="h-7 w-7 object-contain" />
-                      <span className="line-clamp-2 text-[10px] font-semibold leading-tight">{cat.name}</span>
-                    </button>
-                  ))}
+                <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+                  {visibleCategories.map(cat => {
+                    const imageUrl = cat.icon?.startsWith('/') || cat.icon?.startsWith('http') ? cat.icon : null;
+                    return (
+                      <button key={cat.id} type="button" onClick={() => {
+                        setPendingCategorySlug(cat.slug || null);
+                        handleNavChange('categories');
+                      }}
+                        className="flex w-[84px] min-w-[84px] flex-col items-center gap-2 text-center">
+                        <span className="flex h-[84px] w-[84px] items-center justify-center overflow-hidden rounded-2xl bg-cream-100 ring-1 ring-black/5 dark:bg-slate-700 dark:ring-white/10">
+                          {imageUrl
+                            ? <img src={imageUrl} alt={cat.name} loading="lazy" className="h-full w-full object-contain" />
+                            : <span className="text-4xl leading-none" aria-hidden="true">{cat.icon || '🛒'}</span>}
+                        </span>
+                        <span className="line-clamp-2 text-[11px] font-semibold leading-tight text-gray-800 dark:text-slate-200">{cat.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
             );
@@ -1484,7 +1490,7 @@ export default function App() {
 
           {/* Products */}
           {loading || catalogError ? (
-            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2.5">
+            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2.5">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="bg-white rounded-2xl overflow-hidden animate-pulse shadow-sm">
                   <div className="aspect-square bg-gray-100" />
@@ -1550,7 +1556,7 @@ export default function App() {
                     <div className="flex items-center gap-2 mb-3">
                       <h2 className="text-base font-bold text-gray-900 dark:text-white">{cat.name}</h2>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2.5">
                       {catProducts.map(product => (
                         <ProductCard key={product.id} product={product} />
                       ))}
@@ -1567,7 +1573,7 @@ export default function App() {
                     <div className="flex items-center justify-between mb-3">
                       <h2 className="text-sm font-bold text-gray-900 dark:text-white">📦 Others</h2>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-2.5">
+                    <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2.5">
                       {uncat.map(product => (
                         <ProductCard key={product.id} product={product} />
                       ))}

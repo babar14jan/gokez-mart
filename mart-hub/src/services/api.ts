@@ -132,6 +132,35 @@ export const authApi = {
   logout: () => api.post('/admin/logout'),
 };
 
+// ── Uploads ───────────────────────────────────────────────────────────────────
+// Mirrors the backend's checks (multer 5 MB cap, sharp JPEG/PNG/WebP only) so a
+// bad file fails here with a readable message instead of a 5xx, which the hub's
+// network overlay misreads as the backend being down.
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const SUPPORTED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+// Shaped like an axios error so every upload call site's existing
+// `e?.response?.data?.error` handling displays the reason.
+function rejectPhoto(message: string): never {
+  const error: any = new Error(message);
+  error.response = { data: { success: false, error: message } };
+  throw error;
+}
+
+function assertUploadablePhoto(file: File): void {
+  // Some pickers/OSes hand over an empty `type`; fall back to the extension
+  // (the backend re-checks the real bytes with sharp before storing).
+  const typeSupported = file.type
+    ? SUPPORTED_PHOTO_TYPES.has(file.type)
+    : /\.(jpe?g|png|webp)$/i.test(file.name);
+  if (!typeSupported) {
+    rejectPhoto('Only JPEG, PNG, and WebP images are supported.');
+  }
+  if (file.size > MAX_PHOTO_BYTES) {
+    rejectPhoto('That photo is too large. Please use one under 5 MB.');
+  }
+}
+
 // ── Products ──────────────────────────────────────────────────────────────────
 export const productsApi = {
   getAll: (storeId?: string, opts?: FetchOpts) => api.get('/admin/products', { params: storeId ? { storeId } : {}, fresh: opts?.fresh }),
@@ -141,6 +170,7 @@ export const productsApi = {
   delete: (id: string, storeId?: string) => api.delete(`/admin/products/${id}`, { params: storeId ? { storeId } : {} }),
   cleanStorage: (dryRun = true) => api.post('/admin/storage/clean', { dryRun }),
   uploadPhoto: (file: File, maxDimension?: number, profile?: 'product') => {
+    assertUploadablePhoto(file);
     const form = new FormData();
     form.append('photo', file);
     // Icons are drawn tiny in the customer app; cap them server-side so the
@@ -605,6 +635,7 @@ export const carouselApi = {
   delete: (id: string) => api.delete("/admin/carousel/" + id),
   reorder: (ids: string[]) => api.post("/admin/carousel/reorder", { ids }),
   uploadImage: (file: File) => {
+    assertUploadablePhoto(file);
     const form = new FormData();
     form.append("photo", file);
     return api.post("/admin/upload/photo", form, { headers: { "Content-Type": "multipart/form-data" } });

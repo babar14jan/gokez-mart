@@ -161,7 +161,7 @@ export default function CategoriesPage() {
                     <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors w-fit">
                       {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                       {uploading ? 'Uploading...' : 'Upload Image'}
-                      <input type="file" accept="image/*" className="hidden" onChange={handleIconUpload} disabled={uploading} />
+                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleIconUpload} disabled={uploading} />
                     </label>
                     <input type="text" value={form.icon} onChange={e => { setForm(f => ({ ...f, icon: e.target.value })); setIconPreview(null); }} className={inp} placeholder="or type emoji e.g. 🥦" />
                   </div>

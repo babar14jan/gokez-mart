@@ -1,5 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Package, Pencil, Loader2, X,
   AlertTriangle, CheckCircle,
@@ -8,6 +7,7 @@ import {
 import { inventoryApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
+import { useZoneSelectionStore } from '../store/zoneSelectionStore';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
 
@@ -96,34 +96,50 @@ export default function InventoryPage() {
 
   const { role } = useAuthStore();
   const canManageTracking = role === 'super_admin' || role === 'store_owner' || role === 'store_manager';
-  const [searchParams, setSearchParams] = useSearchParams();
-  const selectedStoreId = searchParams.get('store') || 'all';
+  // Zone selection lives in the shared store (header dropdown + this page),
+  // never in the URL — store ids are internal and stay out of the address bar.
+  const zoneInventoryStore = useZoneSelectionStore(s => s.inventoryStore);
+  const setZoneInventoryStore = useZoneSelectionStore(s => s.setInventoryStore);
+  const selectedStoreId = zoneInventoryStore;
   const [manageableStores, setManageableStores] = useState<Array<{ id: string; name: string; address?: string | null; isOwn?: boolean }>>([]);
+  const loadSeq = useRef(0);
   const canSwitchStores = role !== 'super_admin' && manageableStores.length > 1;
   const selectedStore = manageableStores.find(s => s.id === selectedStoreId);
   // A zone head may manage stock for member stores even when that store's own
   // tracking switch is off, so the list is not hidden in that case.
   const managingMemberStore = canSwitchStores && selectedStore != null && !selectedStore.isOwn;
 
+  // One-time migration from the old URL scheme: /inventory?store=<uuid> exposed
+  // internal store ids in the address bar. Adopt the value once, then strip
+  // the param so the URL stays clean.
+  useEffect(() => {
+    const legacy = new URLSearchParams(window.location.search).get('store');
+    if (!legacy) return;
+    if (legacy !== 'all' && legacy !== selectedStoreId) setZoneInventoryStore(legacy);
+    window.history.replaceState(null, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (role === 'super_admin') return;
     inventoryApi.getStores().then(r => {
       const list = r.data.data || [];
       setManageableStores(list);
-      if (selectedStoreId !== 'all' && !list.some((s: any) => s.id === selectedStoreId)) {
+      // Read the live value: the legacy-URL migration above may have just
+      // adopted a store id after this effect captured `selectedStoreId`.
+      const current = useZoneSelectionStore.getState().inventoryStore;
+      if (current !== 'all' && !list.some((s: any) => s.id === current)) {
         const own = list.find((s: any) => s.isOwn)?.id || list[0]?.id;
-        if (own) {
-          setSearchParams(prev => {
-            const next = new URLSearchParams(prev);
-            next.set('store', own);
-            return next;
-          }, { replace: true });
-        }
+        if (own) setZoneInventoryStore(own);
       }
     }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   const load = async (fresh = false) => {
+    // Store switches and the arrival of the manageable-store list can issue
+    // overlapping loads; only the newest one may write state.
+    const seq = ++loadSeq.current;
     if (selectedStoreId === 'all') {
       const stores = manageableStores.length ? manageableStores : [];
       const targetStores = stores.length ? stores : [{ id: getActiveStoreId(), name: 'This store', isOwn: true }];
@@ -131,6 +147,7 @@ export default function InventoryPage() {
         const inv = await inventoryApi.getAll(store.id, { fresh });
         return (inv.data.data || []).map((item: any) => ({ ...item, storeId: store.id, storeName: store.name && store.name !== 'This store' ? store.name : undefined }));
       }));
+      if (seq !== loadSeq.current) return;
       setItems(results.flat());
       try {
         const meta = await inventoryApi.getSettings(targetStores.find(s => s.isOwn)?.id || targetStores[0].id);
@@ -144,12 +161,13 @@ export default function InventoryPage() {
       inventoryApi.getAll(selectedStoreId, { fresh }),
       inventoryApi.getSettings(selectedStoreId),
     ]);
+    if (seq !== loadSeq.current) return;
     setItems([...(inv.data.data || []).map((item: any) => ({ ...item, storeId: selectedStoreId, storeName: manageableStores.find(s => s.id === selectedStoreId)?.name || selectedStore }))]);
     setTrackingEnabled(Boolean(meta.data.data?.inventoryTracking));
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [selectedStoreId]);
+  useEffect(() => { load(); }, [selectedStoreId, manageableStores.length]);
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') load(true); };
     document.addEventListener('visibilitychange', onVisible);

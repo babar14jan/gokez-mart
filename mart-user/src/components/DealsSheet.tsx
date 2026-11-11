@@ -41,9 +41,7 @@ export default function DealsSheet({ title, products, onClose, onOpenCart }: Dea
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title} onClick={onSurfaceClick}>
-      <button type="button" aria-label="Close deals" onClick={onClose}
-        className="absolute inset-0 hidden bg-slate-900/40 backdrop-blur-sm sm:block" />
-      <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 sm:left-auto sm:w-full sm:max-w-md sm:shadow-2xl">
+      <section className="absolute inset-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900">
         <PageHeader
           title={title}
           onBack={onClose}
@@ -54,7 +52,7 @@ export default function DealsSheet({ title, products, onClose, onOpenCart }: Dea
         />
 
         <div className="shrink-0 bg-white px-3 py-2.5 dark:bg-slate-900">
-          <div className="flex items-center gap-2">
+          <div className="mx-auto flex w-full max-w-6xl items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-slate-700 dark:text-slate-200" />
               <input ref={inputRef} type="text" inputMode="search" enterKeyHint="search" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={onKeyDown}
@@ -81,13 +79,13 @@ export default function DealsSheet({ title, products, onClose, onOpenCart }: Dea
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]" onScroll={dismiss}>
+        <div className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto p-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]" onScroll={dismiss}>
           {deals.length ? (
             <>
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
                 {deals.length} deal{deals.length !== 1 ? 's' : ''}
               </p>
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-2.5">
                 {deals.map(p => <ProductCard key={p.id} product={p} />)}
               </div>
             </>
