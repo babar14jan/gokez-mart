@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { clearHttpCache } from '../services/httpCache';
+import { clearZoneSelection } from './zoneSelectionStore';
 
 interface AuthState {
   id: string | null;
@@ -60,8 +61,10 @@ export const useAuthStore = create<AuthState>((setState) => ({
   isSuperAdmin: () => get('mart_admin_role') === 'super_admin',
 
   login: (token, data) => {
-    // A new session must never see the previous user's cached responses.
+    // A new session must never see the previous user's cached responses or
+    // zone selection (an expired session can be followed by a different user).
     clearHttpCache();
+    clearZoneSelection();
     set('mart_admin_id',       data.id || null);
     set('mart_admin_token',    token);
     set('mart_admin_username', data.username);
@@ -97,6 +100,9 @@ export const useAuthStore = create<AuthState>((setState) => ({
 
   logout: () => {
     clearHttpCache();
+    // Zone selections belong to the signed-in head store; a different user on
+    // this device must not inherit them.
+    clearZoneSelection();
     ['mart_admin_id','mart_admin_token','mart_admin_username','mart_admin_name','mart_admin_email','mart_admin_phone','mart_admin_role','mart_admin_store_id','mart_admin_last_login','mart_admin_can_access_daily_sales']
       .forEach(k => localStorage.removeItem(k));
     setState({ id: null, token: null, username: null, name: null, email: null, phone: null, role: null, storeId: null, lastLoginAt: null, canAccessDailySales: null, isAuthenticated: false });

@@ -225,7 +225,7 @@ export default function StoresPage() {
     try {
       const res = await productsApi.uploadPhoto(file);
       setForm(f => ({ ...f, logoUrl: res.data.data.url }));
-    } catch {       window.alert('Upload failed'); } finally { setUploading(false); }
+    } catch (e: any) { window.alert(e?.response?.data?.error || 'Upload failed'); } finally { setUploading(false); }
   };
 
   const handleSave = async () => {
@@ -448,7 +448,7 @@ export default function StoresPage() {
                       <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl cursor-pointer transition-colors shadow-sm">
                         {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                         {uploading ? 'Uploading...' : 'Upload Logo'}
-                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploading} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleLogoUpload} disabled={uploading} />
                       </label>
                       {form.logoUrl && (
                         <button onClick={() => setForm(f => ({ ...f, logoUrl: '' }))} className="ml-2 text-xs text-red-400 hover:text-red-500">Remove</button>

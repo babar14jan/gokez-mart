@@ -1,5 +1,4 @@
 import type { Category, HomeSection, Product } from '../services/api';
-import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
 import Button from './ui/Button';
 import SectionHeading from './ui/SectionHeading';
@@ -93,10 +92,10 @@ function gridCols(section: HomeSection): string {
   if (kind === 'combo' || kind === 'todays_combos' || kind === 'top_picks') return 'grid-cols-2';
   if (section.config?.columns === 4) return 'grid-cols-4';
   if (section.config?.columns === 3) return 'grid-cols-3';
-  return 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-6';
+  return 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6';
 }
 
-const productGridCols = 'grid-cols-3 sm:grid-cols-5 lg:grid-cols-6';
+const productGridCols = 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6';
 // Slightly wider than the catalogue grid so the next card remains visible as a
 // natural cue that this row continues horizontally.
 const homeRowCardWidth = 'w-[calc((100%-1.25rem)/2.85)] min-w-[calc((100%-1.25rem)/2.85)]';
@@ -183,32 +182,35 @@ export default function HomeSections({ entries, categories, onViewAll, onSelectC
                 {(section.config.categorySlugs && section.config.categorySlugs.length ? section.config.categorySlugs : categories.slice(0, 6).map(c => c.slug)).map((slug: string) => {
                   const cat = categories.find(c => String(c.slug).toLowerCase() === String(slug).toLowerCase());
                   if (!cat) return null;
+                  const imageUrl = cat.icon?.startsWith('/') || cat.icon?.startsWith('http') ? cat.icon : null;
                   return (
                     <button
                       key={slug}
                       type="button"
                       onClick={() => onSelectCategory(cat.slug)}
-                      className="group flex flex-col items-center gap-2 rounded-2xl border border-cream-200 bg-white p-3 text-center shadow-card transition-colors hover:border-gokez-200 hover:bg-gokez-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-gokez-800 dark:hover:bg-gokez-900/20"
+                      className="group flex flex-col items-center gap-2 text-center focus-visible:outline-none"
                     >
-                      <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-cream-100 dark:bg-slate-700">
-                        <CategoryIcon icon={cat.icon} name={cat.name} className="h-8 w-8 object-contain" />
+                      <span className="mx-auto flex aspect-square w-full max-w-[120px] items-center justify-center overflow-hidden rounded-2xl bg-cream-100 ring-1 ring-black/5 transition-colors group-hover:ring-gokez-300 dark:bg-slate-700 dark:ring-white/10 dark:group-hover:ring-gokez-700">
+                        {imageUrl
+                          ? <img src={imageUrl} alt={cat.name} loading="lazy" className="h-full w-full object-contain" />
+                          : <span className="text-4xl leading-none" aria-hidden="true">{cat.icon || '🛒'}</span>}
                       </span>
-                      <span className="line-clamp-2 text-[12px] font-semibold leading-tight text-ink dark:text-white">{cat.name}</span>
+                      <span className="line-clamp-2 text-[11px] font-semibold leading-tight text-ink dark:text-white">{cat.name}</span>
                     </button>
                   );
                 })}
               </div>
             ) : layout === 'row' ? (
-              <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide">
+              <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide md:mx-0 md:grid md:grid-cols-6 md:gap-2.5 md:overflow-visible md:px-0 md:pb-0">
                 {visibleItems.map((p: any) => (
-                  <div key={p.id} className={`${homeRowCardWidth} flex-shrink-0`}>
+                  <div key={p.id} className={`${homeRowCardWidth} flex-shrink-0 md:w-auto md:min-w-0 md:shrink`}>
                     <ProductCard product={p} />
                   </div>
                 ))}
               </div>
             ) : layout === 'grid' ? (
               <div className={`grid ${productGridCols} gap-2.5`}>
-                {visibleItems.slice(0, items.length >= 4 ? 4 : items.length).map((p: any) => (
+                {visibleItems.slice(0, 6).map((p: any) => (
                   <ProductCard key={p.id} product={p} />
                 ))}
               </div>
@@ -220,7 +222,7 @@ export default function HomeSections({ entries, categories, onViewAll, onSelectC
               </div>
             ) : (
               <div className={`grid ${productGridCols} gap-2.5`}>
-                {visibleItems.slice(0, items.length >= 4 ? 4 : items.length).map((p: any) => (
+                {visibleItems.slice(0, 6).map((p: any) => (
                   <ProductCard key={p.id} product={p} />
                 ))}
               </div>

@@ -252,15 +252,25 @@ export default function CatalogPage() {
   const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
+    let failure: string | null = null;
+    // `photos` is the value captured at selection time; decrement a local
+    // budget so a multi-file pick cannot exceed the 4-photo cap.
+    let slots = Math.max(0, 4 - photos.length);
     for (const file of files) {
-      if (photos.length >= 4) break;
-      const uploadRes = await productsApi.uploadPhoto(file, undefined, 'product');
-      const upload = uploadRes.data.data;
-      const url = upload.url;
-      setPhotos(prev => [...prev, url]);
-      setPhotoVariants(prev => [...prev, upload.photoVariants]);
-      setPrimaryPhoto(current => current || url);
+      if (slots <= 0) break;
+      try {
+        const uploadRes = await productsApi.uploadPhoto(file, undefined, 'product');
+        const upload = uploadRes.data.data;
+        const url = upload.url;
+        setPhotos(prev => [...prev, url]);
+        setPhotoVariants(prev => [...prev, upload.photoVariants]);
+        setPrimaryPhoto(current => current || url);
+        slots--;
+      } catch (err: any) {
+        failure ||= err?.response?.data?.error || 'Upload failed';
+      }
     }
+    if (failure) alert(failure);
   };
 
   const handleRemovePhoto = (url: string) => {
@@ -340,7 +350,7 @@ export default function CatalogPage() {
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
             <Upload className="w-3.5 h-3.5" /> Bulk Upload
-            <input type="file" accept="image/*" multiple className="hidden" onChange={e => { handleBulkFileSelect(e); setShowBulkUpload(true); }} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={e => { handleBulkFileSelect(e); setShowBulkUpload(true); }} />
           </label>
           <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
             <FileSpreadsheet className="w-3.5 h-3.5" /> Upload Excel
@@ -489,7 +499,7 @@ export default function CatalogPage() {
                     <label className="w-32 h-32 rounded-2xl bg-gray-100 dark:bg-slate-700 border-2 border-dashed border-gray-300 dark:border-slate-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors">
                       <Camera className="w-6 h-6 text-gray-500" />
                       <span className="text-[10px] text-gray-500">Add photo</span>
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddPhotos} />
+                      <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={handleAddPhotos} />
                     </label>
                   </div>
                 )}
@@ -497,7 +507,7 @@ export default function CatalogPage() {
                   <div className="flex justify-center">
                     <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
                       <Upload className="h-3.5 w-3.5" /> Add secondary photos
-                      <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddPhotos} />
+                      <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={handleAddPhotos} />
                     </label>
                   </div>
                 )}
@@ -613,7 +623,7 @@ export default function CatalogPage() {
               <div className="px-5 pt-3 flex-shrink-0">
                 <label className="flex items-center justify-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-gray-500 hover:border-emerald-400 hover:text-emerald-600 cursor-pointer transition-colors">
                   <Upload className="w-4 h-4" /> Add more images
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleBulkFileSelect} />
+                  <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={handleBulkFileSelect} />
                 </label>
               </div>
             )}
