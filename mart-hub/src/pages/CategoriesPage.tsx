@@ -56,7 +56,7 @@ export default function CategoriesPage() {
     if (!file) return;
     setUploading(true);
     try {
-      const res = await productsApi.uploadPhoto(file, 160);
+      const res = await productsApi.uploadPhoto(file, 160, undefined, 'category');
       const url = res.data.data.url;
       setForm(f => ({ ...f, icon: url }));
       setIconPreview(url);

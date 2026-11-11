@@ -151,7 +151,7 @@ export default function CampaignsPage() {
       let carouselImageUrl = editing?.carousel_image_url || undefined;
       if (carouselImageFile) {
         setUploading(true);
-        const res = await productsApi.uploadPhoto(carouselImageFile);
+        const res = await productsApi.uploadPhoto(carouselImageFile, undefined, undefined, 'banner');
         carouselImageUrl = res.data.data.url;
         setUploading(false);
       }
