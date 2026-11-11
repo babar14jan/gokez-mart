@@ -933,8 +933,14 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
     // Check storage before touching the filesystem: in production /uploads is
     // not served, so writing the original first would leave an orphan file
     // behind on every failed request.
-    if (config.env === 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+    if (config.imageStorage.driver !== 'hostinger' && config.env === 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
       throw httpError(503, 'Image storage is not configured on the server (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).', true);
+    }
+    if (config.imageStorage.driver === 'hostinger') {
+      const { HostingerStorageService } = await import('../services/hostingerStorage.service');
+      if (!HostingerStorageService.isConfigured()) {
+        throw httpError(503, 'Image storage is not configured on the server (HOSTINGER_STORAGE_URL / HOSTINGER_STORAGE_API_KEY).', true);
+      }
     }
     const uploadsDir = path.resolve(__dirname, '../../uploads');
     const raw = photoLocalPath.trim();
@@ -980,7 +986,30 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
     const originalLocalPath = `originals/${assetId}-${baseName || 'product'}${originalExt}`;
     await writeFile(path.join(uploadsDir, originalLocalPath), buffer);
 
-    if (config.env !== 'production') {
+    if (config.imageStorage.driver === 'hostinger') {
+      const { HostingerStorageService } = await import('../services/hostingerStorage.service');
+      const uploaded = await Promise.all([...filenames].map(async ([variant, variantFilename]) => {
+        const up = await HostingerStorageService.upload('catalog', variant.buffer, variantFilename);
+        return [variant, up.url, up.id] as const;
+      }));
+      const urls = new Map(uploaded.map(([v, u]) => [v, u]));
+      const ids = uploaded.map(([, , id]) => id);
+      const pv = {
+        assetId,
+        smallUrl: urls.get(images.small)!,
+        thumbnailUrl: urls.get(images.thumbnail)!,
+        largeUrl: urls.get(images.large)!,
+      };
+      await ProductImageAssetService.createPending({
+        id: assetId, uploadedBy: req.admin!.id, smallUrl: pv.smallUrl, thumbnailUrl: pv.thumbnailUrl, largeUrl: pv.largeUrl,
+        smallKey: filenames.get(images.small)!, thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!,
+        originalLocalPath, storageDriver: 'hostinger', storageId: JSON.stringify(ids),
+      });
+      resolvedPhotoUrl = pv.largeUrl;
+      resolvedPhotos = [pv.largeUrl];
+      resolvedPhotoVariants = [pv];
+      resolvedImageAssetIds = [assetId];
+    } else if (config.env !== 'production') {
       await mkdir(path.join(uploadsDir, 'products'), { recursive: true });
       await Promise.all([...filenames].map(([variant, variantFilename]) => writeFile(path.join(uploadsDir, variantFilename), variant.buffer)));
       const localUrl = (variant: PreparedImage) => `${req.protocol}://${req.get('host')}/uploads/${filenames.get(variant)!}`;
@@ -2997,6 +3026,19 @@ export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequ
 
 export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
+
+  if (config.imageStorage.driver === 'hostinger') {
+    const { HostingerStorageService } = await import('../services/hostingerStorage.service');
+    if (!HostingerStorageService.isConfigured()) {
+      throw httpError(503, 'Photo upload is temporarily unavailable. Please try again later.', true);
+    }
+    const image = await prepareAvatarImage(req.file.buffer);
+    const uploaded = await HostingerStorageService.upload('profile', image.buffer, req.file.originalname);
+    await CustomerAuthService.updateProfile(req.customer!.id, { photoUrl: uploaded.url });
+    res.json({ success: true, data: { url: uploaded.url } });
+    return;
+  }
+
   // Avatars have no local fallback: an empty storage URL would turn into a
   // fetch TypeError and a bare 500. Answer 503 with a customer-safe message.
   if (!config.supabase.url || !config.supabase.serviceRoleKey) {
@@ -3191,6 +3233,68 @@ export const adminUpdateSuggestionStatus = asyncHandler(async (req: AdminRequest
 
 export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
+
+  const { HostingerStorageService } = await import('../services/hostingerStorage.service');
+
+  if (config.imageStorage.driver === 'hostinger') {
+    if (!HostingerStorageService.isConfigured()) {
+      throw httpError(503, 'Image storage is not configured on the server (HOSTINGER_STORAGE_URL / HOSTINGER_STORAGE_API_KEY).', true);
+    }
+    const requestedFolder = typeof req.body?.folder === 'string' ? req.body.folder.trim() : '';
+    const allowedFolders = ['category', 'catalog', 'profile', 'banner', 'other'];
+    const folder = allowedFolders.includes(requestedFolder)
+      ? requestedFolder
+      : (req.body?.profile === 'product' ? 'catalog' : 'other');
+
+    const baseName = req.file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+
+    const isProductImage = req.body?.profile === 'product';
+    if (isProductImage) {
+      const images = await prepareProductImages(req.file.buffer);
+      const entries = Object.entries(images) as Array<[keyof PreparedProductImages, PreparedImage]>;
+      const assetId = uuidv4();
+      const filenames = new Map<PreparedImage, string>();
+      for (const [name, variant] of entries) {
+        if (!filenames.has(variant)) {
+          filenames.set(variant, `products/${assetId}-${baseName || 'product'}-${name}.${variant.extension}`);
+        }
+      }
+
+      const uploadsDir = path.resolve(__dirname, '../../uploads');
+      await mkdir(path.join(uploadsDir, 'originals'), { recursive: true });
+      const originalExt = path.extname(req.file.originalname) || '.bin';
+      const originalLocalPath = `originals/${assetId}-${baseName || 'product'}${originalExt}`;
+      await writeFile(path.join(uploadsDir, originalLocalPath), req.file.buffer);
+
+      const uploaded = await Promise.all([...filenames].map(async ([variant, variantFilename]) => {
+        const up = await HostingerStorageService.upload('catalog', variant.buffer, variantFilename);
+        return [variant, up.url, up.id] as const;
+      }));
+      const urls = new Map(uploaded.map(([v, u]) => [v, u]));
+      const ids = uploaded.map(([, , id]) => id);
+      const photoVariants = {
+        assetId,
+        smallUrl: urls.get(images.small)!,
+        thumbnailUrl: urls.get(images.thumbnail)!,
+        largeUrl: urls.get(images.large)!,
+      };
+      await ProductImageAssetService.createPending({
+        id: assetId, uploadedBy: req.admin!.id, smallUrl: photoVariants.smallUrl, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
+        smallKey: filenames.get(images.small)!, thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!,
+        originalLocalPath, storageDriver: 'hostinger', storageId: JSON.stringify(ids),
+      });
+      res.json({ success: true, data: { url: photoVariants.largeUrl, ...photoVariants, photoVariants } });
+      return;
+    }
+
+    const requested = Number(req.body?.maxDimension);
+    const maxDimension = Number.isFinite(requested) ? Math.min(Math.max(Math.round(requested), 64), 1600) : undefined;
+    const image = await prepareImage(req.file.buffer, maxDimension);
+    const filename = `${Date.now()}-${baseName || 'image'}.${image.extension}`;
+    const up = await HostingerStorageService.upload(folder, image.buffer, filename);
+    res.json({ success: true, data: { url: up.url } });
+    return;
+  }
 
   // Production always stores photos in Supabase Storage: /uploads is only
   // served in development, so a local fallback would "succeed" and hand back a

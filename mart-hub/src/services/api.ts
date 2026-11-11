@@ -169,7 +169,7 @@ export const productsApi = {
   update: (id: string, data: any) => api.put(`/admin/products/${id}`, data),
   delete: (id: string, storeId?: string) => api.delete(`/admin/products/${id}`, { params: storeId ? { storeId } : {} }),
   cleanStorage: (dryRun = true) => api.post('/admin/storage/clean', { dryRun }),
-  uploadPhoto: (file: File, maxDimension?: number, profile?: 'product') => {
+  uploadPhoto: (file: File, maxDimension?: number, profile?: 'product', folder?: string) => {
     assertUploadablePhoto(file);
     const form = new FormData();
     form.append('photo', file);
@@ -177,6 +177,7 @@ export const productsApi = {
     // stored/served WebP stays a few KB instead of the default 1600px.
     if (maxDimension) form.append('maxDimension', String(maxDimension));
     if (profile) form.append('profile', profile);
+    if (folder) form.append('folder', folder);
     return api.post('/admin/upload/photo', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
@@ -634,10 +635,11 @@ export const carouselApi = {
   update: (id: string, data: any) => api.put("/admin/carousel/" + id, data),
   delete: (id: string) => api.delete("/admin/carousel/" + id),
   reorder: (ids: string[]) => api.post("/admin/carousel/reorder", { ids }),
-  uploadImage: (file: File) => {
+  uploadImage: (file: File, folder = 'banner') => {
     assertUploadablePhoto(file);
     const form = new FormData();
     form.append("photo", file);
+    form.append("folder", folder);
     return api.post("/admin/upload/photo", form, { headers: { "Content-Type": "multipart/form-data" } });
   },
 };

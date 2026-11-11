@@ -60,7 +60,7 @@ export default function PromotionsPage() {
   const upload = async (file: File) => {
     setBusy(true); setError('');
     try {
-      const imageUrl = (await productsApi.uploadPhoto(file)).data.data.url;
+      const imageUrl = (await productsApi.uploadPhoto(file, undefined, undefined, 'banner')).data.data.url;
       setForm(current => ({ ...current, imageUrl }));
     }
     catch (caught: unknown) { setError(message(caught, 'Image upload failed')); }

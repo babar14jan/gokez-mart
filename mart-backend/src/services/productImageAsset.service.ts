@@ -6,7 +6,7 @@ import { config } from '../config';
 import { badRequest } from '../utils/apiError';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 
-type StorageDriver = 'local' | 'supabase';
+type StorageDriver = 'local' | 'supabase' | 'hostinger';
 type AssetStatus = 'pending' | 'active' | 'cleanup_queued';
 
 type ProductImageAsset = {
@@ -21,6 +21,7 @@ type ProductImageAsset = {
   largeKey: string;
   originalLocalPath: string | null;
   storageDriver: StorageDriver;
+  storageId?: string | null;
   status: AssetStatus;
 };
 
@@ -28,12 +29,12 @@ const PENDING_UPLOAD_TTL = '1 hour';
 const REMOVED_IMAGE_GRACE = '15 minutes';
 
 export class ProductImageAssetService {
-  static async createPending(asset: Omit<ProductImageAsset, 'productId' | 'status'>): Promise<void> {
+  static async createPending(asset: Omit<ProductImageAsset, 'productId' | 'status'> & { storageId?: string | null }): Promise<void> {
     await query(
       `INSERT INTO mart_product_image_assets
-         (id, uploaded_by, small_url, thumbnail_url, large_url, small_key, thumbnail_key, large_key, original_local_path, storage_driver)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [asset.id, asset.uploadedBy, asset.smallUrl, asset.thumbnailUrl, asset.largeUrl, asset.smallKey, asset.thumbnailKey, asset.largeKey, asset.originalLocalPath, asset.storageDriver]
+         (id, uploaded_by, small_url, thumbnail_url, large_url, small_key, thumbnail_key, large_key, original_local_path, storage_driver, storage_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [asset.id, asset.uploadedBy, asset.smallUrl, asset.thumbnailUrl, asset.largeUrl, asset.smallKey, asset.thumbnailKey, asset.largeKey, asset.originalLocalPath, asset.storageDriver, asset.storageId || null]
     );
   }
 
@@ -119,7 +120,7 @@ export class ProductImageAssetService {
   static async cleanupDue(): Promise<void> {
     const due = await query<ProductImageAsset>(
       `SELECT id, product_id as "productId", uploaded_by as "uploadedBy", small_url as "smallUrl", thumbnail_url as "thumbnailUrl", large_url as "largeUrl",
-              small_key as "smallKey", thumbnail_key as "thumbnailKey", large_key as "largeKey", original_local_path as "originalLocalPath", storage_driver as "storageDriver", status
+              small_key as "smallKey", thumbnail_key as "thumbnailKey", large_key as "largeKey", original_local_path as "originalLocalPath", storage_driver as "storageDriver", storage_id as "storageId", status
          FROM mart_product_image_assets
         WHERE (status = 'pending' AND created_at <= NOW() - INTERVAL '${PENDING_UPLOAD_TTL}')
            OR (status = 'cleanup_queued' AND cleanup_after <= NOW())
@@ -150,6 +151,19 @@ export class ProductImageAssetService {
         if (!target.startsWith(`${uploadsDir}${path.sep}`)) throw new Error('Invalid local image path');
         try { await unlink(target); } catch (error: any) { if (error?.code !== 'ENOENT') throw error; }
       }));
+      return;
+    }
+
+    if (asset.storageDriver === 'hostinger') {
+      const { HostingerStorageService } = await import('./hostingerStorage.service');
+      let ids: string[] = [];
+      if (asset.storageId) {
+        try { ids = JSON.parse(asset.storageId); } catch { ids = [asset.storageId]; }
+      }
+      if (!Array.isArray(ids)) ids = [String(ids)];
+      for (const id of ids) {
+        if (id) await HostingerStorageService.delete(id);
+      }
       return;
     }
 
