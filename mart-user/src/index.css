@@ -264,6 +264,14 @@ html, body { overscroll-behavior-y: none; }
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
+    /* Reserve the scrollbar strip even on short views. Otherwise switching from
+       a long page (Home) to a short one (Orders) toggles a classic scrollbar on
+       desktop, shrinking the scroll area by ~15px and shifting every centred
+       element (header nav included) sideways. `both-edges` keeps the scrollport
+       itself centred, so viewport-centred fixed overlays (search, sheets) line
+       up with the header/body column too. Overlay-scrollbar platforms are
+       unaffected (the gutter is 0). */
+    scrollbar-gutter: stable both-edges;
     /* Stop the scroll from chaining to the document at the top edge: this is
        what triggers Chrome/Android's native pull-to-refresh and lets the page
        rubber-band on iOS. The app owns the gesture instead. */

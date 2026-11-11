@@ -241,7 +241,7 @@ export default function CarouselPage() {
                       </div>
                   }
                   {uploading && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><Loader2 className="w-6 h-6 text-white animate-spin" /></div>}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageSelect} />
                 </label>
                 {imagePreview && (
                   <button onClick={() => { setImageFile(null); setImagePreview(null); }} className="mt-1 text-xs text-red-400 hover:text-red-500">Remove image (use gradient)</button>

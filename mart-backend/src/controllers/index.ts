@@ -131,6 +131,17 @@ function hasValidCoordinates(latitude: unknown, longitude: unknown): boolean {
     latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
 }
 
+// Errors thrown from route handlers become 500s with a masked message unless
+// they carry a status. `expose` lets an operational 5xx (e.g. "image storage
+// is not configured") keep its readable message instead of "Something went
+// wrong" — deliberately opt-in so internals never leak to clients.
+function httpError(status: number, message: string, expose = status < 500): Error & { status: number; expose: boolean } {
+  const err = new Error(message) as Error & { status: number; expose: boolean };
+  err.status = status;
+  err.expose = expose;
+  return err;
+}
+
 async function prepareImage(buffer: Buffer, maxDimension?: number): Promise<PreparedImage> {
   // sharp is a native module (libvips) and it is only needed when an image is
   // actually being re-encoded, which is rare. Importing it lazily keeps it out
@@ -155,7 +166,7 @@ async function prepareImage(buffer: Buffer, maxDimension?: number): Promise<Prep
       mimeType: 'image/webp',
     };
   }
-  throw new Error('Only JPEG, PNG, and WebP images are supported');
+  throw httpError(415, 'Only JPEG, PNG, and WebP images are supported');
 }
 
 async function prepareAvatarImage(buffer: Buffer): Promise<PreparedImage> {
@@ -163,7 +174,7 @@ async function prepareAvatarImage(buffer: Buffer): Promise<PreparedImage> {
   const source = sharp(buffer, { failOn: 'error' }).rotate();
   const metadata = await source.metadata();
   if (!['jpeg', 'png', 'webp'].includes(metadata.format || '')) {
-    throw new Error('Only JPEG, PNG, and WebP images are supported');
+    throw httpError(415, 'Only JPEG, PNG, and WebP images are supported');
   }
   return {
     buffer: await source.resize(256, 256, { fit: 'cover', position: 'centre' }).webp({ quality: 80, effort: 4 }).toBuffer(),
@@ -177,7 +188,7 @@ async function prepareProductImages(buffer: Buffer): Promise<PreparedProductImag
   const source = sharp(buffer, { failOn: 'error' }).rotate();
   const metadata = await source.metadata();
   if (!['jpeg', 'png', 'webp'].includes(metadata.format || '')) {
-    throw new Error('Only JPEG, PNG, and WebP images are supported');
+    throw httpError(415, 'Only JPEG, PNG, and WebP images are supported');
   }
   const sourceMax = Math.max(metadata.width || 0, metadata.height || 0);
   const encode = async (maxDimension: number): Promise<PreparedImage> => ({
@@ -919,6 +930,12 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
   let resolvedImageAssetIds = imageAssetIds;
 
   if (typeof photoLocalPath === 'string' && photoLocalPath.trim()) {
+    // Check storage before touching the filesystem: in production /uploads is
+    // not served, so writing the original first would leave an orphan file
+    // behind on every failed request.
+    if (config.env === 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+      throw httpError(503, 'Image storage is not configured on the server (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).', true);
+    }
     const uploadsDir = path.resolve(__dirname, '../../uploads');
     const raw = photoLocalPath.trim();
     const candidates: string[] = [];
@@ -963,7 +980,7 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
     const originalLocalPath = `originals/${assetId}-${baseName || 'product'}${originalExt}`;
     await writeFile(path.join(uploadsDir, originalLocalPath), buffer);
 
-    if (config.env !== 'production' || !config.supabase.url || !config.supabase.serviceRoleKey) {
+    if (config.env !== 'production') {
       await mkdir(path.join(uploadsDir, 'products'), { recursive: true });
       await Promise.all([...filenames].map(([variant, variantFilename]) => writeFile(path.join(uploadsDir, variantFilename), variant.buffer)));
       const localUrl = (variant: PreparedImage) => `${req.protocol}://${req.get('host')}/uploads/${filenames.get(variant)!}`;
@@ -991,8 +1008,9 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
           signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
         });
         if (!uploadRes.ok) {
-          await uploadRes.text();
-          throw new Error('Upload failed. Please try again.');
+          const detail = await uploadRes.text().catch(() => '');
+          console.error(`[upload] storage rejected ${variantFilename} (${uploadRes.status}):`, detail.slice(0, 500));
+          throw httpError(502, 'Image upload failed. Please try again.', true);
         }
         const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
         return [variant, `${storageBase}/${variantFilename}`] as const;
@@ -2979,6 +2997,11 @@ export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequ
 
 export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
+  // Avatars have no local fallback: an empty storage URL would turn into a
+  // fetch TypeError and a bare 500. Answer 503 with a customer-safe message.
+  if (!config.supabase.url || !config.supabase.serviceRoleKey) {
+    throw httpError(503, 'Photo upload is temporarily unavailable. Please try again later.', true);
+  }
   const bucket = config.supabase.bucket;
   const image = await prepareAvatarImage(req.file.buffer);
   const filename = `customers/${req.customer!.id}-${Date.now()}.${image.extension}`;
@@ -2994,7 +3017,12 @@ export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res
     body: image.buffer,
     signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
   });
-  if (!uploadRes.ok) { res.status(500).json({ success: false, error: 'Upload failed' }); return; }
+  if (!uploadRes.ok) {
+    const detail = await uploadRes.text().catch(() => '');
+    console.error(`[upload] storage rejected customer avatar ${req.customer!.id} (${uploadRes.status}):`, detail.slice(0, 500));
+    res.status(500).json({ success: false, error: 'Upload failed' });
+    return;
+  }
   const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');
   const publicUrl = `${storageBase}/${filename}`;
   await CustomerAuthService.updateProfile(req.customer!.id, { photoUrl: publicUrl });
@@ -3164,6 +3192,14 @@ export const adminUpdateSuggestionStatus = asyncHandler(async (req: AdminRequest
 export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
 
+  // Production always stores photos in Supabase Storage: /uploads is only
+  // served in development, so a local fallback would "succeed" and hand back a
+  // URL that 404s for every client. Fail loudly (with the missing variables
+  // named) instead of storing dead links.
+  if (config.env === 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+    throw httpError(503, 'Image storage is not configured on the server (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).', true);
+  }
+
   const bucket = config.supabase.bucket;
   const isProductImage = req.body?.profile === 'product';
   // Callers can ask for a tighter cap: a category icon is painted at ~32px in
@@ -3192,7 +3228,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
     const originalLocalPath = `originals/${assetId}-${baseName || 'product'}${originalExt}`;
     await writeFile(path.join(uploadsDir, originalLocalPath), req.file.buffer);
 
-    if (config.env !== 'production' || !config.supabase.url || !config.supabase.serviceRoleKey) {
+    if (config.env !== 'production') {
       await mkdir(path.join(uploadsDir, 'products'), { recursive: true });
       await Promise.all([...filenames].map(([variant, variantFilename]) => writeFile(path.join(uploadsDir, variantFilename), variant.buffer)));
       const localUrl = (variant: PreparedImage) => `${req.protocol}://${req.get('host')}/uploads/${filenames.get(variant)!}`;
@@ -3219,8 +3255,9 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
         signal: timeoutSignal(OUTBOUND_TIMEOUTS.storageUpload),
       });
       if (!uploadRes.ok) {
-        await uploadRes.text();
-        throw new Error('Upload failed. Please try again.');
+        const detail = await uploadRes.text().catch(() => '');
+        console.error(`[upload] storage rejected ${variantFilename} (${uploadRes.status}):`, detail.slice(0, 500));
+        throw httpError(502, 'Image upload failed. Please try again.', true);
       }
       const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
       return [variant, `${storageBase}/${variantFilename}`] as const;
@@ -3244,7 +3281,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
   const image = await prepareImage(req.file.buffer, maxDimension);
   const filename = `${Date.now()}-${baseName || 'image'}.${image.extension}`;
 
-  if (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey)) {
+  if (config.env !== 'production') {
     const uploadsDir = path.resolve(__dirname, '../../uploads');
     await mkdir(uploadsDir, { recursive: true });
     await writeFile(path.join(uploadsDir, filename), image.buffer);
@@ -3268,9 +3305,9 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
   });
 
   if (!uploadRes.ok) {
-    await uploadRes.text(); // consume body
-    res.status(500).json({ success: false, error: 'Upload failed. Please try again.' });
-    return;
+    const detail = await uploadRes.text().catch(() => '');
+    console.error(`[upload] storage rejected ${filename} (${uploadRes.status}):`, detail.slice(0, 500));
+    throw httpError(502, 'Image upload failed. Please try again.', true);
   }
 
   const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');

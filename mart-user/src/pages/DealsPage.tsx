@@ -40,7 +40,7 @@ export default function DealsPage({ products, onBack }: DealsPageProps) {
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
             {deals.length} deal{deals.length !== 1 ? 's' : ''}
           </p>
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
             {deals.map(p => <ProductCard key={p.id} product={p} />)}
           </div>
         </>

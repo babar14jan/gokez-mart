@@ -110,13 +110,17 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
       }
     };
 
-    // Any real API call that fails gives us an immediate, authoritative signal,
-    // so the screen reacts without waiting for /health to time out.
+    // A real API call failing gives us a faster signal than waiting for
+    // /health to time out — but only offline and transport-level failures are
+    // conclusive about connectivity. A 5xx from one endpoint (e.g. a failed
+    // photo upload) does NOT mean the API is down: verify against /health
+    // first, and if it answers, the failing request's own error handling
+    // (alert/toast) covers it without blanking the whole hub.
     const onApiFailed = (event: Event) => {
       const detail = (event as CustomEvent<ApiFailedDetail>).detail || {};
       if (detail.offline) showFailure('offline', true);
-      else if (detail.server) showFailure('server', false);
       else if (detail.timeout) showFailure('timeout', false);
+      else if (detail.server) scheduleProbe(0);
     };
 
     const onOffline = () => {

@@ -287,6 +287,14 @@
       }
       .js #app-splash { display: block; }
       .skip-launch-splash #app-splash { display: none !important; }
+      /* The artwork is a portrait composition designed for phones. Full-bleed
+         cover would crop it badly on a wide desktop viewport, and a
+         full-screen launch splash is unnecessary there — show the whole image
+         at a compact, centred size on the same brand green instead. The
+         overlay itself stays full-screen so there is no unpainted gap. */
+      @media (min-width: 768px) {
+        #app-splash { background-size: auto min(70vh, 560px); }
+      }
       /* Hand-off to the live app: the app adds .is-leaving when it is ready and
          the overlay dissolves. The element is removed right after, so the fade
          is a visual transition, not a hold — the splash is never kept up for a

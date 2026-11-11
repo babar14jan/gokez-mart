@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useThemeStore } from '../store/themeStore';
 import {
   Home, Package, Image as ImageIcon,
@@ -12,6 +12,8 @@ import {
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, authApi, inventoryApi } from '../services/api';
 import { useHeaderAction } from '../store/headerActionStore';
+import { useZoneSelectionStore } from '../store/zoneSelectionStore';
+import { getActiveStoreId } from '../utils/store';
 import LiveOrderToasts from './LiveOrderToasts';
 
 // Roles mirror mart_admins_role_check in migration 056, including store_manager.
@@ -86,9 +88,12 @@ export const BOTTOM_NAV: Record<string, { label: string; href: string; icon: Rea
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { username, name, storeId, role, canAccessDailySales, logout, isSuperAdmin } = useAuthStore();
   const { onAction, label } = useHeaderAction();
+  const zoneInventoryStore = useZoneSelectionStore(s => s.inventoryStore);
+  const setZoneInventoryStore = useZoneSelectionStore(s => s.setInventoryStore);
+  const zoneProductsStore = useZoneSelectionStore(s => s.productsStore);
+  const setZoneProductsStore = useZoneSelectionStore(s => s.setProductsStore);
   // Fail closed. An absent or unrecognised role yields an empty sidebar rather
   // than the full super-admin nav (previously `role || 'super_admin'`).
   const userRole = isKnownRole(role) ? (role as string) : '';
@@ -106,6 +111,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     localStorage.getItem('mart_admin_active_store') || '00000000-0000-0000-000000000001'
   );
   const [inventoryStores, setInventoryStores] = useState<Array<{ id: string; name: string; isOwn?: boolean }>>([]);
+  // Must mirror the default ProductsPage resolves: persisted pick, then the
+  // active store while it is manageable, and only then the head/first store.
+  const activeProductsStore = zoneProductsStore && inventoryStores.some(s => s.id === zoneProductsStore)
+    ? zoneProductsStore
+    : inventoryStores.some(s => s.id === getActiveStoreId())
+      ? getActiveStoreId()
+      : inventoryStores.find(s => s.isOwn)?.id || inventoryStores[0]?.id;
 
   useEffect(() => {
     if (!username) return;
@@ -134,7 +146,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [username, storeId]);
 
   useEffect(() => {
-    if (pathname !== '/inventory' || isSuperAdmin()) return;
+    // Both zone-head surfaces (Inventory, Products) render the store picker in
+    // the header, so the manageable-store list is needed on either page.
+    if ((pathname !== '/inventory' && pathname !== '/products') || isSuperAdmin()) return;
     inventoryApi.getStores().then(r => {
       const list = r.data.data || [];
       setInventoryStores(list);
@@ -273,29 +287,36 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Sticky header */}
         <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#FFC400] to-[#FFF6B5] dark:bg-none dark:bg-[#18191a] dark:border-b dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
-            {/* Mobile header left */}
-            <div className="lg:hidden">
+            {/* Mobile header left — brand + context. The brand mark mirrors the
+                login screen's header (logo left, home right) so the shell
+                keeps its identity after launch instead of only while the
+                login page is visible. */}
+            <div className="lg:hidden flex items-center gap-2 min-w-0">
+              <picture>
+                <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
+                <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" width="42" height="28" className="h-7 w-auto object-contain object-left flex-shrink-0" />
+              </picture>
               {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
-                <div className="flex items-center gap-1 -ml-1 min-w-0">
+                <div className="flex items-center gap-1 min-w-0">
                   <button onClick={() => navigate(-1)}
-                    className="p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">
+                    className="p-2 -ml-1 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">
                     <ChevronLeft className="w-5 h-5 text-gray-900 dark:text-slate-300" />
                   </button>
                   <span className="text-base font-bold text-gray-900 dark:text-white truncate">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
                 </div>
               ) : pathname === '/' ? (
                 <div className="flex min-w-0 flex-col items-start">
-                  <span className="max-w-[48vw] truncate text-base font-extrabold leading-tight tracking-tight text-gray-900 dark:text-white">
+                  <span className="max-w-[42vw] truncate text-base font-extrabold leading-tight tracking-tight text-gray-900 dark:text-white">
                     {activeStoreName}
                   </span>
                   {activeStoreAddress && (
-                    <p className="max-w-[48vw] truncate text-[9px] sm:text-[10px] font-medium text-gray-800 dark:text-slate-300 leading-tight">
+                    <p className="max-w-[42vw] truncate text-[9px] sm:text-[10px] font-medium text-gray-800 dark:text-slate-300 leading-tight">
                       {activeStoreAddress}
                     </p>
                   )}
                 </div>
               ) : (
-                <span className="text-base font-bold text-gray-900 dark:text-white">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
+                <span className="text-base font-bold text-gray-900 dark:text-white truncate">{PAGE_TITLES[pathname] || 'Gokez Hub'}</span>
               )}
             </div>
 
@@ -343,23 +364,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </select>
             )}
 
-            {pathname === '/inventory' && !isSuperAdmin() && inventoryStores.length > 1 && (
+            {/* Zone store picker — zone heads only (Inventory keeps its
+                Zone-All overview; Products edits one store at a time).
+                The selection lives in zoneSelectionStore, not the URL, so
+                raw store ids stay out of the address bar. */}
+            {(pathname === '/inventory' || pathname === '/products') && !isSuperAdmin() && inventoryStores.length > 1 && (
               <select
-                value={searchParams.get('store') || 'all'}
+                value={pathname === '/inventory' ? zoneInventoryStore : activeProductsStore}
                 onChange={e => {
-                  const next = new URLSearchParams(searchParams);
-                  next.set('store', e.target.value);
-                  setSearchParams(next, { replace: true });
+                  if (pathname === '/inventory') setZoneInventoryStore(e.target.value);
+                  else setZoneProductsStore(e.target.value);
                 }}
-                aria-label="Select store to manage inventory for"
+                aria-label={pathname === '/inventory' ? 'Select store to manage inventory for' : 'Select store to manage products for'}
                 className="max-w-[34vw] lg:max-w-[22vw] text-[11px] lg:text-xs border border-black/15 dark:border-slate-600 rounded-xl px-2.5 py-1 lg:px-3 lg:py-1.5 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-300 focus:outline-none focus:border-gray-900 dark:focus:border-emerald-500 font-semibold"
               >
-                <option value="all">Zone-All</option>
+                {pathname === '/inventory' && <option value="all">Zone-All</option>}
                 {inventoryStores.map(s => (
                   <option key={s.id} value={s.id}>{s.name}{s.isOwn ? ' — Head' : ''}</option>
                 ))}
               </select>
             )}
+
+            {/* Mobile home shortcut — keeps the launch screen's affordance
+                (brand left, home right) available once signed in. */}
+            <button
+              onClick={() => navigate('/')}
+              aria-label="Home"
+              title="Home"
+              className="lg:hidden flex-shrink-0 p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+            >
+              <Home className="w-5 h-5 text-gray-900 dark:text-slate-300" />
+            </button>
 
             {/* Desktop user dropdown — hidden on mobile */}
             <div className="hidden lg:block relative">

@@ -196,11 +196,25 @@ export const asyncHandler = (fn: (req: any, res: Response, next: NextFunction) =
   };
 
 export const errorHandler = (err: any, _req: Request, res: Response, _next: NextFunction): void => {
+  // An oversized upload is the client's to fix; a bare 500 here reads as
+  // "server down" in the hub's network overlay, so answer 413 with a message
+  // the caller can show instead.
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({
+      success: false,
+      error: 'That photo is too large. Please use one under 5 MB.',
+    });
+    return;
+  }
   console.error('[MartAPI Error]', err.message);
   const status = err.status || err.statusCode || 500;
+  // Operational failures (uploads, integrations) mark themselves with `expose`
+  // so their message reaches the client even when 5xx; everything else keeps
+  // the generic text so internals never leak.
+  const message = status < 500 || err.expose ? err.message : 'Something went wrong';
   res.status(status).json({
     success: false,
-    error: status < 500 ? err.message : 'Something went wrong',
+    error: message,
   });
 };
 
