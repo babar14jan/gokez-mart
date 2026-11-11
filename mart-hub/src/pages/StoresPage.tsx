@@ -223,7 +223,7 @@ export default function StoresPage() {
     const file = e.target.files?.[0]; if (!file) return;
     setUploading(true);
     try {
-      const res = await productsApi.uploadPhoto(file);
+      const res = await productsApi.uploadPhoto(file, undefined, undefined, 'profile');
       setForm(f => ({ ...f, logoUrl: res.data.data.url }));
     } catch (e: any) { window.alert(e?.response?.data?.error || 'Upload failed'); } finally { setUploading(false); }
   };

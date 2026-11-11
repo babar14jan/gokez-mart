@@ -45,6 +45,14 @@ export const config = {
   storage: {
     publicBaseUrl: process.env.MART_STORAGE_PUBLIC_BASE_URL || '',
   },
+  imageStorage: {
+    driver: process.env.IMAGE_STORAGE_DRIVER || 'hostinger',
+  },
+  hostinger: {
+    url: process.env.HOSTINGER_STORAGE_URL || '',
+    apiKey: process.env.HOSTINGER_STORAGE_API_KEY || '',
+    projectId: process.env.HOSTINGER_STORAGE_PROJECT_ID || 'gokez-mart',
+  },
   cors: {
     origins: configuredOrigins,
   },
