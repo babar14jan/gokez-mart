@@ -292,10 +292,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 keeps its identity after launch instead of only while the
                 login page is visible. */}
             <div className="lg:hidden flex items-center gap-2 min-w-0">
-              <picture>
-                <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
-                <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" width="42" height="28" className="h-7 w-auto object-contain object-left flex-shrink-0" />
-              </picture>
               {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
                 <div className="flex items-center gap-1 min-w-0">
                   <button onClick={() => navigate(-1)}
@@ -384,17 +380,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 ))}
               </select>
             )}
-
-            {/* Mobile home shortcut — keeps the launch screen's affordance
-                (brand left, home right) available once signed in. */}
-            <button
-              onClick={() => navigate('/')}
-              aria-label="Home"
-              title="Home"
-              className="lg:hidden flex-shrink-0 p-2 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
-            >
-              <Home className="w-5 h-5 text-gray-900 dark:text-slate-300" />
-            </button>
 
             {/* Desktop user dropdown — hidden on mobile */}
             <div className="hidden lg:block relative">
