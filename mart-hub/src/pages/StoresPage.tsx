@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, X, Loader2, Store, Upload, CheckCircle, Search, User, UserPlus, SlidersHorizontal } from 'lucide-react';
-import { storesApi, productsApi, usersApi, teamApi, zonesApi, inventoryApi } from '../services/api';
+import { Plus, Pencil, X, Loader2, Store, Upload, CheckCircle, Search, User, UserPlus, SlidersHorizontal, QrCode } from 'lucide-react';
+import { storesApi, productsApi, usersApi, teamApi, zonesApi, inventoryApi, settingsApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
@@ -18,7 +18,7 @@ interface MartStore {
   monthlyFee: number;
 }
 
-type Tab = 'details' | 'revenue' | 'manager' | 'inventory';
+type Tab = 'details' | 'revenue' | 'manager' | 'inventory' | 'payment';
 
 export default function StoresPage() {
   const { role } = useAuthStore();
@@ -50,6 +50,8 @@ export default function StoresPage() {
   const [inventoryPolicy, setInventoryPolicy] = useState({ inventoryTracking: false, autoOutOfStock: true, lowStockThreshold: '' });
   const [inventoryPolicyLoading, setInventoryPolicyLoading] = useState(false);
   const [savingInventoryPolicy, setSavingInventoryPolicy] = useState(false);
+  const [paymentQrUrl, setPaymentQrUrl] = useState<string | null>(null);
+  const [uploadingQr, setUploadingQr] = useState(false);
 
   const load = async () => {
     try {
@@ -94,7 +96,14 @@ export default function StoresPage() {
       .finally(() => setInventoryPolicyLoading(false));
   }, [showModal, tab, editing?.id, canManageInventoryPolicy]);
 
-
+  useEffect(() => {
+    if (!showModal || tab !== 'payment' || !editing) return;
+    settingsApi.getAll(editing.id).then(r => {
+      const list = r.data.data || [];
+      const qr = list.find((x: any) => x.key === 'upi_qr_url');
+      setPaymentQrUrl(qr?.value || null);
+    }).catch(() => setPaymentQrUrl(null));
+  }, [showModal, tab, editing?.id]);
   const loadZonesForStore = async (storeId: string) => {
     try {
       const r = await zonesApi.getAll(storeId);
@@ -226,6 +235,17 @@ export default function StoresPage() {
       const res = await productsApi.uploadPhoto(file, undefined, undefined, 'profile');
       setForm(f => ({ ...f, logoUrl: res.data.data.url }));
     } catch (e: any) { window.alert(e?.response?.data?.error || 'Upload failed'); } finally { setUploading(false); }
+  };
+
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file || !editing) return;
+    setUploadingQr(true);
+    try {
+      const res = await productsApi.uploadPhoto(file, undefined, undefined, 'other');
+      const url = res.data.data.url;
+      await settingsApi.update({ upi_qr_url: url, upi_qr_enabled: 'true' }, editing.id);
+      setPaymentQrUrl(url);
+    } catch (e: any) { window.alert(e?.response?.data?.error || 'QR upload failed'); } finally { setUploadingQr(false); }
   };
 
   const handleSave = async () => {
@@ -427,10 +447,44 @@ export default function StoresPage() {
                   Inventory
                 </button>
               )}
+              {editing && canManageInventoryPolicy && (
+                <button onClick={() => setTab('payment')}
+                  className={`flex-1 flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors border-b-2 ${
+                    tab === 'payment'
+                      ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                      : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300'
+                  }`}>
+                  <QrCode className="w-4 h-4" />
+                  Payment
+                </button>
+              )}
             </div>
 
             {/* Content */}
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
+
+              {/* ── Payment tab ── */}
+              {tab === 'payment' && editing && (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 dark:text-slate-300">Upload a UPI QR code for this store. It will be shown when collecting UPI payments.</p>
+                  <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-slate-700/50 rounded-2xl">
+                    <div className="w-24 h-24 rounded-2xl bg-white dark:bg-slate-700 border-2 border-dashed border-gray-200 dark:border-slate-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                      {paymentQrUrl
+                        ? <img src={paymentQrUrl} alt="UPI QR" className="w-full h-full object-contain" />
+                        : <QrCode className="w-8 h-8 text-gray-300 dark:text-slate-500" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl cursor-pointer transition-colors shadow-sm">
+                        {uploadingQr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        {uploadingQr ? 'Uploading...' : 'Upload QR'}
+                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleQrUpload} disabled={uploadingQr} />
+                      </label>
+                      {paymentQrUrl && <p className="text-[10px] text-gray-500 mt-2 truncate">{paymentQrUrl}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* ── Details tab ── */}
               {tab === 'details' && (

@@ -3027,6 +3027,18 @@ export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequ
 export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
 
+  if (config.imageStorage.driver === 'local' || (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey))) {
+    const image = await prepareAvatarImage(req.file.buffer);
+    const uploadsDir = path.resolve(__dirname, '../../uploads');
+    await mkdir(uploadsDir, { recursive: true });
+    const filename = `${req.customer!.id}-${Date.now()}.${image.extension}`;
+    await writeFile(path.join(uploadsDir, filename), image.buffer);
+    const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+    await CustomerAuthService.updateProfile(req.customer!.id, { photoUrl: publicUrl });
+    res.json({ success: true, data: { url: publicUrl } });
+    return;
+  }
+
   if (config.imageStorage.driver === 'hostinger') {
     const { HostingerStorageService } = await import('../services/hostingerStorage.service');
     if (!HostingerStorageService.isConfigured()) {
