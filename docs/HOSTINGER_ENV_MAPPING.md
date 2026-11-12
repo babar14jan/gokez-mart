@@ -18,7 +18,7 @@ runtime context change.
 | `MART_STORAGE_PUBLIC_BASE_URL` | Optional | Defaults to Supabase/local URL |
 | `SUPABASE_URL` | For legacy uploads/rollback | Existing value |
 | `SUPABASE_SERVICE_ROLE_KEY` | For legacy uploads/rollback | Existing value |
-| `SUPABASE_BUCKET` | No | Default `mart-products` |
+| `SUPABASE_BUCKET` | Removed | No longer read from env; legacy Supabase bucket is fixed to `mart-products` in code |
 | `IMAGE_STORAGE_DRIVER` | Yes | `hostinger` |
 | `HOSTINGER_STORAGE_URL` | Yes | `http://gokez-storage:8080` on the VPS (container-to-container), not `127.0.0.1` |
 | `HOSTINGER_STORAGE_API_KEY` | Yes | Same key as storage service |
