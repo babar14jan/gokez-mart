@@ -1,0 +1,141 @@
+name: Deploy backend to Hostinger (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type DEPLOY to confirm production deployment'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hostinger-backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build backend image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backend tests
+        run: npm test --workspace=mart-backend
+
+      - name: Verify runtime entry files
+        run: |
+          test -f mart-backend/scripts/start.mjs
+          test -f mart-backend/dist/index.js || npm run build --workspace=mart-backend
+          test -f mart-backend/dist/index.js
+          test "$(ls mart-backend/dist/database/migrations | wc -l)" -gt 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: |
+          docker build \
+            -f deploy/hostinger/Dockerfile \
+            -t gokez-mart-api:${{ github.sha }} \
+            .
+
+      - name: Verify image runtime files
+        run: |
+          docker run --rm gokez-mart-api:${{ github.sha }} \
+            node -e "require('fs').accessSync('/app/mart-backend/scripts/start.mjs'); require('fs').accessSync('/app/mart-backend/dist/index.js'); console.log('runtime files present')"
+
+      - name: Save image
+        run: docker save gokez-mart-api:${{ github.sha }} -o gokez-mart-api.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gokez-mart-api-image
+          path: gokez-mart-api.tar
+          retention-days: 7
+
+  deploy:
+    name: Deploy backend
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "DEPLOY" ]; then
+            echo "Deployment not confirmed" >&2
+            exit 1
+          fi
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gokez-mart-api-image
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Upload image to VPS
+        run: |
+          scp -o StrictHostKeyChecking=no \
+            gokez-mart-api.tar \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/gokez-mart-api.tar
+
+      - name: Deploy and health check
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          IMAGE_SHA: ${{ github.sha }}
+        run: |
+          ssh -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_HOST}" \
+            "IMAGE_SHA='${IMAGE_SHA}' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          previous_image_exists=false
+          if docker image inspect gokez-mart-api:latest >/dev/null 2>&1; then
+            docker tag gokez-mart-api:latest gokez-mart-api:previous
+            previous_image_exists=true
+          fi
+
+          docker load -i /tmp/gokez-mart-api.tar
+          docker tag "gokez-mart-api:${IMAGE_SHA}" gokez-mart-api:latest
+
+          cd /opt/gokez-mart-backend
+          docker compose -f deploy/hostinger/docker-compose.yml up -d --no-build
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/v1/health >/dev/null 2>&1; then
+              echo "Backend health check passed"
+              rm -f /tmp/gokez-mart-api.tar
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Health check failed; not leaving a broken API running" >&2
+          if [ "${previous_image_exists}" = "true" ]; then
+            docker tag gokez-mart-api:previous gokez-mart-api:latest
+            docker compose -f deploy/hostinger/docker-compose.yml up -d --no-build
+            echo "Rolled back to the previous working image"
+          else
+            docker compose -f deploy/hostinger/docker-compose.yml down || true
+            docker rm -f gokez-mart-api || true
+            echo "No previous image was available; removed the failed deployment"
+          fi
+          rm -f /tmp/gokez-mart-api.tar
+          exit 1
+          REMOTE

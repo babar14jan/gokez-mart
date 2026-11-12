@@ -40,10 +40,10 @@ export const config = {
   supabase: {
     url: process.env.SUPABASE_URL || '',
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-    bucket: process.env.SUPABASE_BUCKET || 'mart-products',
+    bucket: 'mart-products',
   },
-  storage: {
-    publicBaseUrl: process.env.MART_STORAGE_PUBLIC_BASE_URL || '',
+  backgroundJobs: {
+    enabled: process.env.MART_BACKGROUND_JOBS_ENABLED !== 'false',
   },
   imageStorage: {
     driver: process.env.IMAGE_STORAGE_DRIVER || 'hostinger',

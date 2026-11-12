@@ -1,0 +1,21 @@
+[Unit]
+Description=Gokez Mart API
+After=network.target
+
+[Service]
+Type=simple
+User=gokez
+Group=gokez
+WorkingDirectory=/opt/gokez-mart-backend
+EnvironmentFile=/etc/gokez/mart-backend.env
+ExecStart=/usr/bin/npm run start --workspace=mart-backend
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gokez-mart-api
+
+[Install]
+WantedBy=multi-user.target
