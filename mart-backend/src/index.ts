@@ -16,32 +16,36 @@ async function start() {
     console.log(`   Health: http://localhost:${config.port}/api/v1/health`);
   });
 
-  const recoverOrders = () => {
-    recoverAutomaticOrderTransitions().catch(error => {
-      console.error('[orders] automatic transition recovery failed:', error);
-    });
-  };
-  recoverOrders();
-  const recoveryTimer = setInterval(recoverOrders, 60_000);
-  recoveryTimer.unref();
+  if (config.backgroundJobs.enabled) {
+    const recoverOrders = () => {
+      recoverAutomaticOrderTransitions().catch(error => {
+        console.error('[orders] automatic transition recovery failed:', error);
+      });
+    };
+    recoverOrders();
+    const recoveryTimer = setInterval(recoverOrders, 60_000);
+    recoveryTimer.unref();
 
-  const dispatchPromotions = () => {
-    PromotionService.dispatchDueScheduled().catch(error => {
-      console.error('[promotions] scheduled dispatch failed:', error);
-    });
-  };
-  dispatchPromotions();
-  const promotionTimer = setInterval(dispatchPromotions, 60_000);
-  promotionTimer.unref();
+    const dispatchPromotions = () => {
+      PromotionService.dispatchDueScheduled().catch(error => {
+        console.error('[promotions] scheduled dispatch failed:', error);
+      });
+    };
+    dispatchPromotions();
+    const promotionTimer = setInterval(dispatchPromotions, 60_000);
+    promotionTimer.unref();
 
-  const cleanupProductImages = () => {
-    ProductImageAssetService.cleanupDue().catch(error => {
-      console.error('[product-images] cleanup failed:', error);
-    });
-  };
-  cleanupProductImages();
-  const imageCleanupTimer = setInterval(cleanupProductImages, 60_000);
-  imageCleanupTimer.unref();
+    const cleanupProductImages = () => {
+      ProductImageAssetService.cleanupDue().catch(error => {
+        console.error('[product-images] cleanup failed:', error);
+      });
+    };
+    cleanupProductImages();
+    const imageCleanupTimer = setInterval(cleanupProductImages, 60_000);
+    imageCleanupTimer.unref();
+  } else {
+    console.log('[background-jobs] disabled by MART_BACKGROUND_JOBS_ENABLED=false');
+  }
 
   // The hosting platform sends SIGTERM on every deploy and restart. Without a
   // handler the process dies mid-request and the database pool is abandoned;

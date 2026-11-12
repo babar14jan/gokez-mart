@@ -45,6 +45,9 @@ export const config = {
   storage: {
     publicBaseUrl: process.env.MART_STORAGE_PUBLIC_BASE_URL || '',
   },
+  backgroundJobs: {
+    enabled: process.env.MART_BACKGROUND_JOBS_ENABLED !== 'false',
+  },
   imageStorage: {
     driver: process.env.IMAGE_STORAGE_DRIVER || 'hostinger',
   },
