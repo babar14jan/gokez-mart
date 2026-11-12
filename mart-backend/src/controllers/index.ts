@@ -3027,7 +3027,7 @@ export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequ
 export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
 
-  if (config.imageStorage.driver === 'local' || (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey))) {
+  if ((config.imageStorage.driver === 'local' && config.env !== 'production') || (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey))) {
     const image = await prepareAvatarImage(req.file.buffer);
     const storageRoot = path.resolve(__dirname, '../../storage');
     await mkdir(path.join(storageRoot, 'profile'), { recursive: true });
@@ -3252,7 +3252,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
     ? requestedFolder
     : (req.body?.profile === 'product' ? 'catalog' : 'other');
 
-  if (config.imageStorage.driver === 'local') {
+  if (config.imageStorage.driver === 'local' && config.env !== 'production') {
     const baseName = req.file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
     const isProductImage = req.body?.profile === 'product';
     const storageRoot = path.resolve(__dirname, '../../storage');
