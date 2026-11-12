@@ -10,6 +10,8 @@ services:
     env_file: /opt/gokez-mart-backend/.env
     ports:
       - "127.0.0.1:3000:3000"
+    networks:
+      - storage
     logging:
       driver: json-file
       options:
@@ -28,3 +30,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+networks:
+  storage:
+    external: true
+    name: storage-service_default

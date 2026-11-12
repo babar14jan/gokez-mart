@@ -73,6 +73,23 @@ TLS certificate for `images.gokez.com` (certbot). Verify:
 curl https://images.gokez.com/api/v1/health
 ```
 
+## 3.1 Docker networking for storage access
+
+The API container cannot use `127.0.0.1:8080` to reach the storage service,
+because localhost inside a container refers to that container. The API
+container is attached to the existing storage Docker network and reaches it
+as `http://gokez-storage:8080`. Do not publish the storage port publicly.
+
+Before deployment, verify the network name:
+
+```bash
+docker inspect gokez-storage --format '{{json .NetworkSettings.Networks}}'
+docker network ls
+```
+
+If the discovered network differs from `storage-service_default`, update
+`deploy/hostinger/docker-compose.yml` accordingly.
+
 ## 4. Configure the API environment
 
 ```bash
@@ -89,7 +106,7 @@ Important values:
 - `MART_CORS_ORIGIN=https://mart.gokez.com,https://hub.gokez.com`
 - `MART_PUBLIC_API_URL=https://api.mart.gokez.com/api/v1`
 - `IMAGE_STORAGE_DRIVER=hostinger`
-- `HOSTINGER_STORAGE_URL=http://127.0.0.1:8080`
+- `HOSTINGER_STORAGE_URL=http://gokez-storage:8080`
 - `HOSTINGER_STORAGE_API_KEY` = same key as the storage service
 - `TWO_FACTOR_API_KEY` = existing key
 

@@ -20,7 +20,7 @@ runtime context change.
 | `SUPABASE_SERVICE_ROLE_KEY` | For legacy uploads/rollback | Existing value |
 | `SUPABASE_BUCKET` | No | Default `mart-products` |
 | `IMAGE_STORAGE_DRIVER` | Yes | `hostinger` |
-| `HOSTINGER_STORAGE_URL` | Yes | `http://127.0.0.1:8080` on the VPS |
+| `HOSTINGER_STORAGE_URL` | Yes | `http://gokez-storage:8080` on the VPS (container-to-container), not `127.0.0.1` |
 | `HOSTINGER_STORAGE_API_KEY` | Yes | Same key as storage service |
 | `HOSTINGER_STORAGE_PROJECT_ID` | No | Default `gokez-mart` |
 | `TWO_FACTOR_API_KEY` | Yes | Existing key |
