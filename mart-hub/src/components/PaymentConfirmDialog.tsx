@@ -23,7 +23,7 @@ export default function PaymentConfirmDialog({ orderTotal, submitting = false, o
       const list = r.data.data || [];
       const qrEnabled = list.find((s: any) => s.key === 'upi_qr_enabled')?.value === 'true'
         || list.find((s: any) => s.key === 'phonepay_enabled')?.value === 'true';
-      const qr = list.find((s: any) => s.key === 'phonepay_qr_url')?.value;
+      const qr = list.find((s: any) => s.key === 'upi_qr_url')?.value;
       setQrUrl(qrEnabled && qr ? qr : '');
       setStoreName(list.find((s: any) => s.key === 'store_name')?.value || '');
     }).catch(() => {}).finally(() => setSettingsLoaded(true));

@@ -9,7 +9,7 @@ export interface MartSetting {
 const PUBLIC_KEYS = [
   'store_name', 'store_address', 'delivery_charge', 'free_delivery_above',
   'min_order_amount', 'delivery_area', 'store_open', 'estimated_delivery',
-  'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'phonepay_qr_url',
+  'cod_enabled', 'upi_enabled', 'upi_qr_enabled', 'upi_qr_url',
   'upi_phone', 'upi_id', 'whatsapp_number', 'support_name', 'support_phone',
   'inventory_tracking', 'auto_out_of_stock', 'low_stock_threshold',
   // The store's own wording for the closed notice, and the closure it
