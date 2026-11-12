@@ -8,7 +8,7 @@ import {
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { NAV_ALL, NAV_SECTIONS, BOTTOM_NAV } from '../components/Layout';
 import { useThemeStore } from '../store/themeStore';
-import { api, authApi, settingsApi } from '../services/api';
+import { api, authApi, settingsApi, productsApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { subscribeAdminToPush, unsubscribeAdminFromPush } from '../services/push';
 import { clearOrderRingtone, hasOrderRingtone, isOrderAlarmEnabled, saveOrderRingtone, setOrderAlarmEnabled, stopOrderAlarm } from '../services/orderAlarm';
@@ -57,6 +57,7 @@ export default function MorePage() {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [qrLoaded, setQrLoaded] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
 
   useEffect(() => {
     if (!qrUrl) return;
@@ -71,11 +72,27 @@ export default function MorePage() {
       const list = r.data.data || [];
       const qrEnabled = list.find((s: any) => s.key === 'upi_qr_enabled')?.value === 'true'
                      || list.find((s: any) => s.key === 'phonepay_enabled')?.value === 'true';
-      const qr = list.find((s: any) => s.key === 'phonepay_qr_url');
+      const qr = list.find((s: any) => s.key === 'upi_qr_url') || list.find((s: any) => s.key === 'phonepay_qr_url');
       if (qrEnabled && qr?.value) setQrUrl(qr.value);
+      else if (qr?.value) setQrUrl(qr.value);
       else setQrUrl(null);
     }).catch(() => {});
   }, [isStoreUser]);
+
+  const handleQrUpload = async (file: File) => {
+    if (!file) return;
+    setUploadingQr(true);
+    try {
+      const res = await productsApi.uploadPhoto(file, undefined, undefined, 'other');
+      const url = res.data.data.url;
+      await settingsApi.update({ upi_qr_url: url, upi_qr_enabled: 'true' }, getActiveStoreId());
+      setQrUrl(url);
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'QR upload failed');
+    } finally {
+      setUploadingQr(false);
+    }
+  };
 
   // PWA install
 
@@ -303,6 +320,19 @@ export default function MorePage() {
           </div>
           <ChevronRight className="w-4 h-4 text-gray-300 dark:text-slate-500 flex-shrink-0" />
         </button>
+      )}
+
+      {/* UPI QR upload — store-tagged users only */}
+      {isStoreUser && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 px-4 py-3">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Upload UPI QR</p>
+          <label className="flex items-center gap-2 text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-xl cursor-pointer hover:bg-emerald-100 transition-colors w-fit">
+            {uploadingQr ? 'Uploading...' : 'Choose QR image'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={uploadingQr}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleQrUpload(f); e.target.value=''; }} />
+          </label>
+          {qrUrl && <p className="text-[10px] text-gray-500 mt-2 truncate">{qrUrl}</p>}
+        </div>
       )}
 
       {/* Role-specific links */}
