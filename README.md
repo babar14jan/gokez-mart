@@ -224,7 +224,7 @@ Mobile commands live in `mart-mobile/package.json`: `start`, `android`, `ios`,
 | `MART_STORAGE_PUBLIC_BASE_URL` | Optional | Public base URL for stored images; defaults to Supabase public URL or local `/uploads` |
 | `SUPABASE_URL` | For uploads | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | For uploads | Server-side Supabase key |
-| `SUPABASE_BUCKET` | No | Defaults to `mart-products` |
+| `SUPABASE_BUCKET` | No longer used | Legacy Supabase bucket is fixed to `mart-products` in code |
 | `TWO_FACTOR_API_KEY` | Production | Sends customer OTPs; without it customer sign-in fails |
 | `VAPID_PUBLIC_KEY` | Optional | Web Push public key |
 | `VAPID_PRIVATE_KEY` | Optional | Web Push private key |
