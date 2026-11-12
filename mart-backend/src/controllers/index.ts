@@ -3027,6 +3027,18 @@ export const customerGetMarketingConsent = asyncHandler(async (req: CustomerRequ
 export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
 
+  if ((config.imageStorage.driver === 'local' && config.env !== 'production') || (config.env !== 'production' && (!config.supabase.url || !config.supabase.serviceRoleKey))) {
+    const image = await prepareAvatarImage(req.file.buffer);
+    const storageRoot = path.resolve(__dirname, '../../storage');
+    await mkdir(path.join(storageRoot, 'profile'), { recursive: true });
+    const filename = `${req.customer!.id}-${Date.now()}.${image.extension}`;
+    await writeFile(path.join(storageRoot, 'profile', filename), image.buffer);
+    const publicUrl = `${req.protocol}://${req.get('host')}/storage/profile/${filename}`;
+    await CustomerAuthService.updateProfile(req.customer!.id, { photoUrl: publicUrl });
+    res.json({ success: true, data: { url: publicUrl } });
+    return;
+  }
+
   if (config.imageStorage.driver === 'hostinger') {
     const { HostingerStorageService } = await import('../services/hostingerStorage.service');
     if (!HostingerStorageService.isConfigured()) {
@@ -3233,6 +3245,54 @@ export const adminUpdateSuggestionStatus = asyncHandler(async (req: AdminRequest
 
 export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Response) => {
   if (!req.file) { res.status(400).json({ success: false, error: 'No file uploaded' }); return; }
+
+  const requestedFolder = typeof req.body?.folder === 'string' ? req.body.folder.trim() : '';
+  const allowedFolders = ['category', 'catalog', 'profile', 'banner', 'other'];
+  const folder = allowedFolders.includes(requestedFolder)
+    ? requestedFolder
+    : (req.body?.profile === 'product' ? 'catalog' : 'other');
+
+  if (config.imageStorage.driver === 'local' && config.env !== 'production') {
+    const baseName = req.file.originalname.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-');
+    const isProductImage = req.body?.profile === 'product';
+    const storageRoot = path.resolve(__dirname, '../../storage');
+    if (isProductImage) {
+      const images = await prepareProductImages(req.file.buffer);
+      const entries = Object.entries(images) as Array<[keyof PreparedProductImages, PreparedImage]>;
+      const assetId = uuidv4();
+      const filenames = new Map<PreparedImage, string>();
+      for (const [name, variant] of entries) {
+        if (!filenames.has(variant)) filenames.set(variant, `${assetId}-${baseName || 'product'}-${name}.${variant.extension}`);
+      }
+      await mkdir(path.join(storageRoot, 'catalog'), { recursive: true });
+      const originalExt = path.extname(req.file.originalname) || '.bin';
+      const originalLocalPath = `originals/${assetId}-${baseName || 'product'}${originalExt}`;
+      const uploadsDir = path.resolve(__dirname, '../../uploads');
+      await mkdir(path.join(uploadsDir, 'originals'), { recursive: true });
+      await writeFile(path.join(uploadsDir, originalLocalPath), req.file.buffer);
+      const urls = new Map<PreparedImage, string>();
+      for (const [variant, variantFilename] of filenames) {
+        await writeFile(path.join(storageRoot, 'catalog', variantFilename), variant.buffer);
+        urls.set(variant, `${req.protocol}://${req.get('host')}/storage/catalog/${variantFilename}`);
+      }
+      const photoVariants = { assetId, smallUrl: urls.get(images.small)!, thumbnailUrl: urls.get(images.thumbnail)!, largeUrl: urls.get(images.large)! };
+      await ProductImageAssetService.createPending({
+        id: assetId, uploadedBy: req.admin!.id, smallUrl: photoVariants.smallUrl, thumbnailUrl: photoVariants.thumbnailUrl, largeUrl: photoVariants.largeUrl,
+        smallKey: filenames.get(images.small)!, thumbnailKey: filenames.get(images.thumbnail)!, largeKey: filenames.get(images.large)!,
+        originalLocalPath, storageDriver: 'local',
+      });
+      res.json({ success: true, data: { url: photoVariants.largeUrl, ...photoVariants, photoVariants } });
+      return;
+    }
+    const requested = Number(req.body?.maxDimension);
+    const maxDimension = Number.isFinite(requested) ? Math.min(Math.max(Math.round(requested), 64), 1600) : undefined;
+    const image = await prepareImage(req.file.buffer, maxDimension);
+    const filename = `${Date.now()}-${baseName || 'image'}.${image.extension}`;
+    await mkdir(path.join(storageRoot, folder), { recursive: true });
+    await writeFile(path.join(storageRoot, folder, filename), image.buffer);
+    res.json({ success: true, data: { url: `${req.protocol}://${req.get('host')}/storage/${folder}/${filename}` } });
+    return;
+  }
 
   const { HostingerStorageService } = await import('../services/hostingerStorage.service');
 

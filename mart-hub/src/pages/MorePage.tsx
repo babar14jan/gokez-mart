@@ -71,8 +71,9 @@ export default function MorePage() {
       const list = r.data.data || [];
       const qrEnabled = list.find((s: any) => s.key === 'upi_qr_enabled')?.value === 'true'
                      || list.find((s: any) => s.key === 'phonepay_enabled')?.value === 'true';
-      const qr = list.find((s: any) => s.key === 'phonepay_qr_url');
+      const qr = list.find((s: any) => s.key === 'upi_qr_url');
       if (qrEnabled && qr?.value) setQrUrl(qr.value);
+      else if (qr?.value) setQrUrl(qr.value);
       else setQrUrl(null);
     }).catch(() => {});
   }, [isStoreUser]);
@@ -304,6 +305,7 @@ export default function MorePage() {
           <ChevronRight className="w-4 h-4 text-gray-300 dark:text-slate-500 flex-shrink-0" />
         </button>
       )}
+
 
       {/* Role-specific links */}
       {extraLinkSections.map(({ section, items }) => (
