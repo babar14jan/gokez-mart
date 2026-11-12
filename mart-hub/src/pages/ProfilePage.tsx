@@ -46,7 +46,7 @@ export default function ProfilePage() {
       const settingsList = r.data.data || [];
       const qrEnabled = settingsList.find((s: any) => s.key === 'upi_qr_enabled')?.value === 'true'
                      || settingsList.find((s: any) => s.key === 'phonepay_enabled')?.value === 'true';
-      const qr = settingsList.find((s: any) => s.key === 'upi_qr_url') || settingsList.find((s: any) => s.key === 'phonepay_qr_url');
+      const qr = settingsList.find((s: any) => s.key === 'upi_qr_url');
       if (qrEnabled && qr?.value) setQrUrl(qr.value);
       else setQrUrl(null);
     }).catch(() => {});
