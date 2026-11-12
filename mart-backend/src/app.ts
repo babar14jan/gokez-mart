@@ -234,6 +234,7 @@ if (config.env !== 'test') {
 // ── Routes ────────────────────────────────────────────────────────────────────
 if (config.env !== 'production') {
   app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
+  app.use('/storage', express.static(path.resolve(__dirname, '../storage')));
 }
 app.get('/', (_req, res) => res.json({ name: 'Gokez Mart API', status: 'running', health: '/api/v1/health' }));
 app.use('/api/v1', routes);

@@ -11,3 +11,6 @@ dist/
 muktifresh_images/
 muktifresh_organic_vegetables.xlsx
 scrape_muktifresh.py
+
+# Local image storage (mirrors Hostinger /opt/gokez-mart)
+mart-backend/storage/
