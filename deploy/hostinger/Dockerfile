@@ -27,6 +27,8 @@ COPY mart-user/package.json mart-user/
 COPY mart-hub/package.json mart-hub/
 RUN npm ci --omit=dev
 
+COPY mart-backend/scripts ./mart-backend/scripts
+
 COPY --from=build /app/mart-backend/dist ./mart-backend/dist
 
 EXPOSE 3000

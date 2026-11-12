@@ -23,6 +23,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backend tests
+        run: npm test --workspace=mart-backend
+
+      - name: Verify runtime entry files
+        run: |
+          test -f mart-backend/scripts/start.mjs
+          test -f mart-backend/dist/index.js || npm run build --workspace=mart-backend
+          test -f mart-backend/dist/index.js
+          test "$(ls mart-backend/dist/database/migrations | wc -l)" -gt 0
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -32,6 +50,11 @@ jobs:
             -f deploy/hostinger/Dockerfile \
             -t gokez-mart-api:${{ github.sha }} \
             .
+
+      - name: Verify image runtime files
+        run: |
+          docker run --rm gokez-mart-api:${{ github.sha }} \
+            node -e "require('fs').accessSync('/app/mart-backend/scripts/start.mjs'); require('fs').accessSync('/app/mart-backend/dist/index.js'); console.log('runtime files present')"
 
       - name: Save image
         run: docker save gokez-mart-api:${{ github.sha }} -o gokez-mart-api.tar
@@ -82,7 +105,12 @@ jobs:
             "IMAGE_SHA='${IMAGE_SHA}' bash -s" <<'REMOTE'
           set -euo pipefail
 
-          docker tag gokez-mart-api:latest gokez-mart-api:rollback 2>/dev/null || true
+          previous_image_exists=false
+          if docker image inspect gokez-mart-api:latest >/dev/null 2>&1; then
+            docker tag gokez-mart-api:latest gokez-mart-api:previous
+            previous_image_exists=true
+          fi
+
           docker load -i /tmp/gokez-mart-api.tar
           docker tag "gokez-mart-api:${IMAGE_SHA}" gokez-mart-api:latest
 
@@ -98,9 +126,16 @@ jobs:
             sleep 2
           done
 
-          echo "Health check failed; rolling back" >&2
-          docker tag gokez-mart-api:rollback gokez-mart-api:latest 2>/dev/null || true
-          docker compose -f deploy/hostinger/docker-compose.yml up -d --no-build || true
+          echo "Health check failed; not leaving a broken API running" >&2
+          if [ "${previous_image_exists}" = "true" ]; then
+            docker tag gokez-mart-api:previous gokez-mart-api:latest
+            docker compose -f deploy/hostinger/docker-compose.yml up -d --no-build
+            echo "Rolled back to the previous working image"
+          else
+            docker compose -f deploy/hostinger/docker-compose.yml down || true
+            docker rm -f gokez-mart-api || true
+            echo "No previous image was available; removed the failed deployment"
+          fi
           rm -f /tmp/gokez-mart-api.tar
           exit 1
           REMOTE
