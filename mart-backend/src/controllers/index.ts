@@ -1041,7 +1041,7 @@ export const adminCreateCatalogProduct = asyncHandler(async (req: AdminRequest, 
           console.error(`[upload] storage rejected ${variantFilename} (${uploadRes.status}):`, detail.slice(0, 500));
           throw httpError(502, 'Image upload failed. Please try again.', true);
         }
-        const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
+        const storageBase = (`${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
         return [variant, `${storageBase}/${variantFilename}`] as const;
       }));
       const urls = new Map(uploaded);
@@ -3077,7 +3077,7 @@ export const customerUploadPhoto = asyncHandler(async (req: CustomerRequest, res
     res.status(500).json({ success: false, error: 'Upload failed' });
     return;
   }
-  const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');
+  const storageBase = (`${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');
   const publicUrl = `${storageBase}/${filename}`;
   await CustomerAuthService.updateProfile(req.customer!.id, { photoUrl: publicUrl });
   res.json({ success: true, data: { url: publicUrl } });
@@ -3423,7 +3423,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
         console.error(`[upload] storage rejected ${variantFilename} (${uploadRes.status}):`, detail.slice(0, 500));
         throw httpError(502, 'Image upload failed. Please try again.', true);
       }
-      const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
+      const storageBase = (`${config.supabase.url}/storage/v1/object/public/${config.supabase.bucket}`).replace(/\/$/, '');
       return [variant, `${storageBase}/${variantFilename}`] as const;
     }));
     const urls = new Map(uploaded);
@@ -3474,7 +3474,7 @@ export const adminUploadPhoto = asyncHandler(async (req: AdminRequest, res: Resp
     throw httpError(502, 'Image upload failed. Please try again.', true);
   }
 
-  const storageBase = (config.storage.publicBaseUrl || `${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');
+  const storageBase = (`${config.supabase.url}/storage/v1/object/public/${bucket}`).replace(/\/$/, '');
   const publicUrl = `${storageBase}/${filename}`;
   res.json({ success: true, data: { url: publicUrl } });
 });
