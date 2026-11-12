@@ -69,9 +69,10 @@ export class ZoneService {
     const params: unknown[] = [];
     let i = 1;
     if (zoneIds) {
-      if (zoneIds.length === 0) return [];
+      const valid = zoneIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+      if (valid.length === 0) return [];
       conditions.push(`z.id = ANY($${i++})`);
-      params.push(zoneIds);
+      params.push(valid);
     }
     if (activeOnly) conditions.push(`z.is_active = true`);
     if (storeId) {
