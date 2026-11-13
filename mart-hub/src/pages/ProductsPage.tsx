@@ -820,8 +820,8 @@ export default function ProductsPage() {
       {/* Add / Edit modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-gray-900 dark:text-white">Edit Product</h2>
                 {editing && (
