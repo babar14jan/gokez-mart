@@ -365,12 +365,18 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    await productsApi.delete(id, storeId);
-    setConfirmDeleteId(null);
-    setConfirmDeleteProduct(null);
-    setShowModal(false);
-    showToast('Product removed from this store');
-    await load();
+    try {
+      await productsApi.delete(id, storeId);
+      setConfirmDeleteId(null);
+      setConfirmDeleteProduct(null);
+      setShowModal(false);
+      setShowComboModal(false);
+      setEditingCombo(null);
+      showToast('Product removed from this store');
+      await load();
+    } catch (err: any) {
+      alert(`Failed to remove: ${err?.response?.data?.error || err?.message || 'Unknown error'}`);
+    }
   };
 
   const comboCandidates = products.filter(product =>
