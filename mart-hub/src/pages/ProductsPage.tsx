@@ -820,8 +820,8 @@ export default function ProductsPage() {
       {/* Add / Edit modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-gray-900 dark:text-white">Edit Product</h2>
                 {editing && (
@@ -835,7 +835,7 @@ export default function ProductsPage() {
                 <X className="w-4 h-4 text-gray-500 dark:text-slate-400" />
               </button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300">
                 Catalog details are view-only here. Ask a super admin to change them in Catalog.
               </div>
@@ -996,7 +996,7 @@ export default function ProductsPage() {
                 </select>
               </div>
             </div>
-            <div className="sticky bottom-0 px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3 bg-white dark:bg-slate-800">
+            <div className="shrink-0 px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3 bg-white dark:bg-slate-800">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">Cancel</button>
               <button onClick={handleSave} disabled={saving || !form.price}
                 className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
