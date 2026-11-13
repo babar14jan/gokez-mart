@@ -37,10 +37,11 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
   const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
 
   const selectedBasePrice = selectedWeightOption.price;
-  const discountedPrice = product.discountPercent > 0
-    ? Math.round(selectedBasePrice * (1 - product.discountPercent / 100))
+  const selectedDiscount = selectedWeightOption.discountPercent || 0;
+  const discountedPrice = selectedDiscount > 0
+    ? Math.round(selectedBasePrice * (1 - selectedDiscount / 100))
     : selectedBasePrice;
-  const savings = product.discountPercent > 0
+  const savings = selectedDiscount > 0
     ? Math.round(selectedBasePrice - discountedPrice)
     : 0;
 
@@ -189,7 +190,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
                       ? 'bg-gokez-700 text-white'
                       : 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200'
                   }`}>
-                  {option.label} · ₹{product.discountPercent > 0 ? Math.round(option.price * (1 - product.discountPercent / 100)) : option.price}
+                  {option.label} · ₹{option.discountPercent ? Math.round(option.price * (1 - option.discountPercent / 100)) : option.price}
                 </button>
               ))}
               {weightOptions.length <= 1 && product.unit && (

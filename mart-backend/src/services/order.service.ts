@@ -384,7 +384,7 @@ export class OrderService {
         );
         const catalogItem = product.rows[0] as {
           name: string; categoryId: string | null; isBundle: boolean; price: number; discountPercent: number; unit: string;
-          weightOptions: Array<{ label: string; price: number }> | null;
+          weightOptions: Array<{ label: string; price: number; discountPercent?: number; approxWeight?: string | null }> | null;
           isAvailable: boolean; availabilityStatus: string;
         } | undefined;
         const selectedOption = item.unit !== catalogItem?.unit
@@ -399,8 +399,9 @@ export class OrderService {
           if (parsed.baseUnit !== catalogItem.unit) throw badRequest('One or more products are unavailable or have changed');
         }
         const basePrice = selectedOption ? selectedOption.price : catalogItem.price;
-        const effectivePrice = catalogItem.discountPercent > 0
-          ? Math.round(basePrice * (1 - catalogItem.discountPercent / 100))
+        const discountPercent = selectedOption ? (selectedOption.discountPercent || 0) : catalogItem.discountPercent;
+        const effectivePrice = discountPercent > 0
+          ? Math.round(basePrice * (1 - discountPercent / 100))
           : basePrice;
         if (catalogItem.isBundle) {
           const components = await client.query(

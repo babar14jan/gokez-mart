@@ -28,9 +28,11 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
   // hover; touch keeps the original press-to-scale feel.
   const finePointer = useFinePointer();
 
-  const baseOptionPrice = product.weightOptions?.length ? product.weightOptions[0].price : product.price;
-  const discountedPrice = product.discountPercent > 0
-    ? Math.round(baseOptionPrice * (1 - product.discountPercent / 100))
+  const firstOption = product.weightOptions?.length ? product.weightOptions[0] : null;
+  const baseOptionPrice = firstOption ? firstOption.price : product.price;
+  const baseDiscount = firstOption?.discountPercent || product.discountPercent || 0;
+  const discountedPrice = baseDiscount > 0
+    ? Math.round(baseOptionPrice * (1 - baseDiscount / 100))
     : baseOptionPrice;
   const savings = product.discountPercent > 0
     ? Math.round(product.price - discountedPrice)

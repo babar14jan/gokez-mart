@@ -22,7 +22,7 @@ export interface MartProduct {
   price: number;
   unit: string;
   approxWeight: string | null;
-  weightOptions: Array<{ label: string; price: number }> | null;
+  weightOptions: Array<{ label: string; price: number; discountPercent?: number; approxWeight?: string | null }> | null;
   discountPercent: number;
   isAvailable: boolean;
   availabilityStatus: 'available' | 'out_of_stock' | 'hidden';
