@@ -977,7 +977,15 @@ export default function ProductsPage() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden">
             <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
               <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">{editingCombo ? 'Edit Combo' : 'Create Combo'}</h2><p className="text-[11px] text-gray-500 mt-0.5">One customer product, with linked inventory deductions.</p></div>
-              <button onClick={() => setShowComboModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"><X className="w-4 h-4 text-gray-500" /></button>
+              <div className="flex items-center gap-2">
+                {editingCombo && (
+                  <button onClick={() => { setConfirmDeleteProduct(editingCombo); setShowComboModal(false); }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-800 transition-colors">
+                    <Trash2 className="w-3 h-3" /> Remove from Store
+                  </button>
+                )}
+                <button onClick={() => setShowComboModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"><X className="w-4 h-4 text-gray-500" /></button>
+              </div>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-2.5">
               <div className="flex items-center gap-2.5">
