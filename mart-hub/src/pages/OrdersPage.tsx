@@ -1119,7 +1119,7 @@ export default function OrdersPage() {
                     {nextAction && order.status !== 'preparing' && !(order.status === 'pending' && order.placedOutsideHours && canManage) && (
                       <button
                         onClick={e => {
-                          if (nextAction.status === 'preparing' && order.deliveryPreference === 'scheduled') {
+                          if (nextAction.status === 'preparing') {
                             e.stopPropagation();
                             setConfirmPrepare({ order, mode: 'status' });
                             return;

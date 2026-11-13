@@ -1647,7 +1647,17 @@ export class OrderService {
         `UPDATE mart_orders SET status = $1, updated_at = NOW(),
            delivery_by = CASE WHEN $1 = 'ready_to_pickup' THEN $2 ELSE delivery_by END,
            delivery_by_name = CASE WHEN $1 = 'ready_to_pickup' THEN $3 ELSE delivery_by_name END,
-           delivery_by_phone = CASE WHEN $1 = 'ready_to_pickup' THEN $4 ELSE delivery_by_phone END
+           delivery_by_phone = CASE WHEN $1 = 'ready_to_pickup' THEN $4 ELSE delivery_by_phone END,
+           promised_delivery_at = CASE
+             WHEN $1 = 'preparing' AND delivery_preference IS DISTINCT FROM 'scheduled' THEN
+               GREATEST(NOW(), COALESCE(scheduled_for, NOW())) +
+                 CASE delivery_preference
+                   WHEN 'within_30' THEN INTERVAL '30 minutes'
+                   WHEN 'within_60' THEN INTERVAL '60 minutes'
+                   ELSE INTERVAL '15 minutes'
+                 END
+             ELSE promised_delivery_at
+           END
          WHERE id = $5
          RETURNING id, order_number as "orderNumber", status, store_id as "storeId", customer_id as "customerId",
                    delivery_by_name as "deliveryByName"`,
