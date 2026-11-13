@@ -17,7 +17,7 @@ export interface Category {
 }
 
 export interface WeightOption {
-  label: string; price: number;
+  label: string; price: number; discountPercent?: number; approxWeight?: string | null;
 }
 
 export interface Product {

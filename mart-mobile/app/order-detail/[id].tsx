@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -91,15 +91,21 @@ export default function OrderDetailScreen() {
 
   const handleOrderAgain = () => {
     if (!order) return;
+    let blocked = 0;
     order.items.forEach(item => {
-      addItem({
+      const result = addItem({
         id: item.productId, name: item.productName, unit: item.unit,
         price: item.price, photoUrl: item.photoUrl ?? null,
         availabilityStatus: 'available', isAvailable: true,
         discountPercent: 0, categoryId: '', categoryName: '',
         description: null, weightOptions: null, localName: null,
       });
+      if (result === 'different_unit') blocked += 1;
     });
+    if (blocked) {
+      Alert.alert('One size per product', 'Remove the other size from your cart before adding this one again.');
+      return;
+    }
     router.back();
   };
 

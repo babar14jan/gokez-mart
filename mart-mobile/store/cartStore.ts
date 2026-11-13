@@ -10,11 +10,13 @@ export interface CartItem {
   thumbnailUrl?: string | null;
 }
 
+export type AddItemResult = 'added' | 'different_unit';
+
 interface CartState {
   items: CartItem[];
   appliedCampaign: { id: string; code?: string; discountType: string; discountValue: number } | null;
   campaignDiscount: number;
-  addItem:    (product: Product, unit?: string, price?: number) => void;
+  addItem:    (product: Product, unit?: string, price?: number) => AddItemResult;
   removeItem: (productId: string, unit: string) => void;
   updateQty:  (productId: string, unit: string, qty: number) => void;
   clearCart:  () => void;
@@ -34,12 +36,14 @@ export const useCartStore = create<CartState>()(
         const u = unit ?? product.unit;
         const p = price ?? product.price;
         set(state => {
-          const existing = state.items.find(i => i.productId === product.id && i.unit === u);
+          const items = state.items.filter(i => !(i.productId === product.id && i.unit !== u));
+          const existing = items.find(i => i.productId === product.id && i.unit === u);
           if (existing) {
-            return { items: state.items.map(i => i.productId === product.id && i.unit === u ? { ...i, quantity: i.quantity + 1 } : i) };
+            return { items: items.map(i => i.productId === product.id && i.unit === u ? { ...i, quantity: i.quantity + 1 } : i) };
           }
-          return { items: [...state.items, { productId: product.id, sourceStoreId: product.storeId, productName: product.name, unit: u, price: p, quantity: 1, photoUrl: product.photoUrl, thumbnailUrl: product.thumbnailUrl ?? product.photoVariants?.[0]?.thumbnailUrl ?? null }] };
+          return { items: [...items, { productId: product.id, sourceStoreId: product.storeId, productName: product.name, unit: u, price: p, quantity: 1, photoUrl: product.photoUrl, thumbnailUrl: product.thumbnailUrl ?? product.photoVariants?.[0]?.thumbnailUrl ?? null }] };
         });
+        return 'added';
       },
 
       removeItem: (productId, unit) =>

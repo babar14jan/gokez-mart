@@ -210,7 +210,7 @@ const PRODUCT_RESOLVE_SELECT = `
   SELECT p.id, p.category_id as "categoryId", c.name as "categoryName", c.slug as "categorySlug",
          p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
          p.description, p.photo_url as "photoUrl",
-         p.weight_options as "weightOptions",
+         sp.weight_options as "weightOptions",
          sp.price::float as price, sp.unit,
          sp.approx_weight as "approxWeight",
          sp.discount_percent::float as "discountPercent",
