@@ -9,6 +9,7 @@ runtime context change.
 | `NODE_ENV` | Yes | `production` |
 | `PORT` | Yes | Set to `3000`; nginx proxies to this port |
 | `DATABASE_URL` | Yes | Existing Supabase PostgreSQL URL; unchanged |
+| `DATABASE_SSL` | No | Optional. Set to `false` only if the database does not require SSL; production defaults to SSL |
 | `ALLOW_REMOTE_DATABASE` | No | Local-development guard only |
 | `MART_JWT_SECRET` | Yes | Existing secret, 32+ characters |
 | `MART_JWT_EXPIRES_IN` | No | Default `90d` |
