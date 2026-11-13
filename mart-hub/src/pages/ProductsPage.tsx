@@ -1021,7 +1021,7 @@ export default function ProductsPage() {
                 <button onClick={() => setShowComboModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"><X className="w-4 h-4 text-gray-500" /></button>
               </div>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-2.5">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-2">
               <div className="flex items-center gap-2.5">
                 <label className="w-12 h-12 shrink-0 rounded-lg overflow-hidden border-2 border-dashed border-gray-300 dark:border-slate-600 flex items-center justify-center cursor-pointer bg-gray-50 dark:bg-slate-700">
                   {comboPhotoPreview ? <img src={comboPhotoPreview} alt="" className="w-full h-full object-cover" /> : <Camera className="w-5 h-5 text-gray-400" />}
@@ -1034,7 +1034,7 @@ export default function ProductsPage() {
               <input value={comboSearchAliases} onChange={event => setComboSearchAliases(event.target.value)} className={inp} placeholder="Search aliases, separated by commas (optional)" />
               <select value={comboCategoryId} onChange={event => setComboCategoryId(event.target.value)} className={inp}><option value="">Choose a category</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
               <div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.5" value={comboPrice} onChange={event => setComboPrice(event.target.value)} className={inp} placeholder="Selling price (₹)" /><input value={comboUnit} onChange={event => setComboUnit(event.target.value)} className={inp} placeholder="Quantity, e.g. 1 combo" /></div>
-              <div className="space-y-2.5 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+              <div className="space-y-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20">
                 <div className="flex items-start justify-between gap-3">
                   <div><p className="text-xs font-bold text-gray-800 dark:text-slate-200">Combo items</p><p className="text-[10px] text-gray-500 dark:text-slate-400">Choose at least two available products. The quantity is deducted for every combo delivered.</p></div>
                   <button onClick={() => setComboComponents(items => [...items, { productId: '', quantity: '1', unit: '' }])} className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-emerald-700"><Plus className="h-3.5 w-3.5" /> Add item</button>
