@@ -558,9 +558,13 @@ export class ProductService {
       );
       const product = listing.rows[0] as { isBundle: boolean } | undefined;
       if (!product) throw badRequest('Product is not listed in this store');
-      if (product.isBundle) throw badRequest('Manage combos from the combo editor');
-
-      const usedByCombo = await client.query(
+      if (product.isBundle) {
+        await client.query(
+          `DELETE FROM mart_bundle_components WHERE store_id = $1 AND bundle_product_id = $2`,
+          [storeId, productId]
+        );
+      } else {
+        const usedByCombo = await client.query(
         `SELECT 1
            FROM mart_bundle_components
           WHERE store_id = $1 AND component_product_id = $2
@@ -571,6 +575,7 @@ export class ProductService {
         throw badRequest('Remove this product from the store combo before removing it from the store list');
       }
 
+      }
       await client.query(
         `DELETE FROM mart_store_products WHERE store_id = $1 AND product_id = $2`,
         [storeId, productId]

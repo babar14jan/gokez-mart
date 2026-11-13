@@ -1129,7 +1129,7 @@ export const adminDeleteCatalogProduct = asyncHandler(async (req: AdminRequest, 
   }
   await transaction(async client => {
     await ProductImageAssetService.queueProductAssets(client, req.params.id);
-    await client.query(`DELETE FROM mart_products WHERE id = $1 AND is_catalog = true AND is_bundle = false`, [req.params.id]);
+    await client.query(`DELETE FROM mart_products WHERE id = $1 AND is_catalog = true`, [req.params.id]);
   });
   res.json({ success: true, message: 'Catalog product deleted' });
 });
