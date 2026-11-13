@@ -935,6 +935,15 @@ export default function ProductsPage() {
                   )}
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Discount %</label>
+                  <input type="number" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className={inp} placeholder="0" min="0" max="100" />
+                </div>
+                <div className="flex items-end">
+                  <span className="text-xs text-gray-500 dark:text-slate-400">Selling preview: <span className="font-bold text-gray-900 dark:text-white">₹{(() => { const p = parseFloat(form.price); const d = parseFloat(form.discountPercent || '0'); if (isNaN(p)) return 0; return Math.round(p * (1 - (isNaN(d) ? 0 : d) / 100)); })()}</span></span>
+                </div>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Weight / quantity options <span className="text-gray-400 dark:text-slate-500">— optional, e.g. 500g, 1kg, 2kg</span></label>
                 <div className="space-y-2">
@@ -973,48 +982,6 @@ export default function ProductsPage() {
                   <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: [...f.weightOptions, { qty: "1", unit: "kg", price: "", discountPercent: "0", approxWeight: "", isDefault: false }] }))} className="w-full rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700">Add option</button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Discount %</label>
-                  <input type="number" value={form.discountPercent} onChange={e => {
-                    const pct = e.target.value;
-                    setForm(f => {
-                      const price = parseFloat(f.price);
-                      if (price > 0 && pct !== '') {
-                        const disc = Math.min(100, Math.max(0, parseFloat(pct)));
-                        const final = Math.round(price * (1 - disc / 100));
-                        return { ...f, discountPercent: pct, finalPrice: String(final) };
-                      }
-                      return { ...f, discountPercent: pct };
-                    });
-                  }} className={inp} placeholder="0" min="0" max="100" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Price after % (₹)</label>
-                  <input type="number" value={(form as any).finalPrice || ''} onChange={e => {
-                    const final = e.target.value;
-                    setForm(f => {
-                      const price = parseFloat(f.price);
-                      if (price > 0 && final !== '') {
-                        const fp = Math.max(0, parseFloat(final));
-                        const pct = Math.round(((price - fp) / price) * 100);
-                        return { ...f, finalPrice: final, discountPercent: String(Math.max(0, Math.min(100, pct))) };
-                      }
-                      return { ...f, finalPrice: final };
-                    });
-                  }} className={inp} placeholder="0" min="0" step="0.5" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Selling preview</label>
-                  <div className="h-[34px] flex items-center px-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                    ₹{(() => {
-                      const p = parseFloat(form.price);
-                      const d = parseFloat(form.discountPercent || '0');
-                      if (isNaN(p)) return 0;
-                      return Math.round(p * (1 - (isNaN(d) ? 0 : d) / 100));
-                    })()}
-                  </div>
-                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Description</label>
@@ -1037,7 +1004,6 @@ export default function ProductsPage() {
               </button>
             </div>
           </div>
-        </div>
       )}
 
       {showComboModal && (
