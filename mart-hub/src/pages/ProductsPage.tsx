@@ -88,7 +88,7 @@ export default function ProductsPage() {
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [form, setForm] = useState({
     name: '', localName: '', searchAliases: '', categoryId: '', price: '', unit: '1 kg',
-    approxWeight: '', weightOptions: [] as Array<{ label: string; price: string; discountPercent: string; approxWeight: string; isDefault: boolean }>,
+    approxWeight: '', weightOptions: [] as Array<{ qty: string; unit: string; price: string; discountPercent: string; approxWeight: string; isDefault: boolean }>,
     discountPercent: '0', finalPrice: '', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
   });
@@ -327,7 +327,10 @@ export default function ProductsPage() {
     setForm({
       name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '', price: String(p.price),
       unit: p.unit, approxWeight: p.approxWeight || '',
-      weightOptions: (p.weightOptions || []).map((option, index) => ({ label: option.label, price: String(option.price), discountPercent: String(option.discountPercent ?? 0), approxWeight: option.approxWeight || '', isDefault: index === 0 && p.price === option.price && p.unit === option.label })),
+      weightOptions: (p.weightOptions || []).map((option, index) => {
+        const match = String(option.label || '').trim().match(/^(\d*\.?\d*)\s*(.*)$/);
+        return { qty: match?.[1] || '1', unit: match?.[2] || 'kg', price: String(option.price), discountPercent: String(option.discountPercent ?? 0), approxWeight: option.approxWeight || '', isDefault: index === 0 && p.price === option.price && p.unit === option.label };
+      }),
       discountPercent: String(p.discountPercent),
       finalPrice: String(fp),
       description: p.description || '',
@@ -352,22 +355,22 @@ export default function ProductsPage() {
     setSaving(true);
     try {
       const validOptions = form.weightOptions
-        .filter(option => option.label.trim() && option.price.trim() && !Number.isNaN(parseFloat(option.price)));
+        .filter(option => option.price.trim() && !Number.isNaN(parseFloat(option.price)));
       const defaultOption = validOptions.find(option => option.isDefault) || validOptions[0];
       const basePrice = defaultOption ? parseFloat(defaultOption.price) : parseFloat(form.price);
-      const baseUnit = defaultOption ? defaultOption.label.trim() : form.unit;
+      const baseUnit = defaultOption ? `${defaultOption.qty || '1'} ${defaultOption.unit || 'kg'}`.trim() : form.unit;
       const baseDiscount = defaultOption ? parseFloat(defaultOption.discountPercent || '0') : parseFloat(form.discountPercent);
       const baseApprox = defaultOption ? (defaultOption.approxWeight || null) : (form.approxWeight || null);
       const allOptions = [
         { label: form.unit, price: parseFloat(form.price), discountPercent: parseFloat(form.discountPercent), approxWeight: form.approxWeight || null },
-        ...validOptions.map(option => ({ label: option.label.trim(), price: parseFloat(option.price), discountPercent: parseFloat(option.discountPercent || '0'), approxWeight: option.approxWeight || null })),
+        ...validOptions.map(option => ({ label: `${option.qty || '1'} ${option.unit || 'kg'}`.trim(), price: parseFloat(option.price), discountPercent: parseFloat(option.discountPercent || '0'), approxWeight: option.approxWeight || null })),
       ];
       // If an extra option is marked default, move it to the primary slot.
       const defaultExtraIndex = validOptions.findIndex(option => option.isDefault);
       if (defaultExtraIndex >= 0) {
         const chosen = validOptions[defaultExtraIndex];
         allOptions.splice(0, 1);
-        allOptions.unshift({ label: chosen.label.trim(), price: parseFloat(chosen.price), discountPercent: parseFloat(chosen.discountPercent || '0'), approxWeight: chosen.approxWeight || null });
+        allOptions.unshift({ label: `${chosen.qty || '1'} ${chosen.unit || 'kg'}`.trim(), price: parseFloat(chosen.price), discountPercent: parseFloat(chosen.discountPercent || '0'), approxWeight: chosen.approxWeight || null });
       }
       const data = {
         price: basePrice,
@@ -939,19 +942,23 @@ export default function ProductsPage() {
                     const price = parseFloat(option.price) || 0;
                     const discount = parseFloat(option.discountPercent || '0') || 0;
                     const after = discount > 0 ? Math.round(price * (1 - discount / 100)) : price;
+                    const label = `${option.qty || '1'} ${option.unit || 'kg'}`.trim();
                     return (
                     <div key={index} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 space-y-2">
                       <div className="grid grid-cols-2 gap-2">
-                        <input value={option.label} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, label: e.target.value } : row) }))} className={inp} placeholder="Label, e.g. 500g" />
-                        <input type="number" min="0" step="0.5" value={option.price} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, price: e.target.value } : row) }))} className={inp} placeholder="Price (₹)" />
+                        <input type="number" min="0" step="0.5" value={option.qty} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, qty: e.target.value } : row) }))} className={inp} placeholder="Qty" />
+                        <select value={option.unit} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, unit: e.target.value } : row) }))} className={inp}>
+                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
+                        <input type="number" min="0" step="0.5" value={option.price} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, price: e.target.value } : row) }))} className={inp} placeholder="Price (₹)" />
                         <input type="number" min="0" max="100" step="1" value={option.discountPercent} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, discountPercent: e.target.value } : row) }))} className={inp} placeholder="Discount %" />
-                        <input value={option.approxWeight} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, approxWeight: e.target.value } : row) }))} className={inp} placeholder="Approx. weight (per unit)" />
                       </div>
+                      <input value={option.approxWeight} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, approxWeight: e.target.value } : row) }))} className={inp} placeholder="Approx. weight (per unit)" />
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-gray-500 dark:text-slate-400">Price after discount: <span className="font-bold text-gray-900 dark:text-white">₹{after}</span></span>
-                        <span className="text-gray-500 dark:text-slate-400">Selling preview: <span className="font-bold text-gray-900 dark:text-white">{option.label || 'option'} · ₹{after}</span></span>
+                        <span className="text-gray-500 dark:text-slate-400">Selling preview: <span className="font-bold text-gray-900 dark:text-white">{label} · ₹{after}</span></span>
                       </div>
                       <div className="flex items-center justify-between">
                         <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-300">
@@ -963,7 +970,7 @@ export default function ProductsPage() {
                     </div>
                     );
                   })}
-                  <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: [...f.weightOptions, { label: "", price: "", discountPercent: "0", approxWeight: "", isDefault: false }] }))} className="w-full rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700">Add option</button>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: [...f.weightOptions, { qty: "1", unit: "kg", price: "", discountPercent: "0", approxWeight: "", isDefault: false }] }))} className="w-full rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700">Add option</button>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
