@@ -88,7 +88,7 @@ export default function ProductsPage() {
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [form, setForm] = useState({
     name: '', localName: '', searchAliases: '', categoryId: '', price: '', unit: '1 kg',
-    approxWeight: '', weightOptions: [] as Array<{ label: string; price: string }>,
+    approxWeight: '', weightOptions: [] as Array<{ label: string; price: string; isDefault: boolean }>,
     discountPercent: '0', finalPrice: '', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
   });
@@ -327,7 +327,7 @@ export default function ProductsPage() {
     setForm({
       name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '', price: String(p.price),
       unit: p.unit, approxWeight: p.approxWeight || '',
-      weightOptions: (p.weightOptions || []).map(option => ({ label: option.label, price: String(option.price) })),
+      weightOptions: (p.weightOptions || []).map((option, index) => ({ label: option.label, price: String(option.price), isDefault: index === 0 && p.price === option.price && p.unit === option.label })),
       discountPercent: String(p.discountPercent),
       finalPrice: String(fp),
       description: p.description || '',
@@ -351,9 +351,11 @@ export default function ProductsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const defaultOption = form.weightOptions.find(option => option.isDefault && option.label.trim() && option.price.trim())
+        || form.weightOptions.find(option => option.label.trim() && option.price.trim());
       const data = {
-        price: parseFloat(form.price),
-        unit: form.unit,
+        price: defaultOption ? parseFloat(defaultOption.price) : parseFloat(form.price),
+        unit: defaultOption ? defaultOption.label.trim() : form.unit,
         approxWeight: form.approxWeight || null,
         weightOptions: form.weightOptions
           .filter(option => option.label.trim() && option.price.trim() && !Number.isNaN(parseFloat(option.price)))
@@ -920,13 +922,17 @@ export default function ProductsPage() {
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Weight / quantity options <span className="text-gray-400 dark:text-slate-500">— optional, e.g. 500g, 1kg, 2kg</span></label>
                 <div className="space-y-2">
                   {form.weightOptions.map((option, index) => (
-                    <div key={index} className="flex gap-2">
+                    <div key={index} className="flex items-center gap-2">
                       <input value={option.label} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, label: e.target.value } : row) }))} className={inp} placeholder="Label, e.g. 500g" />
                       <input type="number" min="0" step="0.5" value={option.price} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, price: e.target.value } : row) }))} className={inp} placeholder="Price" />
+                      <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap">
+                        <input type="checkbox" checked={option.isDefault} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => ({ ...row, isDefault: i === index ? e.target.checked : (e.target.checked ? false : row.isDefault) })) }))} />
+                        Default
+                      </label>
                       <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: f.weightOptions.filter((_, i) => i !== index) }))} className="px-3 rounded-xl bg-red-50 text-red-600 text-xs font-semibold">Remove</button>
                     </div>
                   ))}
-                  <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: [...f.weightOptions, { label: '', price: '' }] }))} className="w-full rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700">Add option</button>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: [...f.weightOptions, { label: "", price: "", isDefault: false }] }))} className="w-full rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700">Add option</button>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
