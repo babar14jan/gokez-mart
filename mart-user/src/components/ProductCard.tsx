@@ -28,9 +28,10 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
   // hover; touch keeps the original press-to-scale feel.
   const finePointer = useFinePointer();
 
+  const baseOptionPrice = product.weightOptions?.length ? product.weightOptions[0].price : product.price;
   const discountedPrice = product.discountPercent > 0
-    ? Math.round(product.price * (1 - product.discountPercent / 100))
-    : product.price;
+    ? Math.round(baseOptionPrice * (1 - product.discountPercent / 100))
+    : baseOptionPrice;
   const savings = product.discountPercent > 0
     ? Math.round(product.price - discountedPrice)
     : 0;
@@ -82,7 +83,10 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
                 variant="card"
                 quantity={qty}
                 disabled={disabled}
-                onAdd={() => { addItem(product, product.unit, discountedPrice); onAdd?.(); }}
+                onAdd={() => {
+                  if (product.weightOptions?.length) { setShowDetail(true); return; }
+                  addItem(product, product.unit, discountedPrice); onAdd?.();
+                }}
                 onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
               />
             </div>
@@ -92,7 +96,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
             {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
           </div>
           <p className="text-[11px] font-medium leading-none text-gray-500 dark:text-slate-400">
-            {product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}
+            {product.weightOptions?.length ? `${product.weightOptions.length} options` : product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}
           </p>
           <div className="mt-auto flex flex-wrap items-baseline gap-x-1.5 pt-1.5">
             <span className="text-base font-extrabold leading-none text-ink dark:text-white">₹{discountedPrice}</span>

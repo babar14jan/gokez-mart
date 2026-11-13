@@ -27,15 +27,21 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
   const { items, addItem, updateQty } = useCartStore();
-  const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
+  const weightOptions = product.weightOptions?.length
+    ? product.weightOptions
+    : [{ label: product.unit, price: product.price }];
+  const [selectedWeightLabel, setSelectedWeightLabel] = useState(weightOptions[0].label);
+  const selectedWeightOption = weightOptions.find(option => option.label === selectedWeightLabel) || weightOptions[0];
+  const cartItem = items.find(i => i.productId === product.id && i.unit === selectedWeightOption.label);
   const qty = cartItem?.quantity || 0;
   const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
 
+  const selectedBasePrice = selectedWeightOption.price;
   const discountedPrice = product.discountPercent > 0
-    ? Math.round(product.price * (1 - product.discountPercent / 100))
-    : product.price;
+    ? Math.round(selectedBasePrice * (1 - product.discountPercent / 100))
+    : selectedBasePrice;
   const savings = product.discountPercent > 0
-    ? Math.round(product.price - discountedPrice)
+    ? Math.round(selectedBasePrice - discountedPrice)
     : 0;
 
   const photos = product.photoVariants?.length
@@ -173,7 +179,20 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {product.unit && (
+              {weightOptions.length > 1 && weightOptions.map(option => (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => setSelectedWeightLabel(option.label)}
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    selectedWeightLabel === option.label
+                      ? 'bg-gokez-700 text-white'
+                      : 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200'
+                  }`}>
+                  {option.label} · ₹{product.discountPercent > 0 ? Math.round(option.price * (1 - product.discountPercent / 100)) : option.price}
+                </button>
+              ))}
+              {weightOptions.length <= 1 && product.unit && (
                 <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 dark:bg-slate-700 dark:text-slate-200">
                   {product.unit}
                 </span>
@@ -204,7 +223,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
             ) : qty === 0 ? (
               <button
                 type="button"
-                onClick={() => addItem(product, product.unit, discountedPrice)}
+                onClick={() => addItem(product, selectedWeightOption.label, discountedPrice)}
                 className="flex-1 h-11 rounded-xl bg-gokez-700 text-sm font-bold text-white transition-colors hover:bg-gokez-800"
               >
                 Add to Cart
@@ -218,7 +237,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
                 <CartQuantityControl
                   variant="sheet"
                   quantity={qty}
-                  onAdd={() => addItem(product, product.unit, discountedPrice)}
+                  onAdd={() => addItem(product, selectedWeightOption.label, discountedPrice)}
                   onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
                 />
               </>

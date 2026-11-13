@@ -26,6 +26,7 @@ interface Product {
   searchAliases: string[];
   price: number; unit: string; discountPercent: number;
   approxWeight: string | null;
+  weightOptions?: Array<{ label: string; price: number }> | null;
   isAvailable: boolean;
   isBundle: boolean;
   isCatalog: boolean;
@@ -87,7 +88,7 @@ export default function ProductsPage() {
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [form, setForm] = useState({
     name: '', localName: '', searchAliases: '', categoryId: '', price: '', unit: '1 kg',
-    approxWeight: '',
+    approxWeight: '', weightOptions: [] as Array<{ label: string; price: string }>,
     discountPercent: '0', finalPrice: '', description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
   });
@@ -326,6 +327,7 @@ export default function ProductsPage() {
     setForm({
       name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '', price: String(p.price),
       unit: p.unit, approxWeight: p.approxWeight || '',
+      weightOptions: (p.weightOptions || []).map(option => ({ label: option.label, price: String(option.price) })),
       discountPercent: String(p.discountPercent),
       finalPrice: String(fp),
       description: p.description || '',
@@ -353,6 +355,9 @@ export default function ProductsPage() {
         price: parseFloat(form.price),
         unit: form.unit,
         approxWeight: form.approxWeight || null,
+        weightOptions: form.weightOptions
+          .filter(option => option.label.trim() && option.price.trim() && !Number.isNaN(parseFloat(option.price)))
+          .map(option => ({ label: option.label.trim(), price: parseFloat(option.price) })),
         discountPercent: parseFloat(form.discountPercent),
         availabilityStatus: form.availabilityStatus,
         isAvailable: form.availabilityStatus === 'available',
@@ -909,6 +914,19 @@ export default function ProductsPage() {
                       shown as "{form.unit.replace(/^\d*\.?\d*\s*/, '') === 'pcs' ? '1 pc' : form.unit}{form.approxWeight ? ` · ${form.approxWeight}` : ''}"
                     </span>
                   )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Weight / quantity options <span className="text-gray-400 dark:text-slate-500">— optional, e.g. 500g, 1kg, 2kg</span></label>
+                <div className="space-y-2">
+                  {form.weightOptions.map((option, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input value={option.label} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, label: e.target.value } : row) }))} className={inp} placeholder="Label, e.g. 500g" />
+                      <input type="number" min="0" step="0.5" value={option.price} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, price: e.target.value } : row) }))} className={inp} placeholder="Price" />
+                      <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: f.weightOptions.filter((_, i) => i !== index) }))} className="px-3 rounded-xl bg-red-50 text-red-600 text-xs font-semibold">Remove</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: [...f.weightOptions, { label: '', price: '' }] }))} className="w-full rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700">Add option</button>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
