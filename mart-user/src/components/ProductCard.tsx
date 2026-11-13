@@ -80,7 +80,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
           {/* Straddles the image/text boundary so it breaks the divider line,
               nudged right and down from the old in-image corner. */}
           {!isOutOfStock && (
-            <div className="pointer-events-auto absolute -top-[26px] right-0.5 z-20">
+            <div className="pointer-events-auto absolute -top-[26px] right-0.5 z-20 flex flex-col items-end gap-0.5">
               <CartQuantityControl
                 variant="card"
                 quantity={qty}
@@ -91,6 +91,11 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
                 }}
                 onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
               />
+              {product.weightOptions && product.weightOptions.length > 1 && (
+                <span className="text-[9px] font-medium leading-none text-gray-500 dark:text-slate-400">
+                  {product.weightOptions.length} options
+                </span>
+              )}
             </div>
           )}
           <div className={`mb-0.5 ${secondaryName ? 'min-h-[2.6em]' : ''}`}>
