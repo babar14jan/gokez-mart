@@ -1744,14 +1744,14 @@ export class OrderService {
   } | null> {
     return transaction(async client => {
       const current = await client.query(
-        `SELECT status, placed_outside_hours as "placedOutsideHours"
+        `SELECT status
            FROM mart_orders
           WHERE id = $1
           FOR UPDATE`,
         [id]
       );
-      const existing = current.rows[0] as { status: string; placedOutsideHours: boolean } | undefined;
-      if (!existing || existing.status !== 'pending' || existing.placedOutsideHours) return null;
+      const existing = current.rows[0] as { status: string } | undefined;
+      if (!existing || existing.status !== 'pending') return null;
 
       const updated = await client.query(
         `UPDATE mart_orders
@@ -1781,14 +1781,14 @@ export class OrderService {
   } | null> {
     return transaction(async client => {
       const current = await client.query(
-        `SELECT status, delivery_preference as "deliveryPreference"
+        `SELECT status, delivery_preference as "deliveryPreference", placed_outside_hours as "placedOutsideHours"
            FROM mart_orders
           WHERE id = $1
           FOR UPDATE`,
         [id]
       );
-      const existing = current.rows[0] as { status: string; deliveryPreference: string | null } | undefined;
-      if (!existing || existing.status !== 'confirmed' || existing.deliveryPreference === 'scheduled') return null;
+      const existing = current.rows[0] as { status: string; deliveryPreference: string | null; placedOutsideHours: boolean } | undefined;
+      if (!existing || existing.status !== 'confirmed' || existing.deliveryPreference === 'scheduled' || existing.placedOutsideHours) return null;
 
       const updated = await client.query(
         `UPDATE mart_orders
@@ -1826,6 +1826,7 @@ export class OrderService {
            FROM mart_orders
           WHERE status = 'confirmed'
             AND delivery_preference IS DISTINCT FROM 'scheduled'
+            AND placed_outside_hours = false
             AND updated_at <= NOW() - INTERVAL '3 minutes'
           ORDER BY updated_at ASC
           LIMIT 100`
