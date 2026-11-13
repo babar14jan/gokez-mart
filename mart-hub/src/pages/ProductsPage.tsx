@@ -820,8 +820,8 @@ export default function ProductsPage() {
       {/* Add / Edit modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-gray-900 dark:text-white">Edit Product</h2>
                 {editing && (
@@ -996,7 +996,7 @@ export default function ProductsPage() {
                 </select>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3">
+            <div className="sticky bottom-0 px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3 bg-white dark:bg-slate-800">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">Cancel</button>
               <button onClick={handleSave} disabled={saving || !form.price}
                 className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
