@@ -618,7 +618,7 @@ export default function ProductsPage() {
             <div className="absolute left-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-30 overflow-hidden">
               {/* Status section */}
               <div className="px-3 pt-3 pb-1">
-                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Status</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Status</p>
                 {(['all', 'available', 'out_of_stock', 'low_stock', 'hidden'] as FilterStatus[]).map(s => (
                   <button key={s} onClick={() => { setFilterStatus(s); setShowFilterMenu(false); }}
                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -631,7 +631,7 @@ export default function ProductsPage() {
               </div>
               {/* Category section */}
               <div className="px-3 pt-2 pb-3 border-t border-gray-100 dark:border-slate-700 mt-1">
-                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Category</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Category</p>
                 {[{ id: 'all', name: 'All Categories' }, ...categories, { id: '__uncat__', name: 'Uncategorised' }].map(c => (
                   <button key={c.id} onClick={() => { setFilterCategory(c.id); setShowFilterMenu(false); }}
                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -835,7 +835,7 @@ export default function ProductsPage() {
                 <X className="w-4 h-4 text-gray-500 dark:text-slate-400" />
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300">
                 Catalog details are view-only here. Ask a super admin to change them in Catalog.
               </div>
@@ -862,11 +862,11 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Product Code</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Product Code</label>
                 <input type="text" value={editing?.productCode || ''} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60 font-mono`} />
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Name *</label>
                   <span className={`text-[10px] font-semibold ${form.name.length >= 26 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.name.length}/26</span>
                   {!editing && (
@@ -881,7 +881,7 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-medium text-gray-700 dark:text-slate-300">
                     Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
                   </label>
@@ -890,23 +890,25 @@ export default function ProductsPage() {
                 <input type="text" value={form.localName} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
                 <input type="text" value={form.searchAliases} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Category</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Category</label>
                 <select value={form.categoryId} disabled className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`}>
                   <option value="">Uncategorised</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 space-y-2">
+                <p className="text-xs font-bold text-gray-700 dark:text-slate-200">Option 1 (primary)</p>
+                <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Price (₹) *</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Price (₹) *</label>
                   <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} className={inp} placeholder="0" min="0" step="0.5" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Unit</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Unit</label>
                   <div className="flex gap-1.5">
                     <input type="number"
                       value={form.unit.match(/^(\d*\.?\d*)/)?.[1] || ''}
@@ -922,7 +924,7 @@ export default function ProductsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Approx. weight (per unit) <span className="text-gray-400 dark:text-slate-500">— optional, shown to customers</span></label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Approx. weight (per unit) <span className="text-gray-400 dark:text-slate-500">— optional, shown to customers</span></label>
                 <div className="flex gap-1.5">
                   <input
                     value={form.approxWeight}
@@ -937,15 +939,16 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Discount %</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Discount %</label>
                   <input type="number" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className={inp} placeholder="0" min="0" max="100" />
                 </div>
                 <div className="flex items-end">
                   <span className="text-xs text-gray-500 dark:text-slate-400">Selling preview: <span className="font-bold text-gray-900 dark:text-white">₹{(() => { const p = parseFloat(form.price); const d = parseFloat(form.discountPercent || '0'); if (isNaN(p)) return 0; return Math.round(p * (1 - (isNaN(d) ? 0 : d) / 100)); })()}</span></span>
                 </div>
               </div>
+              </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Weight / quantity options <span className="text-gray-400 dark:text-slate-500">— optional, e.g. 500g, 1kg, 2kg</span></label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Weight / quantity options <span className="text-gray-400 dark:text-slate-500">— optional, e.g. 500g, 1kg, 2kg</span></label>
                 <div className="space-y-2">
                   {form.weightOptions.map((option, index) => {
                     const price = parseFloat(option.price) || 0;
@@ -984,11 +987,11 @@ export default function ProductsPage() {
               </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Description</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
                 <textarea value={form.description} readOnly className={`${inp} resize-none cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} rows={2} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Availability</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Availability</label>
                 <select value={form.availabilityStatus} onChange={e => setForm(f => ({ ...f, availabilityStatus: e.target.value as any }))} className={inp}>
                   <option value="available">✅ Available</option>
                   <option value="out_of_stock">⚠️ Out of Stock</option>
@@ -1187,12 +1190,12 @@ export default function ProductsPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Add quantity *</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Add quantity *</label>
                   <input type="number" value={restockQty} min="0.001" step="0.001"
                     onChange={e => setRestockQty(e.target.value)} className={inp} placeholder="e.g. 5" autoFocus />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Unit</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Unit</label>
                   <select value={restockUnit} onChange={e => setRestockUnit(e.target.value)} className={inp}>
                     {STOCK_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
@@ -1207,7 +1210,7 @@ export default function ProductsPage() {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Note (optional)</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Note (optional)</label>
                 <input type="text" value={restockNote} onChange={e => setRestockNote(e.target.value)} className={inp} placeholder="e.g. New stock arrived" />
               </div>
             </div>
