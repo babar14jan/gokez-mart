@@ -12,7 +12,11 @@ if (config.env !== 'production' && !localDatabaseHosts.has(databaseHost) && proc
 
 const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: config.env === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DATABASE_SSL === 'false'
+  ? false
+  : config.env === 'production'
+    ? { rejectUnauthorized: false }
+    : false,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
