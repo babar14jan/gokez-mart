@@ -18,9 +18,6 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, disabled = false, onAdd }: ProductCardProps) {
   const { items, addItem, updateQty } = useCartStore();
-  const cartItem = items.find(i => i.productId === product.id && i.unit === product.unit);
-  const qty = cartItem?.quantity || 0;
-  const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
   const [showDetail, setShowDetail] = useState(false);
   // Touch devices emulate :hover on tap and keep it until the next tap, which
   // made the card lift/zoom while pressing ADD and snap back on release — the
@@ -28,14 +25,47 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
   // hover; touch keeps the original press-to-scale feel.
   const finePointer = useFinePointer();
 
-  const discountedPrice = product.discountPercent > 0
-    ? Math.round(product.price * (1 - product.discountPercent / 100))
-    : product.price;
-  const savings = product.discountPercent > 0
-    ? Math.round(product.price - discountedPrice)
-    : 0;
+  const options = product.weightOptions?.length ? product.weightOptions : null;
+  const optionLabels = options ? options.map(option => option.label) : null;
+  const hasMultipleOptions = (options?.length ?? 0) > 1;
+  const primaryOption = options?.find(option => option.label === product.unit) || null;
+  const firstOption = primaryOption || options?.[0] || null;
+  const baseOptionPrice = firstOption ? firstOption.price : product.price;
+  const baseDiscount = firstOption
+    ? (firstOption === primaryOption ? (firstOption.discountPercent ?? product.discountPercent ?? 0) : (firstOption.discountPercent ?? 0))
+    : (product.discountPercent || 0);
+  const discountedPrice = baseDiscount > 0
+    ? Math.round(baseOptionPrice * (1 - baseDiscount / 100))
+    : baseOptionPrice;
+  const savings = baseDiscount > 0 ? Math.round(baseOptionPrice - discountedPrice) : 0;
+  const productCartItems = items.filter(i => i.productId === product.id && (!optionLabels || i.unit === product.unit || optionLabels.includes(i.unit)));
+  const qty = productCartItems.reduce((sum, i) => sum + i.quantity, 0);
+  const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
   const { primary: primaryName, secondary: secondaryName } = productLabelParts(product);
   const openDetail = () => setShowDetail(true);
+
+  const handleAdd = () => {
+    if (hasMultipleOptions) {
+      if (qty > 0) {
+        const entry = productCartItems.find(i => i.quantity > 0);
+        if (entry) addItem(product, entry.unit, entry.price, entry.mrp);
+        return;
+      }
+      setShowDetail(true);
+      return;
+    }
+    const result = addItem(product, firstOption?.label || product.unit, discountedPrice, firstOption ? baseOptionPrice : undefined);
+    if (result === 'added') onAdd?.();
+  };
+
+  const handleDecrease = () => {
+    if (hasMultipleOptions) {
+      const entry = productCartItems.find(i => i.quantity > 0);
+      if (entry) updateQty(product.id, entry.unit, entry.quantity - 1);
+      return;
+    }
+    updateQty(product.id, firstOption?.label || product.unit, qty - 1);
+  };
 
   return (
     <>
@@ -61,7 +91,7 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
 
           {savings > 0 && !isOutOfStock && (
             <span className="absolute left-1.5 top-1.5 rounded-md border border-red-700/40 bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold leading-none text-white shadow-[0_1px_3px_rgba(127,29,29,0.35)]">
-              {product.discountPercent}% OFF
+              {baseDiscount}% OFF
             </span>
           )}
 
@@ -77,13 +107,14 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
           {/* Straddles the image/text boundary so it breaks the divider line,
               nudged right and down from the old in-image corner. */}
           {!isOutOfStock && (
-            <div className="pointer-events-auto absolute -top-[26px] right-0.5 z-20">
+            <div className="pointer-events-auto absolute -top-[26px] right-0.5 z-20 flex flex-col items-end gap-0.5">
               <CartQuantityControl
                 variant="card"
                 quantity={qty}
                 disabled={disabled}
-                onAdd={() => { addItem(product, product.unit, discountedPrice); onAdd?.(); }}
-                onDecrease={() => updateQty(product.id, product.unit, qty - 1)}
+                hint={hasMultipleOptions ? `${options!.length} options` : undefined}
+                onAdd={handleAdd}
+                onDecrease={handleDecrease}
               />
             </div>
           )}
@@ -92,12 +123,12 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
             {secondaryName && <p className="truncate text-[11px] leading-4 text-gray-500 dark:text-slate-400">{secondaryName}</p>}
           </div>
           <p className="text-[11px] font-medium leading-none text-gray-500 dark:text-slate-400">
-            {product.unit}{product.approxWeight ? ` · ${product.approxWeight}` : ''}
+            {firstOption ? firstOption.label : product.unit}
           </p>
           <div className="mt-auto flex flex-wrap items-baseline gap-x-1.5 pt-1.5">
             <span className="text-base font-extrabold leading-none text-ink dark:text-white">₹{discountedPrice}</span>
             {savings > 0 && (
-              <span className="text-[11px] font-semibold leading-none text-gray-400 line-through dark:text-slate-500">₹{product.price}</span>
+              <span className="text-[11px] font-semibold leading-none text-gray-400 line-through dark:text-slate-500">₹{baseOptionPrice}</span>
             )}
           </div>
         </div>

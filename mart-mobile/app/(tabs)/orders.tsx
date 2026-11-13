@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, ActivityIndicator, Modal,
+  View, Text, FlatList, TouchableOpacity, ActivityIndicator, Modal, Alert,
   RefreshControl, ScrollView, Dimensions, TextInput, type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -273,15 +273,18 @@ export default function OrdersScreen() {
   };
 
   const handleOrderAgain = (order: Order) => {
+    let blocked = 0;
     order.items.forEach(item => {
-      addItem({
+      const result = addItem({
         id: item.productId, name: item.productName, unit: item.unit,
         price: item.price, photoUrl: item.photoUrl ?? null,
         availabilityStatus: 'available', isAvailable: true,
         discountPercent: 0, categoryId: '', categoryName: '',
         description: null, weightOptions: null, localName: null,
       });
+      if (result === 'different_unit') blocked += 1;
     });
+    if (blocked) Alert.alert('One size per product', 'Remove the other size from your cart before adding this one again.');
   };
 
   const handleGuestTrack = async () => {

@@ -375,7 +375,12 @@ export default function CheckoutScreen() {
                     <Text style={{ fontSize: 10, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }}>{p.unit}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
                       <Text style={{ fontSize: 12, fontFamily: 'Inter-Bold', color: colors.primary }}>₹{p.price}</Text>
-                      <TouchableOpacity onPress={() => addItem(p)}
+                      <TouchableOpacity onPress={() => {
+                        if (p.weightOptions?.length) { router.push(`/product/${p.id}`); return; }
+                        if (addItem(p) === 'different_unit') {
+                          Alert.alert('One size per product', 'Remove the other size from your cart before adding this product.');
+                        }
+                      }}
                         style={{ backgroundColor: colors.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                         <Text style={{ fontSize: 10, fontFamily: 'Inter-Bold', color: '#fff' }}>ADD</Text>
                       </TouchableOpacity>

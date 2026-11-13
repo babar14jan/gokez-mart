@@ -14,3 +14,6 @@ scrape_muktifresh.py
 
 # Local image storage (mirrors Hostinger /opt/gokez-mart)
 mart-backend/storage/
+
+# Local deployment helper
+docs/hostinger_deploy_command

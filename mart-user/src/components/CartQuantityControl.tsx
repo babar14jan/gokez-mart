@@ -7,9 +7,11 @@ interface CartQuantityControlProps {
   variant: 'card' | 'sheet';
   /** Freezes the control (used while an order is being placed). */
   disabled?: boolean;
+  /** Small secondary line shown inside the card ADD button. */
+  hint?: string;
 }
 
-export default function CartQuantityControl({ quantity, onAdd, onDecrease, variant, disabled = false }: CartQuantityControlProps) {
+export default function CartQuantityControl({ quantity, onAdd, onDecrease, variant, disabled = false, hint }: CartQuantityControlProps) {
   const handle = (action: () => void) => (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     if (disabled) return;
@@ -26,8 +28,9 @@ export default function CartQuantityControl({ quantity, onAdd, onDecrease, varia
         }`}
       >
         {quantity === 0 ? (
-          <button type="button" onClick={handle(onAdd)} disabled={disabled} className="h-full w-full text-[11px] font-extrabold tracking-wide text-gokez-700 transition-colors hover:bg-gokez-50 active:scale-[0.98]" aria-label="Add to cart">
-            ADD
+          <button type="button" onClick={handle(onAdd)} disabled={disabled} className="flex h-full w-full flex-col items-center justify-center gap-0.5 text-gokez-700 transition-colors hover:bg-gokez-50 active:scale-[0.98]" aria-label="Add to cart">
+            <span className="text-[11px] font-extrabold leading-none tracking-wide">ADD</span>
+            {hint && <span className="text-[8px] font-semibold leading-none text-black">{hint}</span>}
           </button>
         ) : (
           <>

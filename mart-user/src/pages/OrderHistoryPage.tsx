@@ -519,8 +519,10 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
 
   const handleOrderAgain = (order: any) => {
     const items = order.items || [];
+    let added = 0;
+    let blocked = 0;
     items.forEach((item: any) => {
-      addItem({
+      const result = addItem({
         id: item.productId, name: item.productName, unit: item.unit,
         price: item.price, photoUrl: item.photoUrl || null,
         availabilityStatus: 'available', isAvailable: true,
@@ -528,8 +530,12 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
         description: null, weightOptions: null, localName: null, searchAliases: [],
         approxWeight: null, isBundle: false,
       });
+      if (result === 'different_unit') blocked += 1;
+      else added += 1;
     });
-    setReorderToast(`${items.length} item${items.length > 1 ? 's' : ''} added to cart`);
+    setReorderToast(blocked
+      ? `${added} added. ${blocked} skipped — only one size per product.`
+      : `${items.length} item${items.length > 1 ? 's' : ''} added to cart`);
     setTimeout(() => setReorderToast(''), 3000);
   };
 
