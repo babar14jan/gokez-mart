@@ -835,7 +835,7 @@ export default function ProductsPage() {
                 <X className="w-4 h-4 text-gray-500 dark:text-slate-400" />
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5">
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-800 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-indigo-300">
                 Catalog details are view-only here. Ask a super admin to change them in Catalog.
               </div>
@@ -900,7 +900,7 @@ export default function ProductsPage() {
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 space-y-2">
+              <div className="rounded-lg border border-gray-200 dark:border-slate-700 p-2.5 space-y-1.5">
                 <p className="text-xs font-bold text-gray-700 dark:text-slate-200">Option 1 (primary)</p>
                 <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -956,7 +956,7 @@ export default function ProductsPage() {
                     const after = discount > 0 ? Math.round(price * (1 - discount / 100)) : price;
                     const label = `${option.qty || '1'} ${option.unit || 'kg'}`.trim();
                     return (
-                    <div key={index} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 space-y-2">
+                    <div key={index} className="rounded-lg border border-gray-200 dark:border-slate-700 p-2.5 space-y-1.5">
                       <div className="grid grid-cols-2 gap-2">
                         <input type="number" min="0" step="0.5" value={option.qty} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, qty: e.target.value } : row) }))} className={inp} placeholder="Qty" />
                         <select value={option.unit} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, unit: e.target.value } : row) }))} className={inp}>
