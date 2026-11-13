@@ -51,6 +51,85 @@ const UNITS = ['kg', 'g', 'pcs', 'dozen', 'litre', 'ml', 'bunch', 'packet'];
 const STOCK_UNITS = ['kg', 'litre', 'pcs', 'bunch', 'packet'];
 const parseSearchAliases = (value: string) => value.split(',').map(alias => alias.trim()).filter(Boolean);
 
+interface OptionRow {
+  qty: string;
+  unit: string;
+  price: string;
+  discountPercent: string;
+  approxWeight: string;
+  isDefault: boolean;
+}
+
+const splitUnitLabel = (label: string): { qty: string; unit: string } => {
+  const match = (label || '').trim().match(/^(\d+(?:\.\d+)?|\.\d+)\s*(.*)$/);
+  const qty = match?.[1]?.trim() || '1';
+  const unit = match?.[2]?.trim() || 'kg';
+  return { qty, unit };
+};
+
+const optionLabel = (option: OptionRow) => {
+  const qty = option.qty.trim();
+  const numericQty = Number(qty);
+  const normalizedQty = qty === '' ? '1' : Number.isFinite(numericQty) ? String(numericQty) : qty;
+  return `${normalizedQty} ${option.unit.trim() || 'kg'}`.trim();
+};
+
+const optionDiscount = (option: OptionRow) => {
+  const discount = parseFloat(option.discountPercent || '0');
+  return Number.isFinite(discount) ? Math.min(100, Math.max(0, discount)) : 0;
+};
+
+const optionSellingPrice = (option: OptionRow) => {
+  const price = parseFloat(option.price);
+  if (!Number.isFinite(price)) return 0;
+  const discount = optionDiscount(option);
+  return discount > 0 ? Math.round(price * (1 - discount / 100)) : price;
+};
+
+const unitFamily = (unit: string) => {
+  const u = unit.trim().toLowerCase();
+  if (u.includes('kg') || u.includes('g')) return 'weight';
+  if (u.includes('litre') || u.includes('liter') || u.includes('ltr') || u.includes('ml')) return 'volume';
+  if (u.includes('dozen') || u.includes('pcs') || u.includes('pc')) return 'count';
+  if (u.includes('bunch')) return 'bunch';
+  if (u.includes('packet')) return 'packet';
+  return 'count';
+};
+
+const isOptionPriceValid = (option: OptionRow) => {
+  const price = parseFloat(option.price);
+  return option.price.trim() !== '' && Number.isFinite(price) && price >= 0;
+};
+
+const isOptionQtyValid = (option: OptionRow) => {
+  const qty = option.qty.trim();
+  const parsed = parseFloat(qty);
+  return qty === '' || (Number.isFinite(parsed) && parsed > 0);
+};
+
+const productOptionRows = (product: Product): OptionRow[] => {
+  const options = product.weightOptions?.length
+    ? product.weightOptions
+    : [{
+        label: product.unit,
+        price: product.price,
+        discountPercent: product.discountPercent,
+        approxWeight: product.approxWeight,
+      }];
+  const defaultIndex = options.findIndex(option => option.label === product.unit);
+  return options.map((option, index) => {
+    const { qty, unit } = splitUnitLabel(option.label || product.unit);
+    return {
+      qty,
+      unit,
+      price: String(option.price ?? ''),
+      discountPercent: String(option.discountPercent ?? 0),
+      approxWeight: option.approxWeight || '',
+      isDefault: index === (defaultIndex >= 0 ? defaultIndex : 0),
+    };
+  });
+};
+
 function stockStatus(p: Product): 'untracked' | 'out' | 'low' | 'ok' {
   if (p.stockQuantity === null) return 'untracked';
   if (p.stockQuantity <= 0) return 'out';
@@ -87,9 +166,9 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [inventoryEnabled, setInventoryEnabled] = useState(false);
   const [form, setForm] = useState({
-    name: '', localName: '', searchAliases: '', categoryId: '', price: '', unit: '1 kg',
-    approxWeight: '', weightOptions: [] as Array<{ qty: string; unit: string; price: string; discountPercent: string; approxWeight: string; isDefault: boolean }>,
-    discountPercent: '0', finalPrice: '', description: '',
+    name: '', localName: '', searchAliases: '', categoryId: '',
+    weightOptions: [] as OptionRow[],
+    description: '',
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
   });
 
@@ -322,17 +401,9 @@ export default function ProductsPage() {
       return;
     }
     setEditing(p);
-    const dp = p.discountPercent || 0;
-    const fp = dp > 0 ? Math.round(p.price * (1 - dp / 100)) : p.price;
     setForm({
-      name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '', price: String(p.price),
-      unit: p.unit, approxWeight: p.approxWeight || '',
-      weightOptions: (p.weightOptions || []).map((option, index) => {
-        const match = String(option.label || '').trim().match(/^(\d*\.?\d*)\s*(.*)$/);
-        return { qty: match?.[1] || '1', unit: match?.[2] || 'kg', price: String(option.price), discountPercent: String(option.discountPercent ?? 0), approxWeight: option.approxWeight || '', isDefault: index === 0 && p.price === option.price && p.unit === option.label };
-      }),
-      discountPercent: String(p.discountPercent),
-      finalPrice: String(fp),
+      name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), categoryId: p.categoryId || '',
+      weightOptions: productOptionRows(p),
       description: p.description || '',
       availabilityStatus: p.availabilityStatus || (p.isAvailable ? 'available' : 'out_of_stock'),
     });
@@ -352,31 +423,41 @@ export default function ProductsPage() {
   };
 
   const handleSave = async () => {
+    const validOptions = form.weightOptions.filter(option =>
+      isOptionPriceValid(option) && isOptionQtyValid(option) && option.unit.trim()
+    );
+    if (validOptions.length === 0) {
+      alert('Add at least one option with a valid price.');
+      return;
+    }
+    const labels = validOptions.map(optionLabel);
+    const duplicateLabel = labels.find((label, index) => labels.indexOf(label) !== index);
+    if (duplicateLabel) {
+      alert(`“${duplicateLabel}” is added more than once. Give each option a different quantity or unit.`);
+      return;
+    }
+    if (new Set(validOptions.map(option => unitFamily(option.unit))).size > 1) {
+      alert('All options must use the same type of unit, for example only weight (g/kg) or only pieces.');
+      return;
+    }
     setSaving(true);
     try {
-      const validOptions = form.weightOptions
-        .filter(option => option.price.trim() && !Number.isNaN(parseFloat(option.price)));
       const defaultOption = validOptions.find(option => option.isDefault) || validOptions[0];
-      const basePrice = defaultOption ? parseFloat(defaultOption.price) : parseFloat(form.price);
-      const baseUnit = defaultOption ? `${defaultOption.qty || '1'} ${defaultOption.unit || 'kg'}`.trim() : form.unit;
-      const baseDiscount = defaultOption ? parseFloat(defaultOption.discountPercent || '0') : parseFloat(form.discountPercent);
-      const baseApprox = defaultOption ? (defaultOption.approxWeight || null) : (form.approxWeight || null);
-      const allOptions = [
-        { label: form.unit, price: parseFloat(form.price), discountPercent: parseFloat(form.discountPercent), approxWeight: form.approxWeight || null },
-        ...validOptions.map(option => ({ label: `${option.qty || '1'} ${option.unit || 'kg'}`.trim(), price: parseFloat(option.price), discountPercent: parseFloat(option.discountPercent || '0'), approxWeight: option.approxWeight || null })),
-      ];
-      // If an extra option is marked default, move it to the primary slot.
-      const defaultExtraIndex = validOptions.findIndex(option => option.isDefault);
-      if (defaultExtraIndex >= 0) {
-        const chosen = validOptions[defaultExtraIndex];
-        allOptions.splice(0, 1);
-        allOptions.unshift({ label: `${chosen.qty || '1'} ${chosen.unit || 'kg'}`.trim(), price: parseFloat(chosen.price), discountPercent: parseFloat(chosen.discountPercent || '0'), approxWeight: chosen.approxWeight || null });
-      }
+      const orderedOptions = [defaultOption, ...validOptions.filter(option => option !== defaultOption)];
+      const allOptions = orderedOptions.map(option => ({
+        label: optionLabel(option),
+        price: parseFloat(option.price),
+        discountPercent: optionDiscount(option),
+        approxWeight: option.approxWeight.trim() || null,
+      }));
+      // The default option becomes the store listing's primary price/unit so
+      // product cards and normal ordering keep working without the options list.
+      const primary = allOptions[0];
       const data = {
-        price: basePrice,
-        unit: baseUnit,
-        approxWeight: baseApprox,
-        discountPercent: baseDiscount,
+        price: primary.price,
+        unit: primary.label,
+        approxWeight: primary.approxWeight,
+        discountPercent: primary.discountPercent,
         weightOptions: allOptions.length > 1 ? allOptions : null,
         availabilityStatus: form.availabilityStatus,
         isAvailable: form.availabilityStatus === 'available',
@@ -841,7 +922,7 @@ export default function ProductsPage() {
               </div>
 
               {/* Catalog image + inventory actions */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className="relative flex-shrink-0">
                   {editing?.photoUrl ? (
                     <img src={editing.photoUrl} alt={editing.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-indigo-200 dark:border-indigo-800 shadow-sm" />
@@ -852,143 +933,137 @@ export default function ProductsPage() {
                     </div>
                   )}
                 </div>
-                {editing && (
-                  <div className="flex flex-col gap-2 flex-1">
-                    <a href="/inventory" className="flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-gray-900 dark:text-white">{editing?.name || form.name || 'Product'}</p>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-gray-500 dark:text-slate-400">{editing?.productCode || '—'}</p>
+                  {editing && (
+                    <a href="/inventory" className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
                       Manage stock in Inventory
                     </a>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Product Code</label>
-                <input type="text" value={editing?.productCode || ''} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60 font-mono`} />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Name *</label>
-                  <span className={`text-[10px] font-semibold ${form.name.length >= 26 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.name.length}/26</span>
-                  {!editing && (
-                    <button type="button" onClick={() => openCatalogBrowser('single')}
-                      className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                      <BookOpen className="w-3 h-3" /> Browse Catalog
-                    </button>
-                  )}
-                </div>
-                <input type="text" value={form.name} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
-                <p className="mt-0.5 text-[10px] text-gray-400 dark:text-slate-500">Managed in Catalog.</p>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-gray-700 dark:text-slate-300">
-                    Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
-                  </label>
-                  <span className={`text-[10px] font-semibold ${form.localName.length >= 30 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.localName.length}/30</span>
-                </div>
-                <input type="text" value={form.localName} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
-                <input type="text" value={form.searchAliases} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Category</label>
-                <select value={form.categoryId} disabled className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`}>
-                  <option value="">Uncategorised</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="rounded-lg border border-gray-200 dark:border-slate-700 p-2.5 space-y-1.5">
-                <p className="text-xs font-bold text-gray-700 dark:text-slate-200">Option 1 (primary)</p>
-                <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Price (₹) *</label>
-                  <input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} className={inp} placeholder="0" min="0" step="0.5" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Unit</label>
-                  <div className="flex gap-1.5">
-                    <input type="number"
-                      value={form.unit.match(/^(\d*\.?\d*)/)?.[1] || ''}
-                      onChange={e => { const qty = e.target.value; const type = form.unit.replace(/^\d*\.?\d*\s*/, '') || 'kg'; setForm(f => ({ ...f, unit: `${qty} ${type}`.trim() })); }}
-                      className={`${inp} w-16`} placeholder="1" min="0" step="0.5" />
-                    <select
-                      value={form.unit.replace(/^\d*\.?\d*\s*/, '') || 'kg'}
-                      onChange={e => { const qty = form.unit.match(/^(\d*\.?\d*)/)?.[1] || '1'; setForm(f => ({ ...f, unit: `${qty} ${e.target.value}`.trim() })); }}
-                      className={inp}>
-                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Approx. weight (per unit) <span className="text-gray-400 dark:text-slate-500">— optional, shown to customers</span></label>
-                <div className="flex gap-1.5">
-                  <input
-                    value={form.approxWeight}
-                    onChange={e => setForm(f => ({ ...f, approxWeight: e.target.value }))}
-                    className={inp} placeholder="e.g. 200-300 g" />
-                  {form.approxWeight && (
-                    <span className="flex items-center px-2 text-[10px] text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                      shown as "{form.unit.replace(/^\d*\.?\d*\s*/, '') === 'pcs' ? '1 pc' : form.unit}{form.approxWeight ? ` · ${form.approxWeight}` : ''}"
-                    </span>
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Discount %</label>
-                  <input type="number" value={form.discountPercent} onChange={e => setForm(f => ({ ...f, discountPercent: e.target.value }))} className={inp} placeholder="0" min="0" max="100" />
+
+              <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700">
+                <div className="mb-2">
+                  <p className="text-xs font-bold text-gray-800 dark:text-slate-200">Pricing &amp; sizes</p>
+                  <p className="mt-0.5 text-[10px] leading-4 text-gray-500 dark:text-slate-400">
+                    The default option is shown on product cards. Add more sizes to let customers choose.
+                  </p>
                 </div>
-                <div className="flex items-end">
-                  <span className="text-xs text-gray-500 dark:text-slate-400">Selling preview: <span className="font-bold text-gray-900 dark:text-white">₹{(() => { const p = parseFloat(form.price); const d = parseFloat(form.discountPercent || '0'); if (isNaN(p)) return 0; return Math.round(p * (1 - (isNaN(d) ? 0 : d) / 100)); })()}</span></span>
-                </div>
-              </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Weight / quantity options <span className="text-gray-400 dark:text-slate-500">— optional, e.g. 500g, 1kg, 2kg</span></label>
                 <div className="space-y-2">
                   {form.weightOptions.map((option, index) => {
-                    const price = parseFloat(option.price) || 0;
-                    const discount = parseFloat(option.discountPercent || '0') || 0;
-                    const after = discount > 0 ? Math.round(price * (1 - discount / 100)) : price;
-                    const label = `${option.qty || '1'} ${option.unit || 'kg'}`.trim();
+                    const price = parseFloat(option.price);
+                    const discount = optionDiscount(option);
+                    const after = optionSellingPrice(option);
+                    const label = optionLabel(option);
+                    const units = UNITS.includes(option.unit) ? UNITS : [option.unit, ...UNITS];
+                    const update = (patch: Partial<OptionRow>) => setForm(f => ({
+                      ...f,
+                      weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, ...patch } : row),
+                    }));
                     return (
-                    <div key={index} className="rounded-lg border border-gray-200 dark:border-slate-700 p-2.5 space-y-1.5">
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="number" min="0" step="0.5" value={option.qty} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, qty: e.target.value } : row) }))} className={inp} placeholder="Qty" />
-                        <select value={option.unit} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, unit: e.target.value } : row) }))} className={inp}>
-                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
+                      <div
+                        key={index}
+                        className={`rounded-xl border p-3 transition-colors ${
+                          option.isDefault
+                            ? 'border-emerald-300 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/20'
+                            : 'border-gray-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="text-[11px] font-bold text-gray-700 dark:text-slate-200">Option {index + 1}</span>
+                            {option.isDefault ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                <Check className="h-2.5 w-2.5" /> Default
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setForm(f => ({
+                                  ...f,
+                                  weightOptions: f.weightOptions.map((row, i) => ({ ...row, isDefault: i === index })),
+                                }))}
+                                className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+                              >
+                                Set as default
+                              </button>
+                            )}
+                          </div>
+                          {form.weightOptions.length > 1 && (
+                            <button
+                              type="button"
+                              aria-label={`Remove option ${index + 1}`}
+                              onClick={() => setForm(f => {
+                                const next = f.weightOptions.filter((_, i) => i !== index);
+                                if (next.length && !next.some(row => row.isDefault)) next[0] = { ...next[0], isDefault: true };
+                                return { ...f, weightOptions: next };
+                              })}
+                              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 dark:text-slate-400 mb-1">Quantity</label>
+                            <input type="number" min="0" step="0.5" value={option.qty} onChange={e => update({ qty: e.target.value })} className={inp} placeholder="1" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 dark:text-slate-400 mb-1">Unit</label>
+                            <select value={option.unit} onChange={e => update({ unit: e.target.value })} className={inp}>
+                              {units.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 dark:text-slate-400 mb-1">Price (₹)</label>
+                            <input type="number" min="0" step="0.5" value={option.price} onChange={e => update({ price: e.target.value })} className={inp} placeholder="0" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-500 dark:text-slate-400 mb-1">Discount %</label>
+                            <input type="number" min="0" max="100" step="1" value={option.discountPercent} onChange={e => update({ discountPercent: e.target.value })} className={inp} placeholder="0" />
+                          </div>
+                        </div>
+
+                        <div className="mt-2">
+                          <label className="block text-[10px] font-medium text-gray-500 dark:text-slate-400 mb-1">Approx. weight <span className="font-normal">(optional)</span></label>
+                          <input value={option.approxWeight} onChange={e => update({ approxWeight: e.target.value })} className={inp} placeholder="e.g. 200-300 g" />
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-white/70 px-2 py-1.5 text-[11px] dark:bg-slate-800/60">
+                          <span className="truncate text-gray-500 dark:text-slate-400">
+                            Shown as <span className="font-semibold text-gray-800 dark:text-slate-200">{label}</span>
+                          </span>
+                          <span className="flex shrink-0 items-baseline gap-1.5">
+                            {discount > 0 && Number.isFinite(price) && (
+                              <span className="text-gray-400 line-through dark:text-slate-500">₹{price}</span>
+                            )}
+                            <span className="font-bold text-gray-900 dark:text-white">₹{after}</span>
+                            {discount > 0 && (
+                              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">{discount}% off</span>
+                            )}
+                          </span>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input type="number" min="0" step="0.5" value={option.price} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, price: e.target.value } : row) }))} className={inp} placeholder="Price (₹)" />
-                        <input type="number" min="0" max="100" step="1" value={option.discountPercent} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, discountPercent: e.target.value } : row) }))} className={inp} placeholder="Discount %" />
-                      </div>
-                      <input value={option.approxWeight} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => i === index ? { ...row, approxWeight: e.target.value } : row) }))} className={inp} placeholder="Approx. weight (per unit)" />
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-500 dark:text-slate-400">Price after discount: <span className="font-bold text-gray-900 dark:text-white">₹{after}</span></span>
-                        <span className="text-gray-500 dark:text-slate-400">Selling preview: <span className="font-bold text-gray-900 dark:text-white">{label} · ₹{after}</span></span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-slate-300">
-                          <input type="checkbox" checked={option.isDefault} onChange={e => setForm(f => ({ ...f, weightOptions: f.weightOptions.map((row, i) => ({ ...row, isDefault: i === index ? e.target.checked : (e.target.checked ? false : row.isDefault) })) }))} />
-                          Make default
-                        </label>
-                        <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: f.weightOptions.filter((_, i) => i !== index) }))} className="px-3 rounded-xl bg-red-50 text-red-600 text-xs font-semibold">Remove</button>
-                      </div>
-                    </div>
                     );
                   })}
-                  <button type="button" onClick={() => setForm(f => ({ ...f, weightOptions: [...f.weightOptions, { qty: "1", unit: "kg", price: "", discountPercent: "0", approxWeight: "", isDefault: false }] }))} className="w-full rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700">Add option</button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({
+                      ...f,
+                      weightOptions: [...f.weightOptions, { qty: '1', unit: f.weightOptions[0]?.unit || 'kg', price: '', discountPercent: '0', approxWeight: '', isDefault: false }],
+                    }))}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/20"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add another size / option
+                  </button>
                 </div>
-              </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
-                <textarea value={form.description} readOnly className={`${inp} resize-none cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} rows={2} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Availability</label>
@@ -998,15 +1073,62 @@ export default function ProductsPage() {
                   <option value="hidden">👁 Hide</option>
                 </select>
               </div>
+
+              <details className="group rounded-xl border border-gray-200 dark:border-slate-700">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-slate-300">
+                    Catalog details <span className="font-normal text-gray-400 dark:text-slate-500">(read-only)</span>
+                  </span>
+                  <ChevronDown className="w-4 h-4 shrink-0 text-gray-400 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="space-y-2 border-t border-gray-100 px-3 py-3 dark:border-slate-700">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Product Code</label>
+                    <input type="text" value={editing?.productCode || ''} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60 font-mono`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300">Name *</label>
+                      <span className={`text-[10px] font-semibold ${form.name.length >= 26 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.name.length}/26</span>
+                    </div>
+                    <input type="text" value={form.name} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300">
+                        Hindi Name <span className="text-gray-500 font-normal">(in English)</span>
+                      </label>
+                      <span className={`text-[10px] font-semibold ${form.localName.length >= 30 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-slate-500'}`}>{form.localName.length}/30</span>
+                    </div>
+                    <input type="text" value={form.localName} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
+                    <input type="text" value={form.searchAliases} readOnly className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Category</label>
+                    <select value={form.categoryId} disabled className={`${inp} cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`}>
+                      <option value="">Uncategorised</option>
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                    <textarea value={form.description} readOnly className={`${inp} resize-none cursor-not-allowed bg-gray-100 dark:bg-slate-700/60`} rows={2} />
+                  </div>
+                </div>
+              </details>
             </div>
             <div className="shrink-0 px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3 bg-white dark:bg-slate-800">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.price}
+              <button onClick={handleSave} disabled={saving || !form.weightOptions.some(option => isOptionPriceValid(option) && isOptionQtyValid(option) && option.unit.trim())}
                 className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Product'}
               </button>
             </div>
           </div>
+        </div>
       )}
 
       {showComboModal && (

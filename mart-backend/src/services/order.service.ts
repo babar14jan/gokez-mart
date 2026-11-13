@@ -374,7 +374,7 @@ export class OrderService {
         const product = await client.query(
             `SELECT p.name, p.category_id as "categoryId", p.is_bundle as "isBundle", sp.price::float AS price,
               sp.discount_percent::float AS "discountPercent", sp.unit,
-              p.weight_options as "weightOptions",
+              sp.weight_options as "weightOptions",
               sp.is_available as "isAvailable", sp.availability_status as "availabilityStatus"
            FROM mart_store_products sp
            JOIN mart_products p ON p.id = sp.product_id
@@ -395,8 +395,9 @@ export class OrderService {
           throw badRequest('One or more products are unavailable or have changed');
         }
         if (selectedOption) {
-          const parsed = parseSellingUnit(item.unit);
-          if (parsed.baseUnit !== catalogItem.unit) throw badRequest('One or more products are unavailable or have changed');
+          const optionBaseUnit = parseSellingUnit(item.unit).baseUnit;
+          const primaryBaseUnit = parseSellingUnit(catalogItem.unit).baseUnit;
+          if (optionBaseUnit !== primaryBaseUnit) throw badRequest('One or more products are unavailable or have changed');
         }
         const basePrice = selectedOption ? selectedOption.price : catalogItem.price;
         const discountPercent = selectedOption ? (selectedOption.discountPercent || 0) : catalogItem.discountPercent;
@@ -433,7 +434,7 @@ export class OrderService {
           categoryId: catalogItem.categoryId,
           unit: item.unit,
           price: effectivePrice,
-          mrp: catalogItem.price,
+          mrp: basePrice,
           quantity: item.quantity,
         });
       }
@@ -1762,26 +1763,30 @@ export class OrderService {
     id: string;
     orderNumber: string;
     storeId: string;
+    placedOutsideHours: boolean;
   } | null> {
     return transaction(async client => {
       const current = await client.query(
-        `SELECT status
+        `SELECT status, placed_outside_hours as "placedOutsideHours"
            FROM mart_orders
           WHERE id = $1
           FOR UPDATE`,
         [id]
       );
-      const existing = current.rows[0] as { status: string } | undefined;
+      const existing = current.rows[0] as { status: string; placedOutsideHours: boolean } | undefined;
       if (!existing || existing.status !== 'pending') return null;
 
       const updated = await client.query(
         `UPDATE mart_orders
-            SET status = 'confirmed', updated_at = NOW()
+            SET status = 'confirmed',
+                confirmed_next_open = CASE WHEN placed_outside_hours THEN true ELSE confirmed_next_open END,
+                updated_at = NOW()
           WHERE id = $1
-          RETURNING id, order_number as "orderNumber", store_id as "storeId"`,
+          RETURNING id, order_number as "orderNumber", store_id as "storeId",
+                    placed_outside_hours as "placedOutsideHours"`,
         [id]
       );
-      const order = updated.rows[0] as { id: string; orderNumber: string; storeId: string };
+      const order = updated.rows[0] as { id: string; orderNumber: string; storeId: string; placedOutsideHours: boolean };
       await client.query(
         `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_id, actor_name)
          VALUES ($1, 'pending', 'confirmed', NULL, 'System')`,
@@ -1837,7 +1842,6 @@ export class OrderService {
         `SELECT id
            FROM mart_orders
           WHERE status = 'pending'
-            AND placed_outside_hours = false
             AND created_at <= NOW() - INTERVAL '2 seconds'
           ORDER BY created_at ASC
           LIMIT 100`

@@ -53,7 +53,9 @@ async function autoConfirmOrder(id: string): Promise<void> {
 
     PushService.notifyOrderRecipient(order.id, {
       title: `Order #${order.orderNumber} update`,
-      body: `✅ Order #${order.orderNumber} confirmed. We're preparing your order.`,
+      body: order.placedOutsideHours
+        ? `✅ Order #${order.orderNumber} confirmed for the next opening hours. We'll start preparing it when the store opens.`
+        : `✅ Order #${order.orderNumber} confirmed. We're preparing your order.`,
       url: '/orders',
       tag: `order-${order.id}`,
     }).catch(() => {});
@@ -854,6 +856,7 @@ export const adminUpdateProduct = asyncHandler(async (req: AdminRequest, res: Re
     data.unit = req.body.unit;
     data.approxWeight = req.body.approxWeight;
     data.discountPercent = req.body.discountPercent;
+    data.weightOptions = req.body.weightOptions;
     data.availabilityStatus = req.body.availabilityStatus;
     data.isAvailable = req.body.isAvailable;
     data.sortOrder = req.body.sortOrder;

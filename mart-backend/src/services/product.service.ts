@@ -81,7 +81,7 @@ const PRODUCT_SELECT = `
   SELECT p.id, p.product_code as "productCode", p.category_id as "categoryId", c.name as "categoryName",
          p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
           p.description, p.photo_url as "photoUrl", p.photos as "photos", p.photo_variants as "photoVariants",
-          p.weight_options as "weightOptions",
+          sp.weight_options as "weightOptions",
           sp.price::float, sp.unit,
          sp.approx_weight as "approxWeight",
          sp.discount_percent::float as "discountPercent",
@@ -255,7 +255,7 @@ export class ProductService {
       `SELECT p.id, p.product_code as "productCode", p.category_id as "categoryId", c.name as "categoryName",
              p.name, p.local_name as "localName", p.search_aliases as "searchAliases",
               p.description, p.photo_url as "photoUrl", p.photos as "photos", p.photo_variants as "photoVariants",
-              p.weight_options as "weightOptions",
+              sp.weight_options as "weightOptions",
               sp.price::float, sp.unit,
              sp.approx_weight as "approxWeight",
              sp.discount_percent::float as "discountPercent",
@@ -313,23 +313,23 @@ export class ProductService {
       : (data.photoUrl ? [String(data.photoUrl)] : []);
     const photoVariants = normalizePhotoVariants((data as any).photoVariants, photos, data.photoUrl);
     await query(
-      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, photo_variants, weight_options, is_catalog)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      `INSERT INTO mart_products (id, category_id, name, local_name, search_aliases, description, photo_url, photos, photo_variants, is_catalog)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [id, data.categoryId || null, name, localName, searchAliases,
        data.description || null, photos[0] || null, JSON.stringify(photos), JSON.stringify(photoVariants),
-       data.weightOptions ? JSON.stringify(data.weightOptions) : null,
        data.isCatalog === true]
     );
     await query(
       `INSERT INTO mart_store_products
-         (store_id, product_id, price, unit, discount_percent, availability_status, is_available, sort_order, approx_weight)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+         (store_id, product_id, price, unit, discount_percent, availability_status, is_available, sort_order, approx_weight, weight_options)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [data.storeId, id, data.price, data.unit || '1 kg',
        data.discountPercent || 0,
        data.availabilityStatus || 'available',
        data.isAvailable !== false,
        data.sortOrder || 0,
-       data.approxWeight || null]
+       data.approxWeight || null,
+       data.weightOptions ? JSON.stringify(data.weightOptions) : null]
     );
     return (await this.findById(id, data.storeId))!;
   }
@@ -496,7 +496,6 @@ export class ProductService {
     if (data.photoUrl !== undefined)   { globalFields.push(`photo_url = $${gi++}`);   globalParams.push(data.photoUrl); }
     if (data.photos !== undefined)     { globalFields.push(`photos = $${gi++}::jsonb`); globalParams.push(JSON.stringify(data.photos)); }
     if ((data as any).photoVariants !== undefined) { globalFields.push(`photo_variants = $${gi++}::jsonb`); globalParams.push(JSON.stringify((data as any).photoVariants)); }
-    if (data.weightOptions !== undefined){ globalFields.push(`weight_options = $${gi++}`); globalParams.push(JSON.stringify(data.weightOptions)); }
     if ((data as any).isCatalog !== undefined) { globalFields.push(`is_catalog = $${gi++}`); globalParams.push((data as any).isCatalog === true); }
     await transaction(async client => {
       if (globalFields.length) {
@@ -518,6 +517,7 @@ export class ProductService {
       if (data.price !== undefined)           { storeFields.push(`price = $${si++}`);               storeParams.push(data.price); }
       if (data.unit !== undefined)            { storeFields.push(`unit = $${si++}`);                storeParams.push(data.unit); }
       if (data.approxWeight !== undefined)    { storeFields.push(`approx_weight = $${si++}`);       storeParams.push(data.approxWeight || null); }
+      if (data.weightOptions !== undefined)   { storeFields.push(`weight_options = $${si++}::jsonb`); storeParams.push(data.weightOptions ? JSON.stringify(data.weightOptions) : null); }
       if (data.discountPercent !== undefined) { storeFields.push(`discount_percent = $${si++}`);    storeParams.push(data.discountPercent); }
       if (data.availabilityStatus !== undefined) {
         storeFields.push(`availability_status = $${si++}`); storeParams.push(data.availabilityStatus);
