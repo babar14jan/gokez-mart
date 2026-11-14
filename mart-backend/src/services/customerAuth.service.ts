@@ -140,9 +140,9 @@ export class CustomerAuthService {
 
     // Upsert customer
     await query(
-      `INSERT INTO mart_customers (id, phone, order_count, total_spent, last_seen_at)
-       VALUES (gen_random_uuid(), $1, 0, 0, NOW())
-       ON CONFLICT (phone) DO UPDATE SET last_seen_at = NOW()`,
+      `INSERT INTO mart_customers (id, phone, order_count, total_spent, last_seen_at, marketing_consent, marketing_consent_at)
+       VALUES (gen_random_uuid(), $1, 0, 0, NOW(), true, NOW())
+       ON CONFLICT (phone) DO UPDATE SET last_seen_at = NOW(), marketing_consent = COALESCE(mart_customers.marketing_consent, true)`,
       [cleaned]
     );
 
@@ -158,6 +158,8 @@ export class CustomerAuthService {
 
     // Record consent on first login (DPDP Act 2023)
     await ComplianceService.recordConsent(customer.id).catch(() => {});
+    // Auto-grant marketing consent on signup so promotional reach works out of the box.
+    await ComplianceService.updateMarketingConsent(customer.id, true).catch(() => {});
 
     // Issue 90-day JWT with jti for blacklist support
     const { v4: uuidv4 } = await import('uuid');

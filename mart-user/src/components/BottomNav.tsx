@@ -7,6 +7,7 @@ interface BottomNavProps {
   active: NavView;
   onChange: (v: NavView) => void;
   onOpenSearch: () => void;
+  freshActive?: boolean;
 }
 
 const tabs = [
@@ -16,7 +17,7 @@ const tabs = [
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavProps) {
+export default function BottomNav({ active, onChange, onOpenSearch, freshActive = false }: BottomNavProps) {
 
   return (
     <nav className="mobile-bottom-nav relative z-40 border-t border-gray-200 bg-[#f7f8fa] dark:border-slate-800 dark:bg-slate-900">
@@ -30,8 +31,14 @@ export default function BottomNav({ active, onChange, onOpenSearch }: BottomNavP
                   type="button"
                   onClick={onOpenSearch}
                   aria-label="Fresh products"
-                  className="flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
+                  className="relative flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
                 >
+                  {freshActive && (
+                    <span className="absolute inset-0 m-auto h-14 w-14 rounded-full border-2 border-gokez-700 dark:border-gokez-300" aria-hidden="true" />
+                  )}
+                  {freshActive && (
+                    <span className="absolute bottom-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-gokez-700 dark:bg-gokez-300" aria-hidden="true" />
+                  )}
                   <img src="/fresh_icon.webp" alt="" width={54} height={54} {...{ fetchpriority: 'high' }} decoding="async" className="nav-veg-icon object-contain" />
                 </button>
               )}

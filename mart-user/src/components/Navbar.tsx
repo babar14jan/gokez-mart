@@ -5,7 +5,7 @@ import { useZoneStore, type ZoneAction } from '../store/zoneStore';
 import AccountGreeting from './AccountGreeting';
 import ConfirmDialog from './ConfirmDialog';
 
-type View = 'home' | 'categories' | 'orders' | 'account';
+type View = 'home' | 'categories' | 'orders' | 'account' | 'fresh';
 
 
 interface NavbarProps {
@@ -181,7 +181,7 @@ const navItems = [
       </div>
 
       {/* Row 2: Search — the Categories view owns its own category-scoped filter. */}
-      {activeView !== 'account' && activeView !== 'orders' && activeView !== 'categories' && (
+      {activeView !== 'account' && activeView !== 'orders' && activeView !== 'categories' && activeView !== 'fresh' && (
         <div className="sm:hidden px-4 py-1">
           <button type="button" onClick={onSearchOpen} className="relative w-full text-left">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gokez-700 dark:text-slate-200" />
