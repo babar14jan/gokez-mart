@@ -29,5 +29,5 @@ export function useRotatingSearchPrompt(products: Product[]): string {
   }, [names]);
 
   if (!names.length) return 'Search products...';
-  return `Search for ${names[index % names.length]}`;
+  return `Search for "${names[index % names.length]}"`;
 }
