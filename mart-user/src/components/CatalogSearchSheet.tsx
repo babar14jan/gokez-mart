@@ -6,6 +6,7 @@ import ProductCard from './ProductCard';
 import SmartImage from './SmartImage';
 import PageHeader from './PageHeader';
 import BottomNav from './BottomNav';
+import { useCartStore } from '../store/cartStore';
 import FloatingCart from './FloatingCart';
 import { loadRecentSearches, recordRecentSearch, clearRecentSearches } from '../utils/recentSearches';
 import { loadRecentlyViewedIds } from '../utils/recentlyViewed';
@@ -67,6 +68,7 @@ export default function CatalogSearchSheet({
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => loadRecentlyViewedIds());
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
+  const totalItems = useCartStore(s => s.totalItems());
   const [refreshing, setRefreshing] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const pullStart = useRef<{ x: number; y: number } | null>(null);
@@ -346,7 +348,7 @@ export default function CatalogSearchSheet({
           </div>
         )}
 
-        <div ref={resultsRef} className={`relative mx-auto w-full max-w-6xl bg-white px-3 dark:bg-slate-900 md:px-6 lg:px-8 ${inline ? "" : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain"} ${freshMode ? "pt-1 pb-[calc(7rem+env(safe-area-inset-bottom,0px))]" : "pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}`} onScroll={dismissKeyboard}>
+        <div ref={resultsRef} className={`relative mx-auto w-full max-w-6xl bg-white px-3 dark:bg-slate-900 md:px-6 lg:px-8 ${inline ? "" : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain"} ${freshMode ? `pt-1 ${totalItems > 0 ? "pb-[calc(7rem+env(safe-area-inset-bottom,0px))]" : "pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}` : "pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}`} onScroll={dismissKeyboard}>
           {(refreshing || pullDistance > 0) && (
             <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2" style={{ opacity: refreshing ? 1 : Math.min(1, pullDistance / 40) }} aria-live="polite">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md ring-1 ring-black/5 dark:bg-slate-800/90 dark:ring-white/10">
