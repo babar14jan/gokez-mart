@@ -41,7 +41,7 @@ import { useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { detectPlatform } from './utils/install';
-import { BRAND_NAME } from './constants/brand';
+import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 
 type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'fresh';
@@ -1612,6 +1612,22 @@ export default function App() {
             </div>
           )}
 
+          {/* Footer */}
+          <footer className="mt-8 border-t-2 border-emerald-200 bg-white/80 pb-5 pt-6 dark:border-emerald-900/60 dark:bg-slate-900/70">
+            <div className="mx-auto max-w-xl sm:max-w-4xl">
+              <div className="mb-3 flex items-center justify-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+                <button type="button" onClick={() => { setView('privacy'); window.history.pushState({}, '', '/privacy'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Privacy Policy</button>
+                <span aria-hidden="true">&middot;</span>
+                <button type="button" onClick={() => { setView('terms'); window.history.pushState({}, '', '/terms'); }} className="hover:text-emerald-600 dark:hover:text-emerald-400">Terms of Service</button>
+              </div>
+              <p className="text-center text-[11px] text-gray-500 dark:text-slate-400">
+                &copy; {new Date().getFullYear()} {BRAND_NAME}{' · '}A product of{' '}
+                <a href={PARENT_COMPANY_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 hover:underline">
+                  {PARENT_COMPANY}
+                </a>
+              </p>
+            </div>
+          </footer>
         </main>
       )}
     </AppShell>
