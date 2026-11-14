@@ -187,6 +187,14 @@ app.use('/api/v1/push/subscribe/guest', rateLimit({
   message: { success: false, error: 'Too many attempts. Please try again later.' },
 }));
 
+app.use('/api/v1/push/guest-consent', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 40 : 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many attempts. Please try again later.' },
+}));
+
 // 5. Order placement — 10 orders / 5 min per IP (prevent order spam)
 app.use('/api/v1/orders', rateLimit({
   windowMs: 5 * 60 * 1000,

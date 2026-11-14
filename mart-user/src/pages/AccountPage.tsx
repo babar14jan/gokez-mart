@@ -14,6 +14,7 @@ import { track, trackInstall } from '../utils/track';
 import { useInstallGuide, dismissInstallGuide } from '../utils/install';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildWhatsAppLink } from '../utils/whatsapp';
+import { readTrackingTokens } from '../utils/guestTracking';
 
 const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
 
@@ -353,8 +354,12 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     const next = !marketingConsent;
     setMarketingConsent(next);
     if (!isLoggedIn) {
-      try { localStorage.setItem(GUEST_MARKETING_CONSENT_KEY, String(next)); }
-      catch { setMarketingConsent(!next); }
+      const tokens = readTrackingTokens();
+      const trackingToken = tokens[tokens.length - 1];
+      try {
+        if (trackingToken) await authApi.updateGuestMarketingConsent(trackingToken, next);
+        localStorage.setItem(GUEST_MARKETING_CONSENT_KEY, String(next));
+      } catch { setMarketingConsent(!next); }
       return;
     }
     try { await authApi.updateMarketingConsent(next); }

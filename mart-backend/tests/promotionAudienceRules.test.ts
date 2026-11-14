@@ -30,6 +30,11 @@ describe('promotion audience rules', () => {
     assert.deepEqual(normalizeAudienceRules({ cohorts: ['winback_15', 'repeat_buyer', 'winback_15'] }), {
       cohorts: ['winback_15', 'repeat_buyer'],
     });
+    assert.deepEqual(normalizeAudienceRules({
+      cohorts: ['signed_in_no_order', 'guest_0_1_delivered', 'guest_2_plus_delivered', 'signed_in_one_order', 'signed_in_repeat_lapsed_7'],
+    }), {
+      cohorts: ['signed_in_no_order', 'guest_0_1_delivered', 'guest_2_plus_delivered', 'signed_in_one_order', 'signed_in_repeat_lapsed_7'],
+    });
   });
 
   test('rejects malformed or unsupported targeting payloads', () => {
@@ -53,6 +58,39 @@ describe('promotion audience rules', () => {
     assert.equal(matchesAudienceCohorts(['first_order_followup'], stats(7, 1), now), true);
     assert.equal(matchesAudienceCohorts(['first_order_followup'], stats(7, 2), now), false);
     assert.equal(matchesAudienceCohorts(['repeat_buyer'], stats(1, 3), now), true);
+  });
+
+  test('targets signed-in and guest delivery cohorts by identity', () => {
+    const now = new Date('2026-11-02T12:00:00.000Z');
+    const deliveredAt = (daysAgo: number) => new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const stats = (isSignedIn: boolean, deliveredOrders: number, daysAgo?: number) => ({
+      isSignedIn,
+      deliveredOrders,
+      lastDeliveredAt: daysAgo === undefined ? null : deliveredAt(daysAgo),
+    });
+
+    assert.equal(matchesAudienceCohorts(['signed_in_no_order'], stats(true, 0), now), true);
+    assert.equal(matchesAudienceCohorts(['signed_in_no_order'], stats(false, 0), now), false);
+    assert.equal(matchesAudienceCohorts(['signed_in_no_order'], stats(true, 1, 30), now), false);
+
+    assert.equal(matchesAudienceCohorts(['signed_in_one_order'], stats(true, 1, 1), now), true);
+    assert.equal(matchesAudienceCohorts(['signed_in_one_order'], stats(true, 2, 1), now), false);
+    assert.equal(matchesAudienceCohorts(['signed_in_one_order'], stats(false, 1, 1), now), false);
+
+    assert.equal(matchesAudienceCohorts(['signed_in_repeat_lapsed_7'], stats(true, 3, 7), now), true);
+    assert.equal(matchesAudienceCohorts(['signed_in_repeat_lapsed_7'], stats(true, 3, 6), now), false);
+    assert.equal(matchesAudienceCohorts(['signed_in_repeat_lapsed_7'], stats(true, 2, 30), now), false);
+    assert.equal(matchesAudienceCohorts(['signed_in_repeat_lapsed_7'], stats(false, 3, 30), now), false);
+
+    assert.equal(matchesAudienceCohorts(['guest_0_1_delivered'], stats(false, 0), now), true);
+    assert.equal(matchesAudienceCohorts(['guest_0_1_delivered'], stats(false, 1, 1), now), true);
+    assert.equal(matchesAudienceCohorts(['guest_0_1_delivered'], stats(false, 2, 1), now), false);
+    assert.equal(matchesAudienceCohorts(['guest_0_1_delivered'], stats(true, 1, 1), now), false);
+
+    assert.equal(matchesAudienceCohorts(['guest_2_plus_delivered'], stats(false, 2, 1), now), true);
+    assert.equal(matchesAudienceCohorts(['guest_2_plus_delivered'], stats(false, 10, 30), now), true);
+    assert.equal(matchesAudienceCohorts(['guest_2_plus_delivered'], stats(false, 1, 1), now), false);
+    assert.equal(matchesAudienceCohorts(['guest_2_plus_delivered'], stats(true, 2, 1), now), false);
   });
 
   test('parses bare scheduled times as Asia/Kolkata and identifies quiet hours', () => {

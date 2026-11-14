@@ -5,7 +5,19 @@ import { config } from '../config';
 const TYPES = ['new_product', 'combo', 'offer', 'back_in_stock', 'we_miss_you', 'custom'] as const;
 type PromotionType = typeof TYPES[number];
 type PromotionStatus = 'draft' | 'sending' | 'sent' | 'cancelled';
-export const AUDIENCE_COHORTS = ['recent_purchaser', 'winback_7', 'winback_15', 'winback_30', 'first_order_followup', 'repeat_buyer'] as const;
+export const AUDIENCE_COHORTS = [
+  'recent_purchaser',
+  'winback_7',
+  'winback_15',
+  'winback_30',
+  'first_order_followup',
+  'repeat_buyer',
+  'signed_in_no_order',
+  'signed_in_one_order',
+  'signed_in_repeat_lapsed_7',
+  'guest_0_1_delivered',
+  'guest_2_plus_delivered',
+] as const;
 export type AudienceCohort = typeof AUDIENCE_COHORTS[number];
 
 export interface AudienceRules {
@@ -22,6 +34,63 @@ export interface AudienceExclusions {
   recentCancellationOrFailure: number;
   lateDeliverySuppression: number;
 }
+
+export interface AudienceCohortCount {
+  cohort: AudienceCohort;
+  count: number;
+}
+
+export interface AudiencePreview {
+  matchedCustomers: number;
+  recipients: number;
+  subscriptions: number;
+  exclusions: AudienceExclusions;
+  cohorts: AudienceCohortCount[];
+}
+
+export interface AudienceCustomer {
+  id: string;
+  name: string | null;
+  phone: string;
+  address: string;
+  address2: string;
+  deliveredOrders: number;
+  lastDeliveredAt: string | null;
+  isSignedIn: boolean;
+  cohorts: AudienceCohort[];
+  eligible: boolean;
+  exclusionReason: string | null;
+}
+
+export interface AudienceCustomerPage {
+  total: number;
+  customers: AudienceCustomer[];
+  limit: number;
+  offset: number;
+}
+
+export interface PromotionTestTarget {
+  phone: string;
+  name: string | null;
+  customerId: string | null;
+  subscriptions: number;
+  sent: number;
+  failed: number;
+  note?: string;
+}
+
+export interface PromotionTestResult {
+  sent: number;
+  failed: number;
+  recipients: number;
+  targets: PromotionTestTarget[];
+}
+
+/**
+ * Internal test recipients for every draft, regardless of type or selected
+ * audience. Keep this in one place so live-test sends are consistent.
+ */
+export const PROMOTION_TEST_PHONES = ['9330317102', '8777376280'] as const;
 
 interface PromotionInput {
   type: PromotionType;
@@ -45,6 +114,8 @@ interface Subscription {
 export interface AudienceDeliveryStats {
   deliveredOrders: number;
   lastDeliveredAt: Date | null;
+  /** OTP-verified customers are signed in; everyone else is a guest. */
+  isSignedIn?: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -72,9 +143,16 @@ export const isPromotionQuietHours = (date: Date): boolean => {
 
 export const matchesAudienceCohorts = (cohorts: AudienceCohort[], stats: AudienceDeliveryStats, now = new Date()): boolean => {
   if (!cohorts.length) return true;
-  if (!stats.lastDeliveredAt) return false;
-  const ageMs = now.getTime() - stats.lastDeliveredAt.getTime();
+  const ageMs = stats.lastDeliveredAt ? now.getTime() - stats.lastDeliveredAt.getTime() : null;
   return cohorts.some(cohort => {
+    if (cohort === 'signed_in_no_order') return stats.isSignedIn === true && stats.deliveredOrders === 0;
+    if (cohort === 'signed_in_one_order') return stats.isSignedIn === true && stats.deliveredOrders === 1;
+    if (cohort === 'signed_in_repeat_lapsed_7') {
+      return stats.isSignedIn === true && stats.deliveredOrders > 2 && ageMs !== null && ageMs >= 7 * DAY_MS;
+    }
+    if (cohort === 'guest_0_1_delivered') return stats.isSignedIn !== true && stats.deliveredOrders < 2;
+    if (cohort === 'guest_2_plus_delivered') return stats.isSignedIn !== true && stats.deliveredOrders >= 2;
+    if (ageMs === null) return false;
     if (cohort === 'recent_purchaser') return ageMs >= 3 * DAY_MS && ageMs < 7 * DAY_MS;
     if (cohort === 'winback_7') return ageMs >= 7 * DAY_MS && ageMs < 14 * DAY_MS;
     if (cohort === 'winback_15') return ageMs >= 14 * DAY_MS && ageMs < 30 * DAY_MS;
@@ -112,6 +190,8 @@ const customerDestination = (destination: unknown): string | null => {
     return null;
   }
 };
+
+const normalizePhoneDigits = (value: string): string => value.replace(/\D/g, '').slice(-10);
 
 export const normalizePromotionInput = (data: Record<string, unknown>, partial = false): Partial<PromotionInput> => {
   const result: Partial<PromotionInput> = {};
@@ -162,11 +242,13 @@ export const normalizePromotionInput = (data: Record<string, unknown>, partial =
 
 interface AudienceResult {
   subscriptions: Subscription[];
+  matchedCustomers: number;
   recipients: number;
   exclusions: AudienceExclusions;
+  cohortCounts: Record<string, number>;
 }
 
-const audienceSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
+const audienceBaseSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
   text: `WITH delivery_stats AS MATERIALIZED (
            SELECT customer_id, COUNT(*)::int AS delivered_orders, MAX(delivered_at) AS last_delivered_at
            FROM mart_orders
@@ -174,20 +256,26 @@ const audienceSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
            GROUP BY customer_id
          ),
          latest_zone_order AS MATERIALIZED (
-           SELECT DISTINCT ON (customer_id) customer_id, zone_id
-           FROM mart_orders
-           WHERE customer_id IS NOT NULL AND status NOT IN ('cancelled', 'failed_delivery', 'terminated')
-           ORDER BY customer_id, created_at DESC, id DESC
+           SELECT DISTINCT ON (o.customer_id) o.customer_id, z.id AS zone_id
+           FROM mart_orders o
+           JOIN mart_zones z ON z.store_id = o.store_id
+           WHERE o.customer_id IS NOT NULL AND o.status NOT IN ('cancelled', 'failed_delivery', 'terminated')
+           ORDER BY o.customer_id, o.created_at DESC, o.id DESC
          ),
          promotion_sends AS MATERIALIZED (
            SELECT customer_id, COUNT(DISTINCT promotion_id)::int AS sent_promotion_last_7d
            FROM mart_promotion_deliveries
            WHERE customer_id IS NOT NULL AND status = 'sent' AND sent_at IS NOT NULL
+             AND NOT is_test
              AND sent_at >= NOW() - INTERVAL '7 days'
            GROUP BY customer_id
          ),
          audience AS MATERIALIZED (
            SELECT c.id AS customer_id, c.marketing_consent,
+             EXISTS (
+               SELECT 1 FROM mart_customer_leads lead
+               WHERE lead.customer_id = c.id AND lead.verified_at IS NOT NULL
+             ) AS is_signed_in,
              EXISTS (SELECT 1 FROM mart_push_subscriptions ps WHERE ps.customer_id = c.id) AS has_subscription,
              COALESCE(ds.delivered_orders, 0) AS delivered_orders, ds.last_delivered_at,
              lzo.zone_id, COALESCE(sent.sent_promotion_last_7d, 0) AS sent_promotion_last_7d,
@@ -228,19 +316,33 @@ const audienceSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
          ),
          staged AS MATERIALIZED (
            SELECT *,
-             (cardinality($1::uuid[]) = 0 OR zone_id = ANY($1::uuid[]))
-             AND (cardinality($2::text[]) = 0 OR
-               ('recent_purchaser' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '7 days' AND last_delivered_at < NOW() - INTERVAL '3 days') OR
-               ('winback_7' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '14 days' AND last_delivered_at < NOW() - INTERVAL '7 days') OR
-               ('winback_15' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '30 days' AND last_delivered_at < NOW() - INTERVAL '14 days') OR
-               ('winback_30' = ANY($2::text[]) AND last_delivered_at < NOW() - INTERVAL '30 days') OR
-               ('first_order_followup' = ANY($2::text[]) AND delivered_orders = 1 AND last_delivered_at <= NOW() - INTERVAL '7 days') OR
-               ('repeat_buyer' = ANY($2::text[]) AND delivered_orders >= 3)
-             ) AS target_match
+             (cardinality($1::uuid[]) = 0 OR zone_id = ANY($1::uuid[])) AS zone_match,
+             jsonb_build_object(
+               'recent_purchaser', ('recent_purchaser' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '7 days' AND last_delivered_at < NOW() - INTERVAL '3 days'),
+               'winback_7', ('winback_7' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '14 days' AND last_delivered_at < NOW() - INTERVAL '7 days'),
+               'winback_15', ('winback_15' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '30 days' AND last_delivered_at < NOW() - INTERVAL '14 days'),
+               'winback_30', ('winback_30' = ANY($2::text[]) AND last_delivered_at < NOW() - INTERVAL '30 days'),
+               'first_order_followup', ('first_order_followup' = ANY($2::text[]) AND delivered_orders = 1 AND last_delivered_at <= NOW() - INTERVAL '7 days'),
+               'repeat_buyer', ('repeat_buyer' = ANY($2::text[]) AND delivered_orders >= 3),
+               'signed_in_no_order', ('signed_in_no_order' = ANY($2::text[]) AND is_signed_in AND delivered_orders = 0),
+               'signed_in_one_order', ('signed_in_one_order' = ANY($2::text[]) AND is_signed_in AND delivered_orders = 1),
+               'signed_in_repeat_lapsed_7', ('signed_in_repeat_lapsed_7' = ANY($2::text[]) AND is_signed_in AND delivered_orders > 2 AND last_delivered_at < NOW() - INTERVAL '7 days'),
+               'guest_0_1_delivered', ('guest_0_1_delivered' = ANY($2::text[]) AND NOT is_signed_in AND delivered_orders < 2),
+               'guest_2_plus_delivered', ('guest_2_plus_delivered' = ANY($2::text[]) AND NOT is_signed_in AND delivered_orders >= 2)
+             ) AS cohort_hits
            FROM audience
          ),
+         matched AS MATERIALIZED (
+           SELECT *,
+             (zone_match AND (
+               cardinality($2::text[]) = 0 OR EXISTS (
+                 SELECT 1 FROM jsonb_each_text(cohort_hits) WHERE value = 'true'
+               )
+             )) AS target_match
+           FROM staged
+         ),
          eligible_customers AS MATERIALIZED (
-           SELECT * FROM staged
+           SELECT * FROM matched
            WHERE marketing_consent
              AND has_subscription
              AND target_match
@@ -249,6 +351,20 @@ const audienceSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
              AND NOT recent_delivery
              AND NOT recent_cancellation_or_failure
              AND NOT late_delivery
+         )`,
+  params: [zoneIds, cohorts],
+});
+
+const audienceSql = (zoneIds: string[], cohorts: AudienceCohort[]) => {
+  const base = audienceBaseSql(zoneIds, cohorts);
+  return {
+    text: `${base.text},
+         cohort_counts AS MATERIALIZED (
+           SELECT selected.cohort,
+             COUNT(*) FILTER (WHERE (matched.cohort_hits ->> selected.cohort)::boolean)::int AS count
+           FROM unnest($2::text[]) AS selected(cohort)
+           CROSS JOIN matched
+           GROUP BY selected.cohort
          ),
          eligible_subscriptions AS MATERIALIZED (
            SELECT DISTINCT ON (ps.endpoint) ps.id, ps.customer_id AS "customerId", ps.endpoint, ps.p256dh, ps.auth, ps.created_at
@@ -257,8 +373,10 @@ const audienceSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
            ORDER BY ps.endpoint, ps.created_at DESC
          )
          SELECT
+           (SELECT COUNT(*)::int FROM matched) AS "matchedCustomers",
            (SELECT COUNT(*)::int FROM eligible_customers) AS recipients,
            COALESCE((SELECT jsonb_agg(jsonb_build_object('id', id, 'customerId', "customerId", 'endpoint', endpoint, 'p256dh', p256dh, 'auth', auth)) FROM eligible_subscriptions), '[]'::jsonb) AS subscriptions,
+           COALESCE((SELECT jsonb_object_agg(cohort, count) FROM cohort_counts), '{}'::jsonb) AS "cohortCounts",
            jsonb_build_object(
              'notConsented', COUNT(*) FILTER (WHERE NOT marketing_consent),
              'noSubscription', COUNT(*) FILTER (WHERE marketing_consent AND NOT has_subscription),
@@ -269,15 +387,88 @@ const audienceSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
              'recentCancellationOrFailure', COUNT(*) FILTER (WHERE marketing_consent AND has_subscription AND target_match AND sent_promotion_last_7d = 0 AND NOT active_order AND NOT recent_delivery AND recent_cancellation_or_failure),
              'lateDeliverySuppression', COUNT(*) FILTER (WHERE marketing_consent AND has_subscription AND target_match AND sent_promotion_last_7d = 0 AND NOT active_order AND NOT recent_delivery AND NOT recent_cancellation_or_failure AND late_delivery)
            ) AS exclusions
-         FROM staged`,
-  params: [zoneIds, cohorts],
-});
+         FROM matched`,
+    params: base.params,
+  };
+};
+
+const audienceCustomersSql = (
+  zoneIds: string[],
+  cohorts: AudienceCohort[],
+  cohort: AudienceCohort | null,
+  limit: number,
+  offset: number,
+) => {
+  const base = audienceBaseSql(zoneIds, cohorts);
+  return {
+    text: `${base.text},
+         audience_customers AS MATERIALIZED (
+           SELECT matched.customer_id AS id,
+             COALESCE(NULLIF(TRIM(c.name), ''), latest_order.guest_name, '') AS name,
+             c.phone,
+             COALESCE(NULLIF(TRIM(c.address), ''), latest_order.guest_address, '') AS address,
+             COALESCE(NULLIF(TRIM(c.address2), ''), '') AS address2,
+             matched.delivered_orders,
+             matched.last_delivered_at,
+             matched.is_signed_in,
+             matched.cohort_hits,
+             (eligible.customer_id IS NOT NULL) AS eligible,
+             CASE
+               WHEN NOT matched.marketing_consent THEN 'Marketing consent missing'
+               WHEN NOT matched.has_subscription THEN 'No push subscription'
+               WHEN matched.sent_promotion_last_7d > 0 THEN 'Promotion sent in last 7 days'
+               WHEN matched.active_order THEN 'Active order in progress'
+               WHEN matched.recent_delivery THEN 'Delivered in last 3 days'
+               WHEN matched.recent_cancellation_or_failure THEN 'Recent cancellation or failure'
+               WHEN matched.late_delivery THEN 'Recent late delivery'
+               ELSE NULL
+             END AS exclusion_reason,
+             ARRAY(SELECT key FROM jsonb_each_text(matched.cohort_hits) WHERE value = 'true') AS cohorts
+           FROM matched
+           JOIN mart_customers c ON c.id = matched.customer_id
+           LEFT JOIN eligible_customers eligible ON eligible.customer_id = matched.customer_id
+           LEFT JOIN LATERAL (
+             SELECT o.guest_name, o.guest_address
+             FROM mart_orders o
+             WHERE o.customer_id = c.id
+             ORDER BY o.created_at DESC, o.id DESC
+             LIMIT 1
+           ) latest_order ON TRUE
+           WHERE (cardinality($1::uuid[]) = 0 OR matched.zone_match)
+             AND (cardinality($2::text[]) = 0 OR EXISTS (SELECT 1 FROM jsonb_each_text(matched.cohort_hits) WHERE value = 'true' AND key = ANY($2::text[])))
+             AND ($3::text IS NULL OR (matched.cohort_hits ->> $3)::boolean)
+         )
+         SELECT
+           (SELECT COUNT(*)::int FROM audience_customers) AS total,
+           COALESCE((
+             SELECT jsonb_agg(jsonb_build_object(
+               'id', id,
+               'name', name,
+               'phone', phone,
+               'address', address,
+               'address2', address2,
+               'deliveredOrders', delivered_orders,
+               'lastDeliveredAt', last_delivered_at,
+               'isSignedIn', is_signed_in,
+               'cohorts', cohorts,
+               'eligible', eligible,
+               'exclusionReason', exclusion_reason
+             ) ORDER BY last_delivered_at DESC NULLS LAST, name ASC NULLS LAST, id)
+             FROM (
+               SELECT * FROM audience_customers
+               ORDER BY last_delivered_at DESC NULLS LAST, name ASC NULLS LAST, id
+               LIMIT $4 OFFSET $5
+             ) page
+           ), '[]'::jsonb) AS customers`,
+    params: [...base.params, cohort, limit, offset],
+  };
+};
 
 export class PromotionService {
   static async list(): Promise<unknown[]> {
     return (await query(`SELECT p.*, a.name AS "createdByName",
       p.click_count AS "clickCount",
-      (SELECT COUNT(*)::int FROM mart_promotion_deliveries d WHERE d.promotion_id = p.id AND d.status = 'sent') AS "deliveredCount"
+      (SELECT COUNT(*)::int FROM mart_promotion_deliveries d WHERE d.promotion_id = p.id AND d.status = 'sent' AND NOT d.is_test) AS "deliveredCount"
       FROM mart_promotions p JOIN mart_admins a ON a.id = p.created_by ORDER BY p.created_at DESC`)).rows;
   }
 
@@ -319,18 +510,105 @@ export class PromotionService {
     return true;
   }
 
-  static async preview(id: string): Promise<{ recipients: number; subscriptions: number; exclusions: AudienceExclusions }> {
+  static async preview(id: string): Promise<AudiencePreview> {
     const promotion = await this.getDraftOrAny(id);
-    const audience = await this.audience(this.zoneIds(promotion), this.audienceRules(promotion));
-    return { recipients: audience.recipients, subscriptions: audience.subscriptions.length, exclusions: audience.exclusions };
+    return this.previewRules({
+      zoneIds: this.zoneIds(promotion),
+      audienceRules: { cohorts: this.audienceRules(promotion) },
+    });
   }
 
-  static async test(id: string, adminId: string): Promise<{ sent: number; failed: number }> {
+  static async previewRules(data: Record<string, unknown>): Promise<AudiencePreview> {
+    const value = normalizePromotionInput(data, true);
+    const zoneIds = value.zoneIds || [];
+    const cohorts = value.audienceRules?.cohorts || [];
+    await this.validateZones(zoneIds);
+    const audience = await this.audience(zoneIds, cohorts);
+    return {
+      matchedCustomers: audience.matchedCustomers,
+      recipients: audience.recipients,
+      subscriptions: audience.subscriptions.length,
+      exclusions: audience.exclusions,
+      cohorts: cohorts.map(cohort => ({ cohort, count: audience.cohortCounts[cohort] || 0 })),
+    };
+  }
+
+  static async customers(data: Record<string, unknown>): Promise<AudienceCustomerPage> {
+    const value = normalizePromotionInput(data, true);
+    const zoneIds = value.zoneIds || [];
+    const cohorts = value.audienceRules?.cohorts || [];
+    const rawCohort = data.cohort;
+    if (rawCohort !== undefined && rawCohort !== null && (typeof rawCohort !== 'string' || !AUDIENCE_COHORTS.includes(rawCohort as AudienceCohort))) {
+      throw new Error('Invalid audience cohort');
+    }
+    const cohort = (rawCohort as AudienceCohort | undefined) || null;
+    const limit = Math.min(Math.max(Number(data.limit) || 25, 1), 100);
+    const offset = Math.max(Number(data.offset) || 0, 0);
+    await this.validateZones(zoneIds);
+    const sql = audienceCustomersSql(zoneIds, cohorts, cohort, limit, offset);
+    const result = (await query<{ total: number; customers: AudienceCustomer[] }>(sql.text, sql.params)).rows[0];
+    return {
+      total: Number(result?.total || 0),
+      customers: (result?.customers || []).map(customer => ({
+        ...customer,
+        deliveredOrders: Number(customer.deliveredOrders || 0),
+        eligible: customer.eligible === true,
+        exclusionReason: customer.exclusionReason || null,
+      })),
+      limit,
+      offset,
+    };
+  }
+
+  static async test(id: string): Promise<PromotionTestResult> {
     const promotion = await this.getDraftOrAny(id);
     if (promotion.status !== 'draft') throw new Error('Only draft promotions can be test sent');
-    const subscriptions = (await query<Subscription>(`SELECT id, NULL::uuid AS "customerId", endpoint, p256dh, auth
-      FROM mart_push_subscriptions WHERE admin_id = $1 ORDER BY created_at DESC`, [adminId])).rows;
-    return this.deliver(subscriptions, promotion);
+    const normalizedPhones = PROMOTION_TEST_PHONES.map(normalizePhoneDigits);
+    const customers = (await query<{ id: string; name: string | null; phone: string }>(
+      `SELECT id, name, phone FROM mart_customers
+       WHERE RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = ANY($1::text[])
+       ORDER BY created_at ASC`,
+      [normalizedPhones],
+    )).rows;
+    const customerByPhone = new Map<string, { id: string; name: string | null; phone: string }>();
+    for (const customer of customers) {
+      const phone = normalizePhoneDigits(customer.phone);
+      if (!customerByPhone.has(phone)) customerByPhone.set(phone, customer);
+    }
+    const targets: PromotionTestTarget[] = [];
+    for (const phone of normalizedPhones) {
+      const customer = customerByPhone.get(phone);
+      if (!customer) {
+        targets.push({ phone, name: null, customerId: null, subscriptions: 0, sent: 0, failed: 0, note: 'Customer not found' });
+        continue;
+      }
+      const subscriptions = (await query<Subscription>(
+        `SELECT id, customer_id AS "customerId", endpoint, p256dh, auth
+         FROM mart_push_subscriptions
+         WHERE customer_id = $1
+         ORDER BY created_at DESC`,
+        [customer.id],
+      )).rows;
+      if (!subscriptions.length) {
+        targets.push({ phone, name: customer.name, customerId: customer.id, subscriptions: 0, sent: 0, failed: 0, note: 'No active push subscription' });
+        continue;
+      }
+      const outcome = await this.deliver(subscriptions, promotion, { isTest: true });
+      targets.push({
+        phone,
+        name: customer.name,
+        customerId: customer.id,
+        subscriptions: subscriptions.length,
+        sent: outcome.sent,
+        failed: outcome.failed,
+      });
+    }
+    return {
+      sent: targets.reduce((sum, target) => sum + target.sent, 0),
+      failed: targets.reduce((sum, target) => sum + target.failed, 0),
+      recipients: targets.filter(target => target.subscriptions > 0).length,
+      targets,
+    };
   }
 
   static async send(id: string): Promise<{ sent: number; failed: number; recipients: number }> {
@@ -346,7 +624,7 @@ export class PromotionService {
     });
     try {
       const audience = await this.audience(this.zoneIds(promotion), this.audienceRules(promotion));
-      const outcome = await this.deliver(audience.subscriptions, promotion, true);
+      const outcome = await this.deliver(audience.subscriptions, promotion, { trackClicks: true });
       await transaction(async client => {
         const result = await client.query(`UPDATE mart_promotions
           SET status = 'sent', sent_at = NOW(), recipient_count = $2, delivery_count = $3, fail_count = $4
@@ -403,24 +681,35 @@ export class PromotionService {
     const sql = audienceSql(zoneIds, cohorts);
     const result = (await query<AudienceResult>(sql.text, sql.params)).rows[0];
     return {
+      matchedCustomers: Number(result?.matchedCustomers || 0),
       recipients: Number(result?.recipients || 0),
       subscriptions: result?.subscriptions || [],
       exclusions: result?.exclusions || {
         notConsented: 0, noSubscription: 0, cohortMismatch: 0, sentPromotionLast7d: 0,
         activeOrder: 0, recentDelivery: 0, recentCancellationOrFailure: 0, lateDeliverySuppression: 0,
       },
+      cohortCounts: result?.cohortCounts || {},
     };
   }
 
-  private static async deliver(subscriptions: Subscription[], promotion: any, trackClicks = false): Promise<{ sent: number; failed: number }> {
+  private static async deliver(
+    subscriptions: Subscription[],
+    promotion: any,
+    options: { trackClicks?: boolean; isTest?: boolean } = {},
+  ): Promise<{ sent: number; failed: number }> {
     const unique = Array.from(new Map(subscriptions.map(subscription => [subscription.endpoint, subscription])).values());
+    const destination = options.isTest
+      ? customerDestination(promotion.destination_url) || promotion.destination_url
+      : options.trackClicks
+        ? `${config.urls.publicApi}/promotions/${promotion.id}/click`
+        : promotion.destination_url;
     const outcomes = await PushService.sendWithOutcomes(unique, {
       title: promotion.title, body: promotion.body, image: promotion.image_url || undefined,
-      url: trackClicks ? `${config.urls.publicApi}/promotions/${promotion.id}/click` : promotion.destination_url, tag: `promotion-${promotion.id}`,
+      url: destination, tag: options.isTest ? `promotion-test-${promotion.id}` : `promotion-${promotion.id}`,
     }, { ttl: 86400, urgency: 'normal' });
     await Promise.all(outcomes.map(async ({ subscription, success, error }) => {
-      await query(`INSERT INTO mart_promotion_deliveries (promotion_id, customer_id, subscription_id, status, sent_at, error)
-        VALUES ($1,$2,$3,$4,$5,$6)`, [promotion.id, subscription.customerId, subscription.id, success ? 'sent' : 'failed', success ? new Date() : null, error?.slice(0, 1000) || null]).catch(() => undefined);
+      await query(`INSERT INTO mart_promotion_deliveries (promotion_id, customer_id, subscription_id, status, sent_at, error, is_test)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)`, [promotion.id, subscription.customerId, subscription.id, success ? 'sent' : 'failed', success ? new Date() : null, error?.slice(0, 1000) || null, options.isTest === true]).catch(() => undefined);
     }));
     return { sent: outcomes.filter(outcome => outcome.success).length, failed: outcomes.filter(outcome => !outcome.success).length };
   }
