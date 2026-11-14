@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ChevronLeft, RefreshCw, Search, X, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, RefreshCw, Search, X } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
 import SmartImage from './SmartImage';
 import PageHeader from './PageHeader';
 import BottomNav from './BottomNav';
-import { useCartStore } from '../store/cartStore';
+import FloatingCart from './FloatingCart';
 import { loadRecentSearches, recordRecentSearch, clearRecentSearches } from '../utils/recentSearches';
 import { loadRecentlyViewedIds } from '../utils/recentlyViewed';
 import { track } from '../utils/track';
@@ -69,7 +69,6 @@ export default function CatalogSearchSheet({
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const pullDistanceRef = useRef(0);
   const refreshingRef = useRef(false);
-  const totalItems = useCartStore(s => s.totalItems());
   const { ref: inputRef, dismiss: dismissKeyboard, onKeyDown: handleKeyDown, onSurfaceClick: handleSurfaceClick } = useKeyboardDismiss();
   const query = search.trim().toLowerCase();
   const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
@@ -274,16 +273,7 @@ export default function CatalogSearchSheet({
                 )}
               </div>
 
-              {/* Cart — appears only once the shopper has added something; taps straight to checkout. */}
-              {totalItems > 0 && (
-                <button type="button" onClick={onOpenCart} aria-label={`View cart, ${totalItems} ${totalItems === 1 ? 'item' : 'items'}`}
-                  className="relative mr-1.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10">
-                  <ShoppingCart className="h-6 w-6" />
-                  <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-[#14532d] ring-1 ring-black/5">
-                    {totalItems}
-                  </span>
-                </button>
-              )}
+
             </PageHeader>
           </div>
 
@@ -349,7 +339,7 @@ export default function CatalogSearchSheet({
           )}
         </div>
 
-        <div ref={resultsRef} className="relative mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto overscroll-y-contain bg-white px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3 dark:bg-slate-900 md:px-6 lg:px-8" onScroll={dismissKeyboard}>
+        <div ref={resultsRef} className={`relative mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto overscroll-y-contain bg-white px-3 pt-3 dark:bg-slate-900 md:px-6 lg:px-8 ${freshMode ? "pb-[calc(7rem+env(safe-area-inset-bottom,0px))]" : "pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}`} onScroll={dismissKeyboard}>
           {(refreshing || pullDistance > 0) && (
             <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2" style={{ opacity: refreshing ? 1 : Math.min(1, pullDistance / 40) }} aria-live="polite">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md ring-1 ring-black/5 dark:bg-slate-800/90 dark:ring-white/10">
@@ -453,6 +443,7 @@ export default function CatalogSearchSheet({
             )}
           </section>
         </div>
+        {freshMode && <FloatingCart onOpen={onOpenCart} />}
         {freshMode && (
         <div className="shrink-0 border-t border-gray-200 bg-[#f7f8fa] dark:border-slate-800 dark:bg-slate-900 sm:hidden">
           <BottomNav
