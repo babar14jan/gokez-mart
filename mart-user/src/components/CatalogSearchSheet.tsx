@@ -116,6 +116,7 @@ export default function CatalogSearchSheet({
     // Fresh never falls back to "all products": if no configured tab resolves,
     // the page is empty rather than leaking the rest of the catalogue.
     if (freshMode && !activeCategoryId) return [] as Product[];
+    if (!freshMode && !query) return [] as Product[];
     const list = products.filter(product =>
       (!freshMode || !product.isBundle) &&
       (!activeCategoryId || product.categoryId === activeCategoryId)
@@ -352,7 +353,9 @@ export default function CatalogSearchSheet({
             <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
               {query
                 ? `Showing results for “${search.trim()}”`
-                : categoryById.get(activeCategoryId ?? '')?.name || 'Products'}
+                : freshMode
+                  ? categoryById.get(activeCategoryId ?? '')?.name || 'Products'
+                  : 'Products'}
             </h2>
             {displayed.length ? (
               freshMode && !query && freshLayout === 'row' ? (
