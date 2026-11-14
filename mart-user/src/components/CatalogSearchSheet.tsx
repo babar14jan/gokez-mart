@@ -74,6 +74,7 @@ export default function CatalogSearchSheet({
   const refreshingRef = useRef(false);
   const { ref: inputRef, dismiss: dismissKeyboard, onKeyDown: handleKeyDown, onSurfaceClick: handleSurfaceClick } = useKeyboardDismiss();
   const query = search.trim().toLowerCase();
+  const placeholder = freshMode ? 'Search Fresh Vegetables and Fruits' : searchPrompt;
   const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
   const categoriesWithProducts = useMemo(
     () => categories.filter(category => products.some(product => product.categoryId === category.id)),
@@ -108,6 +109,7 @@ export default function CatalogSearchSheet({
   const results = useMemo(() => {
     if (!query) return [] as Product[];
     return products
+      .filter(product => !freshMode || !product.isBundle)
       .map((product, index) => ({ product, index, score: matchScore(product, query) }))
       .filter(entry => entry.score < 7)
       .sort((a, b) => a.score - b.score || a.index - b.index)
@@ -270,7 +272,7 @@ export default function CatalogSearchSheet({
                 <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
                   value={search} onChange={event => setSearch(event.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  placeholder={searchPrompt}
+                  placeholder={placeholder}
                   className="w-full rounded-xl border-0 bg-white py-2 pl-4 pr-11 text-sm text-gray-900 shadow-sm ring-1 ring-black/5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/70 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
                 {search && (
                   <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
@@ -296,7 +298,7 @@ export default function CatalogSearchSheet({
               <input autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
                 value={search} onChange={event => setSearch(event.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder={searchPrompt}
+                placeholder={placeholder}
                 className="w-full rounded-2xl border-0 bg-gray-100 py-3.5 pl-11 pr-11 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400" />
               {search && (
                 <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
@@ -364,7 +366,7 @@ export default function CatalogSearchSheet({
                   value={search}
                   onChange={event => setSearch(event.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  placeholder={searchPrompt}
+                  placeholder={placeholder}
                   className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
                 />
                 {search && (
