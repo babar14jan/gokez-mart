@@ -332,6 +332,8 @@ export const authApi = {
   getDataExport: () => api.get('/compliance/data-export'),
   getMarketingConsent: () => api.get('/compliance/marketing-consent'),
   updateMarketingConsent: (granted: boolean) => api.put('/compliance/marketing-consent', { granted }),
+  updateGuestMarketingConsent: (trackingToken: string, granted: boolean) =>
+    api.put('/push/guest-consent', { trackingToken, granted }),
 };
 
 export interface AddressBookEntry {

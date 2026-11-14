@@ -144,6 +144,7 @@ router.put('/admin/settings',          authenticate, ctrl.adminUpdateSettings);
 router.get('/push/vapid-public-key',    ctrl.getVapidPublicKey);
 router.post('/push/subscribe/customer', authenticateCustomer, ctrl.customerSavePushSub);
 router.post('/push/subscribe/guest',    ctrl.guestSavePushSub);
+router.put('/push/guest-consent',       ctrl.guestUpdateMarketingConsent);
 router.post('/push/subscribe/admin',    authenticate, ctrl.adminSavePushSub);
 
 // ── DPDP Compliance ──────────────────────────────────────────────────────────
@@ -186,6 +187,8 @@ router.post('/admin/campaigns/:id/supersede',   authenticate, requireSuperAdmin,
 
 // Promotional web push (super_admin only)
 router.get('/admin/promotions',                authenticate, requireSuperAdmin, ctrl.adminGetPromotions);
+router.post('/admin/promotions/audience/preview', authenticate, requireSuperAdmin, ctrl.adminPreviewPromotionAudience);
+router.post('/admin/promotions/audience/customers', authenticate, requireSuperAdmin, ctrl.adminGetPromotionAudienceCustomers);
 router.post('/admin/promotions',               authenticate, requireSuperAdmin, ctrl.adminCreatePromotion);
 router.put('/admin/promotions/:id',            authenticate, requireSuperAdmin, ctrl.adminUpdatePromotion);
 router.delete('/admin/promotions/:id',         authenticate, requireSuperAdmin, ctrl.adminDeletePromotion);

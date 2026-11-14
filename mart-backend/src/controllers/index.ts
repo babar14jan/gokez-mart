@@ -2897,15 +2897,37 @@ export const guestSavePushSub = asyncHandler(async (req: Request, res: Response)
   if (!endpoint || !keys?.p256dh || !keys?.auth || !trackingToken || typeof trackingToken !== 'string') {
     res.status(400).json({ success: false, error: 'Invalid subscription' }); return;
   }
-  const found = await query<{ id: string }>(
-    `SELECT id FROM mart_orders WHERE tracking_token = $1 LIMIT 1`,
+  const found = await query<{ id: string; customer_id: string | null }>(
+    `SELECT id, customer_id FROM mart_orders WHERE tracking_token = $1 LIMIT 1`,
     [trackingToken.trim()]
   );
   if (!found.rows.length) {
     res.status(404).json({ success: false, error: 'Order not found' }); return;
   }
-  await PushService.saveGuestSubscription(trackingToken.trim(), { endpoint, keys });
+  await PushService.saveGuestSubscription(trackingToken.trim(), found.rows[0].customer_id, { endpoint, keys });
   res.json({ success: true });
+});
+
+/**
+ * Guest marketing consent. The tracking token proves the device owns an order;
+ * the order's phone-derived customer row is the record promotions target.
+ */
+export const guestUpdateMarketingConsent = asyncHandler(async (req: Request, res: Response) => {
+  const { granted, trackingToken } = req.body;
+  if (typeof granted !== 'boolean' || typeof trackingToken !== 'string' || !trackingToken.trim()) {
+    res.status(400).json({ success: false, error: 'Invalid consent request' }); return;
+  }
+  const found = await query<{ customer_id: string | null }>(
+    `SELECT customer_id FROM mart_orders WHERE tracking_token = $1 LIMIT 1`,
+    [trackingToken.trim()]
+  );
+  const customerId = found.rows[0]?.customer_id;
+  if (!customerId) {
+    res.status(404).json({ success: false, error: 'Order not found' }); return;
+  }
+  await ComplianceService.updateMarketingConsent(customerId, granted);
+  await PushService.linkGuestSubscriptionsToCustomer(trackingToken.trim(), customerId);
+  res.json({ success: true, data: { granted } });
 });
 
 export const getVapidPublicKey = asyncHandler(async (_req: Request, res: Response) => {
@@ -3749,6 +3771,16 @@ export const adminGetPromotions = asyncHandler(async (_req: AdminRequest, res: R
   res.json({ success: true, data: await PromotionService.list() });
 });
 
+export const adminPreviewPromotionAudience = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try { res.json({ success: true, data: await PromotionService.previewRules(req.body) }); }
+  catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Audience preview failed' }); }
+});
+
+export const adminGetPromotionAudienceCustomers = asyncHandler(async (req: AdminRequest, res: Response) => {
+  try { res.json({ success: true, data: await PromotionService.customers(req.body) }); }
+  catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Audience customers could not be loaded' }); }
+});
+
 export const adminCreatePromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
   try {
     res.status(201).json({ success: true, data: await PromotionService.create(req.body, req.admin!.id) });
@@ -3774,7 +3806,7 @@ export const adminPreviewPromotion = asyncHandler(async (req: AdminRequest, res:
 });
 
 export const adminTestPromotion = asyncHandler(async (req: AdminRequest, res: Response) => {
-  try { res.json({ success: true, data: await PromotionService.test(req.params.id, req.admin!.id) }); }
+  try { res.json({ success: true, data: await PromotionService.test(req.params.id) }); }
   catch (error: any) { res.status(400).json({ success: false, error: error.message || 'Test send failed' }); }
 });
 
