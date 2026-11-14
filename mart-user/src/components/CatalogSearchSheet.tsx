@@ -347,29 +347,6 @@ export default function CatalogSearchSheet({
             </section>
           )}
 
-          {/* Search catalogue: browse all categories (no "All products" tile). */}
-          {!query && !freshMode && categoriesWithProducts.length > 1 && (
-            <section className="mb-5">
-              <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">Browse categories</h2>
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {categoriesWithProducts.map(category => {
-                  const selected = category.id === activeCategoryId;
-                  return (
-                    <button type="button" key={category.id} onClick={() => selectCategory(category.id)}
-                      className={`flex min-w-[78px] flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-colors ${
-                        selected
-                          ? 'border-gokez-700 bg-gokez-50 text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-300'
-                          : 'border-gray-100 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                      }`}>
-                      <CategoryIcon icon={category.icon} name={category.name} className="h-7 w-7 object-contain" />
-                      <span className="line-clamp-2 text-[10px] font-semibold leading-tight">{category.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
           {/* Live product results. */}
           <section>
             <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
