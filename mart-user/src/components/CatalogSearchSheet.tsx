@@ -405,7 +405,7 @@ export default function CatalogSearchSheet({
             {(!query && !freshMode) ? null : (
             <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
               {query
-                ? `Showing results for “${search.trim()}”`
+                ? `Showing results for ${search.trim()}`
                 : freshMode
                   ? categoryById.get(activeCategoryId ?? '')?.name || 'Products'
                   : 'Products'}
@@ -468,7 +468,7 @@ export default function CatalogSearchSheet({
               </div>
             ) : (
               <p className="py-12 text-center text-sm text-gray-500 dark:text-slate-400">
-                {query ? `No products found for “${search.trim()}”` : 'No products in this category'}
+                {query ? `No products found for ${search.trim()}` : 'No products in this category'}
               </p>
             )}
           </section>
