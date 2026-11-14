@@ -373,7 +373,7 @@ export default function CatalogSearchSheet({
                   />
                   {!search && (
                     <span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-slate-400">
-                      Search <span className="font-bold text-gray-700 dark:text-slate-200">Fresh Vegetables</span> and <span className="font-bold text-gray-700 dark:text-slate-200">Fruits</span>
+                      Search Fresh <span className="font-bold text-gray-600 dark:text-slate-300">Vegetables</span> and <span className="font-bold text-gray-600 dark:text-slate-300">Fruits</span>
                     </span>
                   )}
                   {search && (
