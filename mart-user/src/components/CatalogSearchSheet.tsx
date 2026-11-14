@@ -376,7 +376,7 @@ export default function CatalogSearchSheet({
                   </span>
                 )}
                 {inline && query && suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-yellow-200/60 bg-white shadow-lg dark:border-yellow-900/40 dark:bg-slate-800">
+                  <div className="max-h-56 overflow-y-auto rounded-xl border border-yellow-200/60 bg-white dark:border-yellow-900/40 dark:bg-slate-800">
                     <div className="space-y-1 px-2 py-2">
                       {suggestions.map(product => {
                         const category = categoryById.get(product.categoryId);
