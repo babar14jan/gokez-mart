@@ -44,7 +44,7 @@ import { detectPlatform } from './utils/install';
 import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 
-type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback';
+type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'fresh';
 
 // Canonical URL for each view. Used to give every tab its own history entry so a
 // sub-page opened from it can return there with the back button.
@@ -61,6 +61,7 @@ const VIEW_PATH: Record<View, string> = {
   grievance: '/grievance',
   'delete-account': '/delete-account',
   feedback: '/feedback',
+  fresh: '/fresh',
 };
 
 type PermissionPrompt = 'order-notifications' | null;
@@ -338,9 +339,7 @@ export default function App() {
     setCatalogSearchOpen(true);
   };
   const openFreshPage = () => {
-    setCatalogSearchMode('fresh');
-    setCatalogSearchAutoFocus(false);
-    setCatalogSearchOpen(true);
+    setView('fresh');
   };
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -355,7 +354,7 @@ export default function App() {
   // the legal/info sub-pages, or the combo/deals sheets (which are short and
   // back out to Home, where the cart already lives), so none of those reserve
   // bottom clearance for it.
-  const productPage = view === 'home' || view === 'categories' || view === 'orders';
+  const productPage = view === 'home' || view === 'categories' || view === 'orders' || view === 'fresh';
   const productPageBottom = cartItems > 0 ? PAGE_BOTTOM_CART : PAGE_BOTTOM;
 
   const searchPrompt = useRotatingSearchPrompt(products);
@@ -599,6 +598,7 @@ export default function App() {
       // customer who signed in from the account page was dumped on the home
       // screen instead of their order history.
       else if (path === '/orders') setView('orders');
+      else if (path === '/fresh') setView('fresh');
       // Declining login from the account tab returns here, so this path has to
       // resolve to a view. Without it the guest exit fell through to Home.
       else if (path === '/categories' || path.startsWith('/categories')) setView('categories');
@@ -1252,7 +1252,7 @@ export default function App() {
       {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
         <Navbar
           onUseMyLocation={useMyLocation}
-          activeView={view as 'home' | 'categories' | 'orders' | 'account'}
+          activeView={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'}
           onNavChange={handleNavChange}
           onCheckout={handleCheckout}
           onSearchOpen={() => openCatalogSearch()}
@@ -1275,7 +1275,7 @@ export default function App() {
       floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
       bottomNav={!checkoutActive ? (
         <div className="sm:hidden shrink-0">
-          <BottomNav active={view as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={openFreshPage} />
+          <BottomNav active={(view === 'fresh' ? 'home' : view) as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={openFreshPage} freshActive={view === 'fresh'} />
         </div>
       ) : null}
     >
@@ -1397,6 +1397,8 @@ export default function App() {
           onClose={() => setCatalogSearchOpen(false)}
           onOpenCart={() => handleCheckout()}
           onRefresh={() => refreshCatalog(activeStoreId, selectedZone?.id, { force: true })}
+          activeView={(view === 'fresh' ? 'home' : view) as 'home' | 'categories' | 'orders' | 'account'}
+          onNavigate={(v) => { setCatalogSearchOpen(false); handleNavChange(v); }}
         />
       )}
 
@@ -1408,6 +1410,26 @@ export default function App() {
       ) : view === 'categories' ? (
         <div className={productPageBottom}>
           <CategoriesView categories={categories} products={products} initialCategorySlug={pendingCategorySlug} loading={loading} onEmpty={() => setView('home')} />
+        </div>
+      ) : view === 'fresh' ? (
+        <div className={productPageBottom}>
+          <CatalogSearchSheet
+            inline
+            categories={categories}
+            products={products}
+            searchPrompt={searchPrompt}
+            autoFocus={false}
+            mode="fresh"
+            freshCategorySlugs={freshCategorySlugs}
+            freshColumns={freshSection?.config?.columns ?? 3}
+            freshLimit={freshSection?.config?.limit ?? null}
+            freshLayout={freshSection?.layout === 'row' ? 'row' : 'grid'}
+            onClose={() => setView('home')}
+            onOpenCart={() => handleCheckout()}
+            onRefresh={() => refreshCatalog(activeStoreId, selectedZone?.id, { force: true })}
+            activeView={(view === 'fresh' ? 'home' : view) as 'home' | 'categories' | 'orders' | 'account'}
+            onNavigate={(v) => { setView(v); }}
+          />
         </div>
       ) : view === 'deals' ? (
         <div className={PAGE_BOTTOM}>

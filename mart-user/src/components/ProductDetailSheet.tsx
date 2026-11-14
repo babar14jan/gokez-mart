@@ -3,6 +3,7 @@ import { Check, X } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { trackOnce } from '../utils/track';
+import { recordRecentlyViewed } from '../utils/recentlyViewed';
 import CartQuantityControl from './CartQuantityControl';
 import SmartImage from './SmartImage';
 
@@ -24,6 +25,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
   // Reached the product sheet = product viewed. Once per mount, not per scroll.
   useEffect(() => {
     trackOnce('product_viewed', { productId: product.id, productName: product.name });
+    recordRecentlyViewed(product.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
   const { items, addItem, updateQty } = useCartStore();
@@ -79,6 +81,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
   }, [onClose]);
 
   const sheetRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startYRef = useRef(0);
@@ -91,6 +94,8 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!dragging) return;
+    const scroller = scrollRef.current;
+    if (scroller && scroller.scrollTop > 0) return; // let content scroll
     const currentY = e.touches[0].clientY;
     const delta = currentY - startYRef.current;
     if (delta > 0) {
@@ -102,7 +107,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
   const handleTouchEnd = () => {
     if (!dragging) return;
     setDragging(false);
-    if (dragY > 120) {
+    if (dragY > 80) {
       onClose();
     } else {
       setDragY(0);
@@ -145,7 +150,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
           {/* Large hero image — full-width, clearly bigger than the home card */}
           <div className="relative h-48 w-full overflow-hidden bg-gray-50 sm:h-56 dark:bg-slate-700">
             <SmartImage
