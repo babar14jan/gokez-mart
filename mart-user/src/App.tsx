@@ -577,13 +577,6 @@ export default function App() {
     applySeo(view, { checkoutActive });
   }, [view, checkoutActive]);
 
-  // Keep the bottom nav visible on the Fresh page even while the search
-  // field is focused (the global .input-focused rule hides it otherwise).
-  useEffect(() => {
-    if (view === 'fresh') document.documentElement.classList.add('fresh-page');
-    else document.documentElement.classList.remove('fresh-page');
-  }, [view]);
-
   useEffect(() => {
     const handlePop = () => {
       const path = window.location.pathname.replace(/\/+$/, '') || '/';

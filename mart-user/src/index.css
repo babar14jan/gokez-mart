@@ -120,12 +120,6 @@ html, body { overscroll-behavior-y: none; }
   display: none;
 }
 
-/* Fresh page keeps its bottom nav visible even while the search field is
-   focused, so the bar does not disappear while browsing. */
-html.fresh-page.input-focused .mobile-bottom-nav {
-  display: flex !important;
-}
-
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
   /* Height of the on-screen keyboard over the layout viewport, published by
