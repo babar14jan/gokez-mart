@@ -1397,6 +1397,8 @@ export default function App() {
           onClose={() => setCatalogSearchOpen(false)}
           onOpenCart={() => handleCheckout()}
           onRefresh={() => refreshCatalog(activeStoreId, selectedZone?.id, { force: true })}
+          activeView={view as 'home' | 'categories' | 'orders' | 'account'}
+          onNavigate={(v) => { setCatalogSearchOpen(false); handleNavChange(v); }}
         />
       )}
 

@@ -5,6 +5,7 @@ import CategoryIcon from './CategoryIcon';
 import ProductCard from './ProductCard';
 import SmartImage from './SmartImage';
 import PageHeader from './PageHeader';
+import BottomNav from './BottomNav';
 import { useCartStore } from '../store/cartStore';
 import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
@@ -24,6 +25,10 @@ interface CatalogSearchSheetProps {
   onClose: () => void;
   onOpenCart: () => void;
   onRefresh: () => Promise<void>;
+  /** Active app view, so the in-search bottom nav can highlight the current tab. */
+  activeView?: 'home' | 'categories' | 'orders' | 'account';
+  /** Close the search and hand the tab change to the parent (returns to the page). */
+  onNavigate?: (view: 'home' | 'categories' | 'orders' | 'account') => void;
 }
 
 /**
@@ -49,6 +54,7 @@ export default function CatalogSearchSheet({
   categories, products, searchPrompt, autoFocus = true,
   mode = 'catalog', freshCategorySlugs, freshColumns = 3, freshLimit = null, freshLayout = 'grid',
   onClose, onOpenCart, onRefresh,
+  activeView, onNavigate,
 }: CatalogSearchSheetProps) {
   const freshMode = mode === 'fresh';
   const [search, setSearch] = useState('');
@@ -391,6 +397,13 @@ export default function CatalogSearchSheet({
               </p>
             )}
           </section>
+        </div>
+        <div className="shrink-0 border-t border-gray-200 bg-[#f7f8fa] dark:border-slate-800 dark:bg-slate-900 sm:hidden">
+          <BottomNav
+            active={activeView ?? 'home'}
+            onChange={(v) => { onClose(); onNavigate?.(v); }}
+            onOpenSearch={() => onClose()}
+          />
         </div>
       </section>
     </div>
