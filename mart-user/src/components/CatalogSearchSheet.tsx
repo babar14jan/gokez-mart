@@ -357,24 +357,32 @@ export default function CatalogSearchSheet({
           {freshMode && (
             <div className="sticky top-14 z-40 -mx-3 mb-2 bg-white px-3 py-1 dark:bg-slate-900 md:mx-0 md:px-0">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  inputMode="search"
-                  enterKeyHint="search"
-                  value={search}
-                  onChange={event => setSearch(event.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                  placeholder=""
-                  aria-label={placeholder}
-                  className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
-                />
-                {!search && (
-                  <span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-slate-400">
-                    Search <span className="font-bold text-gray-700 dark:text-slate-200">Fresh Vegetables</span> and <span className="font-bold text-gray-700 dark:text-slate-200">Fruits</span>
-                  </span>
-                )}
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    inputMode="search"
+                    enterKeyHint="search"
+                    value={search}
+                    onChange={event => setSearch(event.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    placeholder=""
+                    aria-label={placeholder}
+                    className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
+                  />
+                  {!search && (
+                    <span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-slate-400">
+                      Search <span className="font-bold text-gray-700 dark:text-slate-200">Fresh Vegetables</span> and <span className="font-bold text-gray-700 dark:text-slate-200">Fruits</span>
+                    </span>
+                  )}
+                  {search && (
+                    <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
+                      className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+                      <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                    </button>
+                  )}
+                </div>
                 {inline && query && suggestions.length > 0 && (
                   <div className="max-h-56 overflow-y-auto rounded-xl border border-yellow-200/60 bg-white dark:border-yellow-900/40 dark:bg-slate-800">
                     <div className="space-y-1 px-2 py-2">
@@ -406,12 +414,6 @@ export default function CatalogSearchSheet({
                       })}
                     </div>
                   </div>
-                )}
-                {search && (
-                  <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
-                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
-                    <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-                  </button>
                 )}
               </div>
             </div>
