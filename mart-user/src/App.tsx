@@ -1275,7 +1275,7 @@ export default function App() {
       floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
       bottomNav={!checkoutActive ? (
         <div className="sm:hidden shrink-0">
-          <BottomNav active={(view === 'fresh' ? 'home' : view) as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={openFreshPage} />
+          <BottomNav active={(view === 'fresh' ? 'home' : view) as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={openFreshPage} freshActive={view === 'fresh'} />
         </div>
       ) : null}
     >

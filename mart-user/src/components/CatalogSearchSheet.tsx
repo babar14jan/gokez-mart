@@ -518,6 +518,7 @@ export default function CatalogSearchSheet({
             active={activeView ?? 'home'}
             onChange={(v) => { onClose(); onNavigate?.(v); }}
             onOpenSearch={() => onClose()}
+            freshActive={freshMode}
           />
         </div>
         )}
