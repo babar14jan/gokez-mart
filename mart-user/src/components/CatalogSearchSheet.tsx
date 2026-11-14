@@ -313,7 +313,7 @@ export default function CatalogSearchSheet({
         )} 
 
         {/* Live suggestions — compact white rows, shown whenever typing. */}
-        {query && suggestions.length > 0 && (
+        {!inline && query && suggestions.length > 0 && (
           <div className="border-b border-yellow-200/60 px-3 pt-2 dark:border-yellow-900/40">
             <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto md:px-6 lg:px-8" onScroll={dismissKeyboard}>
               {suggestions.map(product => {
@@ -355,7 +355,7 @@ export default function CatalogSearchSheet({
             </div>
           )}
           {freshMode && (
-            <div className="sticky top-14 z-20 -mx-3 mb-2 bg-white px-3 py-1 dark:bg-slate-900 md:mx-0 md:px-0">
+            <div className="sticky top-14 z-40 -mx-3 mb-2 bg-white px-3 py-1 dark:bg-slate-900 md:mx-0 md:px-0">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                 <input
@@ -374,6 +374,36 @@ export default function CatalogSearchSheet({
                   <span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-slate-400">
                     Search <span className="font-bold text-gray-700 dark:text-slate-200">Fresh Vegetables</span> and <span className="font-bold text-gray-700 dark:text-slate-200">Fruits</span>
                   </span>
+                )}
+                {inline && query && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                    {suggestions.map(product => {
+                      const category = categoryById.get(product.categoryId);
+                      const localName = product.localName?.trim() && product.localName.trim() !== product.name.trim()
+                        ? product.localName.trim()
+                        : '';
+                      return (
+                        <button type="button" key={product.id} onClick={() => { setSearch(product.name); recordSearch(product.name); dismissKeyboard(); }}
+                          className="flex w-full items-center gap-2.5 px-2 py-2 text-left transition-colors hover:bg-gray-100 active:bg-gray-200 dark:hover:bg-slate-700">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
+                            <SmartImage
+                              src={product.smallUrl || product.thumbnailUrl || product.photoVariants?.[0]?.smallUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
+                              alt=""
+                              className="h-full w-full"
+                              imgClassName="object-cover"
+                              fallback={<CategoryIcon icon={category?.icon || ''} name={category?.name || product.name} className="h-5 w-5 object-contain" />}
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">
+                              {product.name}
+                              {localName && <span> ({localName})</span>}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
                 {search && (
                   <button type="button" onClick={() => setSearch('')} aria-label="Clear product search"
