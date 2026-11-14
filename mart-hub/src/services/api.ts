@@ -434,7 +434,18 @@ export const zonesApi = {
 
 export type PromotionType = 'new_product' | 'combo' | 'offer' | 'back_in_stock' | 'we_miss_you' | 'custom';
 export type PromotionStatus = 'draft' | 'sending' | 'sent' | 'cancelled';
-export type AudienceCohort = 'recent_purchaser' | 'winback_7' | 'winback_15' | 'winback_30' | 'first_order_followup' | 'repeat_buyer';
+export type AudienceCohort =
+  | 'recent_purchaser'
+  | 'winback_7'
+  | 'winback_15'
+  | 'winback_30'
+  | 'first_order_followup'
+  | 'repeat_buyer'
+  | 'signed_in_no_order'
+  | 'signed_in_one_order'
+  | 'signed_in_repeat_lapsed_7'
+  | 'guest_0_1_delivered'
+  | 'guest_2_plus_delivered';
 
 export interface PromotionAudienceRules {
   cohorts: AudienceCohort[];
@@ -451,10 +462,55 @@ export interface PromotionAudienceExclusions {
   lateDeliverySuppression: number;
 }
 
+export interface PromotionCohortCount {
+  cohort: AudienceCohort;
+  count: number;
+}
+
 export interface PromotionPreview {
+  matchedCustomers: number;
   recipients: number;
   subscriptions: number;
   exclusions: PromotionAudienceExclusions;
+  cohorts?: PromotionCohortCount[];
+}
+
+export interface PromotionAudienceCustomer {
+  id: string;
+  name: string | null;
+  phone: string;
+  address: string;
+  address2: string;
+  deliveredOrders: number;
+  lastDeliveredAt: string | null;
+  isSignedIn: boolean;
+  cohorts: AudienceCohort[];
+  eligible: boolean;
+  exclusionReason: string | null;
+}
+
+export interface PromotionAudienceCustomers {
+  total: number;
+  customers: PromotionAudienceCustomer[];
+  limit: number;
+  offset: number;
+}
+
+export interface PromotionTestTarget {
+  phone: string;
+  name: string | null;
+  customerId: string | null;
+  subscriptions: number;
+  sent: number;
+  failed: number;
+  note?: string;
+}
+
+export interface PromotionTestResult {
+  sent: number;
+  failed: number;
+  recipients: number;
+  targets: PromotionTestTarget[];
 }
 
 export interface Promotion {
@@ -494,7 +550,11 @@ export const promotionsApi = {
   update: (id: string, data: Partial<PromotionInput>) => api.put<{ success: boolean; data: Promotion }>(`/admin/promotions/${id}`, data),
   delete: (id: string) => api.delete(`/admin/promotions/${id}`),
   preview: (id: string) => api.post<{ success: boolean; data: PromotionPreview }>(`/admin/promotions/${id}/preview`),
-  test: (id: string) => api.post<{ success: boolean; data: { sent: number; failed: number } }>(`/admin/promotions/${id}/test`),
+  previewAudience: (data: Pick<PromotionInput, 'zoneIds' | 'audienceRules'>) =>
+    api.post<{ success: boolean; data: PromotionPreview }>('/admin/promotions/audience/preview', data),
+  audienceCustomers: (data: Pick<PromotionInput, 'zoneIds' | 'audienceRules'> & { cohort?: AudienceCohort | null; limit?: number; offset?: number }) =>
+    api.post<{ success: boolean; data: PromotionAudienceCustomers }>('/admin/promotions/audience/customers', data),
+  test: (id: string) => api.post<{ success: boolean; data: PromotionTestResult }>(`/admin/promotions/${id}/test`),
   send: (id: string) => api.post<{ success: boolean; data: { sent: number; failed: number; recipients: number } }>(`/admin/promotions/${id}/send`),
 };
 

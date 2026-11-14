@@ -65,15 +65,29 @@ export class PushService {
    * (member, admin or a different guest token) so one device has exactly one
    * subscription row.
    */
-  static async saveGuestSubscription(trackingToken: string, sub: {
+  static async saveGuestSubscription(trackingToken: string, customerId: string | null, sub: {
     endpoint: string; keys: { p256dh: string; auth: string };
   }): Promise<void> {
     await query(
-      `INSERT INTO mart_push_subscriptions (tracking_token, endpoint, p256dh, auth)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO mart_push_subscriptions (tracking_token, customer_id, endpoint, p256dh, auth)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (endpoint) DO UPDATE
-         SET tracking_token = $1, customer_id = NULL, admin_id = NULL, p256dh = $3, auth = $4`,
-      [trackingToken, sub.endpoint, sub.keys.p256dh, sub.keys.auth]
+         SET tracking_token = $1, customer_id = $2, admin_id = NULL, p256dh = $4, auth = $5`,
+      [trackingToken, customerId, sub.endpoint, sub.keys.p256dh, sub.keys.auth]
+    );
+  }
+
+  /**
+   * Attach a guest device to the phone-derived customer row once that guest has
+   * opted in to marketing. Promotion audiences are customer-scoped, so a guest
+   * subscription without this link can never receive a promotional push.
+   */
+  static async linkGuestSubscriptionsToCustomer(trackingToken: string, customerId: string): Promise<void> {
+    await query(
+      `UPDATE mart_push_subscriptions
+         SET customer_id = $1
+       WHERE tracking_token = $2 AND customer_id IS DISTINCT FROM $1`,
+      [customerId, trackingToken]
     );
   }
 
