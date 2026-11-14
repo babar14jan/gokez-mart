@@ -453,6 +453,7 @@ export default function CatalogSearchSheet({
             )}
           </section>
         </div>
+        {freshMode && (
         <div className="shrink-0 border-t border-gray-200 bg-[#f7f8fa] dark:border-slate-800 dark:bg-slate-900 sm:hidden">
           <BottomNav
             active={activeView ?? 'home'}
@@ -460,6 +461,7 @@ export default function CatalogSearchSheet({
             onOpenSearch={() => onClose()}
           />
         </div>
+        )}
       </section>
     </div>
   );
