@@ -1252,7 +1252,7 @@ export default function App() {
       {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
         <Navbar
           onUseMyLocation={useMyLocation}
-          activeView={(view === 'fresh' ? 'home' : view) as 'home' | 'categories' | 'orders' | 'account'}
+          activeView={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'}
           onNavChange={handleNavChange}
           onCheckout={handleCheckout}
           onSearchOpen={() => openCatalogSearch()}
