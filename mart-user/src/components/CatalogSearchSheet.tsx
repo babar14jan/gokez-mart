@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ChevronLeft, RefreshCw, Search, X, ShoppingCart } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
@@ -7,6 +7,8 @@ import SmartImage from './SmartImage';
 import PageHeader from './PageHeader';
 import BottomNav from './BottomNav';
 import { useCartStore } from '../store/cartStore';
+import { loadRecentSearches, recordRecentSearch, clearRecentSearches } from '../utils/recentSearches';
+import { loadRecentlyViewedIds } from '../utils/recentlyViewed';
 import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
@@ -58,6 +60,8 @@ export default function CatalogSearchSheet({
 }: CatalogSearchSheetProps) {
   const freshMode = mode === 'fresh';
   const [search, setSearch] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(() => loadRecentlyViewedIds());
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -126,6 +130,10 @@ export default function CatalogSearchSheet({
   const gridCols = !query && freshMode && freshLayout === 'grid'
     ? freshColumns === 2 ? 'grid-cols-2 md:grid-cols-6' : freshColumns === 4 ? 'grid-cols-4 md:grid-cols-6' : 'grid-cols-3 md:grid-cols-6'
     : 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6';
+  const recentlyViewedProducts = useMemo(
+    () => recentlyViewedIds.map(id => products.find(p => p.id === id)).filter((p): p is Product => Boolean(p)),
+    [recentlyViewedIds, products]
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -158,9 +166,32 @@ export default function CatalogSearchSheet({
     }
   }, [categoryId, categoriesWithProducts, defaultCategoryId]);
 
+  useEffect(() => {
+    const refreshRecent = () => setRecentSearches(loadRecentSearches());
+    const refreshViewed = () => setRecentlyViewedIds(loadRecentlyViewedIds());
+    window.addEventListener('mart:recent-searches', refreshRecent);
+    window.addEventListener('mart:recently-viewed', refreshViewed);
+    window.addEventListener('storage', refreshRecent);
+    window.addEventListener('storage', refreshViewed);
+    return () => {
+      window.removeEventListener('mart:recent-searches', refreshRecent);
+      window.removeEventListener('mart:recently-viewed', refreshViewed);
+      window.removeEventListener('storage', refreshRecent);
+      window.removeEventListener('storage', refreshViewed);
+    };
+  }, []);
+
   const selectCategory = (id: string) => {
     setCategoryId(id);
     setSearch('');
+  };
+  const recordSearch = (term: string) => {
+    const next = recordRecentSearch(term);
+    setRecentSearches(next);
+  };
+  const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    handleKeyDown(event);
+    if (event.key === 'Enter' && search.trim()) recordSearch(search.trim());
   };
 
   useEffect(() => {
@@ -232,7 +263,7 @@ export default function CatalogSearchSheet({
               <div className="relative min-w-0 flex-1">
                 <input ref={inputRef} autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
                   value={search} onChange={event => setSearch(event.target.value)}
-                  onKeyDown={handleKeyDown}
+                  onKeyDown={handleSearchKeyDown}
                   placeholder={searchPrompt}
                   className="w-full rounded-xl border-0 bg-white py-2 pl-4 pr-11 text-sm text-gray-900 shadow-sm ring-1 ring-black/5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-white/70 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400 dark:focus:ring-slate-500" />
                 {search && (
@@ -268,6 +299,7 @@ export default function CatalogSearchSheet({
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-400 dark:text-slate-400" />
               <input autoFocus={autoFocus} type="text" inputMode="search" enterKeyHint="search"
                 value={search} onChange={event => setSearch(event.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 placeholder={searchPrompt}
                 className="w-full rounded-2xl border-0 bg-gray-100 py-3.5 pl-11 pr-11 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400" />
               {search && (
@@ -289,7 +321,7 @@ export default function CatalogSearchSheet({
                     ? product.localName.trim()
                     : '';
                   return (
-                    <button type="button" key={product.id} onClick={() => { setSearch(product.name); dismissKeyboard(); }}
+                    <button type="button" key={product.id} onClick={() => { setSearch(product.name); recordSearch(product.name); dismissKeyboard(); }}
                       className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
                         <SmartImage
@@ -350,6 +382,7 @@ export default function CatalogSearchSheet({
 
           {/* Live product results. */}
           <section>
+            {(!query && !freshMode) ? null : (
             <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
               {query
                 ? `Showing results for “${search.trim()}”`
@@ -357,6 +390,7 @@ export default function CatalogSearchSheet({
                   ? categoryById.get(activeCategoryId ?? '')?.name || 'Products'
                   : 'Products'}
             </h2>
+            )}
             {displayed.length ? (
               freshMode && !query && freshLayout === 'row' ? (
                 <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 scrollbar-hide md:mx-0 md:grid md:grid-cols-6 md:gap-2.5 md:overflow-visible md:px-0 md:pb-0">
@@ -371,6 +405,47 @@ export default function CatalogSearchSheet({
                   {displayed.map(product => <ProductCard key={product.id} product={product} />)}
                 </div>
               )
+            ) : (!query && !freshMode) ? (
+              <div className="space-y-6">
+                {recentSearches.length > 0 && (
+                  <section>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white">Recent searches</h3>
+                      <button type="button" onClick={() => { clearRecentSearches(); setRecentSearches([]); }}
+                        className="text-xs font-semibold text-gokez-700 dark:text-gokez-300">
+                        Clear
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {recentSearches.map(term => (
+                        <button key={term} type="button" onClick={() => setSearch(term)}
+                          className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                          {term}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {recentlyViewedProducts.length > 0 && (
+                  <section>
+                    <h3 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">Continue browsing</h3>
+                    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 md:grid-cols-6">
+                      {recentlyViewedProducts.map(product => <ProductCard key={product.id} product={product} />)}
+                    </div>
+                  </section>
+                )}
+                {products.length > 0 && (
+                  <section>
+                    <h3 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">Popular picks</h3>
+                    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 md:grid-cols-6">
+                      {products.slice(0, 12).map(product => <ProductCard key={product.id} product={product} />)}
+                    </div>
+                  </section>
+                )}
+                {recentSearches.length === 0 && recentlyViewedProducts.length === 0 && products.length === 0 && (
+                  <p className="py-12 text-center text-sm text-gray-500 dark:text-slate-400">Start typing to search…</p>
+                )}
+              </div>
             ) : (
               <p className="py-12 text-center text-sm text-gray-500 dark:text-slate-400">
                 {query ? `No products found for “${search.trim()}”` : 'No products in this category'}

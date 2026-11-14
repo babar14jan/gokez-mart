@@ -3,6 +3,7 @@ import { Check, X } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { trackOnce } from '../utils/track';
+import { recordRecentlyViewed } from '../utils/recentlyViewed';
 import CartQuantityControl from './CartQuantityControl';
 import SmartImage from './SmartImage';
 
@@ -24,6 +25,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
   // Reached the product sheet = product viewed. Once per mount, not per scroll.
   useEffect(() => {
     trackOnce('product_viewed', { productId: product.id, productName: product.name });
+    recordRecentlyViewed(product.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
   const { items, addItem, updateQty } = useCartStore();
