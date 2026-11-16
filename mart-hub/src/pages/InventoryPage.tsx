@@ -285,11 +285,11 @@ export default function InventoryPage() {
       for (const [productId, e] of entries) {
         const key = crypto.randomUUID();
         if (e.action === 'add') {
-          await inventoryApi.restock(productId, Number(e.qty), e.note, selectedStoreId, e.unit, key, e.cost ? Number(e.cost) : undefined);
+          await inventoryApi.restock(productId, Number(e.qty), e.note, selectedStoreId, e.unit || 'kg', key, e.cost ? Number(e.cost) : undefined);
         } else if (e.action === 'remove') {
           await inventoryApi.adjustStock(productId, -Math.abs(Number(e.qty)), e.reason, e.note, selectedStoreId, key);
         } else {
-          await inventoryApi.setStock(productId, Number(e.qty), selectedStoreId, key, e.unit);
+          await inventoryApi.setStock(productId, Number(e.qty), selectedStoreId, key, e.unit || 'kg');
         }
       }
       setInlineEdits({});
