@@ -425,10 +425,6 @@ export default function InventoryPage() {
           <div className="divide-y divide-gray-100 dark:divide-slate-700">
             {sorted.map(item => {
               const s = stockStatus(item);
-              const stockColor = s === 'out' ? 'text-red-600 dark:text-red-400'
-                : s === 'low' ? 'text-amber-600 dark:text-amber-400'
-                : s === 'ok' ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-gray-500 dark:text-slate-400';
               const inlineEdit = inlineEdits[item.productId];
               const isDirty = Boolean(inlineEdit && inlineEdit.qty && Number(inlineEdit.qty) !== 0);
               return (
@@ -463,6 +459,8 @@ export default function InventoryPage() {
                       {s === 'out' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Out</span>}
                       {s === 'low' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Low</span>}
                       {s === 'ok' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full"><CheckCircle className="w-2.5 h-2.5" />OK</span>}
+                      {!item.isBundle && item.stockQuantity !== null && <span className={`text-xs font-bold tabular-nums ${s === 'out' ? 'text-red-600 dark:text-red-400' : s === 'low' ? 'text-amber-600 dark:text-amber-400' : s === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'}`}>{formatStock(item.stockQuantity!, item.stockUnit || 'units')}</span>}
+                      {!item.isBundle && item.stockQuantity === null && <span className="text-xs text-gray-500 dark:text-slate-400">—</span>}
                     </div>
                     {item.localName && <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{item.localName}</p>}
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -499,18 +497,6 @@ export default function InventoryPage() {
                       </div>
                     ) : (
                       <>
-                        <div className="text-right flex-shrink-0 min-w-[48px]">
-                          {item.stockQuantity !== null ? (
-                            <>
-                              <p className={`text-sm font-bold tabular-nums ${stockColor}`}>
-                                {formatStock(item.stockQuantity!, item.stockUnit || 'units')}
-                              </p>
-                            </>
-                          ) : (
-                            <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
-                          )}
-                        </div>
-
                         {/* Inline quick edit */}
                         <div className={`basis-full grid grid-cols-2 gap-1.5 rounded-xl bg-slate-50 p-2 dark:bg-slate-700/40 sm:basis-auto sm:flex sm:flex-wrap sm:items-center ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
                           <select value={inlineEdit?.action || 'add'}
