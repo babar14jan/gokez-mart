@@ -428,7 +428,7 @@ export default function InventoryPage() {
               const inlineEdit = inlineEdits[item.productId];
               const isDirty = Boolean(inlineEdit && inlineEdit.qty && Number(inlineEdit.qty) !== 0);
               return (
-                <div key={item.productId} className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                <div key={item.productId} className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm transition-colors hover:border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600">
                   {/* Bulk select */}
                   <input type="checkbox" checked={selectedIds.has(item.productId)}
                     onChange={e => setSelectedIds(prev => { const next = new Set(prev); if (e.target.checked) next.add(item.productId); else next.delete(item.productId); return next; })}
@@ -498,7 +498,7 @@ export default function InventoryPage() {
                     ) : (
                       <>
                         {/* Inline quick edit */}
-                        <div className={`basis-full grid grid-cols-2 gap-1.5 rounded-xl bg-slate-50 p-2 dark:bg-slate-700/40 sm:basis-auto sm:flex sm:flex-wrap sm:items-center ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
+                        <div className={`basis-full grid grid-cols-2 gap-1.5 rounded-xl border border-slate-200 bg-slate-100 p-2 dark:border-slate-600 dark:bg-slate-700/60 sm:basis-auto sm:flex sm:flex-wrap sm:items-center ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
                           <select value={inlineEdit?.action || 'add'}
                             onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any, qty: e.target.value === 'set' ? '0' : (prev[item.productId]?.qty || '') } }))}
                             className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
