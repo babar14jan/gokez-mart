@@ -432,7 +432,10 @@ export default function InventoryPage() {
                 <div key={item.productId} className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 shadow-sm transition-colors hover:border-gray-400 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-500">
                   {/* Bulk select */}
                   <input type="checkbox" checked={selectedIds.has(item.productId)}
-                    onChange={e => setSelectedIds(prev => { const next = new Set(prev); if (e.target.checked) next.add(item.productId); else next.delete(item.productId); return next; })}
+                    onChange={e => {
+                      setSelectedIds(prev => { const next = new Set(prev); if (e.target.checked) next.add(item.productId); else next.delete(item.productId); return next; });
+                      if (!e.target.checked) setInlineEdits(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
+                    }}
                     className="h-4 w-4 shrink-0 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
                   {/* Photo */}
                   <SmartImage
