@@ -611,7 +611,7 @@ export default function ProductsPage() {
           {p.localName && <p className="text-xs text-gray-500 dark:text-slate-400 break-words">{p.localName}</p>}
           {p.description && <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400 line-clamp-1">{p.description}</p>}
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-            <span className="text-xs text-gray-500 dark:text-slate-400">{p.unit} · ₹{p.price}</span>
+            <span className="text-xs text-gray-500 dark:text-slate-400">{p.unit} · {p.discountPercent > 0 ? (<><span className="line-through opacity-60">₹{p.price}</span>{' '}₹{Math.round(p.price * (1 - p.discountPercent / 100))}</>) : `₹${p.price}`}</span>
             {p.discountPercent > 0 && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded-full">
                 <Percent className="w-2.5 h-2.5" />{p.discountPercent}% off
