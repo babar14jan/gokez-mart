@@ -42,7 +42,11 @@ let cachedSlides: Slide[] | null = null;
 let cachedActive = 0;
 let cachedSettings: CarouselSettings = { autoplay_enabled: true, autoplay_interval_seconds: 4 };
 
-export default function HomeCarousel() {
+interface HomeCarouselProps {
+  className?: string;
+}
+
+export default function HomeCarousel({ className = '' }: HomeCarouselProps) {
   const { isLoggedIn } = useCustomerAuthStore();
   const [slides, setSlides] = useState<Slide[]>(() => cachedSlides ?? []);
   const [active, setActive] = useState(() => {
@@ -187,7 +191,7 @@ export default function HomeCarousel() {
   if (visibleSlides.length === 0) return null;
 
   return (
-    <div className="mt-1 mb-2">
+    <div className={`mt-1 mb-2 ${className}`.trim()}>
       {/* Mobile: centered peek carousel (snap + scale), looping */}
       <div className="sm:hidden">
         <div
