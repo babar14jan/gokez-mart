@@ -7,7 +7,8 @@ import { useCustomerStore } from '../store/customerStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../utils/track';
 import { readTrackingTokens } from '../utils/guestTracking';
-import { requestNotificationPermission, subscribeToPush } from '../services/push';
+import { isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
+import { getDeviceInfo } from '../utils/install';
 
 export interface LoginFlowProps {
   /** Optional: the page host has no overlay to dismiss. */
@@ -183,6 +184,10 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
       // subscribe. Best-effort; never blocks login.
       (async () => {
         try {
+          const device = getDeviceInfo();
+          const isMobile = device.platform === 'android' || device.platform === 'ios';
+          if (!isMobile) return;
+          if (!isPushSupported()) return;
           if (typeof Notification === 'undefined') return;
           if (Notification.permission === 'default') {
             await requestNotificationPermission();
