@@ -79,6 +79,7 @@ export default function InventoryPage() {
   // History drawer
   const [activeTab, setActiveTab] = useState<'stock' | 'ledger'>('stock');
   const [movementSearch, setMovementSearch] = useState('');
+  const [ledgerDateFilter, setLedgerDateFilter] = useState<'today' | 'yesterday' | 'all'>('all');
   const [movements, setMovements] = useState<any[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
@@ -241,12 +242,30 @@ export default function InventoryPage() {
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Inventory Movement Ledger</h2>
           <button onClick={() => setActiveTab('stock')} className="text-xs font-semibold text-emerald-600 hover:underline">Back to Stock</button>
         </div>
-        <input type="text" value={movementSearch} onChange={e => setMovementSearch(e.target.value)}
-          placeholder="Search product, reason or source"
-          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+        <div className="flex items-center gap-2">
+          <input type="text" value={movementSearch} onChange={e => setMovementSearch(e.target.value)}
+            placeholder="Search product, reason or source"
+            className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+          <div className="flex shrink-0 items-center gap-1">
+            {(['today', 'yesterday', 'all'] as const).map(f => (
+              <button key={f} onClick={() => setLedgerDateFilter(f)}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${ledgerDateFilter === f ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                {f === 'today' ? 'Today' : f === 'yesterday' ? 'Yesterday' : 'All'}
+              </button>
+            ))}
+          </div>
+        </div>
         {movementsLoading ? <p className="text-sm text-gray-500">Loading...</p> : (
           <div className="space-y-2">
             {movements.filter(m => {
+              if (ledgerDateFilter !== 'all' && m.createdAt) {
+                const d = new Date(m.createdAt);
+                const now = new Date();
+                const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+                if (ledgerDateFilter === 'today' && d < startOfToday) return false;
+                if (ledgerDateFilter === 'yesterday' && (d < startOfYesterday || d >= startOfToday)) return false;
+              }
               const q = movementSearch.trim().toLowerCase();
               if (!q) return true;
               return [m.productName, m.productLocalName, m.movementType, m.reason, m.remarks, m.sourceType]
