@@ -213,8 +213,15 @@ export default function InventoryPage() {
   const loadMovements = async () => {
     setMovementsLoading(true);
     try {
-      const res = await inventoryApi.getMovements(selectedStoreId);
-      setMovements(res.data.data || []);
+      if (selectedStoreId === 'all') {
+        const stores = manageableStores.length ? manageableStores : [{ id: getActiveStoreId() }];
+        const results = await Promise.all(stores.map(s => inventoryApi.getMovements(s.id).catch(() => ({ data: { data: [] } }))));
+        const merged = results.flatMap(r => r.data.data || []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setMovements(merged);
+      } else {
+        const res = await inventoryApi.getMovements(selectedStoreId);
+        setMovements(res.data.data || []);
+      }
     } finally { setMovementsLoading(false); }
   };
 
