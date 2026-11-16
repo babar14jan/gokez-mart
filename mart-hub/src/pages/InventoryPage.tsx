@@ -499,7 +499,7 @@ export default function InventoryPage() {
                     ) : (
                       <>
                         {/* Inline quick edit */}
-                        <div className={`basis-full grid grid-cols-2 gap-1.5 rounded-xl border-2 border-slate-300 bg-slate-100 p-2 dark:border-slate-500 dark:bg-slate-700/60 sm:basis-auto sm:flex sm:flex-wrap sm:items-center ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
+                        <div className={`basis-full grid grid-cols-2 gap-1.5 rounded-xl border-2 border-slate-300 bg-slate-100 p-2 dark:border-slate-500 dark:bg-slate-700/60 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5 ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
                           <select value={inlineEdit?.action || ''}
                             onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any, qty: e.target.value === 'set' ? '0' : (prev[item.productId]?.qty || '') } }))}
                             className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
