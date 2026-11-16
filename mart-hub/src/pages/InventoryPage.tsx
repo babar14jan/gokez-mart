@@ -361,24 +361,24 @@ export default function InventoryPage() {
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <div className="flex shrink-0 items-center gap-2">
           <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} title="Sort inventory"
-            className="rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            className="h-8 rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             <option value="name">Name (A-Z)</option>
             <option value="stock_asc">Stock low to high</option>
             <option value="stock_desc">Stock high to low</option>
           </select>
           <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+            className="h-8 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             <option value="all">All categories</option>
             {categories.map(category => <option key={category} value={category}>{category}</option>)}
           </select>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setActiveTab('ledger'); void loadMovements(); }}
-            className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
+            className="flex h-8 shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
             <History className="w-3.5 h-3.5" /> View Ledger
           </button>
           <button onClick={() => { window.location.href = '/daily-sales'; }}
-            className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
+            className="flex h-8 shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
             <Plus className="w-3.5 h-3.5" /> Offline Sale
           </button>
         </div>
