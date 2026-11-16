@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import {
-  Package, Pencil, Loader2, X,
+  Package, Loader2, X,
   AlertTriangle, CheckCircle,
   History, Plus, ArrowDownCircle, Search,
 } from 'lucide-react';
@@ -94,9 +94,6 @@ export default function InventoryPage() {
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [history, setHistory] = useState<LogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [showBulkUpdate, setShowBulkUpdate] = useState(false);
-  const [bulkSaving, setBulkSaving] = useState(false);
-  const [bulkRows, setBulkRows] = useState<Array<{ key: string; productId: string; query: string; showSuggestions: boolean; action: 'add' | 'remove' | 'set'; qty: string; unit: string; cost: string; reason: string; note: string }>>([]);
   const [purchaseQuery, setPurchaseQuery] = useState('');
   const [purchaseShowSuggestions, setPurchaseShowSuggestions] = useState(false);
 
@@ -286,30 +283,6 @@ export default function InventoryPage() {
     );
   }
 
-  const saveBulkUpdate = async () => {
-    const rows = bulkRows.filter(row => row.productId && row.qty && Number(row.qty) !== 0);
-    if (rows.length === 0) { setShowBulkUpdate(false); return; }
-    setBulkSaving(true);
-    try {
-      for (const row of rows) {
-        const key = crypto.randomUUID();
-        if (row.action === 'add') {
-          await inventoryApi.restock(row.productId, Number(row.qty), row.note, selectedStoreId, row.unit, key, row.cost ? Number(row.cost) : undefined);
-        } else if (row.action === 'remove') {
-          await inventoryApi.adjustStock(row.productId, -Math.abs(Number(row.qty)), row.reason, row.note, selectedStoreId, key);
-        } else {
-          await inventoryApi.setStock(row.productId, Number(row.qty), selectedStoreId, key, row.unit);
-        }
-      }
-      setShowBulkUpdate(false);
-      setBulkRows([]);
-      await load();
-    } catch (e: any) {
-      alert(e?.response?.data?.error || 'Bulk update failed');
-    } finally {
-      setBulkSaving(false);
-    }
-  };
 
   const dirtyInlineCount = Object.keys(inlineEdits).filter(id => {
     const e = inlineEdits[id];
@@ -342,104 +315,6 @@ export default function InventoryPage() {
 
   const discardInlineEdits = () => setInlineEdits({});
 
-  if (showBulkUpdate) {
-    return (
-      <div className="mx-auto w-full max-w-6xl space-y-4">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-gray-300 dark:border-slate-700 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b-2 border-gray-200 dark:border-slate-700">
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">Bulk Update</h2>
-            <button onClick={() => setShowBulkUpdate(false)} className="text-xs font-semibold text-emerald-600 hover:underline">Back to Inventory</button>
-          </div>
-          <div className="p-4">
-            <div className="flex flex-col gap-2">
-              {bulkRows.map((row) => (
-                <div key={row.key} className="grid grid-cols-1 gap-2 rounded-xl border-2 border-gray-200 p-3 dark:border-slate-700 sm:grid-cols-12">
-                  <div className="relative sm:col-span-3">
-                    <input type="text" value={row.query}
-                      onFocus={() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, showSuggestions: true } : r))}
-                      onBlur={() => window.setTimeout(() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, showSuggestions: false } : r)), 120)}
-                      onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, query: e.target.value, productId: '' } : r))}
-                      placeholder="Search product"
-                      className={inp + ' pr-9'} />
-                    {row.query && (
-                      <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, query: '', productId: '', showSuggestions: false } : r))}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-slate-400">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    {row.showSuggestions && (
-                      <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
-                        {items.filter(item => {
-                          const q = row.query.trim().toLowerCase();
-                          return q ? (item.name.toLowerCase().startsWith(q) || (item.localName || '').toLowerCase().startsWith(q)) : false;
-                        }).slice(0, 8).map(item => (
-                          <button key={item.productId} type="button" onMouseDown={e => e.preventDefault()}
-                            onClick={() => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, productId: item.productId, query: `${item.name}${item.localName ? ` (${item.localName})` : ''}`, unit: item.stockUnit || r.unit, showSuggestions: false } : r))}
-                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
-                            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
-                            {item.localName && <span className="text-xs text-slate-400">{item.localName}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <select value={row.action} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, action: e.target.value as any } : r))} className={inp + ' sm:col-span-2'}>
-                    <option value="add">Add</option>
-                    <option value="remove">Remove</option>
-                    <option value="set">Set</option>
-                  </select>
-                  {row.action === 'add' ? (
-                    <div className="flex flex-wrap items-center gap-2 sm:col-span-4">
-                      <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' flex-1 min-w-[80px]'} />
-                      <input type="text" value={row.unit} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, unit: e.target.value } : r))} placeholder="Unit" className={inp + ' flex-1 min-w-[80px]'} />
-                      <input type="number" value={row.cost} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, cost: e.target.value } : r))} placeholder="Cost/unit" className={inp + ' flex-1 min-w-[80px]'} />
-                    </div>
-                  ) : (
-                    <>
-                      {row.action === 'set' ? (
-                        <div className="flex flex-wrap items-center gap-2 sm:col-span-1">
-                          <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' flex-1 min-w-[80px]'} />
-                          <input type="text" value={row.unit} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, unit: e.target.value } : r))} placeholder="Unit" className={inp + ' w-24'} />
-                        </div>
-                      ) : (
-                        <input type="number" value={row.qty} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, qty: e.target.value } : r))} placeholder="Qty" className={inp + ' sm:col-span:1'} />
-                      )}
-                      {row.action === 'remove' && (
-                        <select value={row.reason} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, reason: e.target.value } : r))} className={inp + ' sm:col-span:2'}>
-                          <option value="damage">Damage</option>
-                          <option value="spoiled">Spoiled</option>
-                          <option value="expired">Expired</option>
-                          <option value="lost">Lost</option>
-                          <option value="missing">Missing</option>
-                          <option value="consumption">Consumption</option>
-                          <option value="quality_rejection">Quality rejection</option>
-                          <option value="other">Other</option>
-                        </select>
-                      )}
-                    </>
-                  )}
-                  <input type="text" value={row.note} onChange={e => setBulkRows(rows => rows.map(r => r.key === row.key ? { ...r, note: e.target.value } : r))} placeholder="Note" className={inp + ' sm:col-span-2'} />
-                  <div className="flex items-center justify-between gap-2 sm:col-span-12">
-                    <button onClick={() => setBulkRows(rows => rows.filter(r => r.key !== row.key))} className="text-red-500 text-xs">Remove</button>
-                    <button onClick={() => setBulkRows(rows => [...rows, { key: crypto.randomUUID(), productId: '', query: '', showSuggestions: false, action: 'add', qty: '', unit: items[0]?.stockUnit || 'kg', cost: '', reason: 'damage', note: '' }])} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-xs font-semibold rounded-xl">
-                      <Plus className="w-3.5 h-3.5" /> Add row
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="border-t-2 border-gray-200 dark:border-slate-700 px-4 py-3 flex gap-3">
-          <button onClick={() => setShowBulkUpdate(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 rounded-xl">Cancel</button>
-          <button disabled={bulkSaving} onClick={saveBulkUpdate}
-            className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50">
-            {bulkSaving ? 'Saving...' : 'Save All'}
-          </button>
-        </div>
-      </div>
-    );
-  }
   if (loading) return <PageSkeleton />;
 
   if (!trackingEnabled && !managingMemberStore) return (
@@ -515,10 +390,6 @@ export default function InventoryPage() {
           <input type="text" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search inventory..." className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-9 pr-8 text-xs text-gray-900 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
           {searchQuery && <button onClick={() => setSearchQuery('')} aria-label="Clear inventory search" className="absolute right-2 top-1/2 -translate-y-1/2"><X className="h-3.5 w-3.5 text-gray-500 hover:text-gray-700" /></button>}
         </div>
-        <button onClick={() => { setBulkRows([{ key: crypto.randomUUID(), productId: '', query: '', showSuggestions: false, action: 'add', qty: '', unit: items[0]?.stockUnit || 'kg', cost: '', reason: 'damage', note: '' }]); setShowBulkUpdate(true); }}
-          className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm">
-          <Pencil className="w-3.5 h-3.5" /> Bulk Update
-        </button>
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
