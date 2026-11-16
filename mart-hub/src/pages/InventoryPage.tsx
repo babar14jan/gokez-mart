@@ -454,6 +454,11 @@ export default function InventoryPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.name}</p>
+                      <button onClick={() => openHistory(item)}
+                        className="shrink-0 p-1 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                        title="Stock history">
+                        <History className="w-4 h-4" />
+                      </button>
                       {item.isBundle && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full"><CheckCircle className="w-2.5 h-2.5" />Combo</span>}
                       {s === 'out' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Out</span>}
                       {s === 'low' && <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full"><AlertTriangle className="w-2.5 h-2.5" />Low</span>}
@@ -586,12 +591,6 @@ export default function InventoryPage() {
                           {isDirty && <span className="text-[10px] font-bold text-amber-600">●</span>}
                         </div>
 
-                        {/* View mode: history button */}
-                        <button onClick={() => openHistory(item)}
-                          className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex-shrink-0"
-                          title="Stock history">
-                          <History className="w-4 h-4" />
-                        </button>
                       </>
                     )}
                   </div>
