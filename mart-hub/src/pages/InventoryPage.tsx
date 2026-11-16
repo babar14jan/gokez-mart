@@ -71,6 +71,12 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Inline quick-edit state: track per-product pending stock edits so the whole
+  // list can be saved in one batch instead of one product at a time.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string }>>({});
+  const [inlineSaving, setInlineSaving] = useState(false);
+
   // History drawer
   const [activeTab, setActiveTab] = useState<'stock' | 'ledger'>('stock');
   const [movementSearch, setMovementSearch] = useState('');
@@ -305,6 +311,37 @@ export default function InventoryPage() {
     }
   };
 
+  const dirtyInlineCount = Object.keys(inlineEdits).filter(id => {
+    const e = inlineEdits[id];
+    return e.qty && Number(e.qty) !== 0;
+  }).length;
+
+  const saveInlineEdits = async () => {
+    const entries = Object.entries(inlineEdits).filter(([, e]) => e.qty && Number(e.qty) !== 0);
+    if (entries.length === 0) return;
+    setInlineSaving(true);
+    try {
+      for (const [productId, e] of entries) {
+        const key = crypto.randomUUID();
+        if (e.action === 'add') {
+          await inventoryApi.restock(productId, Number(e.qty), e.note, selectedStoreId, e.unit, key, e.cost ? Number(e.cost) : undefined);
+        } else if (e.action === 'remove') {
+          await inventoryApi.adjustStock(productId, -Math.abs(Number(e.qty)), e.reason, e.note, selectedStoreId, key);
+        } else {
+          await inventoryApi.setStock(productId, Number(e.qty), selectedStoreId, key, e.unit);
+        }
+      }
+      setInlineEdits({});
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Inline update failed');
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
+  const discardInlineEdits = () => setInlineEdits({});
+
   if (showBulkUpdate) {
     return (
       <div className="mx-auto w-full max-w-6xl space-y-4">
@@ -518,8 +555,14 @@ export default function InventoryPage() {
                 : s === 'low' ? 'text-amber-600 dark:text-amber-400'
                 : s === 'ok' ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-gray-500 dark:text-slate-400';
+              const inlineEdit = inlineEdits[item.productId];
+              const isDirty = Boolean(inlineEdit && inlineEdit.qty && Number(inlineEdit.qty) !== 0);
               return (
                 <div key={item.productId} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                  {/* Bulk select */}
+                  <input type="checkbox" checked={selectedIds.has(item.productId)}
+                    onChange={e => setSelectedIds(prev => { const next = new Set(prev); if (e.target.checked) next.add(item.productId); else next.delete(item.productId); return next; })}
+                    className="h-4 w-4 shrink-0 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
                   {/* Photo */}
                   <SmartImage
                     src={item.photoUrl}
@@ -587,6 +630,24 @@ export default function InventoryPage() {
                           ) : (
                             <p className="text-sm text-gray-500 dark:text-slate-400">—</p>
                           )}
+                        </div>
+
+                        {/* Inline quick edit */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <select value={inlineEdit?.action || 'add'}
+                            onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any } }))}
+                            className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="add">Add</option>
+                            <option value="remove">Remove</option>
+                            <option value="set">Set</option>
+                          </select>
+                          <input type="number" value={inlineEdit?.qty || ''}
+                            onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), qty: e.target.value } }))}
+                            placeholder="Qty" className="w-16 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                          <input type="text" value={inlineEdit?.note || ''}
+                            onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', cost: '' }), note: e.target.value } }))}
+                            placeholder="Note (optional)" className="w-24 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                          {isDirty && <span className="text-[10px] font-bold text-amber-600">●</span>}
                         </div>
 
                         {/* View mode: history button */}
@@ -872,6 +933,18 @@ export default function InventoryPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating save bar for inline edits */}
+      {dirtyInlineCount > 0 && (
+        <div className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 shadow-lg dark:border-slate-600 dark:bg-slate-800">
+          <span className="text-xs font-semibold text-gray-700 dark:text-slate-200">{dirtyInlineCount} unsaved change{dirtyInlineCount === 1 ? '' : 's'}</span>
+          <button onClick={discardInlineEdits} className="text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-slate-400">Discard</button>
+          <button disabled={inlineSaving} onClick={saveInlineEdits}
+            className="rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">
+            {inlineSaving ? 'Saving...' : 'Save all'}
+          </button>
         </div>
       )}
 
