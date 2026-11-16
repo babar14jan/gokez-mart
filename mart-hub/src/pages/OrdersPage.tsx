@@ -634,7 +634,7 @@ export default function OrdersPage() {
               ? 'bg-indigo-500 text-white shadow-sm'
               : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-indigo-300'
           }`}>
-          Scheduled
+          <span className="sm:hidden">Sched</span><span className="hidden sm:inline">Scheduled</span>
         </button>
         {dateRange === 'custom' && (
           <div className="flex items-center gap-2">
