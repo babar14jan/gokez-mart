@@ -31,16 +31,17 @@ export class InventoryService {
               COALESCE((
                 SELECT json_agg(json_build_object(
                   'changeQty', l.change_qty::float,
+                  'reason', l.reason,
                   'note', l.note,
                   'createdBy', l.name,
                   'createdByUsername', l.username,
                   'createdAt', l.created_at
                 ) ORDER BY l.created_at DESC)
                 FROM (
-                  SELECT l.change_qty, l.note, l.created_at, a.name, a.username
+                  SELECT l.change_qty, l.reason, l.note, l.created_at, a.name, a.username
                     FROM mart_inventory_log l
                    LEFT JOIN mart_admins a ON a.id = l.created_by
-                   WHERE l.product_id = sp.product_id AND l.store_id = sp.store_id AND l.reason = 'restock'
+                   WHERE l.product_id = sp.product_id AND l.store_id = sp.store_id
                    ORDER BY l.created_at DESC
                    LIMIT 2
                 ) l

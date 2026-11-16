@@ -24,7 +24,7 @@ interface InventoryItem {
   stockQuantity: number | null;
   lowStockThreshold: number | null;
   categoryName: string | null;
-  recentRestocks?: Array<{ changeQty: number; note: string | null; createdBy?: string | null; createdByUsername?: string | null; createdAt: string }>;
+  recentRestocks?: Array<{ changeQty: number; reason?: string | null; note: string | null; createdBy?: string | null; createdByUsername?: string | null; createdAt: string }>;
   storeId?: string;
   storeName?: string;
   isBundle?: boolean;
@@ -454,11 +454,14 @@ export default function InventoryPage() {
                     </div>
                     {item.recentRestocks?.length ? (
                       <div className="mt-1 space-y-0.5">
-                        {item.recentRestocks.slice(0, 2).map((r, i) => (
-                          <p key={i} className="text-[10px] text-gray-500 dark:text-slate-400">
-                            Purchase: {r.changeQty > 0 ? '+' : ''}{r.changeQty} · {new Date(r.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })} · {r.createdBy || r.createdByUsername || 'System'}
-                          </p>
-                        ))}
+                        {item.recentRestocks.slice(0, 2).map((r, i) => {
+                          const label = r.reason === 'restock' ? 'Restock' : r.reason === 'order_deducted' ? 'Order' : r.changeQty > 0 ? 'Added' : r.changeQty < 0 ? 'Removed' : 'Set';
+                          return (
+                            <p key={i} className="text-[10px] text-gray-500 dark:text-slate-400">
+                              {label}: {r.changeQty > 0 ? '+' : ''}{r.changeQty} · {new Date(r.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })} · {r.createdBy || r.createdByUsername || 'System'}{r.note ? ` · ${r.note}` : ''}
+                            </p>
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>
