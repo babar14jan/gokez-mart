@@ -34,10 +34,7 @@ export default function BottomNav({ active, onChange, onOpenSearch, freshActive 
                   className="relative flex flex-none items-center justify-center px-1 transition-transform duration-200 active:scale-95"
                 >
                   {freshActive && (
-                    <span className="absolute inset-0 m-auto h-14 w-14 rounded-full border-2 border-gokez-700 dark:border-gokez-300" aria-hidden="true" />
-                  )}
-                  {freshActive && (
-                    <span className="absolute bottom-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-gokez-700 dark:bg-gokez-300" aria-hidden="true" />
+                    <span className="absolute inset-0 m-auto h-12 w-12 rounded-full border-[3px] border-amber-500 dark:border-amber-400" aria-hidden="true" />
                   )}
                   <img src="/fresh_icon.webp" alt="" width={54} height={54} {...{ fetchpriority: 'high' }} decoding="async" className="nav-veg-icon object-contain" />
                 </button>
