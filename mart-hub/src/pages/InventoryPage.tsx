@@ -614,7 +614,7 @@ export default function InventoryPage() {
       {dirtyInlineCount > 0 && (
         <div className="fixed bottom-24 left-2.5 right-2.5 z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 shadow-lg dark:border-slate-600 dark:bg-slate-800 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:justify-start">
           <span className="text-xs font-semibold text-gray-700 dark:text-slate-200">{dirtyInlineCount} unsaved change{dirtyInlineCount === 1 ? '' : 's'}</span>
-          <button onClick={discardInlineEdits} className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">Discard</button>
+          <button onClick={discardInlineEdits} className="rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50">Discard all</button>
           <button disabled={inlineSaving} onClick={saveInlineEdits}
             className="rounded-full bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50">
             {inlineSaving ? 'Saving...' : 'Save all'}
