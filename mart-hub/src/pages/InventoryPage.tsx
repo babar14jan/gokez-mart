@@ -72,8 +72,12 @@ export default function InventoryPage() {
 
   // Inline quick-edit state: track per-product pending stock edits so the whole
   // list can be saved in one batch instead of one product at a time.
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: '' | 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string; totalCost: string }>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(sessionStorage.getItem('inventory_selected_ids') || '[]')); } catch { return new Set(); }
+  });
+  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: '' | 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string; totalCost: string }>>(() => {
+    try { return JSON.parse(sessionStorage.getItem('inventory_inline_edits') || '{}'); } catch { return {}; }
+  });
   const [inlineSaving, setInlineSaving] = useState(false);
 
   // History drawer
@@ -85,6 +89,25 @@ export default function InventoryPage() {
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [history, setHistory] = useState<LogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    try { sessionStorage.setItem('inventory_selected_ids', JSON.stringify([...selectedIds])); } catch {}
+  }, [selectedIds]);
+
+  useEffect(() => {
+    try { sessionStorage.setItem('inventory_inline_edits', JSON.stringify(inlineEdits)); } catch {}
+  }, [inlineEdits]);
+
+  const skipFilterResetRef = useRef(true);
+
+  useEffect(() => {
+    if (skipFilterResetRef.current) {
+      skipFilterResetRef.current = false;
+      return;
+    }
+    setSelectedIds(new Set());
+    setInlineEdits({});
+  }, [statusFilter, categoryFilter, searchQuery]);
 
   const { role } = useAuthStore();
   const canManageTracking = role === 'super_admin' || role === 'store_owner' || role === 'store_manager';
@@ -205,6 +228,9 @@ export default function InventoryPage() {
     if (sortBy === 'stock_asc') return sortedList.sort((a, b) => (a.stockQuantity ?? Number.MAX_SAFE_INTEGER) - (b.stockQuantity ?? Number.MAX_SAFE_INTEGER));
     if (sortBy === 'stock_desc') return sortedList.sort((a, b) => (b.stockQuantity ?? -1) - (a.stockQuantity ?? -1));
     return sortedList;  }, [items, sortBy, searchQuery, statusFilter, categoryFilter]);
+
+  const visibleIds = sorted.map(item => item.productId);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
 
   const outCount = items.filter(i => stockStatus(i) === 'out').length;
   const lowCount = items.filter(i => stockStatus(i) === 'low').length;
@@ -330,7 +356,10 @@ export default function InventoryPage() {
     }
   };
 
-  const discardInlineEdits = () => setInlineEdits({});
+  const discardInlineEdits = () => {
+    setInlineEdits({});
+    setSelectedIds(new Set());
+  };
 
   if (loading) return <PageSkeleton />;
 
@@ -412,6 +441,10 @@ export default function InventoryPage() {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          <input id="inventory-select-all" type="checkbox" checked={allVisibleSelected} onChange={event => { if (event.target.checked) setSelectedIds(new Set(visibleIds)); else setSelectedIds(new Set()); }} disabled={visibleIds.length === 0} className="h-4 w-4 shrink-0 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+          <label htmlFor="inventory-select-all" className="shrink-0 text-xs font-semibold text-gray-600 dark:text-slate-300">Select all</label>
+        </div>
         <div className="relative min-w-[180px] flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
           <input type="text" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search inventory..." className="w-full rounded-xl border border-gray-200 bg-white py-1.5 pl-9 pr-8 text-xs text-gray-900 placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
@@ -433,7 +466,7 @@ export default function InventoryPage() {
               const inlineEdit = inlineEdits[item.productId];
               const isDirty = Boolean(inlineEdit && inlineEdit.qty && Number(inlineEdit.qty) !== 0);
               return (
-                <div key={item.productId} className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-gray-300 bg-white px-4 py-3 shadow-sm transition-colors hover:border-gray-400 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-500">
+                <div key={item.productId} className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 shadow-sm transition-colors hover:border-gray-400 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-500">
                   {/* Bulk select */}
                   <input type="checkbox" checked={selectedIds.has(item.productId)}
                     onChange={e => {

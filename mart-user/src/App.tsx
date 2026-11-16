@@ -1540,14 +1540,14 @@ export default function App() {
         <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${productPageBottom}`}>
 
           {carouselPosition === 'top' && (
-            <div className="pb-6">
+            <>
               <button type="button" onClick={() => openCatalogSearch()}
                 className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
                 <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-400 dark:text-slate-400" />
                 <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-gray-100 py-3.5 pl-11 pr-4 text-sm text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text max-w-full truncate">{searchPrompt}</span></span>
               </button>
-              <HomeCarousel />
-            </div>
+              <HomeCarousel className="pb-6" />
+            </>
           )}
 
           {/* Shop by categories */}
@@ -1685,9 +1685,7 @@ export default function App() {
           )}
 
           {carouselPosition === 'bottom' && (
-            <div className="pb-2">
-              <HomeCarousel />
-            </div>
+            <HomeCarousel className="pb-2" />
           )}
 
           {/* Footer */}
