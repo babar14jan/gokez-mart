@@ -74,7 +74,7 @@ export default function InventoryPage() {
   // Inline quick-edit state: track per-product pending stock edits so the whole
   // list can be saved in one batch instead of one product at a time.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string; totalCost: string }>>({});
+  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: '' | 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string; totalCost: string }>>({});
   const [inlineSaving, setInlineSaving] = useState(false);
 
   // History drawer
@@ -288,12 +288,13 @@ export default function InventoryPage() {
     if (!selectedIds.has(id)) return false;
     const e = inlineEdits[id];
     if (!e) return false;
+    if (!e.action) return false;
     if (e.action === 'set') return true;
     return Boolean(e.qty) && Number(e.qty) !== 0;
   }).length;
 
   const saveInlineEdits = async () => {
-    const entries = Object.entries(inlineEdits).filter(([id, e]) => selectedIds.has(id) && (e.action === 'set' || (e.qty && Number(e.qty) !== 0)));
+    const entries = Object.entries(inlineEdits).filter(([id, e]) => selectedIds.has(id) && (e.action === 'add' || e.action === 'remove' || e.action === 'set') && (e.action === 'set' || (e.qty && Number(e.qty) !== 0)));
     if (entries.length === 0) return;
     setInlineSaving(true);
     try {
@@ -499,14 +500,15 @@ export default function InventoryPage() {
                       <>
                         {/* Inline quick edit */}
                         <div className={`basis-full grid grid-cols-2 gap-1.5 rounded-xl border-2 border-slate-300 bg-slate-100 p-2 dark:border-slate-500 dark:bg-slate-700/60 sm:basis-auto sm:flex sm:flex-wrap sm:items-center ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
-                          <select value={inlineEdit?.action || 'add'}
+                          <select value={inlineEdit?.action || ''}
                             onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any, qty: e.target.value === 'set' ? '0' : (prev[item.productId]?.qty || '') } }))}
                             className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            <option value="">Select action</option>
                             <option value="add">Add</option>
                             <option value="remove">Remove</option>
                             <option value="set">Set (to 0)</option>
                           </select>
-                          {inlineEdit?.action !== 'set' && (
+                          {(inlineEdit?.action === 'add' || inlineEdit?.action === 'remove') && (
                             <input type="number" value={inlineEdit?.qty || ''}
                               onChange={e => {
                                 const value = e.target.value;
@@ -568,7 +570,7 @@ export default function InventoryPage() {
                               <option value="other">Other (free text)</option>
                             </select>
                           )}
-                          {(inlineEdit?.action !== 'remove' || inlineEdit?.reason === 'other') && (
+                          {(inlineEdit?.action === 'add' || inlineEdit?.action === 'remove' || inlineEdit?.action === 'set') && (inlineEdit?.action !== 'remove' || inlineEdit?.reason === 'other') && (
                             <input type="text" value={inlineEdit?.note || ''}
                               onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', cost: '' }), note: e.target.value } }))}
                               placeholder={inlineEdit?.action === 'remove' && inlineEdit?.reason === 'other' ? 'Describe reason...' : 'Note (optional)'}
