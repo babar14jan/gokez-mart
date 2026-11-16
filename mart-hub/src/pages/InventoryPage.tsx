@@ -74,7 +74,7 @@ export default function InventoryPage() {
   // Inline quick-edit state: track per-product pending stock edits so the whole
   // list can be saved in one batch instead of one product at a time.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string }>>({});
+  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string; totalCost: string }>>({});
   const [inlineSaving, setInlineSaving] = useState(false);
 
   // History drawer
@@ -516,17 +516,50 @@ export default function InventoryPage() {
                           </select>
                           {inlineEdit?.action !== 'set' && (
                             <input type="number" value={inlineEdit?.qty || ''}
-                              onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), qty: e.target.value } }))}
+                              onChange={e => {
+                                const value = e.target.value;
+                                setInlineEdits(prev => {
+                                  const cur = prev[item.productId] || { action: 'add', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '', totalCost: '' };
+                                  const next = { ...cur, qty: value };
+                                  const q = Number(value); const u = Number(next.cost); const t = Number(next.totalCost);
+                                  if (value && next.cost && Number.isFinite(q) && q > 0) next.totalCost = String(roundMoney(q * u));
+                                  else if (value && next.totalCost && Number.isFinite(q) && q > 0 && !next.cost) next.cost = String(roundMoney(t / q));
+                                  return { ...prev, [item.productId]: next };
+                                });
+                              }}
                               placeholder="Qty" className="w-16 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
                           )}
                           {inlineEdit?.action === 'add' && (
                             <>
                               <input type="text" value={inlineEdit?.unit || item.stockUnit || 'kg'}
-                                onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', reason: 'damage', note: '', cost: '' }), unit: e.target.value } }))}
+                                onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', reason: 'damage', note: '', cost: '', totalCost: '' }), unit: e.target.value } }))}
                                 placeholder="Unit" className="w-14 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
                               <input type="number" value={inlineEdit?.cost || ''}
-                                onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '' }), cost: e.target.value } }))}
+                                onChange={e => {
+                                  const value = e.target.value;
+                                  setInlineEdits(prev => {
+                                    const cur = prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', totalCost: '' };
+                                    const next = { ...cur, cost: value };
+                                    const q = Number(next.qty); const u = Number(value); const t = Number(next.totalCost);
+                                    if (value && next.qty && Number.isFinite(u) && u >= 0) next.totalCost = String(roundMoney(q * u));
+                                    else if (value && next.totalCost && Number.isFinite(u) && u > 0 && !next.qty) next.qty = String(roundMoney(t / u));
+                                    return { ...prev, [item.productId]: next };
+                                  });
+                                }}
                                 placeholder="Cost/unit" className="w-20 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                              <input type="number" value={inlineEdit?.totalCost || ''}
+                                onChange={e => {
+                                  const value = e.target.value;
+                                  setInlineEdits(prev => {
+                                    const cur = prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' };
+                                    const next = { ...cur, totalCost: value };
+                                    const q = Number(next.qty); const t = Number(value);
+                                    if (value && next.qty && Number.isFinite(t) && t >= 0) next.cost = q > 0 ? String(roundMoney(t / q)) : next.cost;
+                                    else if (value && next.cost && Number.isFinite(t) && t >= 0 && !next.qty) { const u = Number(next.cost); if (u > 0) next.qty = String(roundMoney(t / u)); }
+                                    return { ...prev, [item.productId]: next };
+                                  });
+                                }}
+                                placeholder="Total cost" className="w-20 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
                             </>
                           )}
                           {inlineEdit?.action === 'remove' && (
