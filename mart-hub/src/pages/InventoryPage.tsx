@@ -250,7 +250,7 @@ export default function InventoryPage() {
             {(['today', 'yesterday', 'all'] as const).map(f => (
               <button key={f} onClick={() => setLedgerDateFilter(f)}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${ledgerDateFilter === f ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>
-                {f === 'today' ? 'Today' : f === 'yesterday' ? 'Yesterday' : 'All'}
+                {f === 'today' ? 'Today' : f === 'yesterday' ? (<><span className="sm:hidden">Y'day</span><span className="hidden sm:inline">Yesterday</span></>) : 'All'}
               </button>
             ))}
           </div>
