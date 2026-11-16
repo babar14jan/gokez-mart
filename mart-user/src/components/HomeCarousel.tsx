@@ -58,14 +58,15 @@ export default function HomeCarousel() {
   slidesRef.current = slides;
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const n = slides.length;
+  const visibleSlides = slides.filter(s => !!s.image_url || !!s.campaign_id || !!s.title);
+  const n = visibleSlides.length;
   const loop = n > 1;
   // A clone of the last slide is prepended and a clone of the first is appended
   // so the strip can keep scrolling forward forever. Landing on either clone is
   // silently snapped back onto the matching real slide — identical pixels, so
   // the wrap is invisible and it reads as a continuous cycle.
   const offset = loop ? 1 : 0;
-  const displaySlides: Slide[] = loop ? [slides[n - 1], ...slides, slides[0]] : slides;
+  const displaySlides: Slide[] = loop ? [visibleSlides[n - 1], ...visibleSlides, visibleSlides[0]] : visibleSlides;
   // First paint targets the cached slide (clamped to the set) so a remount lands
   // on the exact same frame with no post-paint jump.
   const displayIndexRef = useRef(
@@ -183,7 +184,7 @@ export default function HomeCarousel() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (slides.length === 0) return null;
+  if (visibleSlides.length === 0) return null;
 
   return (
     <div className="mt-1 mb-2">
@@ -274,7 +275,7 @@ export default function HomeCarousel() {
         {/* Dots — mobile only */}
         {loop && (
           <div className="flex items-center justify-center gap-1.5 mt-2.5">
-            {slides.map((_, i) => (
+            {visibleSlides.map((_, i) => (
               <button key={i} onClick={() => goTo(i)} aria-label={`Go to slide ${i + 1}`}
                 className={`rounded-full transition-all duration-300 ${active === i ? 'h-1.5 w-5 bg-gokez-700 dark:bg-gokez-400' : 'h-1.5 w-1.5 bg-cream-300 dark:bg-slate-600'}`} />
             ))}
@@ -285,7 +286,7 @@ export default function HomeCarousel() {
       {/* Desktop: horizontal scroll strip of smaller cards */}
       <div className="hidden sm:block">
         <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-          {slides.map((s, i) => {
+          {visibleSlides.map((s, i) => {
             const isCamp = !!s.campaign_id;
             return (
               <div

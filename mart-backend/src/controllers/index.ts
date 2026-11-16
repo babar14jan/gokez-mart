@@ -4220,19 +4220,6 @@ export const adminCleanStorage = asyncHandler(async (req: AdminRequest, res: Res
 });
 
 
-export const adminRecordPurchase = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const storeId = await resolveManagedStoreId(req);
-  const { productId, quantity, unit, unitCost, note } = req.body || {};
-  if (!productId) { res.status(400).json({ success: false, error: 'productId is required' }); return; }
-  const qty = Number(quantity);
-  if (!Number.isFinite(qty) || qty <= 0) { res.status(400).json({ success: false, error: 'quantity must be positive' }); return; }
-  if (!unit || typeof unit !== 'string') { res.status(400).json({ success: false, error: 'unit is required' }); return; }
-  const cost = Number(unitCost);
-  if (!Number.isFinite(cost) || cost < 0) { res.status(400).json({ success: false, error: 'unitCost must be non-negative' }); return; }
-  const idempotencyKey = req.header('Idempotency-Key') || undefined;
-  const result = await InventoryService.receivePurchase(storeId, String(productId), qty, unit, cost, req.admin!.id, note || null, idempotencyKey);
-  res.json({ success: true, data: result });
-});
 
 export const adminGetInventoryMovements = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = await resolveManagedStoreId(req);

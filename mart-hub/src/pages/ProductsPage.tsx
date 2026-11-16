@@ -611,7 +611,7 @@ export default function ProductsPage() {
           {p.localName && <p className="text-xs text-gray-500 dark:text-slate-400 break-words">{p.localName}</p>}
           {p.description && <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400 line-clamp-1">{p.description}</p>}
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-            <span className="text-xs text-gray-500 dark:text-slate-400">{p.unit} · ₹{p.price}</span>
+            <span className="text-xs text-gray-500 dark:text-slate-400">{p.discountPercent > 0 ? (<><span className="line-through opacity-60">₹{p.price}</span>{' '}₹{Math.round(p.price * (1 - p.discountPercent / 100))}</>) : `₹${p.price}`} / {p.unit}</span>
             {p.discountPercent > 0 && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded-full">
                 <Percent className="w-2.5 h-2.5" />{p.discountPercent}% off
@@ -794,16 +794,15 @@ export default function ProductsPage() {
 
       </div>
 
-      <div className="lg:hidden grid grid-cols-3 gap-2">
+      <div className="lg:hidden flex items-center justify-end gap-2">
         <button onClick={() => openCatalogBrowser('bulk')}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold text-gray-700 dark:text-slate-200 shadow-sm">
-          <BookOpen className="w-4 h-4" /> Bulk Upload
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 transition-colors">
+          <BookOpen className="w-3.5 h-3.5" /> Bulk Upload
         </button>
         <button onClick={openCombo}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-sm font-bold text-emerald-700 dark:text-emerald-400 shadow-sm">
-          <Plus className="w-4 h-4" /> Combo
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 transition-colors">
+          <Plus className="w-3.5 h-3.5" /> Combo
         </button>
-
       </div>
 
       {/* Active filter summary */}
