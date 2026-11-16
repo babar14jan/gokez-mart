@@ -506,7 +506,7 @@ export default function InventoryPage() {
                         </div>
 
                         {/* Inline quick edit */}
-                        <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center">
                           <select value={inlineEdit?.action || 'add'}
                             onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any, qty: e.target.value === 'set' ? '0' : (prev[item.productId]?.qty || '') } }))}
                             className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
@@ -527,13 +527,13 @@ export default function InventoryPage() {
                                   return { ...prev, [item.productId]: next };
                                 });
                               }}
-                              placeholder="Qty" className="w-16 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                              placeholder="Qty" className="w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:w-16" />
                           )}
                           {inlineEdit?.action === 'add' && (
                             <>
                               <input type="text" value={inlineEdit?.unit || item.stockUnit || 'kg'}
                                 onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', reason: 'damage', note: '', cost: '', totalCost: '' }), unit: e.target.value } }))}
-                                placeholder="Unit" className="w-14 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                                placeholder="Unit" className="w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:w-14" />
                               <input type="number" value={inlineEdit?.cost || ''}
                                 onChange={e => {
                                   const value = e.target.value;
@@ -546,7 +546,7 @@ export default function InventoryPage() {
                                     return { ...prev, [item.productId]: next };
                                   });
                                 }}
-                                placeholder="Cost/unit" className="w-20 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                                placeholder="Cost/unit" className="w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:w-20" />
                               <input type="number" value={inlineEdit?.totalCost || ''}
                                 onChange={e => {
                                   const value = e.target.value;
@@ -559,13 +559,13 @@ export default function InventoryPage() {
                                     return { ...prev, [item.productId]: next };
                                   });
                                 }}
-                                placeholder="Total cost" className="w-20 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                                placeholder="Total cost" className="w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:w-20" />
                             </>
                           )}
                           {inlineEdit?.action === 'remove' && (
                             <select value={inlineEdit?.reason || 'damage'}
                               onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'remove', qty: '', unit: item.stockUnit || 'kg', note: '', cost: '' }), reason: e.target.value } }))}
-                              className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                              className="col-span-2 w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:col-span-1 sm:w-auto">
                               <option value="damage">Damage</option>
                               <option value="spoiled">Spoiled</option>
                               <option value="expired">Expired</option>
@@ -580,7 +580,7 @@ export default function InventoryPage() {
                             <input type="text" value={inlineEdit?.note || ''}
                               onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', cost: '' }), note: e.target.value } }))}
                               placeholder={inlineEdit?.action === 'remove' && inlineEdit?.reason === 'other' ? 'Describe reason...' : 'Note (optional)'}
-                              className="w-28 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                              className="col-span-2 w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:col-span-1 sm:w-28" />
                           )}
                           {isDirty && <span className="text-[10px] font-bold text-amber-600">●</span>}
                         </div>
