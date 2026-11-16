@@ -286,7 +286,9 @@ export default function InventoryPage() {
 
   const dirtyInlineCount = Object.keys(inlineEdits).filter(id => {
     const e = inlineEdits[id];
-    return e.qty && Number(e.qty) !== 0;
+    if (!e) return false;
+    if (e.action === 'set') return true;
+    return Boolean(e.qty) && Number(e.qty) !== 0;
   }).length;
 
   const saveInlineEdits = async () => {
@@ -506,18 +508,47 @@ export default function InventoryPage() {
                         {/* Inline quick edit */}
                         <div className="flex flex-wrap items-center gap-1.5">
                           <select value={inlineEdit?.action || 'add'}
-                            onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any } }))}
+                            onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any, qty: e.target.value === 'set' ? '0' : (prev[item.productId]?.qty || '') } }))}
                             className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="add">Add</option>
                             <option value="remove">Remove</option>
-                            <option value="set">Set</option>
+                            <option value="set">Set (to 0)</option>
                           </select>
-                          <input type="number" value={inlineEdit?.qty || ''}
-                            onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), qty: e.target.value } }))}
-                            placeholder="Qty" className="w-16 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
-                          <input type="text" value={inlineEdit?.note || ''}
-                            onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', cost: '' }), note: e.target.value } }))}
-                            placeholder="Note (optional)" className="w-24 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                          {inlineEdit?.action !== 'set' && (
+                            <input type="number" value={inlineEdit?.qty || ''}
+                              onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), qty: e.target.value } }))}
+                              placeholder="Qty" className="w-16 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                          )}
+                          {inlineEdit?.action === 'add' && (
+                            <>
+                              <input type="text" value={inlineEdit?.unit || item.stockUnit || 'kg'}
+                                onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', reason: 'damage', note: '', cost: '' }), unit: e.target.value } }))}
+                                placeholder="Unit" className="w-14 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                              <input type="number" value={inlineEdit?.cost || ''}
+                                onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '' }), cost: e.target.value } }))}
+                                placeholder="Cost/unit" className="w-20 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                            </>
+                          )}
+                          {inlineEdit?.action === 'remove' && (
+                            <select value={inlineEdit?.reason || 'damage'}
+                              onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'remove', qty: '', unit: item.stockUnit || 'kg', note: '', cost: '' }), reason: e.target.value } }))}
+                              className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                              <option value="damage">Damage</option>
+                              <option value="spoiled">Spoiled</option>
+                              <option value="expired">Expired</option>
+                              <option value="lost">Lost</option>
+                              <option value="missing">Missing</option>
+                              <option value="consumption">Offline sold</option>
+                              <option value="quality_rejection">Quality rejection</option>
+                              <option value="other">Other (free text)</option>
+                            </select>
+                          )}
+                          {(inlineEdit?.action !== 'remove' || inlineEdit?.reason === 'other') && (
+                            <input type="text" value={inlineEdit?.note || ''}
+                              onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { action: 'add', qty: '', unit: item.stockUnit || 'kg', reason: 'damage', cost: '' }), note: e.target.value } }))}
+                              placeholder={inlineEdit?.action === 'remove' && inlineEdit?.reason === 'other' ? 'Describe reason...' : 'Note (optional)'}
+                              className="w-28 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                          )}
                           {isDirty && <span className="text-[10px] font-bold text-amber-600">●</span>}
                         </div>
 
