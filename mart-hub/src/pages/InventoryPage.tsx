@@ -67,7 +67,7 @@ export default function InventoryPage() {
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [enablingTracking, setEnablingTracking] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'stock_asc' | 'stock_desc'>('name');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out' | 'untracked' | 'ok' | 'combo'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'low' | 'out' | 'untracked' | 'ok'>('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -198,18 +198,16 @@ export default function InventoryPage() {
 
   const sorted = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    let list = items.filter(item => {
+    let list = items.filter(item => !item.isBundle).filter(item => {
       const matchesQuery = !query
         || item.name.toLowerCase().includes(query)
         || (item.localName || '').toLowerCase().includes(query)
         || (item.searchAliases ?? []).some((alias: string) => alias.toLowerCase().includes(query));
       const matchesStatus =
         statusFilter === 'all'
-        || (statusFilter === 'combo'
-          ? Boolean(item.isBundle)
-          : statusFilter === 'untracked'
-            ? !item.isBundle && stockStatus(item) === 'untracked'
-            : stockStatus(item) === statusFilter);
+        || (statusFilter === 'untracked'
+          ? stockStatus(item) === 'untracked'
+          : stockStatus(item) === statusFilter);
       const matchesCategory = categoryFilter === 'all' || item.categoryName === categoryFilter;
       return matchesQuery && matchesStatus && matchesCategory;
     });
@@ -222,7 +220,6 @@ export default function InventoryPage() {
   const outCount = items.filter(i => stockStatus(i) === 'out').length;
   const lowCount = items.filter(i => stockStatus(i) === 'low').length;
   const untrackedCount = items.filter(i => !i.isBundle && stockStatus(i) === 'untracked').length;
-  const comboCount = items.filter(i => i.isBundle).length;
 
 
   const loadMovements = async () => {
@@ -361,7 +358,6 @@ export default function InventoryPage() {
           { key: 'all', label: `All ${items.length}`, color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200' },
           { key: 'out', label: `Out ${outCount}`, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
           { key: 'low', label: `Low ${lowCount}`, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
-          { key: 'combo', label: `Combo ${comboCount}`, color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' },
           ...(untrackedCount > 0 ? [{ key: 'untracked', label: `Untracked ${untrackedCount}`, color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' }] : []),
         ].map(pill => (
           <button key={pill.key} onClick={() => setStatusFilter(pill.key as any)}
@@ -487,18 +483,7 @@ export default function InventoryPage() {
                   </div>
 
                   {/* Current stock / combo breakdown */}
-                  {item.isBundle ? (
-                    <div className="flex-shrink-0 text-right min-w-[48px] max-w-[260px]">
-                      <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300">
-                        {(item.comboComponents || []).map(c => `${c.name} · ${c.quantity} ${c.unit} · ₹${c.price}`).join(', ')}
-                      </p>
-                      {typeof item.price === 'number' && (
-                        <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                          Combo · ₹{item.price}/{item.sellingUnit || 'combo'}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
+                  {!item.isBundle && (
                     /* Inline quick edit */
                     <div className={`w-full grid grid-cols-2 gap-1.5 rounded-xl border-2 border-slate-300 bg-slate-100 p-2 dark:border-slate-500 dark:bg-slate-700/60 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5 ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
                           <select value={inlineEdit?.action || ''}
