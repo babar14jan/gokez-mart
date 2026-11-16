@@ -285,6 +285,7 @@ export default function InventoryPage() {
 
 
   const dirtyInlineCount = Object.keys(inlineEdits).filter(id => {
+    if (!selectedIds.has(id)) return false;
     const e = inlineEdits[id];
     if (!e) return false;
     if (e.action === 'set') return true;
@@ -292,7 +293,7 @@ export default function InventoryPage() {
   }).length;
 
   const saveInlineEdits = async () => {
-    const entries = Object.entries(inlineEdits).filter(([, e]) => e.qty && Number(e.qty) !== 0);
+    const entries = Object.entries(inlineEdits).filter(([id, e]) => selectedIds.has(id) && (e.action === 'set' || (e.qty && Number(e.qty) !== 0)));
     if (entries.length === 0) return;
     setInlineSaving(true);
     try {
@@ -506,7 +507,7 @@ export default function InventoryPage() {
                         </div>
 
                         {/* Inline quick edit */}
-                        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center">
+                        <div className={`grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
                           <select value={inlineEdit?.action || 'add'}
                             onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any, qty: e.target.value === 'set' ? '0' : (prev[item.productId]?.qty || '') } }))}
                             className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
