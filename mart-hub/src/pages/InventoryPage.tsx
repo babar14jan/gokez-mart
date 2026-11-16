@@ -487,22 +487,20 @@ export default function InventoryPage() {
                   </div>
 
                   {/* Current stock / combo breakdown */}
-                  <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center">
-                    {item.isBundle ? (
-                      <div className="text-right flex-shrink-0 min-w-[48px] max-w-[260px]">
-                        <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300">
-                          {(item.comboComponents || []).map(c => `${c.name} · ${c.quantity} ${c.unit} · ₹${c.price}`).join(', ')}
+                  {item.isBundle ? (
+                    <div className="flex-shrink-0 text-right min-w-[48px] max-w-[260px]">
+                      <p className="text-[11px] font-semibold text-gray-700 dark:text-slate-300">
+                        {(item.comboComponents || []).map(c => `${c.name} · ${c.quantity} ${c.unit} · ₹${c.price}`).join(', ')}
+                      </p>
+                      {typeof item.price === 'number' && (
+                        <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                          Combo · ₹{item.price}/{item.sellingUnit || 'combo'}
                         </p>
-                        {typeof item.price === 'number' && (
-                          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                            Combo · ₹{item.price}/{item.sellingUnit || 'combo'}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <>
-                        {/* Inline quick edit */}
-                        <div className={`basis-full grid grid-cols-2 gap-1.5 rounded-xl border-2 border-slate-300 bg-slate-100 p-2 dark:border-slate-500 dark:bg-slate-700/60 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5 ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
+                      )}
+                    </div>
+                  ) : (
+                    /* Inline quick edit */
+                    <div className={`w-full grid grid-cols-2 gap-1.5 rounded-xl border-2 border-slate-300 bg-slate-100 p-2 dark:border-slate-500 dark:bg-slate-700/60 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5 ${selectedIds.has(item.productId) ? "" : "opacity-50 pointer-events-none"}`}>
                           <select value={inlineEdit?.action || ''}
                             onChange={e => setInlineEdits(prev => ({ ...prev, [item.productId]: { ...(prev[item.productId] || { qty: '', unit: item.stockUnit || 'kg', reason: 'damage', note: '', cost: '' }), action: e.target.value as any, qty: e.target.value === 'set' ? '0' : (prev[item.productId]?.qty || '') } }))}
                             className="rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white">
@@ -581,11 +579,7 @@ export default function InventoryPage() {
                           )}
                           {isDirty && <span className="text-[10px] font-bold text-amber-600">●</span>}
                         </div>
-
-                      </>
                     )}
-                  </div>
-
                 </div>
               );
             })}
