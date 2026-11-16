@@ -621,7 +621,7 @@ export default function OrdersPage() {
              }`}>
              {tab.id === 'custom' && <Calendar className="w-3 h-3 hidden sm:inline" />}
              <span className="hidden sm:inline">{tab.label}</span>
-             <span className="sm:hidden">{tab.id === 'yesterday' ? 'Yest' : tab.label}</span>
+             <span className="sm:hidden">{tab.id === 'yesterday' ? "Y'day" : tab.label}</span>
            </button>
         ))}
         <button type="button" onClick={() => {
