@@ -358,8 +358,8 @@ export default function InventoryPage() {
       </div>
 
       {/* Sort + category filter + quick actions */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="flex shrink-0 items-center gap-2">
           <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} title="Sort inventory"
             className="rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-white">
             <option value="name">Name (A-Z)</option>
