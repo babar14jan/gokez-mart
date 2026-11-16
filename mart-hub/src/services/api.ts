@@ -630,8 +630,6 @@ export const inventoryApi = {
     api.put(`/admin/inventory/${productId}/stock`, { qty, stockUnit }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
   getHistory: (productId: string, storeId?: string) =>
     api.get(`/admin/inventory/${productId}/history`, { params: storeId ? { storeId } : {} }),
-  recordPurchase: (productId: string, quantity: number, unit: string, unitCost: number, note?: string, storeId?: string, idempotencyKey?: string) =>
-    api.post('/admin/inventory/purchase', { productId, quantity, unit, unitCost, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
   getMovements: (storeId?: string, productId?: string, limit?: number) =>
     api.get('/admin/inventory/movements', { params: { ...(storeId ? { storeId } : {}), ...(productId ? { productId } : {}), ...(limit ? { limit } : {}) } }),
   adjustStock: (productId: string, quantity: number, reason: string, note?: string, storeId?: string, idempotencyKey?: string) =>

@@ -38,7 +38,6 @@ interface LogEntry {
   stockUnit: string | null;
 }
 
-const STOCK_UNITS = ['kg', 'litre', 'pcs', 'bunch', 'packet'];
 
 function formatStock(qty: number, unit: string): string {
   if (unit === 'kg' && qty < 1 && qty > 0) return `${Math.round(qty * 1000)} g`;
@@ -48,7 +47,6 @@ function formatStock(qty: number, unit: string): string {
 
 const DEFAULT_LOW_THRESHOLD = 5; // used when no threshold is explicitly set
 const roundMoney = (n: number) => Math.round(n * 100) / 100;
-const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 
 function stockStatus(item: InventoryItem): 'untracked' | 'out' | 'low' | 'ok' {
   // If manually marked out_of_stock, treat as out
@@ -82,20 +80,9 @@ export default function InventoryPage() {
   const [movementSearch, setMovementSearch] = useState('');
   const [movements, setMovements] = useState<any[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
-  const [showPurchase, setShowPurchase] = useState(false);
-  const [purchaseSaving, setPurchaseSaving] = useState(false);
-  const [purchaseForm, setPurchaseForm] = useState({ productId: '', quantity: '', unit: 'kg', unitCost: '', totalCost: '', note: '' });
-  const [showMovements, setShowMovements] = useState(false);
-  const [showAdjust, setShowAdjust] = useState(false);
-  const [adjustSaving, setAdjustSaving] = useState(false);
-  const [adjustForm, setAdjustForm] = useState({ productId: '', quantity: '', reason: 'damage', note: '' });
-  const [adjustQuery, setAdjustQuery] = useState('');
-  const [adjustShowSuggestions, setAdjustShowSuggestions] = useState(false);
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [history, setHistory] = useState<LogEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [purchaseQuery, setPurchaseQuery] = useState('');
-  const [purchaseShowSuggestions, setPurchaseShowSuggestions] = useState(false);
 
   const { role } = useAuthStore();
   const canManageTracking = role === 'super_admin' || role === 'store_owner' || role === 'store_manager';
@@ -393,14 +380,6 @@ export default function InventoryPage() {
       </div>
 
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <button onClick={() => { setPurchaseForm({ productId: '', quantity: '', unit: items[0]?.stockUnit || 'kg', unitCost: '', totalCost: '', note: '' }); setPurchaseQuery(''); setShowPurchase(true); }}
-            className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
-            <Plus className="w-3.5 h-3.5" /> Record Purchase
-          </button>
-          <button onClick={() => { setAdjustForm({ productId: items[0]?.productId || '', quantity: '', reason: 'damage', note: '' }); setShowAdjust(true); }}
-            className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-red-400 hover:text-red-600 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
-            <AlertTriangle className="w-3.5 h-3.5" /> Adjust Stock
-          </button>
           <button onClick={() => { setActiveTab('ledger'); void loadMovements(); }}
             className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-gray-400 text-gray-600 dark:text-slate-400 text-xs font-semibold rounded-xl transition-colors">
             <History className="w-3.5 h-3.5" /> View Ledger
@@ -572,216 +551,6 @@ export default function InventoryPage() {
         )}
       </div>
 
-      {/* Record purchase modal */}
-      {showPurchase && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Record Purchase</h3>
-              <button onClick={() => setShowPurchase(false)}><X className="w-4 h-4 text-gray-500" /></button>
-            </div>
-            <div className="relative">
-              <input type="text" value={purchaseQuery}
-                onFocus={() => setPurchaseShowSuggestions(true)}
-                onBlur={() => window.setTimeout(() => setPurchaseShowSuggestions(false), 120)}
-                onChange={e => { setPurchaseQuery(e.target.value); setPurchaseForm(f => ({ ...f, productId: '' })); }}
-                placeholder="Search product name or Hindi name"
-                className={inp} />
-              {purchaseQuery && (
-                <button type="button" onClick={() => { setPurchaseQuery(''); setPurchaseForm(f => ({ ...f, productId: '' })); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-              {purchaseShowSuggestions && (
-                <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
-                  {items.filter(item => {
-                    const q = purchaseQuery.trim().toLowerCase();
-                    return !q || item.name.toLowerCase().includes(q) || (item.localName || '').toLowerCase().includes(q) || (item.searchAliases ?? []).some((a: string) => a.toLowerCase().includes(q));
-                  }).slice(0, 12).map(item => (
-                    <button key={item.productId} type="button" onMouseDown={e => e.preventDefault()}
-                      onClick={() => {
-                        setPurchaseForm(f => ({ ...f, productId: item.productId, unit: item.stockUnit || f.unit }));
-                        setPurchaseQuery(`${item.name}${item.localName ? ` (${item.localName})` : ''}`);
-                        setPurchaseShowSuggestions(false);
-                      }}
-                      className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
-                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
-                      <span className="text-xs text-slate-400">
-                        {item.localName ? `${item.localName} · ` : ''}{item.stockQuantity != null ? `${item.stockQuantity} ${item.stockUnit || item.sellingUnit}` : 'Not tracked'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <input type="number" value={purchaseForm.quantity} onChange={e => {
-                const value = e.target.value;
-                setPurchaseForm(f => {
-                  const next = { ...f, quantity: value };
-                  const q = Number(value); const u = Number(next.unitCost); const t = Number(next.totalCost);
-                  if (value && next.unitCost && Number.isFinite(q) && q > 0) next.totalCost = String(roundMoney(q * u));
-                  else if (value && next.totalCost && Number.isFinite(q) && q > 0 && !next.unitCost) next.unitCost = String(roundMoney(t / q));
-                  return next;
-                });
-              }} placeholder="Qty" className={inp} />
-              {purchaseForm.productId && items.find(i => i.productId === purchaseForm.productId)?.stockUnit ? (
-                <div className="flex items-center rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200">
-                  {items.find(i => i.productId === purchaseForm.productId)?.stockUnit}
-                </div>
-              ) : (
-                <select value={purchaseForm.unit} onChange={e => setPurchaseForm(f => ({ ...f, unit: e.target.value }))} className={inp}>
-                  {STOCK_UNITS.map(unit => <option key={unit} value={unit}>{unit}</option>)}
-                </select>
-              )}
-              <input type="number" value={purchaseForm.unitCost} onChange={e => {
-                const value = e.target.value;
-                setPurchaseForm(f => {
-                  const next = { ...f, unitCost: value };
-                  const q = Number(next.quantity); const u = Number(value); const t = Number(next.totalCost);
-                  if (value && next.quantity && Number.isFinite(u) && u >= 0) next.totalCost = String(roundMoney(q * u));
-                  else if (value && next.totalCost && Number.isFinite(u) && u > 0 && !next.quantity) next.quantity = String(roundMoney(t / u));
-                  return next;
-                });
-              }} placeholder="Cost/unit" className={inp} />
-            </div>
-            <div className="grid grid-cols-1 gap-2">
-              <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Total cost (optional)</label>
-              <input type="number" value={purchaseForm.totalCost} onChange={e => {
-                const value = e.target.value;
-                setPurchaseForm(f => {
-                  const next = { ...f, totalCost: value };
-                  const q = Number(next.quantity); const u = Number(next.unitCost); const t = Number(value);
-                  if (value && next.quantity && Number.isFinite(t) && t >= 0) next.unitCost = q > 0 ? String(roundMoney(t / q)) : next.unitCost;
-                  else if (value && next.unitCost && Number.isFinite(t) && t >= 0 && !next.quantity && u > 0) next.quantity = String(roundMoney(t / u));
-                  return next;
-                });
-              }} placeholder="Total cost" className={inp} />
-            </div>
-            <input type="text" value={purchaseForm.note} onChange={e => setPurchaseForm(f => ({ ...f, note: e.target.value }))} placeholder="Note (optional)" className={inp} />
-            <button disabled={purchaseSaving} onClick={async () => {
-              const qty = Number(purchaseForm.quantity);
-              const unitCost = purchaseForm.unitCost.trim()
-                ? Number(purchaseForm.unitCost)
-                : (purchaseForm.totalCost.trim() && qty > 0 ? Number(purchaseForm.totalCost) / qty : NaN);
-              const finalQty = qty > 0 ? qty : (purchaseForm.totalCost.trim() && purchaseForm.unitCost.trim() ? Number(purchaseForm.totalCost) / Number(purchaseForm.unitCost) : 0);
-              setPurchaseSaving(true);
-              try {
-                await inventoryApi.recordPurchase(purchaseForm.productId, finalQty, purchaseForm.unit, unitCost, purchaseForm.note, selectedStoreId, crypto.randomUUID());
-                setShowPurchase(false);
-                await load();
-              } catch (e: any) { alert(e?.response?.data?.error || 'Purchase failed'); }
-              finally { setPurchaseSaving(false); }
-            }} className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl disabled:opacity-50">
-              {purchaseSaving ? 'Saving...' : 'Save Purchase'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Movement ledger modal */}
-      {showMovements && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Inventory Movement Ledger</h3>
-              <button onClick={() => setShowMovements(false)}><X className="w-4 h-4 text-gray-500" /></button>
-            </div>
-            <div className="overflow-y-auto p-4 space-y-2">
-              {movementsLoading ? <p className="text-sm text-gray-500">Loading...</p> : movements.map(m => (
-                <div key={m.id} className="text-xs border border-gray-100 dark:border-slate-700 rounded-xl p-2">
-                  <div className="flex justify-between font-semibold">
-                    <span>{m.movementType}</span>
-                    <span>{m.createdAt ? new Date(m.createdAt).toLocaleString() : ''}</span>
-                  </div>
-                  <div>In: {m.quantityIn} · Out: {m.quantityOut} · Balance: {m.newBalance} · Cost: {m.totalCost ?? '-'}</div>
-                  <div className="text-gray-500">{m.reason}{m.remarks ? ` · ${m.remarks}` : ''}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Stock adjustment modal */}
-      {showAdjust && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Adjust Stock</h3>
-              <button onClick={() => setShowAdjust(false)}><X className="w-4 h-4 text-gray-500" /></button>
-            </div>
-            <div className="relative">
-              <input type="text" value={adjustQuery}
-                onFocus={() => setAdjustShowSuggestions(true)}
-                onBlur={() => window.setTimeout(() => setAdjustShowSuggestions(false), 120)}
-                onChange={e => { setAdjustQuery(e.target.value); setAdjustForm(f => ({ ...f, productId: '' })); }}
-                placeholder="Search product name or Hindi name"
-                className={inp} />
-              {adjustQuery && (
-                <button type="button" onClick={() => { setAdjustQuery(''); setAdjustForm(f => ({ ...f, productId: '' })); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-              {adjustShowSuggestions && (
-                <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
-                  {items.filter(item => {
-                    const q = adjustQuery.trim().toLowerCase();
-                    return !q || item.name.toLowerCase().includes(q) || (item.localName || '').toLowerCase().includes(q) || (item.searchAliases ?? []).some((a: string) => a.toLowerCase().includes(q));
-                  }).slice(0, 12).map(item => (
-                    <button key={item.productId} type="button" onMouseDown={e => e.preventDefault()}
-                      onClick={() => {
-                        setAdjustForm(f => ({ ...f, productId: item.productId }));
-                        setAdjustQuery(`${item.name}${item.localName ? ` (${item.localName})` : ''}`);
-                        setAdjustShowSuggestions(false);
-                      }}
-                      className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700">
-                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.name}</span>
-                      <span className="text-xs text-slate-400">
-                        {item.localName ? `${item.localName} · ` : ''}{item.stockQuantity != null ? `${item.stockQuantity} ${item.stockUnit || item.sellingUnit}` : 'Not tracked'}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center gap-2">
-                <input type="number" value={adjustForm.quantity} onChange={e => setAdjustForm(f => ({ ...f, quantity: e.target.value }))} placeholder="Qty (+/-)" className={inp} />
-                <span className="shrink-0 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  {items.find(i => i.productId === adjustForm.productId)?.stockUnit || items.find(i => i.productId === adjustForm.productId)?.sellingUnit || 'unit'}
-                </span>
-              </div>
-              <select value={adjustForm.reason} onChange={e => setAdjustForm(f => ({ ...f, reason: e.target.value }))} className={inp}>
-                <option value="damage">Damage</option>
-                <option value="spoiled">Spoiled</option>
-                <option value="expired">Expired</option>
-                <option value="lost">Lost</option>
-                <option value="missing">Missing</option>
-                <option value="consumption">Consumption</option>
-                <option value="quality_rejection">Quality rejection</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <input type="text" value={adjustForm.note} onChange={e => setAdjustForm(f => ({ ...f, note: e.target.value }))} placeholder="Note (optional)" className={inp} />
-            <button disabled={adjustSaving} onClick={async () => {
-              setAdjustSaving(true);
-              try {
-                await inventoryApi.adjustStock(adjustForm.productId, Number(adjustForm.quantity), adjustForm.reason, adjustForm.note, selectedStoreId, crypto.randomUUID());
-                setShowAdjust(false);
-                await load();
-              } catch (e: any) { alert(e?.response?.data?.error || 'Adjustment failed'); }
-              finally { setAdjustSaving(false); }
-            }} className="w-full py-2.5 text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl disabled:opacity-50">
-              {adjustSaving ? 'Saving...' : 'Save Adjustment'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* History drawer */}
       {historyItem && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
           onClick={() => setHistoryItem(null)}>
