@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject, type TouchEvent as ReactTouchEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, CheckCircle, BellRing, RefreshCw, CalendarClock } from 'lucide-react';
+import { Search, CheckCircle, BellRing, RefreshCw, CalendarClock, X } from 'lucide-react';
 import { isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
@@ -31,6 +31,8 @@ import { useUpdateStore } from './store/updateStore';
 import { hideSplash, splashRevealMs, MIN_SPLASH_MS } from './utils/splash';
 import { rememberClosedCopy } from './utils/storeClosed';
 import { useCartStore } from './store/cartStore';
+import { useInstallGuide, dismissInstallGuide } from './utils/install';
+import { trackInstall } from './utils/track';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 import { useKeyboardInset } from './utils/useKeyboardInset';
@@ -207,6 +209,21 @@ export default function App() {
 
   const [preCheckoutView, setPreCheckoutView] = useState<View>('home');
   const [successData, setSuccessData] = useState<{ num: string; preference: string; storeName?: string; savedAmount?: number; trackingToken?: string; items?: any[]; total?: number; guestAddress?: string; guestName?: string; guestPhone?: string; createdAt?: string; status?: string; scheduledLabel?: string } | null>(null);
+  const installGuide = useInstallGuide();
+  const [installCardHidden, setInstallCardHidden] = useState(false);
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
+  const installPromptOpen = Boolean(installGuide.visible && installGuide.platform && !installCardHidden);
+  const installPromptTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!successData) return;
+    if (!installPromptOpen) {
+      installPromptTrackedRef.current = false;
+      return;
+    }
+    if (installPromptTrackedRef.current) return;
+    installPromptTrackedRef.current = true;
+    if (installGuide.platform) trackInstall('install_prompt_shown', installGuide.platform);
+  }, [successData, installPromptOpen, installGuide.platform]);
   // One session_start per session, fired as early as possible so a visit that
   // never reaches the login screen is still counted.
   useEffect(() => {
@@ -918,13 +935,16 @@ export default function App() {
     //   • 'denied' or unsupported       → never (can't be undone in-app; a
     //     dead-end popup is worse than none)
     // No cooling period on the first show; "Not now" is what starts it.
-    if (!successData || !isPushSupported()) return;
+    if (!successData) return;
+    if (!isPushSupported()) return;
+    if (!installGuide.platform) return; // order notifications are mobile-only
     if (getNotificationPermission() !== 'default') return;
     if (!isPermissionPromptDue(ORDER_NOTIFICATION_PROMPT_KEY)) return;
+    if (installPromptOpen) return;
 
     setPermissionPrompt('order-notifications');
     setOrderNotificationError('');
-  }, [isLoggedIn, successData]);
+  }, [isLoggedIn, successData, installPromptOpen]);
 
   useEffect(() => {
     if (!locationNotice) return;
@@ -1046,7 +1066,7 @@ export default function App() {
             </p>
           </div>
 
-          {permissionPrompt === 'order-notifications' && (
+          {permissionPrompt === 'order-notifications' && !installPromptOpen && (
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-center dark:border-blue-800 dark:bg-blue-900/20">
               <div className="flex flex-col items-center">
                 <BellRing className="h-6 w-6 text-blue-600 dark:text-blue-400" />
@@ -1170,6 +1190,64 @@ export default function App() {
                     Not now
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {installPromptOpen && (
+            <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => { if (installGuide.platform) trackInstall('install_prompt_declined', installGuide.platform); dismissInstallGuide(); setInstallCardHidden(true); }}>
+              <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-2xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Add Gokez Mart to your home screen</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400">Install for one-tap ordering and live order updates.</p>
+                  </div>
+                  <button type="button" onClick={() => { dismissInstallGuide(); setInstallCardHidden(true); if (installGuide.platform) trackInstall('install_prompt_declined', installGuide.platform); }} aria-label="Dismiss" className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="h-24 w-[62px] flex-shrink-0 overflow-hidden rounded-lg border border-cream-200 bg-cream-50 dark:border-slate-700 dark:bg-slate-900">
+                    <img src={installGuide.guideSrc} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover object-top" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { if (installGuide.platform) { trackInstall('install_prompt_accepted', installGuide.platform); trackInstall('install_guide_opened', installGuide.platform); } setInstallGuideOpen(true); }}
+                    className="flex-1 rounded-xl bg-gokez-700 px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-gokez-800"
+                  >
+                    View install steps
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {installGuideOpen && installGuide.platform && (
+            <div className="sheet-enter fixed inset-0 z-[90] flex flex-col bg-slate-900/95 backdrop-blur-sm">
+              <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-[max(2.5rem,env(safe-area-inset-top))]">
+                <div className="mx-auto mb-4 max-w-md rounded-2xl bg-white/95 px-4 py-3 dark:bg-slate-800/95">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">Add a Gokez Mart shortcut</p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+                    This puts a Gokez Mart icon on your home screen so you can open and order in one tap. It is the same site you are using now — nothing is downloaded, and no extra permission is asked.
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+                    You can remove it anytime, just like any other app icon.
+                  </p>
+                </div>
+                <img
+                  src={installGuide.guideSrc}
+                  alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
+                  className="mx-auto h-auto w-full max-w-md rounded-2xl"
+                />
+              </div>
+              <div className="px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <button
+                  type="button"
+                  onClick={() => { setInstallGuideOpen(false); if (installGuide.platform) trackInstall('install_guide_dismissed', installGuide.platform); dismissInstallGuide(); setInstallCardHidden(true); }}
+                  className="w-full rounded-xl bg-gokez-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-gokez-800"
+                >
+                  Got it
+                </button>
               </div>
             </div>
           )}

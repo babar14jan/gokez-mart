@@ -240,7 +240,7 @@ export default function DashboardPage() {
             }`}>
             {r.id === 'custom' && <Calendar className="w-3 h-3 hidden sm:inline" />}
             <span className="hidden md:inline">{r.label}</span>
-            <span className="md:hidden">{r.id === 'yesterday' ? 'Yest' : r.label}</span>
+            <span className="md:hidden">{r.id === 'yesterday' ? "Y'day" : r.label}</span>
           </button>
         ))}
         <button onClick={() => setScheduledView(true)}

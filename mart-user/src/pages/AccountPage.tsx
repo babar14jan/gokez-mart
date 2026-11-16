@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, Smartphone, ArrowUpRight, X, Sparkles, Info } from 'lucide-react';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, X, Sparkles, Info } from 'lucide-react';
 import { authApi, suggestionApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
@@ -10,8 +10,7 @@ import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
 import PageHeader from '../components/PageHeader';
-import { track, trackInstall } from '../utils/track';
-import { useInstallGuide, dismissInstallGuide } from '../utils/install';
+import { track } from '../utils/track';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { readTrackingTokens } from '../utils/guestTracking';
@@ -59,38 +58,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
   // Offered on phones until the app is actually installed to the home screen.
-  const installGuide = useInstallGuide();
-  // The install guide opens in an in-app viewer (not a raw browser tab) so the
-  // page can offer an explicit "Done" button under the image.
-  const [installGuideOpen, setInstallGuideOpen] = useState(false);
-  // Hides the card for the cooling period the moment it is dismissed, without
-  // waiting for a remount to re-read the stored timestamp.
-  const [installCardHidden, setInstallCardHidden] = useState(false);
-
-  // Count the guide as "shown" once per session, the moment the card becomes
-  // visible. There is no native Android accept/decline prompt in this app: the
-  // guide card is the prompt, so its appearance is what the hub's funnel reads
-  // as "Prompt Shown".
-  const installShownRef = useRef(false);
-  useEffect(() => {
-    if (!installGuide.visible || installCardHidden || installShownRef.current) return;
-    installShownRef.current = true;
-    trackInstall('install_prompt_shown', installGuide.platform ?? 'android');
-  }, [installGuide.visible, installCardHidden, installGuide.platform]);
-
-  // Closing the viewer without installing is a "dismissed" guide.
-  const closeInstallGuide = useCallback(() => {
-    if (installGuide.platform) trackInstall('install_guide_dismissed', installGuide.platform);
-    setInstallGuideOpen(false);
-  }, [installGuide.platform]);
-
-  // Declining the card starts the cooling period so it stops reappearing on
-  // every visit. Treated as a decline in the install funnel.
-  const declineInstallCard = useCallback(() => {
-    dismissInstallGuide();
-    setInstallCardHidden(true);
-    if (installGuide.platform) trackInstall('install_prompt_declined', installGuide.platform);
-  }, [installGuide.platform]);
 
   // "Suggest products" — a lightweight demand form opened in a sheet. Kept local
   // to this page; the ask itself is what matters, not where it was captured.
@@ -141,19 +108,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     getLocationPermission().then(setLocationPermission);
   }, []);
 
-  // Install-guide viewer: Escape to dismiss and lock the page behind it while it
-  // is up (same behaviour the shared dialogs use).
-  useEffect(() => {
-    if (!installGuideOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeInstallGuide(); };
-    document.addEventListener('keydown', onKey);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previous;
-    };
-  }, [installGuideOpen, closeInstallGuide]);
 
   // Suggestion sheet: same Escape + scroll-lock contract as the install viewer.
   useEffect(() => {
@@ -540,59 +494,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           {shareNotice && <p className="mt-2 text-center text-[11px] font-medium text-gokez-700 dark:text-gokez-400" role="status">{shareNotice}</p>}
         </section>
 
-        {installGuide.visible && !installCardHidden && (
-        <section>
-          <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Get the app</p>
-          {/* The guide is a phone screenshot anyone can follow. It opens in an
-              in-app viewer rather than the browser's raw image view (a new tab
-              the app cannot add a "Done" button to), so the whole card is one
-              stretched button. */}
-          <div className="group relative overflow-hidden rounded-[18px] border border-cream-200 bg-white shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800">
-            <button
-              type="button"
-              onClick={() => {
-                if (installGuide.platform) trackInstall('install_guide_opened', installGuide.platform);
-                setInstallGuideOpen(true);
-              }}
-              aria-label="Add Gokez Mart to your home screen — view install steps"
-              className="absolute inset-0 z-0 rounded-[18px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500"
-            />
-            {/* Dismiss starts the cooling period. Sits above the stretched card
-                button so its tap is not swallowed by the "view steps" action. */}
-            <button
-              type="button"
-              onClick={declineInstallCard}
-              aria-label="Dismiss install suggestion"
-              className="absolute right-2 top-2 z-20 rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <div className="pointer-events-none relative z-10 flex items-center gap-3 p-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold leading-snug text-ink dark:text-white">Add Gokez Mart to your home screen</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400">Install for one-tap ordering and live order updates.</p>
-                <span className="mt-3 inline-flex items-center gap-1 rounded-lg border border-gokez-200 bg-gokez-50 px-3 py-1.5 text-[11px] font-semibold text-gokez-700 shadow-sm transition-colors group-hover:bg-gokez-100 dark:border-gokez-900/50 dark:bg-gokez-900/30 dark:text-gokez-300 dark:group-hover:bg-gokez-900/50">
-                  <Smartphone className="h-3 w-3" aria-hidden="true" /> View install steps
-                  <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
-                </span>
-              </div>
-              {/* 2:3 portrait frame matches the 1024x1536 guide so object-cover
-                  shows it whole instead of cropping it. Sized to roughly match
-                  the text column so the card height follows the copy, not the
-                  image. */}
-              <div className="h-28 w-[74px] flex-shrink-0 overflow-hidden rounded-lg border border-cream-200 bg-cream-50 dark:border-slate-700 dark:bg-slate-900">
-                <img
-                  src={installGuide.guideSrc}
-                  alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover object-top"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-        )}
+
 
         <section>
           <button
@@ -866,43 +768,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         document.body
       )}
 
-      {/* Install-guide viewer. The guide is a tall phone screenshot, so it scrolls
-          inside a full-screen sheet with a pinned "Done" bar — the browser's own
-          image view (a new tab) has nowhere to put that button. Portalled so it
-          escapes the page scroll container and covers the whole viewport. */}
-      {installGuideOpen && createPortal(
-        <div className="sheet-enter fixed inset-0 z-[90] flex flex-col bg-slate-900/95 backdrop-blur-sm">
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-[max(2.5rem,env(safe-area-inset-top))]">
-            {/* Plain, honest copy. The point is to remove any "is this a scam?"
-                doubt: it is the same Gokez Mart site as a home-screen shortcut,
-                nothing is downloaded, and it can be removed anytime. */}
-            <div className="mx-auto mb-4 max-w-md rounded-2xl bg-white/95 px-4 py-3 dark:bg-slate-800/95">
-              <p className="text-sm font-bold text-gray-900 dark:text-white">Add a Gokez Mart shortcut</p>
-              <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
-                This puts a Gokez Mart icon on your home screen so you can open and order in one tap. It is the same site you are using now — nothing is downloaded, and no extra permission is asked.
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
-                You can remove it anytime, just like any other app icon.
-              </p>
-            </div>
-            <img
-              src={installGuide.guideSrc}
-              alt={`How to add Gokez Mart to your home screen${installGuide.platform ? ` on ${installGuide.platform === 'ios' ? 'iPhone' : 'Android'}` : ''}`}
-              className="mx-auto h-auto w-full max-w-md rounded-2xl"
-            />
-          </div>
-          <div className="px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <button
-              type="button"
-              onClick={() => closeInstallGuide()}
-              className="w-full rounded-xl bg-gokez-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-gokez-800"
-            >
-              Got it
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }

@@ -238,7 +238,6 @@ router.post('/admin/inventory/stocktake',              authenticate, ctrl.adminS
 router.post('/admin/inventory/transfers',              authenticate, ctrl.adminCreateTransfer);
 router.post('/admin/inventory/transfers/:id/receive',  authenticate, ctrl.adminReceiveTransfer);
 router.get('/admin/inventory/transfers',               authenticate, ctrl.adminListTransfers);
-router.post('/admin/inventory/purchase',               authenticate, ctrl.adminRecordPurchase);
 router.get('/admin/inventory/movements',              authenticate, ctrl.adminGetInventoryMovements);
 router.get('/admin/inventory/valuation',              authenticate, ctrl.adminGetInventoryValuation);
 router.get('/admin/inventory/profitability',          authenticate, ctrl.adminGetInventoryProfitability);
