@@ -283,13 +283,15 @@ export default function InventoryPage() {
     setInlineSaving(true);
     try {
       for (const [productId, e] of entries) {
+        const item = items.find(i => i.productId === productId);
+        const storeId = (selectedStoreId && selectedStoreId !== 'all') ? selectedStoreId : (item?.storeId || selectedStoreId);
         const key = crypto.randomUUID();
         if (e.action === 'add') {
-          await inventoryApi.restock(productId, Number(e.qty), e.note, selectedStoreId, e.unit || 'kg', key, e.cost ? Number(e.cost) : undefined);
+          await inventoryApi.restock(productId, Number(e.qty), e.note, storeId, e.unit || 'kg', key, e.cost ? Number(e.cost) : undefined);
         } else if (e.action === 'remove') {
-          await inventoryApi.adjustStock(productId, -Math.abs(Number(e.qty)), e.reason, e.note, selectedStoreId, key);
+          await inventoryApi.adjustStock(productId, -Math.abs(Number(e.qty)), e.reason, e.note, storeId, key);
         } else {
-          await inventoryApi.setStock(productId, Number(e.qty), selectedStoreId, key, e.unit || 'kg');
+          await inventoryApi.setStock(productId, Number(e.qty), storeId, key, e.unit || 'kg');
         }
       }
       setInlineEdits({});
