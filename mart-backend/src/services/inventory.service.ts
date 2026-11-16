@@ -10,7 +10,7 @@ export class InventoryService {
               p.search_aliases as "searchAliases", p.photo_url as "photoUrl",
               sp.unit as "sellingUnit",
               sp.stock_unit as "stockUnit",
-              sp.price::float, sp.availability_status as "availabilityStatus",
+              sp.price::float, sp.discount_percent::float as "discountPercent", sp.availability_status as "availabilityStatus",
               sp.stock_quantity::float as "stockQuantity",
               sp.low_stock_threshold::float as "lowStockThreshold",
               p.is_bundle as "isBundle",

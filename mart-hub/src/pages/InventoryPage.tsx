@@ -20,6 +20,7 @@ interface InventoryItem {
   sellingUnit: string;
   stockUnit: string | null;
   price: number;
+  discountPercent?: number | null;
   availabilityStatus: string;
   stockQuantity: number | null;
   lowStockThreshold: number | null;
@@ -446,7 +447,14 @@ export default function InventoryPage() {
                     {item.localName && <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{item.localName}</p>}
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                       {item.price != null && item.price > 0 ? (
-                        <span className="text-xs text-gray-500 dark:text-slate-400">₹{item.price}/{item.sellingUnit}</span>
+                        (item.discountPercent && item.discountPercent > 0) ? (
+                          <span className="text-xs text-gray-500 dark:text-slate-400">
+                            <span className="line-through opacity-60">₹{item.price}</span>
+                            {' '}₹{Math.round(item.price * (1 - (item.discountPercent || 0) / 100))}/{item.sellingUnit}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-500 dark:text-slate-400">₹{item.price}/{item.sellingUnit}</span>
+                        )
                       ) : (
                         <span className="text-xs text-gray-500 dark:text-slate-400">{item.sellingUnit}</span>
                       )}
