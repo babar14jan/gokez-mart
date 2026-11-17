@@ -3,9 +3,14 @@ import { useEffect, useState, type RefObject } from 'react';
 // Chrome geometry the thresholds depend on. Keep in sync with the header band
 // (Navbar row 1 min-h-[44px]) and the bottom nav overlay.
 const REST_BAND_PX = 96;   // near the top: chrome always shown, accumulator zeroed
-const HIDE_AFTER_PX = 96;  // decisive downward travel before hiding
-const SHOW_AFTER_PX = 64;  // MUST exceed the header band's height (44px row)
+const HIDE_AFTER_PX = 120; // decisive downward travel before hiding
+const SHOW_AFTER_PX = 80;  // MUST exceed the header band's height (44px row)
 const BOTTOM_SLACK_PX = 2; // sub-pixel slack for the end-of-page test
+// A flip is only allowed this long after the previous one. A fast flick (or
+// momentum reaching the end of a page) can cross BOTH thresholds within a few
+// frames; without this guard the nav/header slid out and straight back in, which
+// is what read as a "jump". Reveals at the top and on leaving the end bypass it.
+const FLIP_COOLDOWN_MS = 250;
 
 /**
  * ONE scroll controller for the app chrome: the Navbar delivery row and the
@@ -76,6 +81,28 @@ export function useScrollChrome(
     setHidden(false);
     setAtEnd(false);
 
+    // Local shadow of the state + the last flip time, so the cooldown does not
+    // depend on a re-render having landed yet.
+    let shown = true;
+    let lastFlipAt = 0;
+    const flip = (next: boolean) => {
+      if (next === shown) return;
+      shown = next;
+      lastFlipAt = performance.now();
+      setHidden(next);
+    };
+    // The end-of-page flag drives the nav on its own, so it gets the same
+    // anti-flutter guard: bobbing on the last pixel must not blink the bar.
+    let endState = false;
+    let lastEndAt = 0;
+    const setEnd = (next: boolean, force = false) => {
+      if (next === endState) return;
+      if (!force && performance.now() - lastEndAt < FLIP_COOLDOWN_MS) return;
+      endState = next;
+      lastEndAt = performance.now();
+      setAtEnd(next);
+    };
+
     const state = new Map<
       HTMLElement,
       { last: number; acc: number; atEnd: boolean }
@@ -94,24 +121,31 @@ export function useScrollChrome(
           y + el.clientHeight >= el.scrollHeight - BOTTOM_SLACK_PX;
         const leftTheEnd = s.atEnd && !atBottom && delta < 0;
         s.atEnd = atBottom;
-        setAtEnd(atBottom);
         if (atBottom) {
+          setEnd(true);
           // End of the page: the nav shows through navHidden. Keep the header
           // hidden and zero the accumulator so resting here cannot flip it.
           s.acc = 0;
         } else if (y <= REST_BAND_PX) {
-          // Near the top: always shown, accumulator zeroed.
-          setHidden(false);
+          // Near the top: always shown, accumulator zeroed. Bypasses the
+          // cooldown — a return to the top must never wait on a timer.
+          flip(false);
+          setEnd(false, true);
           s.acc = 0;
         } else if (leftTheEnd) {
           // Scrolling up out of the end is an unambiguous reveal: return both
-          // immediately instead of making the nav blink off for 64px first.
-          setHidden(false);
+          // immediately instead of making the nav blink off first.
+          flip(false);
+          setEnd(false, true);
           s.acc = 0;
-        } else if (s.acc > HIDE_AFTER_PX) {
-          setHidden(true);
-        } else if (s.acc < -SHOW_AFTER_PX) {
-          setHidden(false);
+        } else if (performance.now() - lastFlipAt >= FLIP_COOLDOWN_MS) {
+          // Travel flips only after the cooldown: a fast flick can cross both
+          // thresholds in a few frames, which read as a jump.
+          setEnd(false);
+          if (s.acc > HIDE_AFTER_PX) flip(true);
+          else if (s.acc < -SHOW_AFTER_PX) flip(false);
+        } else {
+          setEnd(false);
         }
         s.last = y;
       };

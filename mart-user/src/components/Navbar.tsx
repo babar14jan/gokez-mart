@@ -154,7 +154,7 @@ const navItems = [
           chrome. The row is clipped, not unmounted, so the zone dropdown
           keeps its state. sm:grid-rows-[1fr] pins the row open on desktop:
           the centred nav pills live in this row and must never collapse. */}
-      <div className={`band-delivery grid transition-[grid-template-rows] duration-150 ${deliveryHidden ? 'grid-rows-[0fr] sm:grid-rows-[1fr]' : 'grid-rows-[1fr]'}`}>
+      <div className={`band-delivery grid ${deliveryHidden ? 'grid-rows-[0fr] sm:grid-rows-[1fr]' : 'grid-rows-[1fr]'}`}>
         <div className="min-h-0 overflow-hidden">
           <div className="mx-auto flex min-h-[44px] max-w-6xl items-center gap-3 page-x">
 
