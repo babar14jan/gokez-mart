@@ -8,6 +8,7 @@ import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 import { usePageBottom } from '../utils/pageBottom';
 import { matchScore } from '../utils/productMatch';
+import { recordRecentSearch } from '../utils/recentSearches';
 import ProductSuggestionList from './ProductSuggestionList';
 
 interface CategoriesViewProps {
@@ -128,7 +129,10 @@ export default function CategoriesView({ categories, products, initialCategoryId
         enterKeyHint="search"
         value={search}
         onChange={event => setSearch(event.target.value)}
-        onKeyDown={onKeyDown}
+        onKeyDown={event => {
+          if (event.key === 'Enter' && search.trim()) recordRecentSearch(search);
+          onKeyDown(event);
+        }}
         placeholder="Search any product, all categories"
         aria-label="Search any product, all categories"
         className="w-full rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-9 text-base leading-5 text-gray-900 shadow-sm placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-white/70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
@@ -198,11 +202,11 @@ export default function CategoriesView({ categories, products, initialCategoryId
             sheet, so Fresh and Categories suggest the same way. */}
         {query && suggestions.length > 0 && (
           <div className="border-b border-yellow-200/60 page-x pt-2 dark:border-yellow-900/40">
-            <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto" onScroll={dismiss}>
+            <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto overscroll-y-contain" onScroll={dismiss}>
               <ProductSuggestionList
                 products={suggestions}
                 categoryById={categoryById}
-                onPick={product => setSearch(product.name)}
+                onPick={product => { setSearch(product.name); recordRecentSearch(product.name); }}
               />
             </div>
           </div>

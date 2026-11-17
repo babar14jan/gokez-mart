@@ -305,8 +305,10 @@ html, body { overscroll-behavior-y: none; }
      child, so its top pad matches the 4px bottom pad — the field then has the
      same breathing room above and below. */
   .band-row { padding-top: 0.125rem; }
-  header.band-collapsed .band-row { padding-top: 0.25rem; }
+  /* Mobile only: on desktop the delivery row never collapses (the centred nav
+     pins it open), so adding the extra padding there would be a 2px jump. */
   @media (max-width: 639.98px) {
+    header.band-collapsed .band-row { padding-top: 0.25rem; }
     header:has(#band-search-slot input:focus) .band-row { padding-top: 0.25rem; }
   }
 
@@ -367,7 +369,8 @@ html, body { overscroll-behavior-y: none; }
     right: 0;
     bottom: 0;
     z-index: 40;
-    transition: transform 180ms ease-out, opacity 180ms ease-out;
+    visibility: visible;
+    transition: transform 180ms ease-out, opacity 180ms ease-out, visibility 0s linear 0s;
   }
 
   /* Hidden state — driven by useScrollChrome() (the navHidden flag, derived
@@ -377,6 +380,10 @@ html, body { overscroll-behavior-y: none; }
     transform: translate3d(0, 100%, 0);
     opacity: 0;
     pointer-events: none;
+    /* visibility flips only after the slide finishes, and takes the bar's
+       links out of the tab order and the accessibility tree while hidden. */
+    visibility: hidden;
+    transition: transform 180ms ease-out, opacity 180ms ease-out, visibility 0s linear 180ms;
   }
 
   /* Desktop has no bottom nav (it is `sm:hidden`), so neither the overlay nor

@@ -24,16 +24,16 @@ const BOTTOM_SLACK_PX = 2; // sub-pixel slack for the end-of-page test
  *    uncover, and the nav is the control the customer is about to use. The nav
  *    is an overlay (transform), so revealing it cannot move the page. The
  *    delivery row is NOT forced back — it is in-flow, so returning it would
- *    shrink the scrollport by 56px and clamp the scroll. It comes back the
+ *    shrink the scrollport by 44px and clamp the scroll. It comes back the
  *    normal way the moment the customer scrolls up.
  *  - hide needs ~96px of downward travel (direction-reset accumulator). Hiding
  *    only ever GROWS the scrollport (delivery row collapses, nav is a
  *    transform overlay), so max scrollTop grows too — it can never clamp.
  *  - show needs 64px of upward travel. Revealing the delivery row SHRINKS the
- *    scrollport by the band's 56px, i.e. max scrollTop drops by 56. Requiring
- *    more than 56px of continuous upward travel guarantees the current
+ *    scrollport by the band's 44px, i.e. max scrollTop drops by 44. Requiring
+ *    more than 44px of continuous upward travel guarantees the current
  *    scrollTop already sits that far below the old maximum, so the browser
- *    never has to clamp — no jump near the bottom of a page. 64 > 56 with a
+ *    never has to clamp — no jump near the bottom of a page. 64 > 44 with a
  *    margin, and still feels instant.
  *
  * The accumulator is per-direction: `acc` keeps adding while the scroll

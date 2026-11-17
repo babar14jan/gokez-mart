@@ -316,7 +316,7 @@ export default function CatalogSearchSheet({
         {/* Live suggestions — compact white rows, shown whenever typing. */}
         {!inline && query && suggestions.length > 0 && (
           <div className="border-b border-yellow-200/60 page-x pt-2 dark:border-yellow-900/40">
-            <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto" onScroll={dismissKeyboard}>
+            <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto overscroll-y-contain" onScroll={dismissKeyboard}>
               <ProductSuggestionList
                 products={suggestions}
                 categoryById={categoryById}
@@ -382,7 +382,7 @@ export default function CatalogSearchSheet({
               so the results grid sits below them exactly like the sheet. */}
           {inline && freshMode && query && suggestions.length > 0 && (
             <div className="border-b border-yellow-200/60 page-x pt-2 dark:border-yellow-900/40">
-              <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto" onScroll={dismissKeyboard}>
+              <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto overscroll-y-contain" onScroll={dismissKeyboard}>
                 <ProductSuggestionList
                   products={suggestions}
                   categoryById={categoryById}
