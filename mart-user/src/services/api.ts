@@ -294,11 +294,12 @@ export const authApi = {
   // so authentication behaviour is unchanged either way. `trackingTokens` lets
   // the server move this device's guest push subscriptions onto the new customer
   // id, so a guest-then-login device gets one push per order, not two.
-  verifyOtp: (phone: string, otp: string, funnelSessionId?: string, trackingTokens?: string[]) =>
+  verifyOtp: (phone: string, otp: string, funnelSessionId?: string, trackingTokens?: string[], referralCode?: string) =>
     api.post('/auth/verify-otp', {
       phone, otp,
       ...(funnelSessionId ? { funnelSessionId } : {}),
       ...(trackingTokens && trackingTokens.length ? { trackingTokens } : {}),
+      ...(referralCode ? { referralCode } : {}),
     }),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
@@ -390,6 +391,8 @@ export const storeApi = {
     items: Array<{ productId: string; productName: string; unit: string; price: number; quantity: number; sourceStoreId?: string }>;
     paymentMethod?: 'cod' | 'upi' | 'phonepay'; notes?: string;
     campaignId?: string; couponCode?: string;
+    /** Reserved referral reward applied instead of a campaign/coupon. */
+    referralCreditId?: string;
     /** Closes the cart funnel. Optional; the server ignores a malformed value. */
     funnelSessionId?: string;
   }, idempotencyKey: string) => api.post('/orders', data, { headers: { 'Idempotency-Key': idempotencyKey } }),
@@ -459,4 +462,84 @@ export const campaignApi = {
     api.post("/campaigns/validate", { code, cartTotal, storeId, zoneId }),
   getCarousel: () => api.get("/carousel"),
   getCarouselSettings: () => api.get("/carousel/settings"),
+};
+
+// ── Referral & Earn (customer) ───────────────────────────────────────────────────────────────
+export interface ReferralCredit {
+  id: string;
+  amount: number;
+  status: string;
+  unlockedAt: string | null;
+  expiresAt: string | null;
+  orderId: string | null;
+}
+
+export interface ReferralCampaign {
+  name: string;
+  status: string;
+  referrerReward: number;
+  refereeReward: number;
+  creditAmount: number;
+  creditsPerReward: number;
+  qualifyingOrderMin: number;
+  redemptionMin: number;
+  expiryDays: number;
+  maxReferralsPerReferrer: number;
+}
+
+export interface ReferralStats {
+  totalEarned: number;
+  available: number;
+  used: number;
+  pending: number;
+  expired: number;
+  reversed: number;
+  successfulReferrals: number;
+  pendingReferrals: number;
+}
+
+export interface ReferralRecord {
+  id: string;
+  status: string;
+  attributedAt: string | null;
+  rewardedAt: string | null;
+}
+
+export interface ReferralMeData {
+  code: string;
+  campaign: ReferralCampaign;
+  stats: ReferralStats;
+  eligibleForCode: boolean;
+  credits: ReferralCredit[];
+  referrals: ReferralRecord[];
+}
+
+export interface ReferralValidateData {
+  valid: boolean;
+  reason?: string;
+  [key: string]: unknown;
+}
+
+export interface ReferralClaimData {
+  referralId: string;
+  status: string;
+  [key: string]: unknown;
+}
+
+export interface ReferralReservation {
+  id: string;
+  amount: number;
+  status: string;
+  reservationExpiresAt: string | null;
+  duplicate?: boolean;
+}
+
+export const referralApi = {
+  getMe: () => api.get<{ success: boolean; data: ReferralMeData }>('/referrals/me'),
+  validate: (code: string) => api.post<{ success: boolean; data: ReferralValidateData }>('/referrals/validate', { code }),
+  claim: (code: string) => api.post<{ success: boolean; data: ReferralClaimData }>('/referrals/claim', { code }),
+  getCredits: (opts?: FetchOpts) => api.get<{ data: { items: ReferralCredit[]; total: number } }>('/referrals/credits', { fresh: opts?.fresh }),
+  reserve: (creditId: string, idempotencyKey: string) =>
+    api.post<{ data: ReferralReservation }>('/referrals/credits/reserve', { creditId, idempotencyKey }),
+  release: (id: string) => api.post<{ data: { status: 'available' } }>(`/referrals/credits/${encodeURIComponent(id)}/release`, {}),
 };

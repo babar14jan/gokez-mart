@@ -9,6 +9,7 @@ import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../uti
 import { readTrackingTokens } from '../utils/guestTracking';
 import { isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
 import { getDeviceInfo } from '../utils/install';
+import { clearLinkReferralCode, normalizeReferralCode, readLinkReferralCode } from '../utils/referral';
 
 export interface LoginFlowProps {
   /** Optional: the page host has no overlay to dismiss. */
@@ -85,6 +86,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     setError('');
   }, [backSignal]);
   const [phone, setPhone] = useState(() => restoredFlow?.phone || '');
+  const [referralCode, setReferralCode] = useState(() => useLoginFlowStore.getState().referralCode || readLinkReferralCode() || '');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -173,7 +175,11 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     setLoading(true); setError('');
     try {
       track('otp_entered', { otpChannel: 'phone_call' });
-      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp, getFunnelSessionId(), readTrackingTokens());
+      const codeForSignup = normalizeReferralCode(referralCode || readLinkReferralCode());
+      const res = await authApi.verifyOtp(
+        phone.replace(/\D/g, ''), otp, getFunnelSessionId(), readTrackingTokens(), codeForSignup || undefined,
+      );
+      clearLinkReferralCode();
       track('login_verified');
       const { token, customer } = res.data.data;
       loginFlow.clear();
@@ -510,6 +516,27 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     aria-invalid={Boolean(error)}
                     className="flex-1 bg-transparent py-2.5 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
                     autoFocus={finePointer} />
+                </div>
+
+                <div>
+                  <label htmlFor="login-referral-code" className="mb-1 block text-xs font-medium text-gray-600 dark:text-slate-300">
+                    Referral code <span className="font-normal text-gray-500 dark:text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    id="login-referral-code"
+                    name="referralCode"
+                    type="text"
+                    value={referralCode}
+                    maxLength={6}
+                    onChange={e => {
+                      const next = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
+                      setReferralCode(next);
+                      useLoginFlowStore.getState().setReferralCode(next || null);
+                    }}
+                    placeholder="Have a code? Enter it here"
+                    autoComplete="off"
+                    className="w-full rounded-xl border border-gray-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.2em] text-slate-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 placeholder:font-normal placeholder:tracking-normal placeholder:text-gray-500 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white dark:focus:border-slate-400 dark:focus:ring-slate-500/30"
+                  />
                 </div>
 
                 <button type="submit" disabled={loading || !phoneValid} className={primaryBtn(phoneValid)}>

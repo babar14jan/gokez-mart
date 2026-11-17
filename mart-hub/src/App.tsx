@@ -46,6 +46,13 @@ const DailySalesPage = lazyWithRetry(() => import('./pages/DailySalesPage'));
 const TopSellingProductsPage = lazyWithRetry(() => import('./pages/TopSellingProductsPage'));
 const PromotionsPage = lazyWithRetry(() => import('./pages/PromotionsPage'));
 const RestoreOrderPage = lazyWithRetry(() => import('./pages/RestoreOrderPage'));
+const ReferralOverviewPage = lazyWithRetry(() => import('./pages/ReferralOverviewPage'));
+const ReferralCampaignsPage = lazyWithRetry(() => import('./pages/ReferralCampaignsPage'));
+const ReferralRecordsPage = lazyWithRetry(() => import('./pages/ReferralRecordsPage'));
+const ReferralCustomerRewardsPage = lazyWithRetry(() => import('./pages/ReferralCustomerRewardsPage'));
+const ReferralRewardsLedgerPage = lazyWithRetry(() => import('./pages/ReferralRewardsLedgerPage'));
+const ReferralFraudPage = lazyWithRetry(() => import('./pages/ReferralFraudPage'));
+const ReferralReportsPage = lazyWithRetry(() => import('./pages/ReferralReportsPage'));
 
 // Fallback for the public routes (no app shell yet): same page-shaped
 // skeleton as the rest of the hub, so nothing flashes a bare dark screen.
@@ -90,7 +97,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/top-selling', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/top-selling', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/home-sections', '/referral-overview', '/referral-campaigns', '/referral-records', '/referral-customer-rewards', '/referral-ledger', '/referral-fraud', '/referral-reports', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -213,6 +220,13 @@ export default function App() {
         <Route path="/restore-order"     element={<ProtectedRoute path="/restore-order"><RestoreOrderPage /></ProtectedRoute>} />
         <Route path="/carousel"          element={<ProtectedRoute path="/carousel"><CarouselPage /></ProtectedRoute>} />
         <Route path="/home-sections"     element={<ProtectedRoute path="/home-sections"><HomeSectionsPage /></ProtectedRoute>} />
+        <Route path="/referral-overview" element={<ProtectedRoute path="/referral-overview"><ReferralOverviewPage /></ProtectedRoute>} />
+        <Route path="/referral-campaigns" element={<ProtectedRoute path="/referral-campaigns"><ReferralCampaignsPage /></ProtectedRoute>} />
+        <Route path="/referral-records" element={<ProtectedRoute path="/referral-records"><ReferralRecordsPage /></ProtectedRoute>} />
+        <Route path="/referral-customer-rewards" element={<ProtectedRoute path="/referral-customer-rewards"><ReferralCustomerRewardsPage /></ProtectedRoute>} />
+        <Route path="/referral-ledger" element={<ProtectedRoute path="/referral-ledger"><ReferralRewardsLedgerPage /></ProtectedRoute>} />
+        <Route path="/referral-fraud" element={<ProtectedRoute path="/referral-fraud"><ReferralFraudPage /></ProtectedRoute>} />
+        <Route path="/referral-reports" element={<ProtectedRoute path="/referral-reports"><ReferralReportsPage /></ProtectedRoute>} />
         <Route path="/daily-sales"      element={<ProtectedRoute path="/daily-sales"><DailySalesPage /></ProtectedRoute>} />
         <Route path="/top-selling"     element={<ProtectedRoute path="/top-selling"><TopSellingProductsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />

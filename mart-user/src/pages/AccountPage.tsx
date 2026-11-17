@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, X, Sparkles, Info } from 'lucide-react';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, X, Sparkles, Info, Gift } from 'lucide-react';
 import { authApi, suggestionApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
@@ -14,6 +14,7 @@ import { track } from '../utils/track';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { readTrackingTokens } from '../utils/guestTracking';
+import ReferEarnSheet from '../components/ReferEarnSheet';
 
 const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
 
@@ -62,6 +63,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // "Suggest products" — a lightweight demand form opened in a sheet. Kept local
   // to this page; the ask itself is what matters, not where it was captured.
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [referOpen, setReferOpen] = useState(false);
   const [suggestText, setSuggestText] = useState('');
   const [suggestDetail, setSuggestDetail] = useState('');
   const [suggestConsent, setSuggestConsent] = useState(true);
@@ -109,10 +111,14 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   }, []);
 
 
-  // Suggestion sheet: same Escape + scroll-lock contract as the install viewer.
+  // Suggestion and referral sheets: same Escape + scroll-lock contract as the install viewer.
   useEffect(() => {
-    if (!suggestOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeSuggest(); };
+    if (!suggestOpen && !referOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (suggestOpen) closeSuggest();
+      else setReferOpen(false);
+    };
     document.addEventListener('keydown', onKey);
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -120,7 +126,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previous;
     };
-  }, [suggestOpen]);
+  }, [suggestOpen, referOpen]);
 
   useEffect(() => {
     const refreshNotificationPermission = () => setNotificationPermission(
@@ -486,6 +492,25 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </div>
         )}
 
+        {isLoggedIn && (
+          <section>
+            <button
+              type="button"
+              onClick={() => setReferOpen(true)}
+              className="flex w-full items-center gap-4 rounded-[18px] border border-gokez-200 bg-white p-4 text-left shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-gokez-800 dark:bg-slate-800 dark:hover:border-gokez-600"
+            >
+              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
+                <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer & Earn</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Earn ₹100 for every friend who places their first qualifying order.</p>
+              </div>
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-slate-400" aria-hidden="true" />
+            </button>
+          </section>
+        )}
+
         <section>
           <div className="grid grid-cols-3 gap-2">
             <a href={`mailto:${GOKEZ_SUPPORT.email}`} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white px-2 py-2 text-center text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
@@ -777,6 +802,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </div>,
         document.body
       )}
+
+      <ReferEarnSheet open={referOpen && isLoggedIn} onClose={() => setReferOpen(false)} />
 
     </div>
   );

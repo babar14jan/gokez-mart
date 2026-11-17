@@ -6,6 +6,7 @@ import { installShutdownHandlers } from './utils/shutdown';
 import { recoverAutomaticOrderTransitions } from './controllers';
 import { PromotionService } from './services/promotion.service';
 import { ProductImageAssetService } from './services/productImageAsset.service';
+import { ReferralService } from './services/referral.service';
 
 async function start() {
   // Run migrations before starting the server
@@ -43,6 +44,15 @@ async function start() {
     cleanupProductImages();
     const imageCleanupTimer = setInterval(cleanupProductImages, 60_000);
     imageCleanupTimer.unref();
+
+    const expireReferrals = () => {
+      ReferralService.expireDue().catch(error => {
+        console.error('[referrals] credit expiry failed:', error);
+      });
+    };
+    expireReferrals();
+    const referralTimer = setInterval(expireReferrals, 60_000);
+    referralTimer.unref();
   } else {
     console.log('[background-jobs] disabled by MART_BACKGROUND_JOBS_ENABLED=false');
   }

@@ -10,6 +10,8 @@ import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerP
 import { parseSellingUnit } from '../utils/unitConversion';
 import { CUSTOMER_CANCELLATION_MESSAGES, getCancellationPolicy } from '../utils/cancellationPolicy';
 import { ORDER_BROWSE_DATE_SQL } from '../utils/orderDate';
+import { ReferralService } from './referral.service';
+import { REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR, referralDiscount, hasDiscountStack } from '../utils/referralLogic';
 
 // Reasons a customer may give for cancelling, chosen from the order screen. The
 // keys are what is stored in mart_orders.cancellation_reason; only these values
@@ -62,6 +64,8 @@ export interface CreateOrderDto {
   campaignId?: string | null;
   campaignDiscount?: number;
   couponCodeUsed?: string | null;
+  /** Id of an AVAILABLE->RESERVED referral credit consumed at checkout. */
+  referralCreditId?: string | null;
   customerId?: string | null;
   /**
    * Anonymous funnel session that produced this order. Only used to close the
@@ -92,6 +96,8 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
               o.campaign_id as "campaignId",
               o.campaign_discount::float as "campaignDiscount",
               o.coupon_code_used as "couponCodeUsed",
+              o.referral_credit_id as "referralCreditId",
+              o.referral_discount::float as "referralDiscount",
               COALESCE(
                 (SELECT (u.terms_snapshot ->> 'requires_scheduled_delivery')::boolean
                  FROM mart_campaign_uses u WHERE u.order_id = o.id LIMIT 1),
@@ -243,6 +249,14 @@ export class OrderService {
     if (data.campaignId && data.couponCodeUsed) {
       throw badRequest('Select either an offer or a coupon code, not both');
     }
+    if (data.referralCreditId && hasDiscountStack({
+      campaignId: data.campaignId, couponCode: data.couponCodeUsed, referralCreditId: data.referralCreditId,
+    })) {
+      throw badRequest(REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR);
+    }
+    if (data.referralCreditId && !data.customerId) {
+      throw forbidden('Sign in with the ordering phone number to redeem a referral reward');
+    }
     const effectiveZone = data.zoneId ? await ZoneService.getEffectiveSettings(data.zoneId) : null;
     if (data.zoneId && (!effectiveZone || !effectiveZone.zone.isActive || effectiveZone.zone.primaryStoreId !== data.storeId)) {
       throw badRequest('Selected delivery zone is unavailable');
@@ -320,6 +334,9 @@ export class OrderService {
       const attribution = attributionResult.rows[0];
       if ((data.campaignId || data.couponCodeUsed) && data.customerId !== customerId) {
         throw forbidden('Sign in with the ordering phone number to redeem this offer');
+      }
+      if (data.referralCreditId && (!customerId || data.customerId !== customerId)) {
+        throw forbidden('Sign in with the ordering phone number to redeem this referral reward');
       }
 
       // A guest's address lands in the same address book a logged-in customer
@@ -510,6 +527,17 @@ export class OrderService {
         throw badRequest(`Minimum order amount is ₹${minOrderAmount}. Add ₹${Math.ceil(minOrderAmount - subtotal)} more to place this order.`);
       }
 
+      // Referral credits are validated with a row lock inside the order
+      // transaction, never from client-supplied amounts. Campaign/coupon logic
+      // below is deliberately unchanged; referral rewards never stack with it.
+      let referralCreditAmount = 0;
+      if (data.referralCreditId) {
+        const referralCredit = await ReferralService.validateCreditForOrder(
+          client, data.customerId!, data.referralCreditId, subtotal
+        );
+        referralCreditAmount = Number(referralCredit.amount) || 0;
+      }
+
       let campaign: any = null;
       if (data.campaignId || data.couponCodeUsed) {
         const campaignResult = await client.query(
@@ -608,7 +636,10 @@ export class OrderService {
       // delivery charge still applies. Without this guard `subtotal >= 0` would
       // waive delivery for every order.
       const actualDelivery = campaign?.discount_type === 'free_delivery' || (freeAbove > 0 && subtotal >= freeAbove) ? 0 : deliveryCharge;
-      const total = Math.ceil(Math.max(0, subtotal + actualDelivery - campaignDiscount));
+      const referralDiscountAmount = data.referralCreditId
+        ? referralDiscount(referralCreditAmount, Math.max(0, subtotal - campaignDiscount))
+        : 0;
+      const total = Math.ceil(Math.max(0, subtotal + actualDelivery - campaignDiscount - referralDiscountAmount));
       // Delivery fee the customer avoided (either through the free-delivery
       // threshold or a free-delivery offer). Stored so the receipt can show the
       // full "you saved" figure without needing the store's live settings.
@@ -691,9 +722,10 @@ export class OrderService {
             placed_outside_hours, closed_reason, scheduled_for, tracking_token,
             promised_delivery_at, cancellation_window_ends_at,
             funnel_session_id, funnel_visitor_id, attribution_source, attribution_medium, attribution_campaign, attribution_qr_code_id,
-            first_touch_source, first_touch_medium, first_touch_campaign, first_touch_qr_code_id,
-            last_touch_source, last_touch_medium, last_touch_campaign, last_touch_qr_code_id)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)`,
+             first_touch_source, first_touch_medium, first_touch_campaign, first_touch_qr_code_id,
+             last_touch_source, last_touch_medium, last_touch_campaign, last_touch_qr_code_id,
+             referral_credit_id, referral_discount)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)`,
 [orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
           data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod || null, data.notes || null,
@@ -720,15 +752,21 @@ export class OrderService {
         attribution?.first_medium ?? null,
         attribution?.first_campaign ?? null,
         attribution?.first_qr_code_id ?? null,
-        attribution?.last_source ?? null,
-        attribution?.last_medium ?? null,
-        attribution?.last_campaign ?? null,
-         attribution?.last_qr_code_id ?? null]
-      );
+         attribution?.last_source ?? null,
+         attribution?.last_medium ?? null,
+         attribution?.last_campaign ?? null,
+         attribution?.last_qr_code_id ?? null,
+         data.referralCreditId || null,
+         referralDiscountAmount]
+       );
 
-      if (data.scheduledLabel) {
-        await client.query(`UPDATE mart_orders SET scheduled_label = $1 WHERE id = $2`, [data.scheduledLabel, orderId]);
-      }
+       if (data.referralCreditId) {
+         await ReferralService.consumeCreditForOrder(client, data.customerId!, data.referralCreditId, orderId);
+       }
+
+       if (data.scheduledLabel) {
+         await client.query(`UPDATE mart_orders SET scheduled_label = $1 WHERE id = $2`, [data.scheduledLabel, orderId]);
+       }
 
       await client.query(
         `UPDATE mart_customers
@@ -824,6 +862,7 @@ export class OrderService {
         subtotal,
         deliveryCharge: actualDelivery,
         campaignDiscount,
+        referralDiscount: referralDiscountAmount,
         itemSavings,
         freeDeliverySaving,
         total,
@@ -1230,6 +1269,21 @@ export class OrderService {
       try { await InventoryService.consumeForOrder(id); } catch { /* non-blocking */ }
     } else if (order && ['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
       try { await InventoryService.releaseForOrder(id); } catch { /* non-blocking */ }
+    }
+
+    // Legacy status writer (kept non-blocking like the inventory side effects
+    // above). The primary admin transition path writes these in-transaction.
+    if (order && status === 'delivered') {
+      try {
+        await transaction(async client => { await ReferralService.onOrderDelivered(client, id); });
+      } catch (err) {
+        console.error(`[referral] reward release skipped for delivered order ${id}:`, err);
+      }
+    }
+    if (order && ['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
+      try { await ReferralService.releaseCreditForOrder(id); } catch (err) {
+        console.error(`[referral] credit release skipped for order ${id}:`, err);
+      }
     }
 
     return order;
@@ -1722,9 +1776,15 @@ export class OrderService {
           // the non-blocking behavior of updateStatus().
           console.error(`[inventory] deduction skipped for delivered order ${id}:`, err);
         }
+        // Reward release shares this transaction with the Delivered write.
+        // Non-fatal data conditions (no referral, below minimum, cap, inactive
+        // campaign) are no-ops inside the service; real failures roll everything
+        // back so a delivery is never recorded without its ledger being sound.
+        await ReferralService.onOrderDelivered(client, id);
       }
       if (['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
         await this.reverseCampaignRedemption(id, status, client);
+        await ReferralService.releaseCreditForOrder(id, client);
       }
       if (status === 'cancelled' && existing.customerId) {
         await client.query(
@@ -2074,6 +2134,7 @@ export class OrderService {
         );
       }
       await this.reverseCampaignRedemption(orderId, 'cancelled', client);
+      await ReferralService.releaseCreditForOrder(orderId, client);
       await client.query(
         `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_name)
          VALUES ($1, $2, 'cancelled', $3)`,
