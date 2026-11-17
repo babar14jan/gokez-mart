@@ -182,7 +182,7 @@ export default function AccountGreeting() {
       {open && createPortal(
         <div className="fixed inset-0 z-[80] flex flex-col bg-[#f7f8fa] font-sans dark:bg-slate-900">
           <header className="bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
-            <div className="flex min-h-[40px] items-center gap-1 px-2">
+            <div className="flex min-h-[44px] items-center gap-1 px-2">
               <button type="button" onClick={closeProfile} aria-label="Back"
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
                 <ChevronLeft className="h-5 w-5" />

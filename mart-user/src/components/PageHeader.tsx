@@ -10,7 +10,7 @@ interface PageHeaderProps {
   onBack?: () => void;
   /** Accessible label for the back button. */
   backLabel?: string;
-  /** 'standard' = 40px title bar (matches the app bar); 'sheet' = 64px bar with room for a search field or controls. */
+  /** 'standard' = 44px title bar (matches the app bar); 'sheet' = 64px bar with room for a search field or controls. */
   size?: 'standard' | 'sheet';
   /** 'sticky' pins to the top with z-20 (sub-pages, checkout); 'static' stays in flow (sheets, overlays). */
   position?: 'sticky' | 'static';
@@ -54,7 +54,7 @@ export default function PageHeader({
   const sizeClass =
     size === 'sheet'
       ? 'min-h-[calc(64px_+_env(safe-area-inset-top))] gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
-      : 'min-h-[calc(2.5rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
+      : 'min-h-[calc(2.75rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
   const gradientClass =
     gradient === 'r' ? 'bg-gradient-to-r from-[#087a43] to-[#087a43]' : 'bg-gradient-to-b from-[#087a43] to-[#087a43]';
   const darkClass = darkTo === '#14532d' ? 'dark:from-[#18191a] dark:to-[#14532d]' : 'dark:from-[#18191a] dark:to-[#18191a]';

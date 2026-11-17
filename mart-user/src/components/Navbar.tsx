@@ -145,7 +145,7 @@ const navItems = [
         sticky content (search rows, cards) that pin at top-0 of the scroller. */}
     <header className={`relative z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a] ${deliveryHidden ? 'band-collapsed' : ''}`}>
 
-      {/* Row 1 — 40px (2.5rem), the same app-bar height as PageHeader and the
+      {/* Row 1 — 44px (2.75rem), the same app-bar height as PageHeader and the
           Profile header so every header matches.
 
           Auto-hide: grid-rows 1fr↔0fr with a 150ms transition, driven by the
@@ -156,7 +156,7 @@ const navItems = [
           the centred nav pills live in this row and must never collapse. */}
       <div className={`band-delivery grid transition-[grid-template-rows] duration-150 ${deliveryHidden ? 'grid-rows-[0fr] sm:grid-rows-[1fr]' : 'grid-rows-[1fr]'}`}>
         <div className="min-h-0 overflow-hidden">
-          <div className="mx-auto flex min-h-[40px] max-w-6xl items-center gap-3 page-x">
+          <div className="mx-auto flex min-h-[44px] max-w-6xl items-center gap-3 page-x">
 
             {/* Location / account identity — left. flex-1 + min-w-0 gives it half of
                 the free space so the centred nav never moves when the identity
