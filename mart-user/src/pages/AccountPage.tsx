@@ -467,8 +467,18 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   return (
     <div className="page-shell bg-[#f7f8fa] dark:bg-slate-900 font-sans">
       <div className="mx-auto max-w-2xl space-y-7 px-4 py-5 pb-10 sm:px-6 sm:py-7">
+        {/* Sticky under the fixed header band: the prompt stays pinned at
+            top-0 of the scroller while the account options scroll beneath
+            it, so "Log in / Continue login" is always one tap away. The
+            band lives outside the scroller, so top-0 pins directly below
+            it — no offset math. No negative top margin: the old -mt-5
+            tucked the card under the in-flow header, which no longer
+            exists; at rest the wrapper's own py-5 gives the breathing room
+            and when pinned the solid bg + border-y + shadow separate it
+            from the content scrolling under. z-30 keeps it below the
+            band's z-40. */}
         {!isLoggedIn && (
-        <div className="relative -mx-4 -mt-5 overflow-hidden rounded-none border-y border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6 sm:-mt-7">
+        <div className="sticky top-0 z-30 -mx-4 overflow-hidden rounded-none border-y border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6">
           <div className="min-w-0">
               <p className="text-sm font-semibold text-center text-gray-500 dark:text-slate-400">Log in or sign up to access your complete account.</p>
               <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-black px-3 text-sm font-semibold text-white transition-colors hover:bg-gray-900 dark:bg-gokez-700 dark:hover:bg-gokez-800">Continue login</button>
@@ -658,7 +668,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </section>
 
         <section className="pt-1 text-center">
-          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.1.3</p>
+          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.1.4</p>
           {footer}
         </section>
       </div>

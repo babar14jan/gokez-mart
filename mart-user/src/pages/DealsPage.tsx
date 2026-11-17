@@ -13,7 +13,7 @@ export default function DealsPage({ products, onBack }: DealsPageProps) {
     .sort((a, b) => (b.discountPercent || 0) - (a.discountPercent || 0));
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 pt-4">
+    <div className="max-w-6xl mx-auto page-x pt-4">
       <div className="flex items-center gap-3 mb-4">
         <button onClick={onBack} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-900 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700 dark:text-white dark:hover:bg-slate-700" aria-label="Back">
           <ChevronLeft className="h-7 w-7" strokeWidth={2.5} />

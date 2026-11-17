@@ -167,6 +167,16 @@ export function useAppUpdate() {
   };
 
   const check = async () => {
+    // Ask the browser for a fresh worker on EVERY poll, before any early
+    // return below: it only re-checks sw.js on its own roughly once a day, and
+    // a skipped update() means an installed PWA can miss a deploy entirely.
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        registration?.update().catch(() => {});
+      }
+    } catch {}
+
     // Read the deploy mode first, so the reload decision below uses the mode of
     // the build the edge is actually serving. Any failure keeps the last known
     // mode (default silent), so a missing policy can never force a reload.
@@ -213,15 +223,6 @@ export function useAppUpdate() {
       // force = land the new build now; silent = wait for the app to be hidden.
       if (updateMode === 'force') forceSwap();
       else stageUpdate();
-    } catch {}
-    // Browsers only re-check sw.js on their own roughly once a day. Ask now so
-    // the freshly deployed worker installs and precaches the new chunks while
-    // the app is open — that is what makes the eventual swap instant.
-    try {
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration();
-        registration?.update().catch(() => {});
-      }
     } catch {}
   };
 

@@ -162,18 +162,18 @@ export default function AccountGreeting() {
       {isLoggedIn ? (
         <button type="button" onClick={openProfile} aria-label="Open profile"
           className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-90">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-white/20">
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/40 bg-white/20">
             {photoUrl
               ? <img src={photoUrl} alt="" className="h-full w-full object-cover" />
-              : <span className="text-sm font-bold text-white">{initials}</span>}
+              : <span className="text-xs font-bold text-white">{initials}</span>}
           </span>
           <span className="min-w-0 max-w-[10rem] truncate text-sm font-bold leading-tight text-white">Hi, {firstName}</span>
         </button>
       ) : (
         <button type="button" onClick={openProfile} aria-label="Open profile"
           className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-90">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-white/40 bg-white/20">
-            <User className="h-4 w-4 text-white" />
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/40 bg-white/20">
+            <User className="h-3.5 w-3.5 text-white" />
           </span>
           <span className="min-w-0 max-w-[10rem] truncate text-sm font-bold leading-tight text-white">Hi Guest</span>
         </button>
@@ -182,10 +182,10 @@ export default function AccountGreeting() {
       {open && createPortal(
         <div className="fixed inset-0 z-[80] flex flex-col bg-[#f7f8fa] font-sans dark:bg-slate-900">
           <header className="bg-gradient-to-r from-[#218044] to-[#2e8b57] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
-            <div className="flex min-h-[64px] items-center gap-1 px-2">
+            <div className="flex min-h-[44px] items-center gap-1 px-2">
               <button type="button" onClick={closeProfile} aria-label="Back"
-                className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15">
-                <ChevronLeft className="h-6 w-6" />
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+                <ChevronLeft className="h-5 w-5" />
               </button>
               <h1 className="text-base font-bold text-white">Profile</h1>
             </div>

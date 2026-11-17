@@ -15,6 +15,12 @@ interface NavbarProps {
   onCheckout: () => void;
   onSearchOpen: () => void;
   searchPrompt: string;
+  /**
+   * Driven by the app-wide useScrollChrome() hook (App.tsx) — NOT by a local
+   * listener. Passing the shared boolean in is what guarantees the delivery
+   * row flips in the same commit as the rest of the chrome.
+   */
+  deliveryHidden?: boolean;
 }
 
 // Nav items — all including Cart and Profile in center
@@ -25,7 +31,7 @@ const navItems = [
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-  export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, onSearchOpen, searchPrompt }: NavbarProps) {
+  export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, onSearchOpen, searchPrompt, deliveryHidden = false }: NavbarProps) {
   const [zoneOpen, setZoneOpen] = useState(false);
   const [pendingZone, setPendingZone] = useState<(typeof zones)[number] | null>(null);
   const totalItems = useCartStore(s => s.totalItems());
@@ -74,8 +80,8 @@ const navItems = [
             ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
             : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
           <div className="min-w-0 text-left">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
-            <p className="truncate text-sm font-bold text-white leading-tight">
+            <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
+            <p className="truncate text-[13px] font-bold text-white leading-tight">
               {selectedZone.name}
             </p>
           </div>
@@ -90,8 +96,8 @@ const navItems = [
           ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
           : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
         <div className="min-w-0 text-left">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
-          <p className="truncate text-sm font-bold text-white leading-tight">
+          <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
+          <p className="truncate text-[13px] font-bold text-white leading-tight">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
         </div>
@@ -133,59 +139,81 @@ const navItems = [
 
   return (
     <>
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a]">
+    {/* Fixed header band: AppShell renders this ABOVE the scroller, so it
+        never scrolls with the page. `relative z-40` (not sticky) — it is a
+        flex child of the frame now, and the z-index keeps it above in-page
+        sticky content (search rows, cards) that pin at top-0 of the scroller. */}
+    <header className={`relative z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a] ${deliveryHidden ? 'band-collapsed' : ''}`}>
 
-      {/* Row 1 — 56px (3.5rem), the same app-bar height as PageHeader, the
-          Profile header and the OTP/brand bars so every header matches. */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[56px] flex items-center gap-3">
+      {/* Row 1 — 44px (2.75rem), the same app-bar height as PageHeader and the
+          Profile header so every header matches.
 
-        {/* Location / account identity — left. flex-1 + min-w-0 gives it half of
-            the free space so the centred nav never moves when the identity
-            changes width (zone picker vs. account greeting). */}
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          {activeView === 'account' ? <AccountGreeting /> : <ZoneDropdown />}
-        </div>
+          Auto-hide: grid-rows 1fr↔0fr with a 150ms transition, driven by the
+          shared useScrollChrome() state (deliveryHidden prop) — never by a
+          local listener, so it flips in the same commit as the rest of the
+          chrome. The row is clipped, not unmounted, so the zone dropdown
+          keeps its state. sm:grid-rows-[1fr] pins the row open on desktop:
+          the centred nav pills live in this row and must never collapse. */}
+      <div className={`band-delivery grid transition-[grid-template-rows] duration-150 ${deliveryHidden ? 'grid-rows-[0fr] sm:grid-rows-[1fr]' : 'grid-rows-[1fr]'}`}>
+        <div className="min-h-0 overflow-hidden">
+          <div className="mx-auto flex min-h-[44px] max-w-6xl items-center gap-3 page-x">
 
-        {/* ── Desktop layout ── */}
-        {/* Center: nav items + Cart. Pinned to the container centre by the two
-            equal-width side slots so the nav is stable across views. */}
-        <nav className="hidden sm:flex shrink-0 items-center gap-1">
-          {navItems.map(({ id, label, Icon }) => {
-            const isActive = activeView === id;
-            return (
-              <button key={id} onClick={() => onNavChange(id)} aria-label={label}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4 ${
-                  isActive ? 'bg-white text-gokez-800 shadow-sm' : 'text-white/80 hover:bg-white/10 hover:text-white'
-                }`}>
-                <Icon className="w-4 h-4" />
-                <span className="hidden lg:inline">{label}</span>
+            {/* Location / account identity — left. flex-1 + min-w-0 gives it half of
+                the free space so the centred nav never moves when the identity
+                changes width (zone picker vs. account greeting). */}
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              {activeView === 'account' ? <AccountGreeting /> : <ZoneDropdown />}
+            </div>
+
+            {/* ── Desktop layout ── */}
+            {/* Center: nav items + Cart. Pinned to the container centre by the two
+                equal-width side slots so the nav is stable across views. */}
+            <nav className="hidden sm:flex shrink-0 items-center gap-1">
+              {navItems.map(({ id, label, Icon }) => {
+                const isActive = activeView === id;
+                return (
+                  <button key={id} onClick={() => onNavChange(id)} aria-label={label}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4 ${
+                      isActive ? 'bg-white text-gokez-800 shadow-sm' : 'text-white/80 hover:bg-white/10 hover:text-white'
+                    }`}>
+                    <Icon className="w-4 h-4" />
+                    <span className="hidden lg:inline">{label}</span>
+                  </button>
+                );
+              })}
+              {/* Cart in center */}
+              <button onClick={onCheckout} aria-label="Cart"
+                className="relative ml-1 flex items-center gap-1.5 rounded-full bg-saffron-400 px-3 py-2 text-sm font-bold text-saffron-900 shadow-sm transition-colors hover:bg-saffron-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4">
+                <ShoppingCart className="w-4 h-4" />
+                <span className="hidden lg:inline">Cart</span>
+                {totalItems > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-gokez-800 shadow-sm">
+                    {totalItems > 9 ? '9+' : totalItems}
+                  </span>
+                )}
               </button>
-            );
-          })}
-          {/* Cart in center */}
-          <button onClick={onCheckout} aria-label="Cart"
-            className="relative ml-1 flex items-center gap-1.5 rounded-full bg-saffron-400 px-3 py-2 text-sm font-bold text-saffron-900 shadow-sm transition-colors hover:bg-saffron-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4">
-            <ShoppingCart className="w-4 h-4" />
-            <span className="hidden lg:inline">Cart</span>
-            {totalItems > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-gokez-800 shadow-sm">
-                {totalItems > 9 ? '9+' : totalItems}
-              </span>
-            )}
-          </button>
-        </nav>
+            </nav>
 
-        {/* Right slot — balances the left identity so the nav stays centred.
-            Empty by design; never renders content. */}
-        <div className="hidden flex-1 sm:block" aria-hidden="true" />
+            {/* Right slot — balances the left identity so the nav stays centred.
+                Empty by design; never renders content. */}
+            <div className="hidden flex-1 sm:block" aria-hidden="true" />
+          </div>
+        </div>
       </div>
+
+      {/* Pages that own a search row in the band (Fresh, Categories) portal it
+          into this slot, so it sits where Home's row 2 sits — full-bleed,
+          outside the scroller (no scrollbar indicator can overlap it), and it
+          stays put while the delivery row collapses. The band's own
+          border/shadow then closes the green section, same as on Home. */}
+      {(activeView === 'fresh' || activeView === 'categories' || activeView === 'orders') && <div id="band-search-slot" />}
 
       {/* Row 2: Search — the Categories view owns its own category-scoped filter. */}
       {activeView !== 'account' && activeView !== 'orders' && activeView !== 'categories' && activeView !== 'fresh' && (
-        <div className="sm:hidden px-4 py-1">
-          <button type="button" onClick={onSearchOpen} className="relative w-full text-left">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gokez-700 dark:text-slate-200" />
-            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-500 shadow-sm transition-colors hover:bg-cream-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+        <div className="band-row sm:hidden page-x pb-1">
+          <button type="button" onClick={onSearchOpen} className="relative block w-full text-left">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-white" />
+            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-3 text-base leading-5 text-gray-700 shadow-sm transition-colors hover:bg-cream-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
           </button>
         </div>
       )}
