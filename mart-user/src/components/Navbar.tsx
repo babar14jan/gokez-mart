@@ -148,14 +148,15 @@ const navItems = [
       {/* Row 1 — 44px (2.75rem), the same app-bar height as PageHeader and the
           Profile header so every header matches.
 
-          Auto-hide: grid-rows 1fr↔0fr with a 150ms transition, driven by the
-          shared useScrollChrome() state (deliveryHidden prop) — never by a
-          local listener, so it flips in the same commit as the rest of the
-          chrome. The row is clipped, not unmounted, so the zone dropdown
-          keeps its state. sm:grid-rows-[1fr] pins the row open on desktop:
-          the centred nav pills live in this row and must never collapse. */}
-      <div className={`band-delivery grid ${deliveryHidden ? 'grid-rows-[0fr] sm:grid-rows-[1fr]' : 'grid-rows-[1fr]'}`}>
-        <div className="min-h-0 overflow-hidden">
+          Auto-hide: the row's height is written per scroll event as the
+          --band-collapse custom property (useScrollChrome), so it leaves and
+          returns in step with the finger instead of on a timer — this row is
+          in flow above the scroller, so a timed collapse moved the page
+          content (a 44px bump under a centred product card). The row is
+          clipped, not unmounted, so the zone dropdown keeps its state, and
+          desktop pins it open: the centred nav pills live in this row. */}
+      <div className="band-delivery grid">
+        <div className="band-slide min-h-0 overflow-hidden">
           <div className="mx-auto flex min-h-[44px] max-w-6xl items-center gap-3 page-x">
 
             {/* Location / account identity — left. flex-1 + min-w-0 gives it half of
