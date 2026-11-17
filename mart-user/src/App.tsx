@@ -510,7 +510,7 @@ export default function App() {
   // end of a page only: the nav (an overlay) returns there, the delivery row
   // (in-flow) does not. Enabled everywhere the chrome renders, except while an
   // overlay owns the screen (checkout) or the login flow replaces the header.
-  const chromeAutoHide = !checkoutActive && !accountSubPage && !(view === 'account' && accountLoginOpen);
+  const chromeAutoHide = !checkoutActive && !accountSubPage && view !== 'account';
   const { hidden: chromeHidden, navHidden } = useScrollChrome(scrollRef, chromeAutoHide, categoriesPaneEl);
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const pullDistance = useRef(0);
