@@ -77,11 +77,13 @@ html, body { overscroll-behavior-y: none; }
   }
 }
 
-/* Keep fixed mobile navigation above the iOS home indicator while scrolling. */
+/* Bottom navigation. The bar itself no longer moves: AppShell wraps it in an
+   absolutely positioned .app-bottom-nav overlay and animates THAT, so this
+   element only has to keep the home-indicator area painted. translate3d(0,0,0)
+   promotes the layer (helps iOS repaint the bar over the scroller). */
 .mobile-bottom-nav {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   transform: translate3d(0, 0, 0);
-  transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 
 /* The centre Fresh icon stays fully contained inside the fixed-height
@@ -111,11 +113,11 @@ html, body { overscroll-behavior-y: none; }
   transform: translateZ(0);
 }
 
-/* While a field owns the screen the bottom nav is hidden. It must leave the
-   layout entirely, not just fade: an in-flow bar that is only translated away
-   still reserves its height, which showed up as a full-width white strip above
-   the keyboard on the category page. `.input-focused` is published once by
-   useKeyboardInset(), so this applies to every page without per-page handlers. */
+/* While a field owns the screen the bottom nav is hidden. `.input-focused` is
+   published once by useKeyboardInset(), so this applies to every page without
+   per-page handlers. The scroller's matching padding is dropped in the same
+   state (see the .app-bottom-nav block below) so no empty strip is left above
+   the keyboard. */
 .input-focused .mobile-bottom-nav {
   display: none;
 }
@@ -155,10 +157,11 @@ html, body { overscroll-behavior-y: none; }
      exceeded the layout viewport during a toolbar transition -- made the
      document scroll, and a relative shell was carried up with it.
 
-     The nav is a normal flex child at the bottom of this frame, so it is
-     structurally pinned through normal layout and cannot drift the way a
-     position:fixed bottom bar does on iOS Safari/standalone PWA (WebKit bug
-     297779). Keep only .app-scroll scrollable and do not put a transform on
+     The nav is an absolutely positioned overlay pinned to the bottom of this
+     fixed frame (not an in-flow flex child): layout-pinned, so it cannot drift
+     the way a position:fixed bottom bar does on iOS Safari/standalone PWA
+     (WebKit bug 297779), and a transform hide never resizes the scroller.
+     Keep only .app-scroll scrollable and do not put a transform on
      .app-shell or .app-scroll: fixed overlays (checkout, sheets, dialogs) rely
      on escaping to the viewport. */
   .app-shell {
@@ -208,11 +211,11 @@ html, body { overscroll-behavior-y: none; }
   }
 
   /* NOTE: the frame's bottom is the toolbar's top (tab) / the physical bottom
-     (PWA) — i.e. the in-flow nav lands flush against the iOS chrome with no gap
-     and no overlap. Do NOT subtract from `bottom` to "push the nav down": that
-     only slides it under the toolbar / into the home-indicator strip, and the
-     shortest combined nav+chrome height is already achieved when the two are
-     flush. */
+     (PWA) — i.e. the nav overlay lands flush against the iOS chrome with no
+     gap and no overlap. Do NOT subtract from `bottom` to "push the nav down":
+     that only slides it under the toolbar / into the home-indicator strip, and
+     the shortest combined nav+chrome height is already achieved when the two
+     are flush. */
 
   /* iOS 26 browser-bar tint. iOS 26 Safari ignores <meta name="theme-color"> and
      instead derives the top and bottom bar tints from the background-color of a
@@ -246,9 +249,10 @@ html, body { overscroll-behavior-y: none; }
   /* 12px tall, not tied to the safe-area insets: Safari only needs the strip to
      cover the point it hit-tests (3px from the bottom) and to clear the ~10px
      "thin border" floor below which it samples painted pixels instead of the
-     declared colour. The top edge has no strip — the sticky Navbar/PageHeader
-     already paints green through its safe-area padding at top:0, so Safari
-     samples the header itself and the status-bar tint matches with no seam. */
+     declared colour. The top edge has no strip — the fixed header band
+     (Navbar) already paints green through its safe-area padding at the top
+     of the frame, so Safari samples the header itself and the status-bar
+     tint matches with no seam. */
   .app-tint-bottom {
     bottom: 0;
     height: 12px;
@@ -266,12 +270,13 @@ html, body { overscroll-behavior-y: none; }
     overflow-y: auto;
     /* Reserve the scrollbar strip even on short views. Otherwise switching from
        a long page (Home) to a short one (Orders) toggles a classic scrollbar on
-       desktop, shrinking the scroll area by ~15px and shifting every centred
-       element (header nav included) sideways. `both-edges` keeps the scrollport
-       itself centred, so viewport-centred fixed overlays (search, sheets) line
-       up with the header/body column too. Overlay-scrollbar platforms are
-       unaffected (the gutter is 0). */
-    scrollbar-gutter: stable both-edges;
+       desktop, shrinking the scroll area by ~15px and shifting every element
+       sideways. Deliberately NOT `both-edges`: reserving a strip on the start
+       edge too pushed every page's content an extra ~15px in from the left,
+       so cards read as having more gap on the left than the right. The strip
+       now lives only on the inline-end (right) edge, which is standard browser
+       behaviour. Overlay-scrollbar platforms (iOS/Android/macOS) see 0px. */
+    scrollbar-gutter: stable;
     /* Stop the scroll from chaining to the document at the top edge: this is
        what triggers Chrome/Android's native pull-to-refresh and lets the page
        rubber-band on iOS. The app owns the gesture instead. */
@@ -282,6 +287,81 @@ html, body { overscroll-behavior-y: none; }
        combo, deals, search) were painted *below* the in-flow bottom nav — the
        Place order footer ended up under the nav buttons in iOS standalone.
        Modern iOS scrolls with momentum without it. */
+  }
+
+  /* THE horizontal rhythm. Every page, sub-page, sheet body and band row uses
+     this one class, so the left and right margins are identical everywhere:
+     16px on phones, 24px from sm, 32px from lg. Pair it with a column cap
+     (max-w-6xl for catalogue pages, max-w-lg/2xl for forms) and mx-auto.
+     Spacing utilities may still add vertical padding (pt-*, pb-*, py-*), but
+     horizontal insets must come from here only. */
+  .page-x { padding-left: 1rem; padding-right: 1rem; }
+  @media (min-width: 640px) { .page-x { padding-left: 1.5rem; padding-right: 1.5rem; } }
+  @media (min-width: 1024px) { .page-x { padding-left: 2rem; padding-right: 2rem; } }
+
+  /* Full-bleed escape for a pinned row inside .app-scroll (e.g. the pinned
+     Fresh category-chips row). .app-scroll keeps a scrollbar strip on its
+     inline-end edge, so a plain 100%-wide child stops short of the screen's
+     right edge — a full-width band above it then reads as inset instead of
+     edge to edge. 100vw overhangs that strip so the row lines up with the
+     header band; .app-scroll's overflow-x: hidden clips any excess. The start
+     edge needs no offset because the content box starts at the viewport's
+     left edge (no start-edge gutter). Overlay-scrollbar platforms have a 0px
+     gutter, so nothing changes there. */
+  .app-bleed-x {
+    width: 100vw;
+    margin-left: 0;
+  }
+
+  /* ---- Bottom nav overlay ---------------------------------------------
+     The nav is absolutely positioned over the scroller and hidden by a
+     TRANSFORM, never by collapsing an in-flow box. This is the whole point of
+     the architecture: a flex-child nav that collapses changes the scrollport
+     height mid-scroll, which shrinks the max scrollTop, clamps it, and yanks
+     the content down — the "shake" the old auto-hide showed near the bottom of
+     a page. A transform is compositor-only: layout, content height, and
+     scrollTop never change, so hide/show is immune to clamping.
+
+     The scroller therefore reserves the nav's height with a CONSTANT bottom
+     padding (4rem row + safe area — keep in sync with the h-16 row and
+     .mobile-bottom-nav's padding). Content clears the bar exactly as it did
+     when the nav was in flow, and nothing shifts when the chrome toggles. */
+  @media (max-width: 639.98px) {
+    .app-scroll {
+      padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Keyboard up: the nav is display:none, so drop the reserved strip too —
+       otherwise the page ends a nav's height short above the keyboard. */
+    .input-focused .app-scroll {
+      padding-bottom: 0;
+    }
+  }
+
+  .app-bottom-nav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    transition: transform 180ms ease-out, opacity 180ms ease-out;
+  }
+
+  /* Hidden state — driven by useScrollChrome() (the navHidden flag, derived
+     from the header's travel state but forced back at the end of a page), so
+     the two chrome elements still move in one commit. */
+  .app-bottom-nav.nav-hidden {
+    transform: translate3d(0, 100%, 0);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Desktop has no bottom nav (it is `sm:hidden`), so neither the overlay nor
+     the reserved scroller padding exists there. */
+  @media (min-width: 640px) {
+    .app-bottom-nav {
+      display: none;
+    }
   }
 
   /* ---- While the on-screen keyboard is up ------------------------------
@@ -328,16 +408,42 @@ html, body { overscroll-behavior-y: none; }
     object-position: top;
   }
 
-  /* Category split view: a fixed-height pane that reserves room for the in-flow
-     bottom nav. 100vh keeps its height stable while the page scrolls, so the
-     pane (and everything below it) does not resize mid-scroll. */
+  /* Category split view: the pane fills the app scroller, so the only
+     scrolling on Categories happens inside the rail and the products pane —
+     no "dual scroll" of the whole page drifting under a fixed header.
+     Percentage, not a vh calculation: it tracks the real scrollport through
+     header collapse, keyboard focus and any viewport change with no magic
+     offsets to keep in sync.
+
+     Mobile exception: the scroller reserves the bottom nav's height with
+     padding (see .app-bottom-nav). A pane that stops at the CONTENT box would
+     leave that reserved strip empty right where the nav sits — invisible while
+     the nav is shown, but a blank white/dark bar the moment it hides on
+     scroll. Normal pages don't show it because their content passes behind
+     the nav. So on mobile the pane grows over the reserved strip and the nav
+     overlays it exactly as it overlays content elsewhere; the pane's own
+     scroll areas pad their ends (.categories-scroll) so the last row/rail
+     button can still clear the bar. */
   .categories-pane {
-    height: calc(100vh - 8rem);
+    height: 100%;
   }
 
-  /* While a field is focused the bottom nav leaves the layout, so stop
-     reserving its room -- otherwise the pane ends a nav's height short and
-     leaves a blank strip above the keyboard. */
-  .input-focused .categories-pane {
-    height: 100vh;
+  @media (max-width: 639.98px) {
+    .categories-pane {
+      height: calc(100% + 4rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Keyboard up: the scroller drops its reserved strip (see .input-focused
+       .app-scroll), so the pane must not overflow past the shortened scrollport. */
+    .input-focused .categories-pane {
+      height: 100%;
+    }
+
+    .categories-pane .categories-scroll {
+      padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .input-focused .categories-pane .categories-scroll {
+      padding-bottom: 0;
+    }
   }

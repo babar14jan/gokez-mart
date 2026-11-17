@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, RefreshCw, Search, X } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import CategoryIcon from './CategoryIcon';
@@ -76,6 +77,17 @@ export default function CatalogSearchSheet({
   const refreshingRef = useRef(false);
   const { ref: inputRef, dismiss: dismissKeyboard, onKeyDown: handleKeyDown, onSurfaceClick: handleSurfaceClick } = useKeyboardDismiss();
   const query = search.trim().toLowerCase();
+  // The inline Fresh search row is portaled into the fixed header band
+  // ("band-search-slot" in Navbar) so it sits OUTSIDE the scroller, exactly
+  // like Home's row 2: full-bleed, above the scrollport — no scrollbar
+  // indicator can ever overlap it. The slot exists as soon as the band renders
+  // (same commit); resolving it in a layout effect re-renders before paint, so
+  // the field never flickers in.
+  const [bandSlot, setBandSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!inline || !freshMode) { setBandSlot(null); return; }
+    setBandSlot(document.getElementById('band-search-slot'));
+  }, [inline, freshMode]);
   const placeholder = freshMode ? 'Search Fresh Vegetables and Fruits' : searchPrompt;
   const categoryById = useMemo(() => new Map(categories.map(category => [category.id, category])), [categories]);
   const categoriesWithProducts = useMemo(
@@ -289,7 +301,7 @@ export default function CatalogSearchSheet({
 
           {/* Desktop: the search field lives in the page body, under the site
               header, with a "Back to home" control on its left. */}
-          <div className="mx-auto hidden w-full max-w-6xl items-center gap-2 px-3 pb-4 pt-4 sm:px-6 md:flex lg:px-8">
+          <div className="mx-auto hidden w-full max-w-6xl items-center gap-2 page-x pb-4 pt-4 md:flex">
             <button type="button" onClick={onClose} aria-label="Back to home"
               className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-gray-100 px-3 py-3.5 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 transition-colors hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-200 dark:ring-slate-600 dark:hover:bg-slate-600">
               <ChevronLeft className="h-5 w-5" strokeWidth={2.5} />
@@ -316,8 +328,8 @@ export default function CatalogSearchSheet({
 
         {/* Live suggestions — compact white rows, shown whenever typing. */}
         {!inline && query && suggestions.length > 0 && (
-          <div className="border-b border-yellow-200/60 px-3 pt-2 dark:border-yellow-900/40">
-            <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto md:px-6 lg:px-8" onScroll={dismissKeyboard}>
+          <div className="border-b border-yellow-200/60 page-x pt-2 dark:border-yellow-900/40">
+            <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto" onScroll={dismissKeyboard}>
               {suggestions.map(product => {
                 const category = categoryById.get(product.categoryId);
                 const localName = product.localName?.trim() && product.localName.trim() !== product.name.trim()
@@ -348,19 +360,28 @@ export default function CatalogSearchSheet({
           </div>
         )}
 
-        <div ref={resultsRef} className={`relative mx-auto w-full max-w-6xl bg-white px-3 dark:bg-slate-900 md:px-6 lg:px-8 ${inline ? "" : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain"} ${freshMode ? `pt-1 ${totalItems > 0 ? "pb-[calc(7rem+env(safe-area-inset-bottom,0px))]" : "pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}` : "pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}`} onScroll={dismissKeyboard}>
+        <div ref={resultsRef} className={`relative bg-white dark:bg-slate-900 ${freshMode && inline ? "w-full" : "mx-auto w-full max-w-6xl page-x"} ${inline ? "" : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain"} ${freshMode ? `${inline ? "" : "pt-1 "}${totalItems > 0 ? "pb-[calc(7rem+env(safe-area-inset-bottom,0px))]" : "pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}` : "pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]"}`} onScroll={dismissKeyboard}>
+          {/* Pull-to-refresh spinner — z-[35]: above the pinned search block
+              (z-30) so the gesture has visible feedback, below the header
+              band (z-40). */}
           {(refreshing || pullDistance > 0) && (
-            <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2" style={{ opacity: refreshing ? 1 : Math.min(1, pullDistance / 40) }} aria-live="polite">
+            <div className="pointer-events-none absolute left-1/2 top-2 z-[35] -translate-x-1/2" style={{ opacity: refreshing ? 1 : Math.min(1, pullDistance / 40) }} aria-live="polite">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-md ring-1 ring-black/5 dark:bg-slate-800/90 dark:ring-white/10">
                 <RefreshCw className={`h-4 w-4 text-emerald-600 dark:text-emerald-300 ${refreshing || pullDistance >= 76 ? 'animate-spin' : ''}`} style={refreshing || pullDistance >= 76 ? undefined : { transform: `rotate(${pullDistance * 4}deg)` }} aria-hidden="true" />
               </div>
             </div>
           )}
-          {freshMode && (
-            <div className="sticky top-14 z-40 -mx-3 mb-2 bg-white px-3 py-1 dark:bg-slate-900 md:mx-0 md:px-0">
-              <div className="relative">
+          {/* Fresh: the search row is portaled OUT of the scroller into the
+              fixed header band ("band-search-slot" in Navbar), so it sits
+              exactly where Home's row 2 sits — full-bleed edge to edge, above
+              the scrollport (a scrollbar indicator can never overlap it), and
+              it stays put while the delivery row collapses. The category chips
+              stay here: a pinned white row directly under the band. */}
+          {inline && freshMode && bandSlot && createPortal(
+            <div className="bg-gokez-700 dark:bg-[#18191a]">
+              <div className="mx-auto w-full max-w-6xl page-x py-1">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-white" />
                   <input
                     ref={inputRef}
                     type="text"
@@ -371,11 +392,11 @@ export default function CatalogSearchSheet({
                     onKeyDown={handleSearchKeyDown}
                     placeholder=""
                     aria-label={placeholder}
-                    className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
+                    className="w-full rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-9 text-sm text-gray-900 shadow-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
                   />
                   {!search && (
-                    <span className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-slate-400">
-                      Search Fresh <span className="font-bold text-gray-600 dark:text-slate-300">Vegetables</span> and <span className="font-bold text-gray-600 dark:text-slate-300">Fruits</span>
+                    <span className="pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-base text-gray-700 dark:text-slate-300">
+                      Search Fresh <span className="font-bold text-gray-900 dark:text-white">Vegetables</span> and <span className="font-bold text-gray-900 dark:text-white">Fruits</span>
                     </span>
                   )}
                   {search && (
@@ -384,68 +405,73 @@ export default function CatalogSearchSheet({
                       <X className="h-3.5 w-3.5" strokeWidth={2.5} />
                     </button>
                   )}
-                </div>
-                {inline && query && suggestions.length > 0 && (
-                  <div className="max-h-56 overflow-y-auto rounded-xl border border-yellow-200/60 bg-white dark:border-yellow-900/40 dark:bg-slate-800">
-                    <div className="space-y-1 px-2 py-2">
-                      {suggestions.map(product => {
-                        const category = categoryById.get(product.categoryId);
-                        const localName = product.localName?.trim() && product.localName.trim() !== product.name.trim()
-                          ? product.localName.trim()
-                          : '';
-                        return (
-                          <button type="button" key={product.id} onClick={() => { setSearch(product.name); recordSearch(product.name); dismissKeyboard(); }}
-                            className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
-                              <SmartImage
-                                src={product.smallUrl || product.thumbnailUrl || product.photoVariants?.[0]?.smallUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
-                                alt=""
-                                className="h-full w-full"
-                                imgClassName="object-cover"
-                                fallback={<CategoryIcon icon={category?.icon || ''} name={category?.name || product.name} className="h-5 w-5 object-contain" />}
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">
-                                {product.name}
-                                {localName && <span> ({localName})</span>}
-                              </p>
-                            </div>
-                          </button>
-                        );
-                      })}
+                  {query && suggestions.length > 0 && (
+                    <div className="absolute inset-x-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-yellow-200/60 bg-white shadow-lg dark:border-yellow-900/40 dark:bg-slate-800">
+                      <div className="space-y-1 px-2 py-2">
+                        {suggestions.map(product => {
+                          const category = categoryById.get(product.categoryId);
+                          const localName = product.localName?.trim() && product.localName.trim() !== product.name.trim()
+                            ? product.localName.trim()
+                            : '';
+                          return (
+                            <button type="button" key={product.id} onClick={() => { setSearch(product.name); recordSearch(product.name); dismissKeyboard(); }}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors hover:bg-yellow-200/50 active:bg-yellow-200/70 dark:hover:bg-yellow-900/30">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50 ring-1 ring-gray-100 dark:bg-slate-800 dark:ring-slate-600">
+                                <SmartImage
+                                  src={product.smallUrl || product.thumbnailUrl || product.photoVariants?.[0]?.smallUrl || product.photoVariants?.[0]?.thumbnailUrl || product.photoUrl}
+                                  alt=""
+                                  className="h-full w-full"
+                                  imgClassName="object-cover"
+                                  fallback={<CategoryIcon icon={category?.icon || ''} name={category?.name || product.name} className="h-5 w-5 object-contain" />}
+                                />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">
+                                  {product.name}
+                                  {localName && <span> ({localName})</span>}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+              </div>
+            </div>,
+            bandSlot
+          )}
+
+          {/* Fresh: only the admin-configured category tabs. Hidden while
+              searching so results span the whole catalogue (point 5). The row
+              pins right under the band; app-bleed-x covers the stable
+              scrollbar gutters so the white row stays flush with the band. */}
+          {!query && freshTabs.length > 0 && (
+            <div className={`sticky top-0 z-30 bg-white shadow-sm dark:bg-slate-900 ${inline ? "app-bleed-x" : ""}`}>
+              <div className="mx-auto w-full max-w-6xl page-x pb-5 pt-2">
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  {freshTabs.map(category => {
+                    const selected = category.id === activeCategoryId;
+                    return (
+                      <button type="button" key={category.id} onClick={() => selectCategory(category.id)}
+                        className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 transition-colors ${
+                          selected
+                            ? 'border-gokez-700 bg-gokez-50 text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-300'
+                            : 'border-gray-100 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                        }`}>
+                        <CategoryIcon icon={category.icon} name={category.name} className="h-6 w-6 object-contain" />
+                        <span className="whitespace-nowrap text-xs font-semibold leading-tight">{category.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Fresh: only the admin-configured category tabs. Hidden while
-              searching so results span the whole catalogue (point 5). */}
-          {!query && freshMode && freshTabs.length > 0 && (
-            <section className="mb-5">
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {freshTabs.map(category => {
-                  const selected = category.id === activeCategoryId;
-                  return (
-                    <button type="button" key={category.id} onClick={() => selectCategory(category.id)}
-                      className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 transition-colors ${
-                        selected
-                          ? 'border-gokez-700 bg-gokez-50 text-gokez-800 dark:bg-gokez-950/20 dark:text-gokez-300'
-                          : 'border-gray-100 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                      }`}>
-                      <CategoryIcon icon={category.icon} name={category.name} className="h-6 w-6 object-contain" />
-                      <span className="whitespace-nowrap text-xs font-semibold leading-tight">{category.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
           {/* Live product results. */}
-          <section>
+          <section className={freshMode && inline ? "mx-auto w-full max-w-6xl page-x pt-3" : ""}>
             {(!query && !freshMode) ? null : (
             <h2 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
               {query

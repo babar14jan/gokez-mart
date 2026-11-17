@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ShoppingBag, RefreshCw, X, MapPin, RotateCcw, IndianRupee, User, MessageCircle, WifiOff, CalendarClock } from 'lucide-react';
 import { authApi, storeApi } from '../services/api';
@@ -407,6 +407,15 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const [reorderToast, setReorderToast] = useState('');
   const [activeTab, setActiveTab] = useState<'current' | 'past'>('current');
+  // Same band hand-off as Fresh/Categories search: the Current/History tabs are
+  // rendered in the fixed header band ("band-search-slot" in Navbar) so they sit
+  // on the band's green, above the scrollport, with the same py-1 green margin
+  // under them as Home's search row. Resolved after commit, before paint, so it
+  // never flickers. Embed mode has no band and falls back to a sticky row.
+  const [bandSlot, setBandSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setBandSlot(document.getElementById('band-search-slot'));
+  }, []);
   // Live store opening label ("9:00 AM today") when the app has one; falls
   // back to the opening time captured with the order when the store state
   // hasn't been fetched yet e.g. right after a fresh page load.
@@ -591,6 +600,32 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   const activeOrders = orders.filter(o => !ALL_CLOSED.includes(o.status));
   const deliveredOrders = orders.filter(o => isRecentlyDelivered(o));
   const pastOrders = orders.filter(o => ALL_CLOSED.includes(o.status) && !isRecentlyDelivered(o));
+
+  // Smart default tab, same rules for guests and signed-in customers:
+  //   • something to watch (an open order, or one just delivered and still
+  //     shown in Current) -> Current, even when older history exists
+  //   • nothing open but older orders exist -> History
+  //   • nothing at all -> Current (its empty state links to History)
+  // Decided once per load, after the first successful fetch. Polling status
+  // changes and the customer's own taps must never yank them to another tab,
+  // and a tap made while the first load is in flight wins over the default.
+  const tabChoiceMade = useRef(false);
+  const tabAutoApplied = useRef(false);
+
+  // A different audience is a different list, so let the default decide again.
+  useEffect(() => {
+    tabChoiceMade.current = false;
+    tabAutoApplied.current = false;
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (loading || loadError || tabAutoApplied.current) return;
+    tabAutoApplied.current = true;
+    if (tabChoiceMade.current) return;
+    const hasSomethingToWatch = activeOrders.length > 0 || deliveredOrders.length > 0;
+    if (!hasSomethingToWatch && pastOrders.length > 0) setActiveTab('past');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, loadError, orders]);
   const pastDeliveredCount = pastOrders.filter(o => o.status === 'delivered').length;
   const pastCancelledCount = pastOrders.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length;
 
@@ -610,13 +645,44 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   // to verify there is no current order before looking through older orders.
   const showTab = activeTab;
 
+  // One tab group, rendered either in the green band (normal app shell) or as a
+  // sticky fallback in embed mode. White active pill on the green, translucent
+  // resting pills, so the row reads as the same surface as Home's search row.
+  const tabsRow = (
+    <div className="flex gap-1 rounded-xl bg-white/15 p-1 dark:bg-slate-800">
+      <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('current'); }}
+        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${showTab === 'current' ? 'bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-white/85 hover:text-white dark:text-slate-300'}`}>
+        Current
+      </button>
+      <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('past'); }}
+        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${showTab === 'past' ? 'bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-white/85 hover:text-white dark:text-slate-300'}`}>
+        History
+      </button>
+    </div>
+  );
+
+  const bandTabs = bandSlot
+    ? createPortal(
+        <div className="bg-gokez-700 dark:bg-[#18191a]">
+          <div className="mx-auto w-full max-w-lg page-x py-1">{tabsRow}</div>
+        </div>,
+        bandSlot,
+      )
+    : null;
+
+  const inlineTabs = !bandSlot ? (
+    <div className="sticky top-0 z-30 app-bleed-x bg-gokez-700 px-4 py-1 dark:bg-[#18191a] sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-lg">{tabsRow}</div>
+    </div>
+  ) : null;
+
   const handleTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (touchStartX.current === null) return;
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
     if (Math.abs(deltaX) > 50) {
-      if (deltaX < 0 && showTab === 'current') setActiveTab('past');
-      else if (deltaX > 0 && showTab === 'past') setActiveTab('current');
+      if (deltaX < 0 && showTab === 'current') { tabChoiceMade.current = true; setActiveTab('past'); }
+      else if (deltaX > 0 && showTab === 'past') { tabChoiceMade.current = true; setActiveTab('current'); }
     }
     touchStartX.current = null;
   };
@@ -685,17 +751,9 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     }
 
     return (
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
-        <div className="flex gap-1 rounded-2xl bg-gray-100 p-1 dark:bg-slate-800">
-          <button type="button" onClick={() => setActiveTab('current')}
-            className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-all ${showTab === 'current' ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-gray-500 dark:text-slate-400'}`}>
-            Current
-          </button>
-          <button type="button" onClick={() => setActiveTab('past')}
-            className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-all ${showTab === 'past' ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-gray-500 dark:text-slate-400'}`}>
-            History
-          </button>
-        </div>
+      <div className="max-w-lg mx-auto page-x py-4 space-y-4">
+        {bandTabs}
+        {inlineTabs}
 
         {/* Same three cards the signed-in view uses. The only guest-specific
             input is canCancel: cancelling needs the order's tracking token, and
@@ -706,7 +764,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
             <div className="mb-3 text-4xl">✅</div>
             <p className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">No active orders</p>
             <p className="text-xs text-gray-500 dark:text-slate-400">Looking for an older order? Check History.</p>
-            <button type="button" onClick={() => setActiveTab('past')}
+            <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('past'); }}
               className="mt-3 text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">
               View History
             </button>
@@ -768,36 +826,19 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   );
 
   return (
-    <div className="max-w-lg mx-auto px-3 py-4 space-y-4" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onClick={handleSearchSurfaceClick}>
+    <div className="max-w-lg mx-auto page-x py-4 space-y-4" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onClick={handleSearchSurfaceClick}>
 
-      {/* Reorder toast */}
+      {/* Reorder toast — position:fixed, so it takes no space in the list. */}
       {reorderToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg">
           🛒 {reorderToast}
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 rounded-2xl p-1">
-        <button
-          onClick={() => setActiveTab('current')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all ${
-            showTab === 'current'
-              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-slate-400'
-          }`}>
-          Current
-        </button>
-        <button
-          onClick={() => setActiveTab('past')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all ${
-            showTab === 'past'
-              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-slate-400'
-          }`}>
-          History
-        </button>
-      </div>
+      {/* Tabs — pinned in the green header band (see bandTabs above), not in
+          the scroller, so nothing slides under a white strip. */}
+      {bandTabs}
+      {inlineTabs}
 
       {/* Live indicator — current tab only */}
       {showTab === 'current' && hasActiveOrder(orders) && (
@@ -857,7 +898,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
             <div className="text-4xl mb-3">✅</div>
             <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No active orders</p>
             <p className="text-xs text-gray-500">Looking for an older order? Check History.</p>
-            <button type="button" onClick={() => setActiveTab('past')}
+            <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('past'); }}
               className="mt-3 text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400">
               View History
             </button>

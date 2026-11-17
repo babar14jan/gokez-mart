@@ -4,7 +4,11 @@ import { Home, LayoutGrid, Package, User } from 'lucide-react';
 type NavView = 'home' | 'categories' | 'orders' | 'account';
 
 interface BottomNavProps {
-  active: NavView;
+  /**
+   * The active view. 'fresh' is accepted so the Fresh page highlights ONLY the
+   * centre veg button: no tab matches it, so Home does not light up too.
+   */
+  active: NavView | 'fresh';
   onChange: (v: NavView) => void;
   onOpenSearch: () => void;
   freshActive?: boolean;

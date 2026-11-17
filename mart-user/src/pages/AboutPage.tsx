@@ -5,7 +5,7 @@ export default function AboutPage() {
   return (
     <main className="page-shell bg-cream-50 dark:bg-slate-900 font-sans">
       <PageHeader title="About Gokez Mart" />
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+      <div className="max-w-3xl mx-auto page-x py-10">
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-cream-200 p-6 shadow-card dark:border-slate-700 text-center">
           <img src="/mart_brand_new.webp" alt="Gokez Mart" className="h-16 w-auto object-contain mx-auto" />
           <p className="-mt-1 text-sm font-semibold text-gokez-700 dark:text-gokez-400">{BRAND_SLOGAN}</p>

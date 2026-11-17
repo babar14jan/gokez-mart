@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, X } from 'lucide-react';
 import type { Category, Product } from '../services/api';
 import ProductCard from './ProductCard';
 import CategoryIcon from './CategoryIcon';
 import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
+import { usePageBottom } from '../utils/pageBottom';
 
 interface CategoriesViewProps {
   categories: Category[];
@@ -13,6 +15,13 @@ interface CategoriesViewProps {
   initialCategorySlug?: string | null;
   loading?: boolean;
   onEmpty: () => void;
+  /**
+   * The products pane is this page's ONLY scroller (the outer .app-scroll
+   * never moves). App attaches the shared chrome hook to it, so the header
+   * delivery row and bottom nav hide/return on this page exactly as they do
+   * everywhere else.
+   */
+  paneScrollRef?: Ref<HTMLDivElement>;
 }
 
 // Per-category accent so the active tab reads as a colourful highlighter and
@@ -35,7 +44,7 @@ function matches(product: Product, query: string): boolean {
   return name.includes(query) || local.includes(query) || aliases.some(alias => alias.includes(query));
 }
 
-export default function CategoriesView({ categories, products, initialCategoryId, initialCategorySlug, loading = false, onEmpty }: CategoriesViewProps) {
+export default function CategoriesView({ categories, products, initialCategoryId, initialCategorySlug, loading = false, onEmpty, paneScrollRef }: CategoriesViewProps) {
   // Hide categories with no visible products for this store
   const visibleCategories = useMemo(
     () => categories.filter(category => products.some(product => product.categoryId === category.id)),
@@ -53,6 +62,18 @@ export default function CategoriesView({ categories, products, initialCategoryId
   const [search, setSearch] = useState('');
   const appliedInitialSelection = useRef<string | null>(null);
   const { ref: inputRef, dismiss, onKeyDown, onSurfaceClick } = useKeyboardDismiss();
+  // Same end clearance as Home/Fresh: the floating cart overlays the bottom of
+  // the scroll area, so without this the last product card sat behind it.
+  const pageBottom = usePageBottom();
+  // Same as Fresh: the search row is portaled into the fixed header band
+  // ("band-search-slot" in Navbar) so it sits above the scrollport — full-bleed
+  // like Home's row 2, with no scrollbar indicator overlapping it. Resolved
+  // after commit, before paint, so it never flickers. Falls back to an inline
+  // sticky row when the band is not rendered (embed mode).
+  const [bandSlot, setBandSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setBandSlot(document.getElementById('band-search-slot'));
+  }, []);
 
   useEffect(() => {
     const selectionKey = initialCategoryId
@@ -95,11 +116,54 @@ export default function CategoriesView({ categories, products, initialCategoryId
     onEmpty();
   }, [loading, query, activeCatId, visibleCategories, filteredProducts.length, onEmpty]);
 
-  return (
-    <div className="categories-pane flex overflow-hidden" onClick={onSurfaceClick}>
+  // One search field, rendered either in the band (normal) or in a sticky row
+  // inside the pane (embed fallback) — identical markup, same state.
+  const searchField = (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-white" />
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="search"
+        enterKeyHint="search"
+        value={search}
+        onChange={event => setSearch(event.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder="Search any product, all categories"
+        aria-label="Search any product, all categories"
+        className="w-full rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-9 text-sm text-gray-900 shadow-sm placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-white/70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
+      />
+      {search && (
+        <button type="button" onClick={() => setSearch('')} aria-label="Clear search"
+          className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
+          <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+        </button>
+      )}
+    </div>
+  );
 
-      {/* Category sidebar */}
-      <div className="w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700">
+  return (
+    <>
+      {/* Search row in the fixed band — same place and styling as Home's row 2
+          and the Fresh page, so it is full-bleed and no scrollbar can overlap
+          it. */}
+      {bandSlot && createPortal(
+        <div className="bg-gokez-700 dark:bg-[#18191a]">
+          <div className="mx-auto w-full max-w-6xl page-x py-1">
+            {searchField}
+          </div>
+        </div>,
+        bandSlot,
+      )}
+      <div className="categories-pane app-bleed-x flex overflow-hidden" onClick={onSurfaceClick}>
+
+      {/* Category sidebar. scrollbar-hide: the rail still scrolls (wheel/touch)
+          but draws no scrollbar of its own, so Categories shows exactly ONE
+          scrollbar — the products pane's, at the screen's right edge — the same
+          pattern as Home/Fresh. app-bleed-x on the pane above makes the rail
+          start flush at the screen's left edge, over .app-scroll's stable
+          scrollbar gutter. */}
+      <div className="categories-scroll scrollbar-hide w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700">
         {visibleCategories.map((cat, index) => {
           const isActive = activeCatId === cat.id;
           const accent = ACCENTS[index % ACCENTS.length];
@@ -121,32 +185,17 @@ export default function CategoriesView({ categories, products, initialCategoryId
         })}
       </div>
 
-      {/* Right — products */}
-      <div className="flex-1 min-h-0 overflow-y-auto" onScroll={dismiss}>
-        <div className="sticky top-0 z-30 isolate border-b border-gray-100 bg-white px-2 py-2 dark:border-slate-800 dark:bg-slate-900">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
-            <input
-              ref={inputRef}
-              type="text"
-              inputMode="search"
-              enterKeyHint="search"
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Search all products"
-              className="w-full rounded-xl bg-gray-100 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-gray-200 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gokez-700/40 dark:bg-slate-700 dark:text-white dark:ring-slate-600 dark:placeholder:text-slate-400"
-            />
-            {search && (
-              <button type="button" onClick={() => setSearch('')} aria-label="Clear search"
-                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-gray-600 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500">
-                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-              </button>
-            )}
+      {/* Right — products. This pane is the page's scroll owner (see
+          paneScrollRef); the search lives in the band above, so nothing in the
+          pane has to stay pinned. */}
+      <div ref={paneScrollRef} className="categories-scroll flex-1 min-h-0 overflow-y-auto" onScroll={dismiss}>
+        {!bandSlot && (
+          <div className="sticky top-0 z-30 isolate border-b border-gray-100 bg-white px-4 py-2 dark:border-slate-800 dark:bg-slate-900">
+            {searchField}
           </div>
-        </div>
+        )}
 
-        <div className="p-2">
+        <div className={`page-x pt-3 ${pageBottom}`}>
           {filteredProducts.length === 0 ? (
             <div className="text-center py-16 text-gray-500 dark:text-slate-400">
               <p className="text-sm">{query ? 'No products match your search' : 'No products in this category'}</p>
@@ -158,6 +207,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
