@@ -304,12 +304,27 @@ html, body { overscroll-behavior-y: none; }
      up, or focusing a band search field) the row becomes the band's first
      child, so its top pad matches the 4px bottom pad — the field then has the
      same breathing room above and below. */
-  .band-row { padding-top: 0.125rem; }
+  .band-row {
+    padding-top: 0.125rem;
+    /* Same curve/duration as the delivery row's collapse: without this the 2px
+       step landed instantly and read as a small jump under the search field. */
+    transition: padding-top 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
   /* Mobile only: on desktop the delivery row never collapses (the centred nav
      pins it open), so adding the extra padding there would be a 2px jump. */
   @media (max-width: 639.98px) {
     header.band-collapsed .band-row { padding-top: 0.25rem; }
     header:has(#band-search-slot input:focus) .band-row { padding-top: 0.25rem; }
+  }
+
+  /* The delivery row's height collapse. `grid-template-rows` is the only
+     in-flow animation in the chrome (it has to be: collapsing an in-flow row is
+     what grows the scrollport instead of clamping it). The iOS-style curve and
+     a slightly longer 220ms make the same 44px read as a slide instead of a
+     snap; a compositor-only translate cannot be used here because the row must
+     stop occupying height. */
+  .band-delivery {
+    transition: grid-template-rows 220ms cubic-bezier(0.32, 0.72, 0, 1);
   }
 
   /* Fresh/Categories: focusing the band's search field collapses the delivery
@@ -370,7 +385,10 @@ html, body { overscroll-behavior-y: none; }
     bottom: 0;
     z-index: 40;
     visibility: visible;
-    transition: transform 180ms ease-out, opacity 180ms ease-out, visibility 0s linear 0s;
+    /* Same curve as the delivery row, so the two chrome pieces move as one
+       gesture. will-change keeps the layer promoted across the animation. */
+    will-change: transform, opacity;
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0s;
   }
 
   /* Hidden state — driven by useScrollChrome() (the navHidden flag, derived
@@ -383,7 +401,7 @@ html, body { overscroll-behavior-y: none; }
     /* visibility flips only after the slide finishes, and takes the bar's
        links out of the tab order and the accessibility tree while hidden. */
     visibility: hidden;
-    transition: transform 180ms ease-out, opacity 180ms ease-out, visibility 0s linear 180ms;
+    transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 220ms;
   }
 
   /* Desktop has no bottom nav (it is `sm:hidden`), so neither the overlay nor
