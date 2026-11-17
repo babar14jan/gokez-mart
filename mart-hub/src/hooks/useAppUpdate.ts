@@ -92,6 +92,16 @@ export function useAppUpdate() {
   };
 
   const check = async () => {
+    // Ask for a fresh worker on every poll, before the version check's early
+    // returns: otherwise a device can sit on the old worker until the browser's
+    // own ~24h re-check, and never see the deploy.
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        registration?.update().catch(() => {});
+      }
+    } catch {}
+
     try {
       const policyRes = await fetch(`/update-policy.json?t=${Date.now()}`, { cache: 'no-store' });
       if (policyRes.ok) {
@@ -115,15 +125,6 @@ export function useAppUpdate() {
       currentVersion.current = v;
       if (updateMode === 'force') forceSwap();
       else stageUpdate();
-    } catch {}
-    // Ask the browser to re-fetch sw.js now instead of waiting for its ~24h
-    // interval, so the freshly deployed worker installs and precaches the new
-    // chunks while the app is open — that makes the eventual swap instant.
-    try {
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration();
-        registration?.update().catch(() => {});
-      }
     } catch {}
   };
 

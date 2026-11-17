@@ -36,6 +36,7 @@ import { trackInstall } from './utils/track';
 import HomeCarousel from './components/HomeCarousel';
 import { PAGE_BOTTOM, PAGE_BOTTOM_CART } from './utils/pageBottom';
 import { useKeyboardInset } from './utils/useKeyboardInset';
+import { useScrollChrome } from './utils/useScrollChrome';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
@@ -495,10 +496,22 @@ export default function App() {
   // so opening and closing it leaves `view` untouched and the offset survives.
   const showingSuccess = Boolean(successData);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Categories scrolls inside its product pane, not .app-scroll. Held in state
+  // (callback ref) so useScrollChrome re-attaches when the pane mounts.
+  const [categoriesPaneEl, setCategoriesPaneEl] = useState<HTMLDivElement | null>(null);
   const mobileCheckoutScrollRef = useRef<HTMLDivElement>(null);
   const desktopCheckoutScrollRef = useRef<HTMLDivElement>(null);
   useContainTopPull(mobileCheckoutScrollRef, checkoutActive);
   useContainTopPull(desktopCheckoutScrollRef, checkoutActive);
+  // ONE controller for the app chrome. The Navbar delivery row and the bottom
+  // nav both consume it (deliveryHidden / bottomNavHidden), so every element
+  // flips in the same commit — the old per-component listeners had different
+  // enable flags and drifted apart, which read as a shake. They diverge at the
+  // end of a page only: the nav (an overlay) returns there, the delivery row
+  // (in-flow) does not. Enabled everywhere the chrome renders, except while an
+  // overlay owns the screen (checkout) or the login flow replaces the header.
+  const chromeAutoHide = !checkoutActive && !accountSubPage && view !== 'account';
+  const { hidden: chromeHidden, navHidden } = useScrollChrome(scrollRef, chromeAutoHide, categoriesPaneEl);
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const pullDistance = useRef(0);
   const [pullDistanceVisible, setPullDistanceVisible] = useState(0);
@@ -1325,6 +1338,8 @@ export default function App() {
       )}
         </>
       }
+      /* Fixed header band — AppShell renders this ABOVE the scroller, so it
+         never scrolls away and page content pins beneath it at top-0. */
       header={
         <>
       {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
@@ -1335,6 +1350,7 @@ export default function App() {
           onCheckout={handleCheckout}
           onSearchOpen={() => openCatalogSearch()}
           searchPrompt={searchPrompt}
+          deliveryHidden={chromeHidden}
         />
       )}
 
@@ -1351,9 +1367,10 @@ export default function App() {
         </>
       }
       floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
+      bottomNavHidden={navHidden}
       bottomNav={!checkoutActive ? (
-        <div className="sm:hidden shrink-0">
-          <BottomNav active={(view === 'fresh' ? 'home' : view) as 'home' | 'categories' | 'orders' | 'account'} onChange={handleNavChange} onOpenSearch={openFreshPage} freshActive={view === 'fresh'} />
+        <div className="sm:hidden">
+          <BottomNav active={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'} onChange={handleNavChange} onOpenSearch={openFreshPage} freshActive={view === 'fresh'} />
         </div>
       ) : null}
     >
@@ -1486,8 +1503,13 @@ export default function App() {
       ) : view === 'what-is-gokez-mart' ? (
         <DeferredPage><WhatIsGokezMartPage /></DeferredPage>
       ) : view === 'categories' ? (
-        <div className={productPageBottom}>
-          <CategoriesView categories={categories} products={products} initialCategorySlug={pendingCategorySlug} loading={loading} onEmpty={() => setView('home')} />
+        // h-full, not productPageBottom: the split pane must fill the
+        // scroller EXACTLY (the header band and bottom nav are flex siblings
+        // of the scroller, already reserving their own space). Any bottom
+        // padding here would make the content taller than the scrollport and
+        // re-introduce the outer "second scroll" the pane is meant to replace.
+        <div className="h-full">
+          <CategoriesView categories={categories} products={products} initialCategorySlug={pendingCategorySlug} loading={loading} onEmpty={() => setView('home')} paneScrollRef={setCategoriesPaneEl} />
         </div>
       ) : view === 'fresh' ? (
         <div className={productPageBottom}>
@@ -1537,14 +1559,14 @@ export default function App() {
         /></DeferredPage>
       ) : (
         /* Home */
-        <main className={`max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 ${productPageBottom}`}>
+        <main className={`max-w-6xl mx-auto page-x ${productPageBottom}`}>
 
           {carouselPosition === 'top' && (
             <>
               <button type="button" onClick={() => openCatalogSearch()}
                 className="relative mt-4 mb-4 hidden w-full items-center text-left sm:flex">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-400 dark:text-slate-400" />
-                <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-gray-100 py-3.5 pl-11 pr-4 text-sm text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text max-w-full truncate">{searchPrompt}</span></span>
+                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-slate-200" />
+                <span className="w-full overflow-hidden whitespace-nowrap rounded-2xl bg-gray-100 py-3.5 pl-11 pr-4 text-base text-gray-700 ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text max-w-full truncate">{searchPrompt}</span></span>
               </button>
               <HomeCarousel className="pb-6" />
             </>
