@@ -306,8 +306,7 @@ html, body { overscroll-behavior-y: none; }
      same breathing room above and below. */
   .band-row {
     padding-top: 0.125rem;
-    /* Same curve/duration as the delivery row's collapse: without this the 2px
-       step landed instantly and read as a small jump under the search field. */
+    /* Ease the 2px step so it never lands instantly under the search field. */
     transition: padding-top 220ms cubic-bezier(0.32, 0.72, 0, 1);
   }
   /* Mobile only: on desktop the delivery row never collapses (the centred nav
@@ -317,14 +316,29 @@ html, body { overscroll-behavior-y: none; }
     header:has(#band-search-slot input:focus) .band-row { padding-top: 0.25rem; }
   }
 
-  /* The delivery row's height collapse. `grid-template-rows` is the only
-     in-flow animation in the chrome (it has to be: collapsing an in-flow row is
-     what grows the scrollport instead of clamping it). The iOS-style curve and
-     a slightly longer 220ms make the same 44px read as a slide instead of a
-     snap; a compositor-only translate cannot be used here because the row must
-     stop occupying height. */
+  /* The delivery row's height. useScrollChrome writes --band-collapse (0..44px)
+     on the frame on every scroll event, so this in-flow row shrinks and grows
+     in step with the finger. That is deliberate: because the row sits above
+     the scroller, its height change moves page content, and a timed animation
+     of it is what read as a 44px bump under a centred product card. Desktop
+     pins the row open: the centred nav pills live in it. */
   .band-delivery {
-    transition: grid-template-rows 220ms cubic-bezier(0.32, 0.72, 0, 1);
+    height: calc(2.75rem - var(--band-collapse, 0px));
+    /* Clip the sliding row (see .band-slide) at the header edge. */
+    overflow: hidden;
+  }
+  @media (min-width: 640px) {
+    .band-delivery { height: 2.75rem; }
+  }
+
+  /* Slide the row's content up by the collapsed amount while the row's height
+     shrinks, so a rest halfway through the collapse shows the row sliding out
+     of the header (its bottom edge) instead of being eaten from below. Mobile
+     only: desktop never collapses the row. */
+  @media (max-width: 639.98px) {
+    .band-slide {
+      transform: translateY(calc(var(--band-collapse, 0px) * -1));
+    }
   }
 
   /* Fresh/Categories: focusing the band's search field collapses the delivery
@@ -335,7 +349,7 @@ html, body { overscroll-behavior-y: none; }
      desktop nav lives in that row and must stay open. */
   @media (max-width: 639.98px) {
     header:has(#band-search-slot input:focus) .band-delivery {
-      grid-template-rows: 0fr;
+      height: 0;
     }
   }
 
@@ -385,8 +399,9 @@ html, body { overscroll-behavior-y: none; }
     bottom: 0;
     z-index: 40;
     visibility: visible;
-    /* Same curve as the delivery row, so the two chrome pieces move as one
-       gesture. will-change keeps the layer promoted across the animation. */
+    /* The nav is the one chrome piece that can still be time-animated: it is
+       an overlay, so this transform moves nothing but the bar itself.
+       will-change keeps the layer promoted across the animation. */
     will-change: transform, opacity;
     transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), opacity 220ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0s;
   }
