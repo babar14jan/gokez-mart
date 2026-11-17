@@ -10,7 +10,7 @@ interface PageHeaderProps {
   onBack?: () => void;
   /** Accessible label for the back button. */
   backLabel?: string;
-  /** 'standard' = 56px title bar; 'sheet' = 64px bar with room for a search field or controls. */
+  /** 'standard' = 40px title bar (matches the app bar); 'sheet' = 64px bar with room for a search field or controls. */
   size?: 'standard' | 'sheet';
   /** 'sticky' pins to the top with z-20 (sub-pages, checkout); 'static' stays in flow (sheets, overlays). */
   position?: 'sticky' | 'static';
@@ -54,7 +54,7 @@ export default function PageHeader({
   const sizeClass =
     size === 'sheet'
       ? 'min-h-[calc(64px_+_env(safe-area-inset-top))] gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
-      : 'min-h-[calc(3.5rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
+      : 'min-h-[calc(2.5rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
   const gradientClass =
     gradient === 'r' ? 'bg-gradient-to-r from-[#087a43] to-[#087a43]' : 'bg-gradient-to-b from-[#087a43] to-[#087a43]';
   const darkClass = darkTo === '#14532d' ? 'dark:from-[#18191a] dark:to-[#14532d]' : 'dark:from-[#18191a] dark:to-[#18191a]';
@@ -62,20 +62,20 @@ export default function PageHeader({
   const backClass =
     backStyle === 'square'
       ? backSize === 'sm'
-        ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
-        : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
-      : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
+        ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
+        : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
+      : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
 
   return (
     <div className={`${positionClass} flex shrink-0 items-center ${sizeClass} ${gradientClass} ${darkClass}`}>
       <button type="button" onClick={goBack} aria-label={backLabel} className={backClass}>
         <ChevronLeft
-          className={backStyle === 'square' ? 'h-7 w-7' : 'h-6 w-6'}
+          className={backStyle === 'square' ? 'h-5 w-5' : 'h-5 w-5'}
           strokeWidth={backStyle === 'square' ? 2.5 : undefined}
         />
       </button>
 
-      {icon && <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">{icon}</span>}
+      {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/15">{icon}</span>}
 
       {title && (
         <div className="min-w-0 flex-1">

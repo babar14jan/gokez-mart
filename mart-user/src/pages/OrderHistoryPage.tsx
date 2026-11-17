@@ -649,13 +649,13 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   // sticky fallback in embed mode. White active pill on the green, translucent
   // resting pills, so the row reads as the same surface as Home's search row.
   const tabsRow = (
-    <div className="flex gap-1 rounded-xl bg-white/15 p-1 dark:bg-slate-800">
+    <div className="flex h-[42px] gap-1 rounded-xl bg-white/15 p-1 dark:bg-slate-800">
       <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('current'); }}
-        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${showTab === 'current' ? 'bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-white/85 hover:text-white dark:text-slate-300'}`}>
+        className={`flex h-full flex-1 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${showTab === 'current' ? 'bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-white/85 hover:text-white dark:text-slate-300'}`}>
         Current
       </button>
       <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('past'); }}
-        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${showTab === 'past' ? 'bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-white/85 hover:text-white dark:text-slate-300'}`}>
+        className={`flex h-full flex-1 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${showTab === 'past' ? 'bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-white/85 hover:text-white dark:text-slate-300'}`}>
         History
       </button>
     </div>
@@ -664,14 +664,14 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   const bandTabs = bandSlot
     ? createPortal(
         <div className="bg-gokez-700 dark:bg-[#18191a]">
-          <div className="mx-auto w-full max-w-lg page-x py-1">{tabsRow}</div>
+          <div className="band-row mx-auto w-full max-w-lg page-x pb-1">{tabsRow}</div>
         </div>,
         bandSlot,
       )
     : null;
 
   const inlineTabs = !bandSlot ? (
-    <div className="sticky top-0 z-30 app-bleed-x bg-gokez-700 px-4 py-1 dark:bg-[#18191a] sm:px-6 lg:px-8">
+    <div className="sticky top-0 z-30 band-row app-bleed-x bg-gokez-700 px-4 pb-1 dark:bg-[#18191a] sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-lg">{tabsRow}</div>
     </div>
   ) : null;

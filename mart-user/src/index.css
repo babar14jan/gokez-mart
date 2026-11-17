@@ -299,6 +299,29 @@ html, body { overscroll-behavior-y: none; }
   @media (min-width: 640px) { .page-x { padding-left: 1.5rem; padding-right: 1.5rem; } }
   @media (min-width: 1024px) { .page-x { padding-left: 2rem; padding-right: 2rem; } }
 
+  /* Search / Orders-tab rows that sit directly under the delivery row. While
+     that row is open they hug it with a 2px top pad; once it collapses (scroll
+     up, or focusing a band search field) the row becomes the band's first
+     child, so its top pad matches the 4px bottom pad — the field then has the
+     same breathing room above and below. */
+  .band-row { padding-top: 0.125rem; }
+  header.band-collapsed .band-row { padding-top: 0.25rem; }
+  @media (max-width: 639.98px) {
+    header:has(#band-search-slot input:focus) .band-row { padding-top: 0.25rem; }
+  }
+
+  /* Fresh/Categories: focusing the band's search field collapses the delivery
+     row exactly like a downward scroll does, so the field (and the keyboard's
+     suggestion area under it) rises to the top. The portaled input is still a
+     DOM child of the band slot, so :has() reaches it. Scoped to the search
+     input, so buttons in row 1 never trigger it, and mobile only: the centred
+     desktop nav lives in that row and must stay open. */
+  @media (max-width: 639.98px) {
+    header:has(#band-search-slot input:focus) .band-delivery {
+      grid-template-rows: 0fr;
+    }
+  }
+
   /* Full-bleed escape for a pinned row inside .app-scroll (e.g. the pinned
      Fresh category-chips row). .app-scroll keeps a scrollbar strip on its
      inline-end edge, so a plain 100%-wide child stops short of the screen's

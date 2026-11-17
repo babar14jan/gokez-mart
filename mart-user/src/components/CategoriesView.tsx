@@ -7,6 +7,8 @@ import CategoryIcon from './CategoryIcon';
 import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 import { usePageBottom } from '../utils/pageBottom';
+import { matchScore } from '../utils/productMatch';
+import ProductSuggestionList from './ProductSuggestionList';
 
 interface CategoriesViewProps {
   categories: Category[];
@@ -22,26 +24,6 @@ interface CategoriesViewProps {
    * everywhere else.
    */
   paneScrollRef?: Ref<HTMLDivElement>;
-}
-
-// Per-category accent so the active tab reads as a colourful highlighter and
-// neighbouring categories stay visually distinct.
-const ACCENTS = [
-  { bar: 'bg-gokez-700', text: 'text-gokez-800 dark:text-gokez-300' },
-  { bar: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300' },
-  { bar: 'bg-violet-500', text: 'text-violet-700 dark:text-violet-300' },
-  { bar: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
-  { bar: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-300' },
-  { bar: 'bg-cyan-500', text: 'text-cyan-700 dark:text-cyan-300' },
-  { bar: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-300' },
-  { bar: 'bg-pink-500', text: 'text-pink-700 dark:text-pink-300' },
-];
-
-function matches(product: Product, query: string): boolean {
-  const name = product.name.toLowerCase();
-  const local = (product.localName ?? '').toLowerCase();
-  const aliases = (product.searchAliases ?? []).map(alias => alias.toLowerCase());
-  return name.includes(query) || local.includes(query) || aliases.some(alias => alias.includes(query));
 }
 
 export default function CategoriesView({ categories, products, initialCategoryId, initialCategorySlug, loading = false, onEmpty, paneScrollRef }: CategoriesViewProps) {
@@ -102,9 +84,27 @@ export default function CategoriesView({ categories, products, initialCategoryId
   const query = search.trim().toLowerCase();
   // A search is always catalogue-wide — name, Hindi name or any alias — even
   // while a category tab is open. With no query the active tab's products show.
+  // Ranked with the SAME scorer as the catalog sheet / Fresh page, closest
+  // keyword first, so every search surface lists products in the same order.
+  const rankedProducts = useMemo(
+    () => (query
+      ? products
+        .map((product, index) => ({ product, index, score: matchScore(product, query) }))
+        .filter(entry => entry.score < 7)
+        .sort((a, b) => a.score - b.score || a.index - b.index)
+        .map(entry => entry.product)
+      : []),
+    [products, query],
+  );
   const filteredProducts = query
-    ? products.filter(product => matches(product, query))
+    ? rankedProducts
     : products.filter(product => product.categoryId === activeCatId);
+  // Same eight live suggestions every other search surface shows.
+  const suggestions = rankedProducts.slice(0, 8);
+  const categoryById = useMemo(
+    () => new Map(categories.map(category => [category.id, category])),
+    [categories],
+  );
   const redirected = useRef(false);
 
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
         onKeyDown={onKeyDown}
         placeholder="Search any product, all categories"
         aria-label="Search any product, all categories"
-        className="w-full rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-9 text-sm text-gray-900 shadow-sm placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-white/70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
+        className="w-full rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-9 text-base leading-5 text-gray-900 shadow-sm placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-white/70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
       />
       {search && (
         <button type="button" onClick={() => setSearch('')} aria-label="Clear search"
@@ -149,7 +149,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
           it. */}
       {bandSlot && createPortal(
         <div className="bg-gokez-700 dark:bg-[#18191a]">
-          <div className="mx-auto w-full max-w-6xl page-x py-1">
+          <div className="band-row mx-auto w-full max-w-6xl page-x pb-1">
             {searchField}
           </div>
         </div>,
@@ -164,20 +164,19 @@ export default function CategoriesView({ categories, products, initialCategoryId
           start flush at the screen's left edge, over .app-scroll's stable
           scrollbar gutter. */}
       <div className="categories-scroll scrollbar-hide w-[72px] sm:w-24 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700">
-        {visibleCategories.map((cat, index) => {
+        {visibleCategories.map(cat => {
           const isActive = activeCatId === cat.id;
-          const accent = ACCENTS[index % ACCENTS.length];
           return (
             <button
               key={cat.id}
               onClick={() => { setActiveCatId(cat.id); track('category_viewed', { categoryId: cat.id }); }}
               className={`w-full relative flex flex-col items-center gap-1 py-3 px-1 transition-all ${
                 isActive
-                  ? `bg-white dark:bg-slate-800 ${accent.text}`
+                  ? 'bg-gokez-100 text-gokez-900 dark:bg-gokez-900/40 dark:text-gokez-200'
                   : 'bg-gray-50 dark:bg-slate-900 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'
               }`}
             >
-              {isActive && <span aria-hidden="true" className={`absolute bottom-2 left-0 top-2 w-1 rounded-r ${accent.bar}`} />}
+              {isActive && <span aria-hidden="true" className="absolute bottom-2 left-0 top-2 w-1 rounded-r bg-gokez-700" />}
               <CategoryIcon icon={cat.icon} name={cat.name} className="w-8 h-8 object-contain" />
               <span className="text-[9px] font-semibold text-center leading-tight line-clamp-2">{cat.name}</span>
             </button>
@@ -192,6 +191,20 @@ export default function CategoriesView({ categories, products, initialCategoryId
         {!bandSlot && (
           <div className="sticky top-0 z-30 isolate border-b border-gray-100 bg-white px-4 py-2 dark:border-slate-800 dark:bg-slate-900">
             {searchField}
+          </div>
+        )}
+
+        {/* Live suggestions — identical block and rows to the catalog search
+            sheet, so Fresh and Categories suggest the same way. */}
+        {query && suggestions.length > 0 && (
+          <div className="border-b border-yellow-200/60 page-x pt-2 dark:border-yellow-900/40">
+            <div className="mx-auto max-h-56 w-full max-w-6xl space-y-1 overflow-y-auto" onScroll={dismiss}>
+              <ProductSuggestionList
+                products={suggestions}
+                categoryById={categoryById}
+                onPick={product => setSearch(product.name)}
+              />
+            </div>
           </div>
         )}
 

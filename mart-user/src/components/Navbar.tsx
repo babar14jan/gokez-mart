@@ -80,8 +80,8 @@ const navItems = [
             ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
             : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
           <div className="min-w-0 text-left">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
-            <p className="truncate text-sm font-bold text-white leading-tight">
+            <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
+            <p className="truncate text-[13px] font-bold text-white leading-tight">
               {selectedZone.name}
             </p>
           </div>
@@ -96,8 +96,8 @@ const navItems = [
           ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
           : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
         <div className="min-w-0 text-left">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 leading-none">Delivery area</p>
-          <p className="truncate text-sm font-bold text-white leading-tight">
+          <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
+          <p className="truncate text-[13px] font-bold text-white leading-tight">
             {selectedZone ? selectedZone.name : 'Select area'}
           </p>
         </div>
@@ -143,10 +143,10 @@ const navItems = [
         never scrolls with the page. `relative z-40` (not sticky) — it is a
         flex child of the frame now, and the z-index keeps it above in-page
         sticky content (search rows, cards) that pin at top-0 of the scroller. */}
-    <header className="relative z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a]">
+    <header className={`relative z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a] ${deliveryHidden ? 'band-collapsed' : ''}`}>
 
-      {/* Row 1 — 56px (3.5rem), the same app-bar height as PageHeader, the
-          Profile header and the OTP/brand bars so every header matches.
+      {/* Row 1 — 40px (2.5rem), the same app-bar height as PageHeader and the
+          Profile header so every header matches.
 
           Auto-hide: grid-rows 1fr↔0fr with a 150ms transition, driven by the
           shared useScrollChrome() state (deliveryHidden prop) — never by a
@@ -154,9 +154,9 @@ const navItems = [
           chrome. The row is clipped, not unmounted, so the zone dropdown
           keeps its state. sm:grid-rows-[1fr] pins the row open on desktop:
           the centred nav pills live in this row and must never collapse. */}
-      <div className={`grid transition-[grid-template-rows] duration-150 ${deliveryHidden ? 'grid-rows-[0fr] sm:grid-rows-[1fr]' : 'grid-rows-[1fr]'}`}>
+      <div className={`band-delivery grid transition-[grid-template-rows] duration-150 ${deliveryHidden ? 'grid-rows-[0fr] sm:grid-rows-[1fr]' : 'grid-rows-[1fr]'}`}>
         <div className="min-h-0 overflow-hidden">
-          <div className="mx-auto flex min-h-[56px] max-w-6xl items-center gap-3 page-x">
+          <div className="mx-auto flex min-h-[40px] max-w-6xl items-center gap-3 page-x">
 
             {/* Location / account identity — left. flex-1 + min-w-0 gives it half of
                 the free space so the centred nav never moves when the identity
@@ -210,10 +210,10 @@ const navItems = [
 
       {/* Row 2: Search — the Categories view owns its own category-scoped filter. */}
       {activeView !== 'account' && activeView !== 'orders' && activeView !== 'categories' && activeView !== 'fresh' && (
-        <div className="sm:hidden page-x py-1">
+        <div className="band-row sm:hidden page-x pb-1">
           <button type="button" onClick={onSearchOpen} className="relative block w-full text-left">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-white" />
-            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-3 text-base text-gray-700 shadow-sm transition-colors hover:bg-cream-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-3 text-base leading-5 text-gray-700 shadow-sm transition-colors hover:bg-cream-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
           </button>
         </div>
       )}

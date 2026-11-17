@@ -1,10 +1,10 @@
 import { useEffect, useState, type RefObject } from 'react';
 
 // Chrome geometry the thresholds depend on. Keep in sync with the header band
-// (Navbar row 1 min-h-[56px]) and the bottom nav overlay.
+// (Navbar row 1 min-h-[40px]) and the bottom nav overlay.
 const REST_BAND_PX = 96;   // near the top: chrome always shown, accumulator zeroed
 const HIDE_AFTER_PX = 96;  // decisive downward travel before hiding
-const SHOW_AFTER_PX = 64;  // MUST exceed the header band's height (56px)
+const SHOW_AFTER_PX = 64;  // MUST exceed the header band's height (40px row)
 const BOTTOM_SLACK_PX = 2; // sub-pixel slack for the end-of-page test
 
 /**
