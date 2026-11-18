@@ -184,7 +184,7 @@ const navItems = [
               })}
               {/* Cart in center */}
               <button onClick={onCheckout} aria-label="Cart"
-                className="relative ml-1 flex items-center gap-1.5 rounded-full bg-saffron-400 px-3 py-2 text-sm font-bold text-saffron-900 shadow-sm transition-colors hover:bg-saffron-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4">
+                className="relative ml-1 flex items-center gap-1.5 rounded-full bg-gokez-700 px-3 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4">
                 <ShoppingCart className="w-4 h-4" />
                 <span className="hidden lg:inline">Cart</span>
                 {totalItems > 0 && (

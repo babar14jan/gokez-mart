@@ -749,6 +749,8 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const [referralCreditsLoaded, setReferralCreditsLoaded] = useState(false);
   const [referralApplied, setReferralApplied] = useState(() => readCheckoutReferralSelection());
   const [referralError, setReferralError] = useState('');
+  const [referralMinimumBlocked, setReferralMinimumBlocked] = useState(false);
+  const [referralMinimumOrderAmount, setReferralMinimumOrderAmount] = useState(0);
 
   const loadReferralCredits = useCallback(async () => {
     if (!isLoggedIn) {
@@ -759,11 +761,16 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       return;
     }
     try {
-      const response = await referralApi.getCredits();
-      const items: ReferralCredit[] = response.data?.data?.items || [];
+      const [creditsResponse, meResponse] = await Promise.all([
+        referralApi.getCredits(),
+        referralApi.getMe(),
+      ]);
+      const items: ReferralCredit[] = creditsResponse.data?.data?.items || [];
       setReferralCredits(items.filter(credit => credit.status === 'available'));
+      setReferralMinimumOrderAmount(Number(meResponse.data?.data?.minimumOrderAmount) || 0);
     } catch {
       setReferralCredits([]);
+      setReferralMinimumOrderAmount(0);
     } finally {
       setReferralCreditsLoaded(true);
     }
@@ -772,6 +779,12 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   useEffect(() => {
     void loadReferralCredits();
   }, [loadReferralCredits]);
+
+  useEffect(() => {
+    if (referralMinimumBlocked && referralMinimumOrderAmount > 0 && cartSubtotal >= referralMinimumOrderAmount) {
+      setReferralMinimumBlocked(false);
+    }
+  }, [referralMinimumBlocked, referralMinimumOrderAmount, cartSubtotal]);
 
   useEffect(() => {
     if (!referralCreditsLoaded || !referralApplied) return;
@@ -791,6 +804,9 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   );
   const nextReferralAmount = Number(nextReferralCredit?.amount) || 0;
   const firstOrderReferralCredit = referralCredits.find(credit => credit.benefitType === 'first_order') || null;
+  const referralMinimumMessage = referralMinimumOrderAmount > 0 && cartSubtotal < referralMinimumOrderAmount
+    ? `Add ₹${Math.max(0, referralMinimumOrderAmount - cartSubtotal).toFixed(0)} more to use your referral reward.`
+    : '';
 
   useEffect(() => {
     if (offerMinimumOrder === null || !/^Add ₹[\d.]+ more to unlock (this )?offer/.test(offerNotice)) return;
@@ -1017,6 +1033,11 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       rejectReferralConflict();
       return;
     }
+    if (referralMinimumOrderAmount > 0 && cartSubtotal < referralMinimumOrderAmount) {
+      setReferralMinimumBlocked(true);
+      return;
+    }
+    setReferralMinimumBlocked(false);
     const selection = { creditId: credit.id, amount: Number(credit.amount) || 0 };
     setReferralApplied(selection);
     saveCheckoutReferralSelection(selection);
@@ -1029,6 +1050,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     setReferralError('');
     setCouponError('');
     setOfferNotice('');
+    setReferralMinimumBlocked(false);
   };
 
   const deliveryCharge = parseFloat(settings.delivery_charge || '0');
@@ -1374,7 +1396,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const referralDisplayAmount = referralApplied ? Math.max(0, Number(referralApplied.amount) || 0) : nextReferralAmount;
   const referralSection = isLoggedIn && referralCredits.length > 0 ? (
     <div className="space-y-2 rounded-xl border border-gokez-200 bg-gokez-50 px-2.5 py-2 dark:border-gokez-800 dark:bg-slate-900/60">
-      {referralError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400" role="alert">{referralError}</p>}
+      {(referralError || (referralMinimumBlocked && referralMinimumMessage)) && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400" role="alert">{referralError || referralMinimumMessage}</p>}
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-gray-900 dark:text-white">
