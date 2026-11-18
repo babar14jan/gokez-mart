@@ -13,11 +13,14 @@ const {
   calculateOrderTotals,
   canApplyCampaignDiscount,
   canApplyReferralDiscount,
+  clearCheckoutReferralSelection,
   discountConflictMessage,
   getOrderReferralDiscount,
   isReferralReservationExpired,
   normalizeReferralCode,
+  readCheckoutReferralSelection,
   referralCodeFromSearch,
+  saveCheckoutReferralSelection,
 } = await import('../src/utils/referral');
 
 function source(path: string): string {
@@ -66,8 +69,10 @@ describe('referral link helpers', () => {
     const message = buildReferralShareMessage('k7p9x2', link);
     assert.ok(message.includes('K7P9X2'));
     assert.ok(message.includes(link));
-    assert.ok(message.includes('₹50'));
-    assert.ok(message.includes('successfully delivered'));
+    assert.ok(message.includes('₹25'));
+    assert.ok(message.includes('first qualifying order'));
+    assert.ok(message.includes('delivered'));
+    assert.ok(!message.includes('₹50'));
   });
 
   test('WhatsApp link encodes the full message', () => {
@@ -126,6 +131,23 @@ describe('referral discount rules', () => {
     assert.equal(isReferralReservationExpired(null, now), false);
   });
 
+  test('checkout referral selection survives reloads and clears on remove or order', () => {
+    const values = new Map<string, string>();
+    (globalThis as any).sessionStorage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    assert.equal(readCheckoutReferralSelection(), null);
+    saveCheckoutReferralSelection({ creditId: 'credit-1', amount: 30 });
+    assert.deepEqual(readCheckoutReferralSelection(), { creditId: 'credit-1', amount: 30 });
+    clearCheckoutReferralSelection();
+    assert.equal(readCheckoutReferralSelection(), null);
+    saveCheckoutReferralSelection({ creditId: 'credit-2', amount: Number.NaN });
+    assert.deepEqual(readCheckoutReferralSelection(), { creditId: 'credit-2', amount: 0 });
+    clearCheckoutReferralSelection();
+  });
+
   test('order referral discount reads explicit fields before the credit fallback', () => {
     assert.equal(getOrderReferralDiscount({ referralDiscount: 20 }), 20);
     assert.equal(getOrderReferralDiscount({ referralRewardDiscount: 20 }), 20);
@@ -143,35 +165,53 @@ describe('referral integration points', () => {
       'referralCode }',
       "api.get<{ success: boolean; data: ReferralMeData }>('/referrals/me')",
       "api.post<{ success: boolean; data: ReferralValidateData }>('/referrals/validate', { code })",
-      "api.post<{ success: boolean; data: ReferralClaimData }>('/referrals/claim', { code })",
+      "benefitType: 'first_order' | 'reward';",
+      'referralId: string | null;',
+      "role: 'referrer' | 'referee';",
+      'firstOrderCreditId: string | null;',
       "api.get<{ data: { items: ReferralCredit[]; total: number } }>('/referrals/credits'",
+      'reservationExpiresAt: string | null;',
       "api.post<{ data: ReferralReservation }>('/referrals/credits/reserve', { creditId, idempotencyKey })",
       '/referrals/credits/${encodeURIComponent(id)}/release',
       'referralCreditId?: string',
     ]);
     assert.ok(api.indexOf('referralCode?: string') < api.indexOf('referralApi ='));
+    assert.ok(!api.includes('/referrals/claim'), 'referral codes must be claimed only during registration');
+    assert.ok(!api.includes('ReferralClaimData'), 'the removed claim API type must not be used');
   });
 
-  test('app boot captures ref before the existing query-stripping redirect', () => {
+  test('app boot opens the login view for ref links', () => {
     assert.ok(source('src/utils/referral.ts').includes(`REFERRAL_LINK_CODE_KEY = '${REFERRAL_LINK_CODE_KEY}'`));
     const app = assertIncludes('src/App.tsx', [
       'referralCodeFromSearch(window.location.search)',
       'REFERRAL_LINK_CODE_KEY',
-      "window.history.replaceState({}, '', '/account')",
-      "if (referralLinkCode) return 'account';",
+      "window.history.replaceState({}, '', '/login')",
+      "if (referralLinkCode) return 'login';",
+      "if (path === '/login') return 'login';",
+      'useAccountLoginStore.getState().openLogin()',
     ]);
     assert.ok(app.indexOf('referralCodeFromSearch(window.location.search)') < app.indexOf("window.history.replaceState({}, '', VIEW_PATH[storedView])"));
+    assertIncludes('src/utils/seo.ts', ['| \'account\' | \'login\'', 'login: {']);
   });
 
   test('login flow stores and forwards the optional code', () => {
     assertIncludes('src/components/LoginFlow.tsx', [
       'id="login-referral-code"',
+      'Have Referral code?',
+      'placeholder="Enter Referral code"',
+      'const [referralOpen, setReferralOpen] = useState(() => Boolean(referralCode))',
+      'const clearReferral = () => {',
       '(optional)',
       'normalizeReferralCode(referralCode || readLinkReferralCode())',
       'readTrackingTokens(), codeForSignup || undefined',
       'clearLinkReferralCode()',
       'setReferralCode(next || null)',
     ]);
+    const login = source('src/components/LoginFlow.tsx');
+    assert.ok(!login.includes('referralApi.validate('), 'login must not expose referral validation to the customer');
+    assert.ok(!login.includes('referralApi.claim('), 'login must not claim codes outside registration');
+    assert.ok(!login.includes('already been applied'), 'existing attribution must not surface as a login error');
+    assert.ok(!login.includes('cannot use your own referral code'), 'self-referral details must not surface during login');
     assertIncludes('src/store/loginFlowStore.ts', [
       'referralCode: string | null',
       'setReferralCode: (code: string | null) => void',
@@ -183,55 +223,103 @@ describe('referral integration points', () => {
     assertIncludes('src/pages/AccountPage.tsx', [
       '{isLoggedIn && (',
       'Refer & Earn',
+      'Get ₹25 off your first order with a friend’s code, then unlock the rest after delivery',
       'setReferOpen(true)',
       '<ReferEarnSheet',
     ]);
     assertIncludes('src/components/ReferEarnSheet.tsx', [
       'Earn {rupees(reward)}',
+      '1 · Use code',
+      'Only one code can be used per customer.',
+      '2 · First order',
+      '3 · Unlock',
+      'Unlocked for next order',
       'Copy Code',
       'Copy Link',
       'WhatsApp',
       'buildReferralLink(code, window.location.origin)',
+      'Your referral benefit',
+      'Total referral reward: {rupees(reward)}',
+      'Congratulations! Your {rupees(firstStageAmount)} first-order referral discount has been used successfully. Another {rupees(remainingStageAmount)} reward is now available for your next eligible order.',
       'Successful referrals',
       'Pending referrals',
-      'Total rewards earned',
+      'Total referral reward earned',
       'Available to use',
       'Reversed',
       'Pending rewards are not spendable',
+      'First order ·',
       'Your credits',
       'Referral history',
-      'eligibleForCode',
-      'referralApi.claim(code)',
       'role="alert"',
       'role="status"',
     ]);
+    const sheet = source('src/components/ReferEarnSheet.tsx');
+    assert.ok(!sheet.includes('referralApi.claim('), 'the sheet must not claim codes on linked accounts');
+    assert.ok(!sheet.includes('codeInput'), 'registration-only codes must not be entered from the sheet');
+    assert.ok(!sheet.includes('3 · Redeem at checkout'), 'first-order benefit wording replaces the old wallet-only copy');
   });
 
-  test('checkout reserves, applies and releases referral credits exclusively', () => {
-    assertIncludes('src/pages/CheckoutPage.tsx', [
-      'Referral Rewards',
-      'Available balance: ₹',
-      'referralApi.reserve(credit.id, crypto.randomUUID())',
-      'referralApi.release(referralApplied.creditId)',
-      'crypto.randomUUID()',
-      'creditId: referralSelected',
+  test('checkout selects the next referral credit locally until the order is placed', () => {
+    const checkout = assertIncludes('src/pages/CheckoutPage.tsx', [
+      'Total referral balance: ₹',
+      'You can avail ₹',
+      "'Apply'",
+      "'Remove'",
+      'nextReferralCredit',
+      'nextReferralAmount',
+      'availableReferralBalance(referralCredits)',
+      'creditId: credit.id',
+      'const formId = `checkout-form-${useId().replace(/:/g, \'\')}`;',
+      '<form id={formId}',
+      'form={formId}',
+      'useState(() => readCheckoutReferralSelection())',
+      'saveCheckoutReferralSelection(selection)',
+      'clearCheckoutReferralSelection()',
+      'setReferralApplied(null)',
       'canApplyReferralDiscount(',
       'canApplyCampaignDiscount(',
       'discountConflictMessage()',
-      'setReferralSelected(null)',
-      'setReferralApplied(null)',
-      'isReferralReservationExpired(',
       'referralCreditId: referralApplied?.creditId || undefined',
       'calculateOrderTotals(',
       'calculateOrderSavings(',
-      'Referral Reward Discount',
+      "credit.benefitType === 'first_order'",
+      'First-order referral discount: ₹',
+      'Apply to your first eligible order; minimum product subtotal applies.',
+      'Referral Reward',
       'confirmedCampaignDiscount + confirmedReferralDiscount',
     ]);
+    assert.ok(!checkout.includes('referralApi.reserve('), 'checkout must not reserve before order placement');
+    assert.ok(!checkout.includes('referralApi.release('), 'checkout must not release a local selection');
+    assert.ok(!checkout.includes('id="checkout-form"'), 'mobile and desktop checkout forms must not share an id');
+    assert.ok(!checkout.includes('form="checkout-form"'), 'the submit button must target its own checkout form');
+    assert.ok(!checkout.includes('isReferralReservationExpired('), 'checkout must not track reservation expiry');
+    assert.ok(!checkout.includes('referralApplying'), 'local selection needs no loading state');
+    assert.ok(checkout.includes('Offers &amp; coupons'));
+    assert.ok(checkout.includes('referralSection={referralSection}'));
+    assert.ok(checkout.includes('rounded-xl border border-gokez-200 bg-gokez-50 px-2.5 py-2 dark:border-gokez-800 dark:bg-slate-900/60'));
+    assert.ok(checkout.indexOf('{referralSection &&') < checkout.indexOf('Have a coupon code?'), 'referral balance must render inside offers before the coupon field');
+    assert.ok(!checkout.includes('type="checkbox"'), 'checkout must not ask customers to pick a referral credit');
+    assert.ok(!checkout.includes('Referral Rewards'), 'checkout must not repeat a referral section label');
+    assert.ok(checkout.includes('flex h-[34px] shrink-0 items-center rounded-lg px-2.5 text-[11px] font-bold text-white'));
+    assert.ok(checkout.includes('bg-gokez-700 hover:bg-gokez-800'));
+    assert.ok(checkout.includes('bg-red-600 hover:bg-red-700'));
+    assert.ok(!checkout.includes('We apply your next available referral reward automatically.'));
+    assert.ok(!checkout.includes('referral reward applied'));
+    assert.ok(!checkout.includes('Referral reward removed.'));
+    assert.ok(!checkout.includes('Held until'));
+    assert.ok(!checkout.includes('Reserved for this order'));
+    const rejectReferralConflict = checkout.match(/const rejectReferralConflict = \(\) => \{[\s\S]*?\n  \};/)?.[0] || '';
+    assert.ok(rejectReferralConflict.includes('setReferralError(discountConflictMessage())'));
+    assert.ok(!rejectReferralConflict.includes('setCouponError('));
+    assert.ok(!rejectReferralConflict.includes('setOfferNotice('));
+    const removeCampaign = checkout.match(/const removeCampaign = \(\) => \{[\s\S]*?\n  \};/)?.[0] || '';
+    assert.ok(removeCampaign.includes("setReferralError('')"));
+    assert.ok(removeCampaign.includes("setOfferNotice('')"));
   });
 
   test('order history and printed receipts show the referral bill line', () => {
-    assertIncludes('src/pages/OrderHistoryPage.tsx', ['getOrderReferralDiscount(order)', 'Referral Reward Discount']);
-    assertIncludes('src/utils/printReceipt.ts', ['getOrderReferralDiscount(order)', 'Referral Reward Discount']);
+    assertIncludes('src/pages/OrderHistoryPage.tsx', ['getOrderReferralDiscount(order)', 'Referral Reward']);
+    assertIncludes('src/utils/printReceipt.ts', ['getOrderReferralDiscount(order)', 'Referral Reward']);
   });
 
   test('no new dependencies were added', () => {

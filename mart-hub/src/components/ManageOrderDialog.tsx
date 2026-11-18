@@ -688,8 +688,9 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                   </span>
                 </div>
                 <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">
-                  New subtotal ₹{newSubtotal.toFixed(2)} · delivery ₹{effectiveDeliveryCharge.toFixed(2)}
-                  {effectiveCampaignDiscount > 0 ? ` · offer -₹${effectiveCampaignDiscount.toFixed(2)}` : ''}
+                      New subtotal ₹{newSubtotal.toFixed(2)} · delivery ₹{effectiveDeliveryCharge.toFixed(2)}
+                      {effectiveCampaignDiscount > 0 ? ` · offer -₹${effectiveCampaignDiscount.toFixed(2)}` : ''}
+                      {referralDiscount > 0 ? ` · referral -₹${referralDiscount.toFixed(2)}` : ''}
                   {removeNextDayCoupon ? ' · next-day coupon removed' : ''}
                 </p>
               </div>

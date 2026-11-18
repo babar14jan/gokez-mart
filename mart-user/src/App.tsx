@@ -48,7 +48,7 @@ import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/bran
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 import { REFERRAL_LINK_CODE_KEY, referralCodeFromSearch } from './utils/referral';
 
-type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'fresh';
+type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'fresh';
 
 // Canonical URL for each view. Used to give every tab its own history entry so a
 // sub-page opened from it can return there with the back button.
@@ -60,6 +60,7 @@ const VIEW_PATH: Record<View, string> = {
   deals: '/deals',
   orders: '/orders',
   account: '/account',
+  login: '/login',
   privacy: '/privacy',
   terms: '/terms',
   grievance: '/grievance',
@@ -157,13 +158,15 @@ export default function App() {
   const referralLinkCode = (() => {
     const code = referralCodeFromSearch(window.location.search);
     if (!code) return '';
+    try { sessionStorage.removeItem(REFERRAL_LINK_CODE_KEY); } catch {}
+    if (useCustomerAuthStore.getState().isLoggedIn) return '';
     try { sessionStorage.setItem(REFERRAL_LINK_CODE_KEY, code); } catch {}
-    window.history.replaceState({}, '', '/account');
+    window.history.replaceState({}, '', '/login');
     return code;
   })();
   const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
   const [view, setView] = useState<View>(() => {
-    if (referralLinkCode) return 'account';
+    if (referralLinkCode) return 'login';
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
     // The public, crawlable pages keep their own view so direct links and the
     // prerendered SEO documents still resolve. /delete-account is kept because it
@@ -176,6 +179,7 @@ export default function App() {
     if (path === '/feedback') return 'feedback';
     if (path === '/delete-account') return 'delete-account';
     if (path === '/account') return 'account';
+    if (path === '/login') return 'login';
     // The tab paths are real views, not just history markers: a reload on
     // /categories, /orders or /deals has to come back to that tab instead of
     // being normalised to Home (the popstate handler already resolved them).
@@ -250,8 +254,12 @@ export default function App() {
   // than mid-login.
   const accountLoginOpen = useAccountLoginStore((s) => s.open);
   useEffect(() => {
-    if (view !== 'account') useAccountLoginStore.getState().closeLogin();
+    if (view !== 'account' && view !== 'login') useAccountLoginStore.getState().closeLogin();
   }, [view]);
+  useEffect(() => {
+    if (!referralLinkCode && view !== 'login') return;
+    useAccountLoginStore.getState().openLogin();
+  }, [referralLinkCode, view]);
 
   // Secondary Account/Profile sub-pages render their own green header (see
   // PageHeader), so the browsing Navbar — with its delivery-zone selector —
@@ -631,6 +639,7 @@ export default function App() {
       }
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
+      else if (path === '/login') setView('login');
       // Needed because the login redirect lands here: AccountPage navigates to
       // postLoginPath, which is '/orders' for the guest "Track My Orders" CTA.
       // Without this branch the pushState fell through to setView('home'), so a
@@ -1351,7 +1360,7 @@ export default function App() {
          never scrolls away and page content pins beneath it at top-0. */
       header={
         <>
-      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
+      {!isEmbed && !accountSubPage && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
         <Navbar
           onUseMyLocation={useMyLocation}
           activeView={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'}
@@ -1366,7 +1375,7 @@ export default function App() {
       {/* Closed-store notice: below the header, on every page, never blocking.
           The store's own greeting and message come from the hub's Hours tab;
           without them the notice falls back to the default wording. */}
-      {!isEmbed && !accountSubPage && !(view === 'account' && accountLoginOpen) && (
+      {!isEmbed && !accountSubPage && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
         <StoreStatusStrip
           openState={openState}
           closedGreeting={settings.store_closed_greeting}
@@ -1377,7 +1386,7 @@ export default function App() {
       }
       floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
       bottomNavHidden={navHidden}
-      bottomNav={!checkoutActive ? (
+      bottomNav={!checkoutActive && view !== 'login' ? (
         <div className="sm:hidden">
           <BottomNav active={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'} onChange={handleNavChange} onOpenSearch={openFreshPage} freshActive={view === 'fresh'} />
         </div>
@@ -1558,7 +1567,7 @@ export default function App() {
         <div className={productPageBottom}>
           <DeferredPage><OrderHistoryPage onBack={() => setView('home')} whatsappNumber={settings.whatsapp_number} nextOpenLabel={openState?.nextOpenLabel ?? null} /></DeferredPage>
         </div>
-      ) : view === 'account' ? (
+      ) : view === 'account' || view === 'login' ? (
         <DeferredPage><AccountPage
           storeName={settings.store_name}
           storeAddress={settings.store_address}

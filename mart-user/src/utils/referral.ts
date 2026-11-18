@@ -1,8 +1,14 @@
 export const REFERRAL_LINK_CODE_KEY = 'mart_referral_link_code';
+export const CHECKOUT_REFERRAL_SELECTION_KEY = 'mart_checkout_referral_selection';
 export const REFERRAL_CODE_LENGTH = 6;
 export const REFERRAL_DISCOUNT_EXCLUSIVITY_MESSAGE = 'Remove your existing offer/coupon first — only one discount per order';
 
 const CODE_PATTERN = /^[A-Z0-9]{6}$/;
+
+export interface CheckoutReferralSelection {
+  creditId: string;
+  amount: number;
+}
 
 export interface ReferralCreditLike {
   id: string;
@@ -48,7 +54,10 @@ export function buildReferralLink(code: string, origin: string): string {
 }
 
 export function buildReferralShareMessage(code: string, link: string, reward = 50): string {
-  return `Join Gokez Mart and use my referral code ${normalizeReferralCode(code)}. Both of us can earn ₹${finite(reward)} after your first qualifying order is successfully delivered! ${link}`;
+  const total = finite(reward);
+  const first = total / 2;
+  const remaining = Math.max(0, total - first);
+  return `Join Gokez Mart and use my referral code ${normalizeReferralCode(code)}. Get ₹${first} off your first qualifying order, then unlock ₹${remaining} after it is delivered! ${link}`;
 }
 
 export function buildWhatsAppReferralLink(message: string): string {
@@ -73,6 +82,39 @@ export function clearLinkReferralCode(): void {
   try {
     sessionStorage.removeItem(REFERRAL_LINK_CODE_KEY);
   } catch {}
+}
+
+export function readCheckoutReferralSelection(): CheckoutReferralSelection | null {
+  try {
+    const raw = typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(CHECKOUT_REFERRAL_SELECTION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const creditId = typeof parsed?.creditId === 'string' ? parsed.creditId.trim() : '';
+    const amount = Number(parsed?.amount);
+    if (!creditId || !Number.isFinite(amount) || amount < 0) return null;
+    return { creditId, amount };
+  } catch {
+    return null;
+  }
+}
+
+export function saveCheckoutReferralSelection(selection: CheckoutReferralSelection | null): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    if (!selection?.creditId) {
+      sessionStorage.removeItem(CHECKOUT_REFERRAL_SELECTION_KEY);
+      return;
+    }
+    const amount = Number(selection.amount);
+    sessionStorage.setItem(CHECKOUT_REFERRAL_SELECTION_KEY, JSON.stringify({
+      creditId: selection.creditId,
+      amount: Number.isFinite(amount) ? Math.max(0, amount) : 0,
+    }));
+  } catch {}
+}
+
+export function clearCheckoutReferralSelection(): void {
+  saveCheckoutReferralSelection(null);
 }
 
 export function canApplyReferralDiscount(state: ReferralDiscountState): boolean {

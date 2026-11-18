@@ -504,7 +504,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer & Earn</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Earn rewards for every friend who places their first qualifying order.</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Get ₹25 off your first order with a friend’s code, then unlock the rest after delivery — or earn by referring friends.</p>
               </div>
               <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-slate-400" aria-hidden="true" />
             </button>

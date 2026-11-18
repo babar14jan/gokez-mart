@@ -89,7 +89,7 @@ export function printReceipt(order: any) {
         </tr>` : ''}
         ${referralDiscount > 0 ? `
         <tr>
-          <td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">Referral Reward Discount</td>
+          <td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">Referral Reward</td>
           <td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${referralDiscount.toFixed(0)}</td>
         </tr>` : ''}
         <tr>

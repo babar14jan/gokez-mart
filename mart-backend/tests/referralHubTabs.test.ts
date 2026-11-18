@@ -2,6 +2,10 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  campaignFormToPayload, campaignToForm, changeStageCount, rebalanceStageAmounts,
+  stageTotal, stagesMatchTotal,
+} from '../../mart-hub/src/services/referralAdminApi';
 
 const readHub = (rel: string) => readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', rel), 'utf8');
 
@@ -169,5 +173,59 @@ describe('Referral hub consolidation', () => {
 
     const ledger = readHub('pages/ReferralRewardsLedgerPage.tsx');
     assert.ok(ledger.includes("setParams({ tab: 'ledger' }, { replace: true });"));
+  });
+
+  test('order bills show the referral discount and include it in savings', () => {
+    const orders = readHub('pages/OrdersPage.tsx');
+    assert.ok(orders.includes('const referralDiscount = Number(order.referralDiscount) || 0;'));
+    assert.ok(orders.includes('itemSavings + freeDeliverySaving + campaignDiscount + referralDiscount'));
+    assert.ok(orders.includes('Referral Reward'));
+    assert.ok(orders.includes('− ₹${order.referralDiscount} referral'));
+
+    const manage = readHub('components/ManageOrderDialog.tsx');
+    assert.ok(manage.includes('· referral -₹${referralDiscount.toFixed(2)}'));
+  });
+});
+
+describe('Referral stage editor', () => {
+  test('adding a stage splits the total and keeps it balanced', () => {
+    const stages = changeStageCount(['30', '20'], 50, 3);
+    assert.deepEqual(stages, ['16.67', '16.67', '16.66']);
+    assert.equal(stageTotal(stages), 50);
+    assert.ok(stagesMatchTotal(stages, 50));
+
+    const withSpare = changeStageCount(['30', '10'], 50, 3);
+    assert.deepEqual(withSpare, ['30', '10', '10']);
+    assert.equal(stageTotal(withSpare), 50);
+  });
+
+  test('removing a stage folds its amount into the first remaining stage', () => {
+    const stages = changeStageCount(['30', '10', '10'], 50, 2);
+    assert.deepEqual(stages, ['40', '10']);
+    assert.equal(stageTotal(stages), 50);
+  });
+
+  test('changing the total rebalances the stage amounts', () => {
+    assert.deepEqual(rebalanceStageAmounts(['30', '20'], '60'), ['30', '30']);
+    assert.deepEqual(rebalanceStageAmounts(['30', '20'], '10'), ['5', '5']);
+    assert.ok(stagesMatchTotal(rebalanceStageAmounts(['30', '20'], '50.05'), '50.05'));
+  });
+
+  test('editable stages become sequential payload stages', () => {
+    const form = campaignToForm(null);
+    const payload = campaignFormToPayload({ ...form, totalRewardAmount: '50', stageAmounts: ['20', '15', '15'] });
+    assert.deepEqual(payload.rewardStages, [
+      { stage: 1, amount: 20 },
+      { stage: 2, amount: 15 },
+      { stage: 3, amount: 15 },
+    ]);
+  });
+
+  test('campaign modal exposes add/remove controls and live total validation', () => {
+    const page = readHub('pages/ReferralCampaignsPage.tsx');
+    assert.ok(page.includes('setStageCount(form.stageAmounts.length + 1)'));
+    assert.ok(page.includes('setStageCount(form.stageAmounts.length - 1)'));
+    assert.ok(page.includes('stagesMatchTotal(form.stageAmounts, form.totalRewardAmount)'));
+    assert.ok(page.includes('left to assign'));
   });
 });
