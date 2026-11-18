@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share2, Moon, Sun, X, Sparkles, Info, Gift } from 'lucide-react';
-import { authApi, suggestionApi } from '../services/api';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share, Moon, Sun, X, Sparkles, Info, Gift } from 'lucide-react';
+import { authApi, referralApi, suggestionApi, type ReferralMeData } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
@@ -12,9 +12,9 @@ import LoginFlow, { type Step } from '../components/LoginFlow';
 import PageHeader from '../components/PageHeader';
 import { track } from '../utils/track';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
+import { buildReferralLink, normalizeReferralCode } from '../utils/referral';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { readTrackingTokens } from '../utils/guestTracking';
-import ReferEarnSheet from '../components/ReferEarnSheet';
 
 const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
 
@@ -33,6 +33,12 @@ function WhatsAppIcon({ className }: { className?: string }) {
       <path d="M12.04 2a9.85 9.85 0 0 0-8.35 15.08L2.5 21.5l4.55-1.13A9.85 9.85 0 1 0 12.04 2Zm0 17.9a8 8 0 0 1-4.08-1.12l-.3-.18-2.7.67.72-2.62-.2-.32a8 8 0 1 1 6.56 3.57Zm4.4-5.98c-.24-.12-1.42-.7-1.64-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06a6.55 6.55 0 0 1-1.93-1.19 7.23 7.23 0 0 1-1.34-1.67c-.14-.24 0-.37.1-.49.1-.1.22-.26.32-.39.11-.12.14-.22.22-.36.07-.14.03-.27-.02-.38-.06-.1-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.4h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.57.25 1.02.4 1.37.51.58.18 1.1.15 1.51.09.46-.07 1.42-.58 1.62-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z" />
     </svg>
   );
+}
+
+function formatReferralRupees(value: number | string | null | undefined): string {
+  const n = Number(value);
+  const rounded = Number.isFinite(n) ? n : 0;
+  return `₹${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2)}`;
 }
 
 export default function AccountPage({ storeName, storeAddress, supportPhone, whatsappNumber }: AccountPageProps) {
@@ -58,12 +64,12 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const [notificationNotice, setNotificationNotice] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
+  const [referralData, setReferralData] = useState<ReferralMeData | null>(null);
   // Offered on phones until the app is actually installed to the home screen.
 
   // "Suggest products" — a lightweight demand form opened in a sheet. Kept local
   // to this page; the ask itself is what matters, not where it was captured.
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const [referOpen, setReferOpen] = useState(false);
   const [suggestText, setSuggestText] = useState('');
   const [suggestDetail, setSuggestDetail] = useState('');
   const [suggestConsent, setSuggestConsent] = useState(true);
@@ -106,18 +112,55 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     setSuggestError('');
   };
 
+  const handleShareReferral = async () => {
+    const shareLink = buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin);
+    if (!shareLink) return;
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      copied = true;
+    } catch {
+      // Fall through to the native share sheet or retry copying below.
+    }
+    if (copied) {
+      setShareNotice('Link copied');
+      window.setTimeout(() => setShareNotice(''), 2500);
+    }
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Refer & Earn',
+          text: `Use my referral code ${normalizeReferralCode(referralData?.code)} on Gokez Mart.`,
+          url: shareLink,
+        });
+        return;
+      } catch (err) {
+        if ((err as { name?: string })?.name === 'AbortError') return;
+      }
+    }
+    if (!copied) {
+      try {
+        await navigator.clipboard.writeText(shareLink);
+        setShareNotice('Link copied');
+        window.setTimeout(() => setShareNotice(''), 2500);
+      } catch {
+        setShareNotice('Could not copy. Please select the text and copy it manually.');
+        window.setTimeout(() => setShareNotice(''), 2500);
+      }
+    }
+  };
+
   useEffect(() => {
     getLocationPermission().then(setLocationPermission);
   }, []);
 
 
-  // Suggestion and referral sheets: same Escape + scroll-lock contract as the install viewer.
+  // Suggestion sheet: same Escape + scroll-lock contract as the install viewer.
   useEffect(() => {
-    if (!suggestOpen && !referOpen) return;
+    if (!suggestOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (suggestOpen) closeSuggest();
-      else setReferOpen(false);
+      closeSuggest();
     };
     document.addEventListener('keydown', onKey);
     const previous = document.body.style.overflow;
@@ -126,7 +169,35 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previous;
     };
-  }, [suggestOpen, referOpen]);
+  }, [suggestOpen]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setReferralData(null);
+      return;
+    }
+    let cancelled = false;
+    referralApi.getMe().then((response) => {
+      if (!cancelled) setReferralData(response.data.data);
+    }).catch(() => {
+      if (!cancelled) setReferralData(null);
+    });
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setReferralData(null);
+      return;
+    }
+    let cancelled = false;
+    referralApi.getMe().then((response) => {
+      if (!cancelled) setReferralData(response.data.data);
+    }).catch(() => {
+      if (!cancelled) setReferralData(null);
+    });
+    return () => { cancelled = true; };
+  }, [isLoggedIn]);
 
   useEffect(() => {
     const refreshNotificationPermission = () => setNotificationPermission(
@@ -493,21 +564,44 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
 
         {isLoggedIn && (
-          <section>
-            <button
-              type="button"
-              onClick={() => setReferOpen(true)}
-              className="flex w-full items-center gap-4 rounded-[18px] border border-gokez-200 bg-white p-4 text-left shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-gokez-800 dark:bg-slate-800 dark:hover:border-gokez-600"
-            >
+          <section className="rounded-[18px] border border-gokez-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-gokez-800 dark:bg-slate-800">
+            <div className="flex items-start gap-4">
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
                 <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer & Earn</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Get ₹25 off your first order with a friend’s code, then unlock the rest after delivery — or earn by referring friends.</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer & Earn</p>
+                  <span className="rounded-full bg-gokez-50 px-2 py-0.5 font-mono text-xs font-bold text-gokez-700 dark:bg-gokez-900/30 dark:text-gokez-400">
+                    Code: {normalizeReferralCode(referralData?.code) || '—'}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-medium text-ink dark:text-white">
+                  Total referral balance:
+                  <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                    {formatReferralRupees(referralData?.stats?.totalEarned)}
+                  </span>
+                </p>
               </div>
-              <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-slate-400" aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                onClick={() => void handleShareReferral()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-black px-3 py-1.5 text-sm font-extrabold leading-tight text-white transition-colors hover:bg-gray-900"
+              >
+                <Share className="h-4 w-4" aria-hidden="true" /> Share
+                <span className="sr-only">{buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin)}</span>
+              </button>
+            </div>
+            {shareNotice && <p className="mt-2 text-[11px] font-medium text-gokez-700 dark:text-gokez-300" role="status">{shareNotice}</p>}
+            <div className="mt-0.5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => navigate('/referrals')}
+                className="text-xs font-bold text-gokez-700 underline-offset-2 hover:underline dark:text-gokez-400"
+              >
+                View referral details
+              </button>
+            </div>
           </section>
         )}
 
@@ -522,7 +616,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <span>Feedback</span>
             </button>
             <button type="button" onClick={handleShareApp} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white px-2 py-2 text-center text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-              <Share2 className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
+              <Share className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               <span>Share App</span>
             </button>
           </div>
@@ -693,7 +787,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </section>
 
         <section className="pt-1 text-center">
-          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.1.5</p>
+          <p className="mt-6 text-xs text-gray-400 dark:text-slate-500">Version: v0.1.6</p>
           {footer}
         </section>
       </div>
@@ -802,8 +896,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </div>,
         document.body
       )}
-
-      <ReferEarnSheet open={referOpen && isLoggedIn} onClose={() => setReferOpen(false)} />
 
     </div>
   );

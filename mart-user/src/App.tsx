@@ -48,7 +48,7 @@ import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/bran
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 import { REFERRAL_LINK_CODE_KEY, referralCodeFromSearch } from './utils/referral';
 
-type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'fresh';
+type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'referral' | 'fresh';
 
 // Canonical URL for each view. Used to give every tab its own history entry so a
 // sub-page opened from it can return there with the back button.
@@ -66,6 +66,7 @@ const VIEW_PATH: Record<View, string> = {
   grievance: '/grievance',
   'delete-account': '/delete-account',
   feedback: '/feedback',
+  referral: '/referrals',
   fresh: '/fresh',
 };
 
@@ -96,6 +97,7 @@ const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'));
 const GrievancePage = lazyWithRetry(() => import('./pages/GrievancePage'));
 const DeleteAccountPage = lazyWithRetry(() => import('./pages/DeleteAccountPage'));
 const FeedbackPage = lazyWithRetry(() => import('./pages/FeedbackPage'));
+const ReferralPage = lazyWithRetry(() => import('./pages/ReferralPage'));
 const AboutPage = lazyWithRetry(() => import('./pages/AboutPage'));
 const WhatIsGokezMartPage = lazyWithRetry(() => import('./pages/WhatIsGokezMartPage'));
 
@@ -178,6 +180,7 @@ export default function App() {
     if (path === '/grievance') return 'grievance';
     if (path === '/feedback') return 'feedback';
     if (path === '/delete-account') return 'delete-account';
+    if (path === '/referrals') return 'referral';
     if (path === '/account') return 'account';
     if (path === '/login') return 'login';
     // The tab paths are real views, not just history markers: a reload on
@@ -264,7 +267,7 @@ export default function App() {
   // Secondary Account/Profile sub-pages render their own green header (see
   // PageHeader), so the browsing Navbar — with its delivery-zone selector —
   // must not stack above it. Embed mode is already handled by `isEmbed`.
-  const accountSubPage = view === 'feedback' || view === 'grievance' || view === 'privacy' || view === 'terms' || view === 'delete-account' || view === 'about' || view === 'what-is-gokez-mart';
+  const accountSubPage = view === 'feedback' || view === 'grievance' || view === 'privacy' || view === 'terms' || view === 'delete-account' || view === 'about' || view === 'what-is-gokez-mart' || view === 'referral';
 
   // Load the customer's address book from the backend on login.
   // (No longer auto-migrates "legacy local" addresses — that path could pick up
@@ -646,6 +649,7 @@ export default function App() {
       // customer who signed in from the account page was dumped on the home
       // screen instead of their order history.
       else if (path === '/orders') setView('orders');
+      else if (path === '/referrals') setView('referral');
       else if (path === '/fresh') setView('fresh');
       // Declining login from the account tab returns here, so this path has to
       // resolve to a view. Without it the guest exit fell through to Home.
@@ -1567,6 +1571,8 @@ export default function App() {
         <div className={productPageBottom}>
           <DeferredPage><OrderHistoryPage onBack={() => setView('home')} whatsappNumber={settings.whatsapp_number} nextOpenLabel={openState?.nextOpenLabel ?? null} /></DeferredPage>
         </div>
+      ) : view === 'referral' ? (
+        <DeferredPage><ReferralPage /></DeferredPage>
       ) : view === 'account' || view === 'login' ? (
         <DeferredPage><AccountPage
           storeName={settings.store_name}

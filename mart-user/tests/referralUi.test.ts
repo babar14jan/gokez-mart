@@ -219,44 +219,29 @@ describe('referral integration points', () => {
     ]);
   });
 
-  test('account page exposes a logged-in referral card and sheet', () => {
+  test('account page exposes a logged-in referral card and subpage navigation', () => {
     assertIncludes('src/pages/AccountPage.tsx', [
       '{isLoggedIn && (',
       'Refer & Earn',
-      'Get ₹25 off your first order with a friend’s code, then unlock the rest after delivery',
-      'setReferOpen(true)',
-      '<ReferEarnSheet',
+      'normalizeReferralCode(referralData?.code) || \'—\'',
+      'Total referral balance:',
+      'formatReferralRupees(referralData?.stats?.totalEarned)',
+      'handleShareReferral',
+      'Share',
+      'View referral details',
+      "navigate('/referrals')",
     ]);
-    assertIncludes('src/components/ReferEarnSheet.tsx', [
-      'Earn {rupees(reward)}',
-      '1 · Use code',
-      'Only one code can be used per customer.',
-      '2 · First order',
-      '3 · Unlock',
-      'Unlocked for next order',
-      'Copy Code',
-      'Copy Link',
-      'WhatsApp',
-      'buildReferralLink(code, window.location.origin)',
+    assert.ok(!source('src/pages/AccountPage.tsx').includes('<ReferEarnSheet'), 'the referral flow should open a subpage, not a sheet');
+    assertIncludes('src/pages/ReferralPage.tsx', [
+      'How it works',
       'Your referral benefit',
-      'Total referral reward: {rupees(reward)}',
-      'Congratulations! Your {rupees(firstStageAmount)} first-order referral discount has been used successfully. Another {rupees(remainingStageAmount)} reward is now available for your next eligible order.',
-      'Successful referrals',
-      'Pending referrals',
-      'Total referral reward earned',
-      'Available to use',
-      'Reversed',
-      'Pending rewards are not spendable',
-      'First order ·',
+      'Your progress',
+      'Rewards wallet',
       'Your credits',
       'Referral history',
       'role="alert"',
       'role="status"',
     ]);
-    const sheet = source('src/components/ReferEarnSheet.tsx');
-    assert.ok(!sheet.includes('referralApi.claim('), 'the sheet must not claim codes on linked accounts');
-    assert.ok(!sheet.includes('codeInput'), 'registration-only codes must not be entered from the sheet');
-    assert.ok(!sheet.includes('3 · Redeem at checkout'), 'first-order benefit wording replaces the old wallet-only copy');
   });
 
   test('checkout selects the next referral credit locally until the order is placed', () => {

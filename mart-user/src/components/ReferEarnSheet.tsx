@@ -54,6 +54,7 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
+  const [showDetails, setShowDetails] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -188,6 +189,7 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
               </div>
               <p className="mt-3 text-xl font-extrabold text-gokez-700 dark:text-gokez-300">Earn {rupees(reward)}</p>
               <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">Use a code during registration to save {rupees(firstStageAmount)} on your first qualifying order. The rest unlocks after delivery.</p>
+              <p className="mt-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Total referral balance: {rupees(stats?.totalEarned)}</p>
               <div className="mt-3 rounded-xl border border-dashed border-gokez-300 bg-white px-3 py-3 dark:border-gokez-700 dark:bg-slate-800">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Your referral code</p>
                 <p className="mt-1 font-mono text-2xl font-extrabold tracking-[0.25em] text-ink dark:text-white">{code || '—'}</p>
@@ -217,8 +219,19 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                 </a>
               </div>
               {notice && <p className="mt-2 text-[11px] font-medium text-gokez-700 dark:text-gokez-300" role="status">{notice}</p>}
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowDetails(true)}
+                  className="rounded-xl bg-gokez-700 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-gokez-800"
+                >
+                  View referral details
+                </button>
+              </div>
             </section>
 
+            {showDetails && (
+              <>
             <section>
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">How it works</p>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -333,6 +346,8 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                 </div>
               )}
             </section>
+              </>
+            )}
           </div>
         )}
       </div>
