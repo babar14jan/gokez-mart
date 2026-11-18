@@ -46,6 +46,7 @@ import { saveTrackingToken } from './utils/guestTracking';
 import { detectPlatform } from './utils/install';
 import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
+import { REFERRAL_LINK_CODE_KEY, referralCodeFromSearch } from './utils/referral';
 
 type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'fresh';
 
@@ -153,8 +154,16 @@ const DEFAULT_SETTINGS: PublicSettings = {
 };
 
 export default function App() {
+  const referralLinkCode = (() => {
+    const code = referralCodeFromSearch(window.location.search);
+    if (!code) return '';
+    try { sessionStorage.setItem(REFERRAL_LINK_CODE_KEY, code); } catch {}
+    window.history.replaceState({}, '', '/account');
+    return code;
+  })();
   const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
   const [view, setView] = useState<View>(() => {
+    if (referralLinkCode) return 'account';
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
     // The public, crawlable pages keep their own view so direct links and the
     // prerendered SEO documents still resolve. /delete-account is kept because it

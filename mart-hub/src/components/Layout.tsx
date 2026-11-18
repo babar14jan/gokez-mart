@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
   Store, ShoppingBag, Truck, Megaphone, UserCog, Inbox, LayoutList, LayoutTemplate, Lightbulb, MapPin,
-  TrendingUp, RotateCcw,
+  TrendingUp, RotateCcw, Gift,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
 import { storesApi, authApi, inventoryApi } from '../services/api';
@@ -19,12 +19,12 @@ import LiveOrderToasts from './LiveOrderToasts';
 // Roles mirror mart_admins_role_check in migration 056, including store_manager.
 // sales_manager was retired: the database now permits super_admin, store_owner,
 // store_manager, delivery_staff and staff only.
-type NavSection = 'Daily Work' | 'Store Management' | 'Administration';
+type NavSection = 'Daily Work' | 'Store Management' | 'Marketing & Growth' | 'Administration';
 type NavItem = {
   label: string; href: string; icon: React.ElementType; roles: string[]; section: NavSection;
 };
 
-export const NAV_SECTIONS: NavSection[] = ['Daily Work', 'Store Management', 'Administration'];
+export const NAV_SECTIONS: NavSection[] = ['Daily Work', 'Store Management', 'Marketing & Growth', 'Administration'];
 
 export const NAV_ALL: NavItem[] = [
   { label: 'Dashboard',          href: '/',                    icon: Home,            roles: ['super_admin', 'store_owner', 'store_manager', 'delivery_staff', 'staff'], section: 'Daily Work' },
@@ -38,6 +38,7 @@ export const NAV_ALL: NavItem[] = [
   { label: 'Catalog',            href: '/catalog',             icon: LayoutList,      roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
   { label: 'Feedback',           href: '/feedback',            icon: MessageSquare,   roles: ['super_admin', 'store_owner', 'store_manager'], section: 'Store Management' },
   { label: 'Campaigns',          href: '/campaigns',           icon: Megaphone,       roles: ['super_admin', 'store_owner'], section: 'Store Management' },
+  { label: 'Referral & Earn',   href: '/referrals',            icon: Gift,            roles: ['super_admin'], section: 'Marketing & Growth' },
   { label: 'Customers',          href: '/customers',           icon: Users,           roles: ['super_admin'], section: 'Administration' },
   { label: 'Leads',              href: '/customer-leads',      icon: UserPlus,        roles: ['super_admin'], section: 'Administration' },
   { label: 'Suggestions',        href: '/suggestions',         icon: Lightbulb,       roles: ['super_admin'], section: 'Administration' },
@@ -195,6 +196,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/suggestions': 'Product Suggestions',
     '/install-analytics': 'Installs',
     '/subscriptions': 'Subscriptions',
+    '/referrals': 'Referral & Earn',
   };
 
 
@@ -292,7 +294,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 keeps its identity after launch instead of only while the
                 login page is visible. */}
             <div className="lg:hidden flex items-center gap-2 min-w-0">
-              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/home-sections'].includes(pathname) ? (
+              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/home-sections', '/referrals'].includes(pathname) ? (
                 <div className="flex items-center gap-1 min-w-0">
                   <button onClick={() => navigate(-1)}
                     className="p-2 -ml-1 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">

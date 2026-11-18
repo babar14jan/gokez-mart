@@ -9,6 +9,7 @@ import { useCartStore } from '../store/cartStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { printReceipt } from '../utils/printReceipt';
 import { buildWhatsAppLink } from '../utils/whatsapp';
+import { getOrderReferralDiscount } from '../utils/referral';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 
 import {
@@ -156,8 +157,9 @@ function OrderDetailSheet({
               const itemSavings = Number(order.itemSavings) || 0;
               const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
               const campaignDiscount = Number(order.campaignDiscount) || 0;
+              const referralDiscount = getOrderReferralDiscount(order);
               const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
-              const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
+              const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount + referralDiscount;
               return (
                 <>
                   {totalSavings > 0 && (
@@ -189,6 +191,12 @@ function OrderDetailSheet({
                     <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
                       <span>{order.campaignRequiresScheduledDelivery ? 'Scheduled delivery discount' : order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
                       {campaignDiscount > 0 && <span className="font-semibold">-₹{order.campaignDiscount}</span>}
+                    </div>
+                  )}
+                  {referralDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                      <span>Referral Reward Discount</span>
+                      <span className="font-semibold">-₹{referralDiscount.toFixed(0)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-base font-bold text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-slate-600">

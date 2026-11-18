@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useFinePointer } from '../utils/useFinePointer';
-import { Loader2, Plus, Minus, Trash2, X, Tag, MessageCircle, ChevronRight, Clock, User, ShoppingBag } from 'lucide-react';
+import { Loader2, Plus, Minus, Trash2, X, Tag, MessageCircle, ChevronRight, Clock, User, ShoppingBag, Gift } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
-import { storeApi, campaignApi, authApi, recommendationApi } from '../services/api';
-import type { PublicSettings, StoreOpeningHours, RecommendationResult, Product } from '../services/api';
+import { storeApi, campaignApi, authApi, recommendationApi, referralApi } from '../services/api';
+import type { PublicSettings, StoreOpeningHours, RecommendationResult, Product, ReferralCredit } from '../services/api';
 import { useCustomerStore, type SavedAddress } from '../store/customerStore';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -18,6 +18,11 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/track';
 import { requestErrorMessage, isTransportFailure } from '../utils/networkError';
 import { useGuestAddressStore } from '../store/guestAddressStore';
+import {
+  availableReferralBalance, calculateOrderSavings, calculateOrderTotals,
+  canApplyCampaignDiscount, canApplyReferralDiscount, discountConflictMessage,
+  getOrderReferralDiscount, isReferralReservationExpired,
+} from '../utils/referral';
 
 interface CheckoutPageProps {
   settings: PublicSettings;
@@ -202,6 +207,13 @@ function money(v: number | string | null | undefined): string {
   const n = Number(v);
   if (!Number.isFinite(n)) return '0';
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '');
+}
+
+function shortDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function offerHeadline(c: OfferCampaign): string {
@@ -731,6 +743,42 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const [couponSuccess, setCouponSuccess] = useState('');
   const [offerNotice, setOfferNotice] = useState('');
   const [offerMinimumOrder, setOfferMinimumOrder] = useState<number | null>(null);
+  const [referralCredits, setReferralCredits] = useState<ReferralCredit[]>([]);
+  const [referralSelected, setReferralSelected] = useState<string | null>(null);
+  const [referralApplied, setReferralApplied] = useState<{ creditId: string; amount: number; reservationExpiresAt: string | null } | null>(null);
+  const [referralApplying, setReferralApplying] = useState(false);
+  const [referralError, setReferralError] = useState('');
+  const [referralNotice, setReferralNotice] = useState('');
+
+  const loadReferralCredits = useCallback(async (fresh = false) => {
+    if (!isLoggedIn) {
+      setReferralCredits([]);
+      return;
+    }
+    try {
+      const response = await referralApi.getCredits(fresh ? { fresh: true } : undefined);
+      const items = response.data?.data?.items || [];
+      setReferralCredits(items.filter(credit => credit.status === 'available'));
+    } catch {
+      setReferralCredits([]);
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    void loadReferralCredits();
+  }, [loadReferralCredits]);
+
+  useEffect(() => {
+    if (!referralApplied?.reservationExpiresAt) return;
+    const checkExpiry = () => {
+      if (!isReferralReservationExpired(referralApplied.reservationExpiresAt, Date.now())) return;
+      setReferralApplied(null);
+      setReferralNotice('Your referral reward reservation expired. Apply it again to use it.');
+    };
+    checkExpiry();
+    const timer = window.setInterval(checkExpiry, 1000);
+    return () => window.clearInterval(timer);
+  }, [referralApplied]);
 
   useEffect(() => {
     if (offerMinimumOrder === null || !/^Add ₹[\d.]+ more to unlock (this )?offer/.test(offerNotice)) return;
@@ -746,6 +794,14 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   useEffect(() => {
     // Offers are explicitly selected for each checkout; never restore an old cart selection.
     useCartStore.getState().setAppliedCampaign(null, 0);
+    setReferralSelected(null);
+    setReferralApplied(null);
+    setReferralError('');
+    setReferralNotice('');
+    return () => {
+      setReferralSelected(null);
+      setReferralApplied(null);
+    };
   }, []);
 
   useEffect(() => {
@@ -865,7 +921,18 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     return 0;
   };
 
+  const rejectReferralConflict = () => {
+    const message = discountConflictMessage();
+    setReferralError(message);
+    setCouponError(message);
+    setOfferNotice(message);
+  };
+
   const applyCampaign = (campaign: any, couponCode: string | null = null, opts: { skipSchedulePrompt?: boolean } = {}) => {
+    if (!canApplyCampaignDiscount({ referralApplied: Boolean(referralApplied) })) {
+      rejectReferralConflict();
+      return;
+    }
     const disc = calcDiscount(campaign, sub);
     if (campaign.requires_scheduled_delivery && !opts.skipSchedulePrompt && (deliveryPreference !== 'scheduled' || !scheduledSlot)) {
       setEligibleCampaigns(prev => prev.some(c => c.id === campaign.id) ? prev : [campaign, ...prev]);
@@ -900,6 +967,10 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
      the client's word: the server re-checks eligibility, expiry, usage limits and
      minimum order before the figure on screen is allowed to stand. */
   const applyCode = async (raw: string, opts: { skipSchedulePrompt?: boolean } = {}) => {
+    if (!canApplyCampaignDiscount({ referralApplied: Boolean(referralApplied) })) {
+      rejectReferralConflict();
+      return;
+    }
     const code = raw.trim().toUpperCase();
     if (!code || !storeId) return;
     setCouponLoading(true); setCouponError(''); setCouponSuccess(''); setOfferNotice(''); setOfferMinimumOrder(null);
@@ -930,6 +1001,55 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
 
   const validateCoupon = () => applyCode(couponInput);
 
+  const handleApplyReferral = async () => {
+    if (!referralSelected || referralApplying) return;
+    setReferralError('');
+    setReferralNotice('');
+    if (!canApplyReferralDiscount({ campaignApplied: Boolean(appliedCampaign), couponApplied: Boolean(appliedCouponCode) })) {
+      setReferralError(discountConflictMessage());
+      return;
+    }
+    const credit = referralCredits.find(item => item.id === referralSelected);
+    if (!credit) {
+      setReferralError('This reward is no longer available. Please choose another.');
+      return;
+    }
+    setReferralApplying(true);
+    try {
+      const response = await referralApi.reserve(credit.id, crypto.randomUUID());
+      const reservation = response.data.data;
+      setReferralApplied({
+        creditId: referralSelected,
+        amount: Number(reservation.amount) || credit.amount,
+        reservationExpiresAt: reservation.reservationExpiresAt ?? null,
+      });
+      setReferralNotice(`₹${(Number(reservation.amount) || credit.amount).toFixed(0)} referral reward applied.`);
+      void loadReferralCredits(true);
+    } catch (err: any) {
+      setReferralError(err?.response?.data?.error || requestErrorMessage(err, 'We could not apply this reward. Please try again.'));
+    } finally {
+      setReferralApplying(false);
+    }
+  };
+
+  const handleRemoveReferral = async () => {
+    if (!referralApplied || referralApplying) return;
+    setReferralApplying(true);
+    setReferralError('');
+    setReferralNotice('');
+    try {
+      await referralApi.release(referralApplied.creditId);
+      setReferralApplied(null);
+      setReferralSelected(null);
+      setReferralNotice('Referral reward removed.');
+      void loadReferralCredits(true);
+    } catch (err: any) {
+      setReferralError(err?.response?.data?.error || requestErrorMessage(err, 'We could not remove this reward. Please try again.'));
+    } finally {
+      setReferralApplying(false);
+    }
+  };
+
   const deliveryCharge = parseFloat(settings.delivery_charge || '0');
   const freeAbove = parseFloat(settings.free_delivery_above || '0');
   const minOrder = parseFloat(settings.min_order_amount || '0');
@@ -943,7 +1063,13 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' && campaignMeetsMinimum
     ? 0
     : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
-  const total = Math.ceil(Math.max(0, sub + actualDelivery - displayedCampaignDiscount));
+  const referralDiscount = referralApplied ? Math.max(0, Number(referralApplied.amount) || 0) : 0;
+  const total = calculateOrderTotals({
+    subtotal: sub,
+    deliveryCharge: actualDelivery,
+    campaignDiscount: displayedCampaignDiscount,
+    referralDiscount,
+  });
   const payAmount = loading && submittedTotal != null ? submittedTotal : total;
   const canCheckout = sub >= minOrder && items.length > 0;
 
@@ -953,7 +1079,12 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   // every +/- and coupon change.
   const itemLevelSavings = itemSavings();
   const freeDeliverySaving = actualDelivery === 0 && deliveryCharge > 0 ? deliveryCharge : 0;
-  const totalSavings = itemLevelSavings + freeDeliverySaving + displayedCampaignDiscount;
+  const totalSavings = calculateOrderSavings({
+    itemSavings: itemLevelSavings,
+    freeDeliverySaving,
+    campaignDiscount: displayedCampaignDiscount,
+    referralDiscount,
+  });
 
   // Free-delivery progress (0-1). Only meaningful when a threshold is set,
   // there is a fee to unlock, and delivery is still chargeable for this cart.
@@ -1060,7 +1191,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     e.preventDefault();
     // A coupon is authoritative only after its validation request completes.
     // Do not let a quick tap submit the order before its discount reaches state.
-    if (couponLoading) return;
+    if (couponLoading || referralApplying) return;
     let name = checkoutName;
     const phone = checkoutPhone;
     // Nothing is sent until name, mobile and address are all in. The dialog
@@ -1115,17 +1246,25 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
         deliveryNote: showCustomNote ? (customNote.trim() || 'Ring the bell') : deliveryNote,
         campaignId: appliedCouponCode ? undefined : appliedCampaign?.id || undefined,
         couponCode: appliedCouponCode || undefined,
+        referralCreditId: referralApplied?.creditId || undefined,
         // Without this the server has no way to tie the order back to the cart
         // that produced it, and the funnel reports every checkout as abandoned.
         funnelSessionId: getFunnelSessionId(),
       }, orderRequestKey.current);
       const confirmedCampaignDiscount = Number(res.data.data.campaignDiscount) || 0;
+      const confirmedReferralDiscount = referralApplied
+        ? (res.data.data.referralDiscount != null
+          ? getOrderReferralDiscount({ referralDiscount: res.data.data.referralDiscount })
+          : referralApplied.amount)
+        : 0;
+      const confirmedSavings = confirmedCampaignDiscount + confirmedReferralDiscount;
       track('order_placed', { orderNumber: res.data.data.orderNumber, itemCount: lockedItems.length, value: res.data.data.total });
       const orderData = {
         orderNumber: res.data.data.orderNumber,
         trackingToken: res.data.data.trackingToken,
         items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, photoUrl: i.photoUrl || null })),
         total: res.data.data.total,
+        referralDiscount: confirmedReferralDiscount,
         guestAddress: orderAddress,
         guestName: isLoggedIn ? (authName || guestName) : guestName,
         guestPhone: isLoggedIn ? (authPhone || guestPhone) : guestPhone,
@@ -1134,7 +1273,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
         scheduledLabel: deliveryPreference === 'scheduled' && scheduledSlot ? slotLabel(schedule, scheduledSlot) : undefined,
       };
       clearCart();
-      onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, confirmedCampaignDiscount || undefined, orderData);
+      onSuccess(res.data.data.orderNumber, deliveryPreference, res.data.data.storeName, confirmedSavings || undefined, orderData);
     } catch (err: any) {
       const responseStatus = err?.response?.status;
       const responseError = err?.response?.data?.error;
@@ -1526,6 +1665,68 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
             onClearSchedule={clearSchedule}
           />
 
+          {isLoggedIn && (referralCredits.length > 0 || referralApplied) && (
+            <div className={card}>
+              <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 dark:border-slate-700">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/20">
+                  <Gift className="h-4 w-4 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-slate-400">Referral Rewards</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Available balance: ₹{availableReferralBalance(referralCredits).toFixed(0)}</p>
+                </div>
+              </div>
+              <div className="space-y-2 px-4 py-3">
+                {referralError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 dark:bg-red-900/20 dark:text-red-400" role="alert">{referralError}</p>}
+                {referralNotice && <p className="rounded-lg bg-gokez-50 px-3 py-2 text-xs font-medium text-gokez-700 dark:bg-gokez-900/20 dark:text-gokez-300" role="status">{referralNotice}</p>}
+                {!referralApplied ? (
+                  <>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Choose one reward to apply. Only one discount per order.</p>
+                    {referralCredits.map(credit => (
+                      <label key={credit.id} className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2.5 dark:border-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={referralSelected === credit.id}
+                          onChange={() => { setReferralSelected(credit.id); setReferralError(''); setReferralNotice(''); }}
+                          className="h-4 w-4 flex-shrink-0 rounded border-gray-300 text-gokez-700 focus:ring-gokez-500"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-gray-900 dark:text-white">₹{(Number(credit.amount) || 0).toFixed(0)} referral reward</span>
+                          <span className="block text-[11px] text-gray-500 dark:text-slate-400">Expires {shortDate(credit.expiresAt)}</span>
+                        </span>
+                      </label>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => void handleApplyReferral()}
+                      disabled={referralApplying || !referralSelected}
+                      className="flex min-h-11 w-full items-center justify-center rounded-xl bg-gokez-700 px-4 text-sm font-bold text-white transition-colors hover:bg-gokez-800 disabled:opacity-50"
+                    >
+                      {referralApplying ? 'Applying…' : 'Apply'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-gokez-700 dark:text-gokez-300">₹{referralDiscount.toFixed(0)} referral reward applied</p>
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                        {referralApplied.reservationExpiresAt ? `Held until ${shortDate(referralApplied.reservationExpiresAt)}` : 'Reserved for this order'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveReferral()}
+                      disabled={referralApplying}
+                      className="min-h-11 flex-shrink-0 rounded-xl border border-red-200 px-4 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-900/20"
+                    >
+                      {referralApplying ? 'Removing…' : 'Remove'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Delivery summary + note ── */}
           <div className={`${card} !overflow-visible`}>
             <div className="flex w-full items-center gap-3 px-4 py-3">
@@ -1613,6 +1814,12 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
                   <span className="text-gokez-700 font-semibold dark:text-gokez-400">-₹{displayedCampaignDiscount.toFixed(0)}</span>
                 </div>
               )}
+              {referralDiscount > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gokez-700 dark:text-gokez-400">Referral Reward Discount</span>
+                  <span className="text-gokez-700 font-semibold dark:text-gokez-400">-₹{referralDiscount.toFixed(0)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t border-gray-100 pt-2.5 dark:border-slate-700">
                 <span className="text-sm font-bold text-gray-900 dark:text-white">Total</span>
                 <span className="text-base font-extrabold text-gray-900 dark:text-white">₹{total.toFixed(0)}</span>
@@ -1685,12 +1892,17 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
                     old string in the sticky layer (WebKit bug 209376). */}
                 <p key={payAmount} className="text-lg font-bold text-gray-900 dark:text-white">₹{payAmount.toFixed(0)}</p>
               </div>
-              <button type="submit" form="checkout-form" disabled={loading || couponLoading || !canCheckout}
+              <button type="submit" form="checkout-form" disabled={loading || couponLoading || referralApplying || !canCheckout}
                 className="flex-1 h-14 bg-gokez-700 hover:bg-gokez-800 text-white font-bold rounded-2xl disabled:opacity-50 transition-all shadow-sm flex flex-col items-center justify-center leading-tight dark:bg-gokez-700 dark:text-white dark:hover:bg-gokez-800">
                 {loading || couponLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span className="text-[11px] font-medium leading-4 text-white/80">{couponLoading ? 'Checking offer' : 'Placing order'}</span>
+                  </>
+                ) : referralApplying ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-[11px] font-medium leading-4 text-white/80">Applying reward</span>
                   </>
                 ) : (
                   <>

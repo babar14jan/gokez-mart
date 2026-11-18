@@ -9,6 +9,7 @@ import {
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import PageSkeleton from '../components/PageSkeleton';
+import { DateRangeChips } from '../components/DateRangeFilter';
 
 // Indian currency formatting for the ledger figures.
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -21,13 +22,6 @@ const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-
-const MODES: { id: DailySalesMode; label: string }[] = [
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday', label: 'Yesterday' },
-  { id: 'all', label: 'All' },
-  { id: 'custom', label: 'Custom' },
-];
 
 const NOTE_OPTIONS = ['Store counter', 'Campaign', 'Offline vendor', 'Other'] as const;
 
@@ -293,26 +287,8 @@ export default function DailySalesPage() {
       {/* Filters */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          {MODES.map(m => (
-            <button key={m.id} onClick={() => setMode(m.id)}
-              className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
-                mode === m.id
-                  ? 'bg-emerald-500 text-white shadow-sm'
-                  : 'border border-gray-200 bg-white text-gray-600 hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
-              }`}>
-              {m.id === 'custom' && <CalendarDays className="h-3 w-3" />}
-              {m.label}
-            </button>
-          ))}
-          {mode === 'custom' && (
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <input type="date" value={customFrom} max={todayStr()} onChange={e => setCustomFrom(e.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-emerald-500 focus:outline-none sm:w-[138px] sm:flex-none dark:border-slate-600 dark:bg-slate-700 dark:text-white" />
-              <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
-              <input type="date" value={customTo} max={todayStr()} onChange={e => setCustomTo(e.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 focus:border-emerald-500 focus:outline-none sm:w-[138px] sm:flex-none dark:border-slate-600 dark:bg-slate-700 dark:text-white" />
-            </div>
-          )}
+          <DateRangeChips active={mode} onSelect={setMode}
+            from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo} />
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={refreshAll} title="Refresh sales" aria-label="Refresh sales"

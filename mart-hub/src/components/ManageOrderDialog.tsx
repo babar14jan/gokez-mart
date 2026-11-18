@@ -67,6 +67,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
   const [reason, setReason] = useState(REASONS[0]);
   const [comment, setComment] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'upi'>('cod');
+  const [removeNextDayCoupon, setRemoveNextDayCoupon] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<any | null>(null);
 
@@ -110,12 +111,20 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
   const items: any[] = Array.isArray(order?.items) ? order.items : [];
   const deliveryCharge = Number(order?.deliveryCharge) || 0;
   const campaignDiscount = Number(order?.campaignDiscount) || 0;
+  const referralDiscount = Number(order?.referralDiscount) || 0;
   const originalTotal = Number(order?.total) || 0;
+  const hasNextDayCoupon = Boolean(
+    order?.campaignRequiresScheduledDelivery &&
+    (order?.campaignId || order?.couponCodeUsed || campaignDiscount > 0 || Number(order?.freeDeliverySaving) > 0),
+  );
+  const effectiveDeliveryCharge = deliveryCharge;
+  const effectiveCampaignDiscount = removeNextDayCoupon && hasNextDayCoupon ? 0 : campaignDiscount;
+  const restoredCouponAmount = removeNextDayCoupon && hasNextDayCoupon ? campaignDiscount : 0;
   const deliveredSubtotal = items.reduce((sum, item) => sum + Number(item.price) * (quantities[item.id] ?? Number(item.quantity)), 0);
   const addedSubtotal = addedLines.reduce((sum, line) => sum + line.price * line.quantity, 0);
   const newSubtotal = Math.max(0, deliveredSubtotal + addedSubtotal);
-  const newTotal = Math.max(0, newSubtotal + deliveryCharge - campaignDiscount);
-  const deliveredOnlyTotal = Math.max(0, deliveredSubtotal + deliveryCharge - campaignDiscount);
+  const newTotal = Math.max(0, newSubtotal + effectiveDeliveryCharge - effectiveCampaignDiscount - referralDiscount);
+  const deliveredOnlyTotal = Math.max(0, deliveredSubtotal + effectiveDeliveryCharge - effectiveCampaignDiscount - referralDiscount);
   const removedTotal = Math.max(0, deliveredOnlyTotal - newTotal);
   const addedTotalValue = addedLines.reduce((sum, line) => sum + line.price * line.quantity, 0);
 
@@ -130,9 +139,11 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
   const finalReason = `${reason}${comment.trim() ? ` — ${comment.trim()}` : ''}`;
   const hasItemEdits = changedItems.length > 0 || addedLines.length > 0;
   const paymentChanged = !!order && paymentMethod !== normalizePayment(order.paymentMethod);
-  const canPreview = !allRemoved && (hasItemEdits || paymentChanged)
+  const canPreview = !allRemoved && (hasItemEdits || paymentChanged || removeNextDayCoupon)
     && (changedItems.length === 0 || reason !== 'Other' || comment.trim().length > 0);
-  const submitReason = hasItemEdits ? finalReason : 'Payment mode corrected';
+  const submitReason = hasItemEdits
+    ? finalReason
+    : removeNextDayCoupon ? 'Next-day coupon removed' : 'Payment mode corrected';
 
   const runSearch = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -162,6 +173,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
     setReason(REASONS[0]);
     setComment('');
     setPaymentMethod(normalizePayment(entry.paymentMethod));
+    setRemoveNextDayCoupon(false);
     setStep('edit');
   };
 
@@ -209,6 +221,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
         submitReason,
         paymentMethod,
         addedLines.map(line => ({ productId: line.productId, quantity: line.quantity, unit: line.unit, price: line.price })),
+        removeNextDayCoupon,
       );
       setResult(response.data.data);
       await onSaved();
@@ -369,6 +382,46 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                     : 'Change this only if the recorded mode was wrong. No item changes are needed.'}
                 </p>
               </div>
+
+              {hasNextDayCoupon && (
+                <div className={`rounded-xl border p-3 ${
+                  removeNextDayCoupon
+                    ? 'border-amber-300 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-900/10'
+                    : 'border-gray-200 dark:border-slate-700'
+                }`}>
+                  <label className="flex cursor-pointer items-start gap-2.5" htmlFor="manage-remove-next-day">
+                    <input
+                      id="manage-remove-next-day"
+                      type="checkbox"
+                      checked={removeNextDayCoupon}
+                      onChange={event => setRemoveNextDayCoupon(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>
+                      <span className="block text-xs font-semibold text-gray-900 dark:text-white">
+                        {order.status === 'delivered'
+                          ? 'Remove next-day coupon and restore normal total'
+                          : 'Remove next-day coupon and deliver now'}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
+                        Coupon saving ₹{campaignDiscount.toFixed(2)}
+                        {Number(order.freeDeliverySaving) > 0 && campaignDiscount === 0
+                          ? ` · free delivery ₹${Number(order.freeDeliverySaving).toFixed(2)}`
+                          : ''}
+                        . The coupon usage will be released and both apps will show the revised total.
+                      </span>
+                    </span>
+                  </label>
+                  {removeNextDayCoupon && (
+                    <p className="mt-2 rounded-lg bg-amber-100/70 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                      Payable increases by ₹{restoredCouponAmount.toFixed(2)}
+                      {Number(order.freeDeliverySaving) > 0 && campaignDiscount === 0 ? ' at minimum; any free-delivery charge is restored if the revised subtotal falls below the store threshold' : ''}.
+                      The scheduled tag and label are removed in both apps.
+                      {order.status !== 'delivered' ? ' Delivery switches from the next-day slot to immediate.' : ''}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {items.map(item => {
                 const delivered = quantities[item.id] ?? Number(item.quantity);
@@ -597,6 +650,20 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                     </span>
                   </div>
                 ))}
+                {removeNextDayCoupon && (
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-700 dark:text-slate-300">Next-day coupon</span>
+                    <span className="flex-shrink-0 font-semibold text-amber-700 dark:text-amber-400">
+                      removed · +₹{restoredCouponAmount.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                {removeNextDayCoupon && (
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-700 dark:text-slate-300">Scheduled slot</span>
+                    <span className="flex-shrink-0 font-semibold text-amber-700 dark:text-amber-400">removed</span>
+                  </div>
+                )}
                 {paymentChanged && (
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="text-gray-700 dark:text-slate-300">Payment mode</span>
@@ -621,8 +688,9 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                   </span>
                 </div>
                 <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">
-                  New subtotal ₹{newSubtotal.toFixed(2)} · delivery ₹{deliveryCharge.toFixed(2)}
-                  {campaignDiscount > 0 ? ` · offer -₹${campaignDiscount.toFixed(2)}` : ''}
+                  New subtotal ₹{newSubtotal.toFixed(2)} · delivery ₹{effectiveDeliveryCharge.toFixed(2)}
+                  {effectiveCampaignDiscount > 0 ? ` · offer -₹${effectiveCampaignDiscount.toFixed(2)}` : ''}
+                  {removeNextDayCoupon ? ' · next-day coupon removed' : ''}
                 </p>
               </div>
 
@@ -653,7 +721,8 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                 {result.addedItems > 0 && (
                   <>Added ₹{addedTotalValue.toFixed(2)} across {addedLines.length} items.{' '}</>
                 )}
-                {result.adjustedItems === 0 && result.addedItems === 0 && 'Payment mode updated. '}
+                {result.nextDayCouponRemoved && `Next-day coupon removed (₹${Number(result.restoredAmount).toFixed(2)} restored). Scheduled tag removed. `}
+                {result.adjustedItems === 0 && result.addedItems === 0 && !result.nextDayCouponRemoved && 'Payment mode updated. '}
                 The hub and customer apps will show the updated order.
               </p>
             </div>

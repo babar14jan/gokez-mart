@@ -42,6 +42,8 @@ import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { config } from '../config';
 import { badRequest, forbidden } from '../utils/apiError';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
+import { REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR, hasDiscountStack } from '../utils/referralLogic';
+import { ReferralService } from '../services/referral.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -463,7 +465,7 @@ export const reverseGeocode = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneId, zoneName, deliveryPreference, deliveryNote, scheduledFor, scheduledLabel, campaignId, couponCode, latitude, longitude } = req.body;
+  const { guestName, guestPhone, guestAddress, guestAddressLabel, items, notes, storeId, zoneId, zoneName, deliveryPreference, deliveryNote, scheduledFor, scheduledLabel, campaignId, couponCode, referralCreditId, latitude, longitude } = req.body;
   let suppliedName = typeof guestName === 'string' ? guestName.trim().replace(/\s+/g, ' ') : '';
   // A signed-in order is identified by the verified phone, not by the name the
   // client posts. An account that never saved a name sends the 'Customer'
@@ -520,8 +522,14 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
   if (campaignId && couponCode) {
     res.status(400).json({ success: false, error: 'Select either an offer or a coupon code, not both' }); return;
   }
+  if (referralCreditId && hasDiscountStack({ campaignId, couponCode, referralCreditId })) {
+    res.status(400).json({ success: false, error: REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR }); return;
+  }
   if ((campaignId || couponCode) && (!req.customer || req.customer.phone !== cleanPhone)) {
     res.status(401).json({ success: false, error: 'Sign in with the ordering phone number to redeem an offer' }); return;
+  }
+  if (referralCreditId && (!req.customer || req.customer.phone !== cleanPhone)) {
+    res.status(401).json({ success: false, error: 'Sign in with the ordering phone number to redeem a referral reward' }); return;
   }
   const requestedStoreId = storeId || SHAPOORJI_ID;
   const zone = typeof zoneId === 'string' ? await ZoneService.findById(zoneId) : null;
@@ -549,6 +557,7 @@ export const placeOrder = asyncHandler(async (req: CustomerRequest, res: Respons
     longitude: hasCoordinates ? longitude : null,
     campaignId: campaignId || null,
     couponCodeUsed: couponCode || null,
+    referralCreditId: referralCreditId || null,
     customerId: req.customer?.id || null,
     funnelSessionId,
     idempotencyKey,
@@ -1773,11 +1782,12 @@ export const adminUpdateOrderFulfilment = asyncHandler(async (req: AdminRequest,
 // order money, returns any stock for an already-delivered order, and writes an
 // audit row so the original quantity is never lost.
 export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { adjustments, reason, paymentMethod, additions } = req.body;
+  const { adjustments, reason, paymentMethod, additions, removeNextDayCoupon } = req.body;
+  const couponRemoval = removeNextDayCoupon === true || removeNextDayCoupon === 'true';
   const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
   const additionList = Array.isArray(additions) ? additions : [];
-  if (adjustmentList.length === 0 && additionList.length === 0 && paymentMethod === undefined) {
-    res.status(400).json({ success: false, error: 'Choose at least one item to adjust or add, or change the payment mode' }); return;
+  if (adjustmentList.length === 0 && additionList.length === 0 && paymentMethod === undefined && !couponRemoval) {
+    res.status(400).json({ success: false, error: 'Choose at least one item to adjust or add, change the payment mode, or remove the next-day coupon' }); return;
   }
   if (paymentMethod !== undefined && paymentMethod !== 'cod' && paymentMethod !== 'upi') {
     res.status(400).json({ success: false, error: 'Choose a valid payment mode' }); return;
@@ -1813,16 +1823,17 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     req.admin!,
     paymentMethod,
     normalizedAdditions,
+    couponRemoval,
   );
 
   ComplianceService.logAudit({
     adminId: req.admin!.id,
     username: req.admin!.username,
     role: req.admin!.role,
-    action: 'order_items_adjusted',
+    action: result.nextDayCouponRemoved ? 'next_day_coupon_removed' : 'order_items_adjusted',
     entityType: 'order',
     entityId: result.id,
-    detail: `Order #${result.orderNumber}: ${result.adjustedItems} line(s) adjusted, ₹${result.removedTotal.toFixed(2)} removed, ${result.addedItems} line(s) added, ₹${result.addedTotal.toFixed(2)} added, new total ₹${result.total.toFixed(2)}, payment ${result.paymentMethod}${reason ? ` — ${reason}` : ''}`,
+    detail: `Order #${result.orderNumber}: ${result.adjustedItems} line(s) adjusted, ₹${result.removedTotal.toFixed(2)} removed, ${result.addedItems} line(s) added, ₹${result.addedTotal.toFixed(2)} added${result.nextDayCouponRemoved ? `, next-day coupon removed (₹${result.restoredAmount.toFixed(2)} restored)` : ''}, new total ₹${result.total.toFixed(2)}, payment ${result.paymentMethod}${reason ? ` — ${reason}` : ''}`,
     ipAddress: req.ip,
     userAgent: req.get('user-agent'),
   });
@@ -1840,6 +1851,15 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     PushService.notifyOrderRecipient(result.id, {
       title: `Order #${result.orderNumber} updated`,
       body: `An item was added to your order. Your updated total is ₹${result.total.toFixed(0)}.`,
+      url: '/orders',
+      tag: `order-${result.id}`,
+    }).catch(() => {});
+  }
+
+  if (result.nextDayCouponRemoved) {
+    PushService.notifyOrderRecipient(result.id, {
+      title: `Order #${result.orderNumber} updated`,
+      body: `The next-day coupon was removed. Your updated total is ₹${result.total.toFixed(0)}.`,
       url: '/orders',
       tag: `order-${result.id}`,
     }).catch(() => {});
@@ -1942,6 +1962,7 @@ export const adminTerminateOrder = asyncHandler(async (req: AdminRequest, res: R
       [finalReason, req.admin!.id, req.params.id]
     );
     await OrderService.reverseCampaignRedemption(req.params.id, 'terminated', client);
+    await ReferralService.releaseCreditForOrder(req.params.id, client);
   });
   const MSGS: Record<string,string> = {
     rider_unavailable: '😔 Sorry — your order could not be completed due to a delivery issue. You will not be charged. Please reorder.',
@@ -2427,9 +2448,13 @@ export const customerSendOtp = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const customerVerifyOtp = asyncHandler(async (req: Request, res: Response) => {
-  const { phone, otp, funnelSessionId, trackingTokens } = req.body;
+  const { phone, otp, funnelSessionId, trackingTokens, referralCode } = req.body;
   if (!phone || !otp) { res.status(400).json({ success: false, error: 'Phone and OTP required' }); return; }
-  const result = await CustomerAuthService.verifyOtp(phone, otp);
+  const result = await CustomerAuthService.verifyOtp(
+    phone,
+    otp,
+    typeof referralCode === 'string' ? referralCode : null,
+  );
   // Attribution link only. Auth behaviour is unchanged and a missing or invalid
   // session id is ignored rather than surfaced, so a tracking failure can never
   // affect whether a customer logs in. The phone is not stored here; the
@@ -4386,4 +4411,162 @@ export const adminGetInventoryProfitability = asyncHandler(async (req: AdminRequ
       grossProfit: totalRevenue - totalCogs,
     },
   });
+});
+
+// ── Referral & Earn: customer endpoints ──────────────────────────────────────
+
+export const referralGetMe = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getMe(req.customer!.id) });
+});
+
+export const referralValidate = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const code = typeof req.body?.code === 'string' ? req.body.code : '';
+  if (!code) { res.status(400).json({ success: false, error: 'Code required' }); return; }
+  const data = req.customer
+    ? await ReferralService.validateCouponOrReferral(code, req.customer.id)
+    : await ReferralService.validateCode(code);
+  res.json({ success: true, data });
+});
+
+export const referralClaim = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const code = typeof req.body?.code === 'string' ? req.body.code : '';
+  if (!code) { res.status(400).json({ success: false, error: 'Code required' }); return; }
+  const data = await ReferralService.claimCode(req.customer!.id, code, 'account');
+  res.json({ success: true, data });
+});
+
+export const referralGetCredits = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const me = await ReferralService.getMe(req.customer!.id);
+  res.json({ success: true, data: { items: me.credits, total: me.credits.length } });
+});
+
+export const referralReserveCredit = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const { creditId, idempotencyKey } = req.body ?? {};
+  if (typeof creditId !== 'string' || !creditId) {
+    res.status(400).json({ success: false, error: 'creditId is required' }); return;
+  }
+  if (typeof idempotencyKey !== 'string' || !idempotencyKey) {
+    res.status(400).json({ success: false, error: 'idempotencyKey is required' }); return;
+  }
+  const data = await ReferralService.reserveCredit(req.customer!.id, creditId, idempotencyKey);
+  res.json({ success: true, data });
+});
+
+export const referralReleaseCredit = asyncHandler(async (req: CustomerRequest, res: Response) => {
+  const data = await ReferralService.releaseCredit(req.customer!.id, req.params.id);
+  res.json({ success: true, data });
+});
+
+// ── Referral & Earn: admin endpoints ─────────────────────────────────────────
+
+export const adminGetReferralCampaigns = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getCampaigns(req.query as Record<string, unknown>) });
+});
+
+export const adminCreateReferralCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.createCampaign(req.body, req.admin!.id) });
+});
+
+export const adminUpdateReferralCampaign = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.updateCampaign(req.params.id, req.body, req.admin!.id) });
+});
+
+export const adminReferralCampaignAction = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const action = req.params.action;
+  if (!['activate', 'pause'].includes(action)) {
+    res.status(400).json({ success: false, error: 'Action must be activate or pause' }); return;
+  }
+  const data = await ReferralService.setCampaignStatus(req.params.id, action as 'activate' | 'pause', req.admin!.id);
+  res.json({ success: true, data });
+});
+
+export const adminGetReferralCampaignHistory = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getCampaignHistory(req.query as Record<string, unknown>) });
+});
+
+export const adminGetReferralRecords = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getRecords(req.query as Record<string, unknown>) });
+});
+
+export const adminGetReferralRecord = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getRecord(req.params.id) });
+});
+
+export const adminGetReferralCustomers = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const search = typeof req.query.query === 'string' ? req.query.query.trim().slice(0, 100) : '';
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? 50), 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(String(req.query.offset ?? 0), 10) || 0, 0);
+  const where = search ? `WHERE c.phone ILIKE $3 OR c.name ILIKE $3 OR rc.code ILIKE $3` : '';
+  const params: unknown[] = [limit, offset];
+  if (search) params.push(`%${search}%`);
+  const [items, total] = await Promise.all([
+    query(
+      `SELECT c.id, c.phone, c.name, rc.code,
+              (SELECT COUNT(*)::int FROM mart_referrals r WHERE r.referrer_customer_id = c.id) AS "successfulReferrals",
+              (SELECT COUNT(*)::int FROM mart_referral_credits cr
+                WHERE cr.customer_id = c.id AND cr.status IN ('available', 'reserved')) AS "availableCredits"
+         FROM mart_customers c
+         LEFT JOIN mart_referral_codes rc ON rc.customer_id = c.id
+         ${where} ORDER BY c.created_at DESC LIMIT $1 OFFSET $2`,
+      params
+    ),
+    query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM mart_customers c
+         LEFT JOIN mart_referral_codes rc ON rc.customer_id = c.id ${where}`,
+      search ? [`%${search}%`] : []
+    ),
+  ]);
+  res.json({ success: true, data: { items: items.rows, total: total.rows[0]?.count || 0 } });
+});
+
+export const adminGetReferralLedger = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getLedger(req.query as Record<string, unknown>) });
+});
+
+export const adminGetReferralFraud = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getFraudQueue(req.query as Record<string, unknown>) });
+});
+
+export const adminReviewReferralFraud = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { status, notes } = req.body ?? {};
+  if (typeof status !== 'string' || !status) {
+    res.status(400).json({ success: false, error: 'status is required' }); return;
+  }
+  const data = await ReferralService.reviewFraud(
+    req.params.id, status, typeof notes === 'string' ? notes : null, req.admin!.id
+  );
+  res.json({ success: true, data });
+});
+
+export const adminGetReferralSummary = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getSummary(req.query as Record<string, unknown>) });
+});
+
+export const adminGetReferralReport = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const type = req.params.type;
+  if (!['conversion', 'orders', 'customers', 'liability'].includes(type)) {
+    res.status(400).json({ success: false, error: 'Unknown referral report type' }); return;
+  }
+  res.json({ success: true, data: await ReferralService.getReport(type as 'conversion' | 'orders' | 'customers' | 'liability', req.query as Record<string, unknown>) });
+});
+
+export const adminAdjustReferral = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { customerId, amount, reason } = req.body ?? {};
+  if (typeof customerId !== 'string' || !customerId) {
+    res.status(400).json({ success: false, error: 'customerId is required' }); return;
+  }
+  const data = await ReferralService.adjust(customerId, Number(amount), String(reason ?? ''), req.admin!.id);
+  res.json({ success: true, data });
+});
+
+export const adminGetReferralAudit = asyncHandler(async (req: AdminRequest, res: Response) => {
+  res.json({ success: true, data: await ReferralService.getAudit(req.query as Record<string, unknown>) });
+});
+
+export const adminExportReferralCsv = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const type = req.query.type === 'ledger' ? 'ledger' : 'records';
+  const csv = await ReferralService.exportCsv(type, req.query as Record<string, unknown>);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="referral-${type}.csv"`);
+  res.send(csv);
 });

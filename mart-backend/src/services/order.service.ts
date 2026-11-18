@@ -10,6 +10,8 @@ import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerP
 import { parseSellingUnit } from '../utils/unitConversion';
 import { CUSTOMER_CANCELLATION_MESSAGES, getCancellationPolicy } from '../utils/cancellationPolicy';
 import { ORDER_BROWSE_DATE_SQL } from '../utils/orderDate';
+import { ReferralService } from './referral.service';
+import { REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR, referralDiscount, hasDiscountStack } from '../utils/referralLogic';
 
 // Reasons a customer may give for cancelling, chosen from the order screen. The
 // keys are what is stored in mart_orders.cancellation_reason; only these values
@@ -62,6 +64,8 @@ export interface CreateOrderDto {
   campaignId?: string | null;
   campaignDiscount?: number;
   couponCodeUsed?: string | null;
+  /** Id of an AVAILABLE->RESERVED referral credit consumed at checkout. */
+  referralCreditId?: string | null;
   customerId?: string | null;
   /**
    * Anonymous funnel session that produced this order. Only used to close the
@@ -92,9 +96,11 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
               o.campaign_id as "campaignId",
               o.campaign_discount::float as "campaignDiscount",
               o.coupon_code_used as "couponCodeUsed",
+              o.referral_credit_id as "referralCreditId",
+              o.referral_discount::float as "referralDiscount",
               COALESCE(
                 (SELECT (u.terms_snapshot ->> 'requires_scheduled_delivery')::boolean
-                 FROM mart_campaign_uses u WHERE u.order_id = o.id LIMIT 1),
+                 FROM mart_campaign_uses u WHERE u.order_id = o.id AND u.reversed_at IS NULL LIMIT 1),
                 (SELECT c.requires_scheduled_delivery FROM mart_campaigns c WHERE c.id = o.campaign_id),
                 false
               ) as "campaignRequiresScheduledDelivery",
@@ -243,6 +249,14 @@ export class OrderService {
     if (data.campaignId && data.couponCodeUsed) {
       throw badRequest('Select either an offer or a coupon code, not both');
     }
+    if (data.referralCreditId && hasDiscountStack({
+      campaignId: data.campaignId, couponCode: data.couponCodeUsed, referralCreditId: data.referralCreditId,
+    })) {
+      throw badRequest(REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR);
+    }
+    if (data.referralCreditId && !data.customerId) {
+      throw forbidden('Sign in with the ordering phone number to redeem a referral reward');
+    }
     const effectiveZone = data.zoneId ? await ZoneService.getEffectiveSettings(data.zoneId) : null;
     if (data.zoneId && (!effectiveZone || !effectiveZone.zone.isActive || effectiveZone.zone.primaryStoreId !== data.storeId)) {
       throw badRequest('Selected delivery zone is unavailable');
@@ -320,6 +334,9 @@ export class OrderService {
       const attribution = attributionResult.rows[0];
       if ((data.campaignId || data.couponCodeUsed) && data.customerId !== customerId) {
         throw forbidden('Sign in with the ordering phone number to redeem this offer');
+      }
+      if (data.referralCreditId && (!customerId || data.customerId !== customerId)) {
+        throw forbidden('Sign in with the ordering phone number to redeem this referral reward');
       }
 
       // A guest's address lands in the same address book a logged-in customer
@@ -510,6 +527,17 @@ export class OrderService {
         throw badRequest(`Minimum order amount is ₹${minOrderAmount}. Add ₹${Math.ceil(minOrderAmount - subtotal)} more to place this order.`);
       }
 
+      // Referral credits are validated with a row lock inside the order
+      // transaction, never from client-supplied amounts. Campaign/coupon logic
+      // below is deliberately unchanged; referral rewards never stack with it.
+      let referralCreditAmount = 0;
+      if (data.referralCreditId) {
+        const referralCredit = await ReferralService.validateCreditForOrder(
+          client, data.customerId!, data.referralCreditId, subtotal
+        );
+        referralCreditAmount = Number(referralCredit.amount) || 0;
+      }
+
       let campaign: any = null;
       if (data.campaignId || data.couponCodeUsed) {
         const campaignResult = await client.query(
@@ -608,7 +636,10 @@ export class OrderService {
       // delivery charge still applies. Without this guard `subtotal >= 0` would
       // waive delivery for every order.
       const actualDelivery = campaign?.discount_type === 'free_delivery' || (freeAbove > 0 && subtotal >= freeAbove) ? 0 : deliveryCharge;
-      const total = Math.ceil(Math.max(0, subtotal + actualDelivery - campaignDiscount));
+      const referralDiscountAmount = data.referralCreditId
+        ? referralDiscount(referralCreditAmount, Math.max(0, subtotal - campaignDiscount))
+        : 0;
+      const total = Math.ceil(Math.max(0, subtotal + actualDelivery - campaignDiscount - referralDiscountAmount));
       // Delivery fee the customer avoided (either through the free-delivery
       // threshold or a free-delivery offer). Stored so the receipt can show the
       // full "you saved" figure without needing the store's live settings.
@@ -691,9 +722,10 @@ export class OrderService {
             placed_outside_hours, closed_reason, scheduled_for, tracking_token,
             promised_delivery_at, cancellation_window_ends_at,
             funnel_session_id, funnel_visitor_id, attribution_source, attribution_medium, attribution_campaign, attribution_qr_code_id,
-            first_touch_source, first_touch_medium, first_touch_campaign, first_touch_qr_code_id,
-            last_touch_source, last_touch_medium, last_touch_campaign, last_touch_qr_code_id)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43)`,
+             first_touch_source, first_touch_medium, first_touch_campaign, first_touch_qr_code_id,
+             last_touch_source, last_touch_medium, last_touch_campaign, last_touch_qr_code_id,
+             referral_credit_id, referral_discount)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45)`,
 [orderId, orderNumber, data.storeId, customerId, data.guestName, cleanPhone,
           data.guestAddress, data.latitude ?? null, data.longitude ?? null, subtotal, actualDelivery, total,
          data.paymentMethod || null, data.notes || null,
@@ -720,15 +752,21 @@ export class OrderService {
         attribution?.first_medium ?? null,
         attribution?.first_campaign ?? null,
         attribution?.first_qr_code_id ?? null,
-        attribution?.last_source ?? null,
-        attribution?.last_medium ?? null,
-        attribution?.last_campaign ?? null,
-         attribution?.last_qr_code_id ?? null]
-      );
+         attribution?.last_source ?? null,
+         attribution?.last_medium ?? null,
+         attribution?.last_campaign ?? null,
+         attribution?.last_qr_code_id ?? null,
+         data.referralCreditId || null,
+         referralDiscountAmount]
+       );
 
-      if (data.scheduledLabel) {
-        await client.query(`UPDATE mart_orders SET scheduled_label = $1 WHERE id = $2`, [data.scheduledLabel, orderId]);
-      }
+       if (data.referralCreditId) {
+         await ReferralService.consumeCreditForOrder(client, data.customerId!, data.referralCreditId, orderId);
+       }
+
+       if (data.scheduledLabel) {
+         await client.query(`UPDATE mart_orders SET scheduled_label = $1 WHERE id = $2`, [data.scheduledLabel, orderId]);
+       }
 
       await client.query(
         `UPDATE mart_customers
@@ -824,6 +862,7 @@ export class OrderService {
         subtotal,
         deliveryCharge: actualDelivery,
         campaignDiscount,
+        referralDiscount: referralDiscountAmount,
         itemSavings,
         freeDeliverySaving,
         total,
@@ -1232,6 +1271,21 @@ export class OrderService {
       try { await InventoryService.releaseForOrder(id); } catch { /* non-blocking */ }
     }
 
+    // Legacy status writer (kept non-blocking like the inventory side effects
+    // above). The primary admin transition path writes these in-transaction.
+    if (order && status === 'delivered') {
+      try {
+        await transaction(async client => { await ReferralService.onOrderDelivered(client, id); });
+      } catch (err) {
+        console.error(`[referral] reward release skipped for delivered order ${id}:`, err);
+      }
+    }
+    if (order && ['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
+      try { await ReferralService.releaseCreditForOrder(id); } catch (err) {
+        console.error(`[referral] credit release skipped for order ${id}:`, err);
+      }
+    }
+
     return order;
   }
 
@@ -1251,11 +1305,12 @@ export class OrderService {
     actor: { id: string; username: string; role: string; storeId: string | null },
     paymentMethod?: 'cod' | 'upi' | null,
     additions: Array<{ productId: string; quantity: number; unit?: string; price?: number }> = [],
+    removeNextDayCoupon = false,
   ) {
     const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
     const additionList = Array.isArray(additions) ? additions : [];
-    if (adjustmentList.length === 0 && additionList.length === 0 && !paymentMethod) {
-      throw badRequest('Choose at least one item to adjust or add, or change the payment mode');
+    if (adjustmentList.length === 0 && additionList.length === 0 && !paymentMethod && !removeNextDayCoupon) {
+      throw badRequest('Choose at least one item to adjust or add, change the payment mode, or remove the next-day coupon');
     }
     if (paymentMethod && !['cod', 'upi'].includes(paymentMethod)) {
       throw badRequest('Choose a valid payment mode');
@@ -1267,6 +1322,10 @@ export class OrderService {
                 o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
                 o.campaign_discount::float as "campaignDiscount", o.total::float,
                 o.item_savings::float as "itemSavings",
+                o.free_delivery_saving::float as "freeDeliverySaving",
+                o.referral_discount::float as "referralDiscount",
+                o.campaign_id as "campaignId", o.coupon_code_used as "couponCodeUsed",
+                o.delivery_preference as "deliveryPreference", o.scheduled_for as "scheduledFor",
                 o.customer_id as "customerId", o.payment_method as "paymentMethod"
            FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
         [orderId]
@@ -1278,6 +1337,24 @@ export class OrderService {
       }
       if (actor.role !== 'super_admin' && actor.storeId !== order.storeId) {
         throw forbidden('Only the ordering store can edit this order');
+      }
+
+      const couponResult = removeNextDayCoupon
+        ? await client.query(
+            `SELECT cu.discount_applied as "discountApplied", cu.terms_snapshot as "termsSnapshot",
+                    COALESCE(c.discount_type, cu.terms_snapshot ->> 'discount_type') as "discountType",
+                    COALESCE(c.requires_scheduled_delivery, (cu.terms_snapshot ->> 'requires_scheduled_delivery')::boolean, false) as "requiresScheduledDelivery"
+               FROM mart_campaign_uses cu
+               LEFT JOIN mart_campaigns c ON c.id = cu.campaign_id
+              WHERE cu.order_id = $1 AND cu.reversed_at IS NULL
+              ORDER BY cu.used_at DESC
+              LIMIT 1`,
+            [orderId],
+          )
+        : { rows: [] as any[] };
+      const couponUse = couponResult.rows[0];
+      if (removeNextDayCoupon && !couponUse?.requiresScheduledDelivery) {
+        throw badRequest('This order does not have an active next-day coupon');
       }
 
       const itemsResult = await client.query(
@@ -1312,8 +1389,11 @@ export class OrderService {
         return input.deliveredQuantity !== item.quantity;
       });
       const paymentChanged = !!paymentMethod && paymentMethod !== order.paymentMethod;
-      if (changed.length === 0 && additionList.length === 0 && !paymentChanged) {
+      if (changed.length === 0 && additionList.length === 0 && !paymentChanged && !removeNextDayCoupon) {
         throw badRequest('No changes to save');
+      }
+      if (removeNextDayCoupon) {
+        await this.reverseCampaignRedemption(orderId, 'next_day_coupon_removed', client);
       }
 
       // An order with nothing delivered is a cancellation, not a partial
@@ -1460,12 +1540,28 @@ export class OrderService {
         [orderId]
       );
       const subtotal = Number(subtotalResult.rows[0]?.subtotal ?? 0);
-      const total = Math.ceil(Math.max(0, subtotal + order.deliveryCharge - order.campaignDiscount));
+      const effectiveCampaignDiscount = removeNextDayCoupon ? 0 : Number(order.campaignDiscount);
+      let deliveryCharge = Number(order.deliveryCharge);
+      let freeDeliverySaving = Number(order.freeDeliverySaving || 0);
+      if (removeNextDayCoupon && couponUse?.discountType === 'free_delivery') {
+        const normalDeliveryCharge = parseFloat(settings.delivery_charge || '0');
+        const freeAbove = parseFloat(settings.free_delivery_above || '0');
+        deliveryCharge = freeAbove > 0 && subtotal >= freeAbove ? 0 : normalDeliveryCharge;
+        freeDeliverySaving = deliveryCharge === 0 && normalDeliveryCharge > 0 ? normalDeliveryCharge : 0;
+      }
+      const total = Math.ceil(Math.max(
+        0,
+        subtotal + deliveryCharge - effectiveCampaignDiscount - Number(order.referralDiscount || 0),
+      ));
       const retainedSubtotal = Math.max(0, subtotal - addedTotal);
       const retainedSavings = Number(order.subtotal) > 0
         ? Number(order.itemSavings) * retainedSubtotal / Number(order.subtotal)
         : 0;
       const itemSavings = Number((retainedSavings + addedSavings).toFixed(2));
+      const restoredAmount = removeNextDayCoupon
+        ? Number((Number(order.campaignDiscount) + Math.max(0, Number(order.freeDeliverySaving || 0) - freeDeliverySaving)).toFixed(2))
+        : 0;
+      const clearNextDaySchedule = removeNextDayCoupon;
 
       const effectivePaymentMethod = paymentMethod || order.paymentMethod;
       await client.query(
@@ -1474,10 +1570,30 @@ export class OrderService {
                 total = $2,
                 item_savings = $4,
                 payment_method = COALESCE($5, payment_method),
+                campaign_id = CASE WHEN $6::boolean THEN NULL ELSE campaign_id END,
+                campaign_discount = CASE WHEN $6::boolean THEN 0 ELSE campaign_discount END,
+                coupon_code_used = CASE WHEN $6::boolean THEN NULL ELSE coupon_code_used END,
+                delivery_charge = $7,
+                free_delivery_saving = $8,
+                delivery_preference = CASE WHEN $9::boolean THEN 'within_15' ELSE delivery_preference END,
+                scheduled_for = CASE WHEN $9::boolean THEN NULL ELSE scheduled_for END,
+                scheduled_label = CASE WHEN $9::boolean THEN NULL ELSE scheduled_label END,
+                confirmed_next_open = CASE WHEN $9::boolean THEN false ELSE confirmed_next_open END,
+                promised_delivery_at = CASE WHEN $9::boolean THEN NULL ELSE promised_delivery_at END,
+                cancellation_window_ends_at = CASE WHEN $9::boolean THEN NULL ELSE cancellation_window_ends_at END,
                 updated_at = NOW()
           WHERE id = $3`,
-        [subtotal, total, orderId, itemSavings, paymentMethod || null]
+        [subtotal, total, orderId, itemSavings, paymentMethod || null, removeNextDayCoupon,
+          deliveryCharge, freeDeliverySaving, clearNextDaySchedule]
       );
+
+      if (clearNextDaySchedule) {
+        await client.query(
+          `INSERT INTO mart_order_delivery_events (order_id, event_type, scheduled_for, actor_id, actor_name)
+           VALUES ($1, 'rescheduled', COALESCE($4::timestamptz, NOW()), $2, $3)`,
+          [orderId, actor.id, adjustedByName, order.scheduledFor || null]
+        );
+      }
 
       const removedFromTotal = Number((Number(order.total) - total).toFixed(2));
       if (order.customerId && removedFromTotal !== 0) {
@@ -1497,6 +1613,15 @@ export class OrderService {
         subtotal,
         total,
         paymentMethod: effectivePaymentMethod,
+        campaignId: removeNextDayCoupon ? null : order.campaignId,
+        couponCodeUsed: removeNextDayCoupon ? null : order.couponCodeUsed,
+        campaignDiscount: effectiveCampaignDiscount,
+        deliveryCharge,
+        freeDeliverySaving,
+        deliveryPreference: clearNextDaySchedule ? 'within_15' : order.deliveryPreference,
+        scheduledFor: clearNextDaySchedule ? null : order.scheduledFor,
+        nextDayCouponRemoved: removeNextDayCoupon,
+        restoredAmount,
         removedTotal: Number(removedTotal.toFixed(2)),
         adjustedItems: changed.length,
         addedItems: addedItemsCount,
@@ -1722,9 +1847,15 @@ export class OrderService {
           // the non-blocking behavior of updateStatus().
           console.error(`[inventory] deduction skipped for delivered order ${id}:`, err);
         }
+        // Reward release shares this transaction with the Delivered write.
+        // Non-fatal data conditions (no referral, below minimum, cap, inactive
+        // campaign) are no-ops inside the service; real failures roll everything
+        // back so a delivery is never recorded without its ledger being sound.
+        await ReferralService.onOrderDelivered(client, id);
       }
       if (['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
         await this.reverseCampaignRedemption(id, status, client);
+        await ReferralService.releaseCreditForOrder(id, client);
       }
       if (status === 'cancelled' && existing.customerId) {
         await client.query(
@@ -2074,6 +2205,7 @@ export class OrderService {
         );
       }
       await this.reverseCampaignRedemption(orderId, 'cancelled', client);
+      await ReferralService.releaseCreditForOrder(orderId, client);
       await client.query(
         `INSERT INTO mart_order_status_events (order_id, from_status, to_status, actor_name)
          VALUES ($1, $2, 'cancelled', $3)`,

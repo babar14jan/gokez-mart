@@ -78,15 +78,15 @@ export default function TopSellingProductsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-700 pb-2">
+      <div className="inline-flex shrink-0 flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40">
         {RANGE_TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setRange(tab.id)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            className={`inline-flex items-center justify-center whitespace-nowrap rounded-md border px-2 py-1.5 text-xs font-bold transition-colors sm:px-2.5 ${
               range === tab.id
-                ? 'bg-emerald-500 text-white'
-                : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                ? 'border-emerald-500 bg-emerald-500 text-white'
+                : 'border-gray-200 text-gray-600 dark:border-slate-600 dark:text-slate-300'
             }`}
           >
             <span className="sm:hidden">{tab.short}</span>
