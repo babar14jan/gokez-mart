@@ -4428,11 +4428,11 @@ export const referralValidate = asyncHandler(async (req: CustomerRequest, res: R
   res.json({ success: true, data });
 });
 
-export const referralClaim = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const code = typeof req.body?.code === 'string' ? req.body.code : '';
-  if (!code) { res.status(400).json({ success: false, error: 'Code required' }); return; }
-  const data = await ReferralService.claimCode(req.customer!.id, code, 'account');
-  res.json({ success: true, data });
+export const referralClaim = asyncHandler(async (_req: CustomerRequest, res: Response) => {
+  res.status(400).json({
+    success: false,
+    error: 'Referral codes can only be entered during registration',
+  });
 });
 
 export const referralGetCredits = asyncHandler(async (req: CustomerRequest, res: Response) => {

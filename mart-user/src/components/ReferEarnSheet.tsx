@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Copy, MessageCircle, X, Gift } from 'lucide-react';
-import { referralApi, type ReferralMeData } from '../services/api';
+import { referralApi, type ReferralCredit, type ReferralMeData, type ReferralRecord } from '../services/api';
 import { requestErrorMessage } from '../utils/networkError';
 import {
   availableReferralBalance,
@@ -22,9 +22,31 @@ function statusLabel(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.replace(/_/g, ' ').slice(1) : '—';
 }
 
+function firstOrderCreditFor(referral: ReferralRecord | undefined, credits: ReferralCredit[]): ReferralCredit | undefined {
+  return credits.find(credit => credit.benefitType === 'first_order' && credit.referralId === referral?.id);
+}
+
+function remainingCreditFor(referral: ReferralRecord | undefined, credits: ReferralCredit[], stage?: number): ReferralCredit | undefined {
+  return credits.find(credit => credit.benefitType === 'reward' && credit.referralId === referral?.id && credit.stageNumber === stage);
+}
+
+function historyLabel(referral: ReferralRecord, credits: ReferralCredit[]): string {
+  if (referral.status === 'capped') return 'Limit reached';
+  if (referral.status === 'expired' || referral.status === 'rejected') return statusLabel(referral.status);
+  if (referral.role === 'referee') {
+    const first = firstOrderCreditFor(referral, credits);
+    if (first?.status === 'redeemed') return referral.status === 'rewarded' ? 'Reward credited' : 'First ₹25 redeemed';
+    if (first?.status === 'reserved') return 'First order placed';
+    return 'Pending first order';
+  }
+  if (referral.status === 'rewarded') return 'Successfully delivered · Reward credited';
+  return 'Pending delivery';
+}
+
 function rupees(value: number | string | null | undefined): string {
   const n = Number(value);
-  return `₹${(Number.isFinite(n) ? n : 0).toFixed(0)}`;
+  const rounded = Number.isFinite(n) ? n : 0;
+  return `₹${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2)}`;
 }
 
 export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -32,11 +54,6 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
-  const [codeInput, setCodeInput] = useState('');
-  const [claimBusy, setClaimBusy] = useState(false);
-  const [claimError, setClaimError] = useState('');
-  const [claimSuccess, setClaimSuccess] = useState('');
-  const [claimed, setClaimed] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -78,26 +95,6 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
     window.setTimeout(() => setNotice(''), 2500);
   };
 
-  const handleClaim = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const code = normalizeReferralCode(codeInput);
-    if (!code || claimBusy) return;
-    setClaimBusy(true);
-    setClaimError('');
-    setClaimSuccess('');
-    try {
-      await referralApi.claim(code);
-      setClaimed(true);
-      setCodeInput('');
-      setClaimSuccess('Referral code applied. Your rewards will appear once the order is delivered.');
-      await refresh();
-    } catch (err: any) {
-      setClaimError(err?.response?.data?.error || requestErrorMessage(err, 'This code could not be applied. Check it and try again.'));
-    } finally {
-      setClaimBusy(false);
-    }
-  };
-
   if (!open) return null;
 
   const code = normalizeReferralCode(data?.code);
@@ -115,8 +112,30 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
   const credits = data?.credits || [];
   const referrals = data?.referrals || [];
   const available = data ? availableReferralBalance(data.credits) : 0;
+  const firstStageAmount = Number(stages[0]?.amount) || reward;
+  const remainingStageAmount = Math.max(0, Math.round((reward - firstStageAmount) * 100) / 100);
+  const refereeReferral = referrals.find(referral => referral.role === 'referee');
+  const firstOrderCredit = firstOrderCreditFor(refereeReferral, credits);
+  const remainingCredit = remainingCreditFor(refereeReferral, credits, stages[1]?.stage);
+  const firstOrderStatus = firstOrderCredit?.status === 'reserved'
+    ? 'Applied to your first order'
+    : firstOrderCredit?.status === 'redeemed'
+      ? 'Used on first order'
+      : firstOrderCredit?.status === 'expired'
+        ? 'Expired'
+        : 'Ready for your first order';
+  const remainingStatus = remainingCredit?.status === 'redeemed'
+    ? 'Used on a later order'
+    : remainingCredit?.status === 'reserved'
+      ? 'Applied to an order'
+      : remainingCredit?.status === 'expired'
+        ? 'Expired'
+        : remainingCredit?.status === 'available'
+          ? 'Unlocked for next order'
+          : 'Pending after first-order delivery';
+  const firstOrderCompleted = firstOrderCredit?.status === 'redeemed' && remainingCredit?.status === 'available';
   const wallet = [
-    { label: 'Total rewards earned', value: rupees(stats?.totalEarned) },
+    { label: 'Total referral reward earned', value: rupees(stats?.totalEarned) },
     { label: 'Available to use', value: rupees(stats?.available ?? available) },
     { label: 'Used', value: rupees(stats?.used) },
     { label: 'Expired', value: rupees(stats?.expired) },
@@ -168,7 +187,7 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                 <Gift className="h-5 w-5" aria-hidden="true" />
               </div>
               <p className="mt-3 text-xl font-extrabold text-gokez-700 dark:text-gokez-300">Earn {rupees(reward)}</p>
-              <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">for every friend who places their first qualifying order.</p>
+              <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">Use a code during registration to save {rupees(firstStageAmount)} on your first qualifying order. The rest unlocks after delivery.</p>
               <div className="mt-3 rounded-xl border border-dashed border-gokez-300 bg-white px-3 py-3 dark:border-gokez-700 dark:bg-slate-800">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Your referral code</p>
                 <p className="mt-1 font-mono text-2xl font-extrabold tracking-[0.25em] text-ink dark:text-white">{code || '—'}</p>
@@ -202,19 +221,44 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
 
             <section>
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">How it works</p>
-              <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
-                <li>Share your code or your link with a friend.</li>
-                <li>They sign up with your code, or open your link and verify their number.</li>
-                <li>Both of you get {rupees(reward)} in rewards after their first qualifying order is successfully delivered.</li>
-              </ol>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-gokez-100 bg-gokez-50/70 p-3 dark:border-gokez-900/40 dark:bg-gokez-900/15">
+                  <p className="text-xs font-bold text-gokez-700 dark:text-gokez-300">1 · Use code</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">A new customer enters a friend’s code during registration. Only one code can be used per customer.</p>
+                </div>
+                <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-900/15">
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-300">2 · First order</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">Apply the referral benefit at checkout on the first qualifying order. {rupees(firstStageAmount)} is reserved for that order.</p>
+                </div>
+                <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3 sm:col-span-2 dark:border-sky-900/40 dark:bg-sky-900/15">
+                  <p className="text-xs font-bold text-sky-700 dark:text-sky-300">3 · Unlock</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">After successful delivery, the first stage is consumed and {rupees(remainingStageAmount)} becomes available for the next eligible order. One reward per order; no coupon stacking.</p>
+                </div>
+              </div>
               {(stageText || minimumOrderAmount > 0 || expiryDays > 0) && (
                 <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-                  {stageText && `${stageText}. `}
+                  {stageText && `${stageText}${stages.length > 1 ? '. Use earlier stages first.' : '.'} `}
                   {minimumOrderAmount > 0 && `Eligible orders: ${rupees(minimumOrderAmount)} product subtotal or more. `}
                   {expiryDays > 0 && `Credits expire ${expiryDays} days after they unlock. `}
                 </p>
               )}
             </section>
+
+            {refereeReferral && (
+              <section className="rounded-2xl border border-gokez-100 bg-white p-4 dark:border-gokez-900/40 dark:bg-slate-900/40">
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your referral benefit</p>
+                <p className="text-sm font-extrabold text-ink dark:text-white">Total referral reward: {rupees(reward)}</p>
+                <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">
+                  <p>{rupees(firstStageAmount)} – {firstOrderStatus}</p>
+                  {remainingStageAmount > 0 && <p>{rupees(remainingStageAmount)} – {remainingStatus}</p>}
+                </div>
+                {firstOrderCompleted && remainingStageAmount > 0 && (
+                  <p className="mt-3 rounded-xl bg-gokez-50 p-3 text-[11px] font-semibold leading-relaxed text-gokez-700 dark:bg-gokez-900/20 dark:text-gokez-300" role="status">
+                    Congratulations! Your {rupees(firstStageAmount)} first-order referral discount has been used successfully. Another {rupees(remainingStageAmount)} reward is now available for your next eligible order.
+                  </p>
+                )}
+              </section>
+            )}
 
             <section>
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your progress</p>
@@ -249,14 +293,16 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
             <section>
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your credits</p>
               {credits.length === 0 ? (
-                <p className="rounded-xl border border-cream-200 bg-white p-3 text-xs text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">No credits yet. Share your code to start earning.</p>
+                <p className="rounded-xl border border-cream-200 bg-white p-3 text-xs text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">No credits yet. Share your code; unlocked rewards appear here and can be used at checkout.</p>
               ) : (
                 <div className="divide-y divide-cream-200 overflow-hidden rounded-xl border border-cream-200 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900/40">
                   {credits.map(credit => (
                     <div key={credit.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-ink dark:text-white">
-                          {credit.stageNumber ? `Stage ${credit.stageNumber} · ` : ''}{rupees(credit.amount)} reward
+                          {credit.benefitType === 'first_order'
+                            ? `First order · ${rupees(credit.amount)} discount`
+                            : `${credit.stageNumber ? `Stage ${credit.stageNumber} · ` : ''}${rupees(credit.amount)} reward`}
                         </p>
                         <p className="text-[11px] text-gray-500 dark:text-slate-400">Expires {dateLabel(credit.expiresAt)}</p>
                       </div>
@@ -276,8 +322,10 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                   {referrals.map(referral => (
                     <div key={referral.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-ink dark:text-white">Applied {dateLabel(referral.attributedAt)}</p>
-                        <p className="text-[11px] text-gray-500 dark:text-slate-400">Rewarded {dateLabel(referral.rewardedAt)}</p>
+                        <p className="text-xs font-semibold text-ink dark:text-white">
+                          {referral.role === 'referee' ? 'Used a referral code' : 'Referred a friend'} · {dateLabel(referral.attributedAt)}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400">{historyLabel(referral, credits)}</p>
                       </div>
                       <span className="flex-shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-600 dark:bg-slate-700 dark:text-slate-300">{statusLabel(referral.status)}</span>
                     </div>
@@ -285,33 +333,6 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                 </div>
               )}
             </section>
-
-            {data.eligibleForCode && !claimed && (
-              <section className="rounded-xl border border-cream-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40">
-                <p className="text-xs font-bold text-ink dark:text-white">Have a referral code?</p>
-                <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">Enter a friend's code to claim your reward.</p>
-                <form onSubmit={handleClaim} className="mt-2 flex gap-2">
-                  <input
-                    id="referral-code-input"
-                    type="text"
-                    value={codeInput}
-                    maxLength={6}
-                    onChange={event => setCodeInput(event.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6))}
-                    placeholder="6-character code"
-                    className="min-w-0 flex-1 rounded-xl border border-cream-200 bg-white px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.2em] text-ink outline-none focus:border-gokez-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  />
-                  <button
-                    type="submit"
-                    disabled={claimBusy || normalizeReferralCode(codeInput).length !== 6}
-                    className="min-h-11 flex-shrink-0 rounded-xl bg-gokez-700 px-4 text-xs font-bold text-white transition-colors hover:bg-gokez-800 disabled:opacity-50"
-                  >
-                    {claimBusy ? 'Applying…' : 'Apply'}
-                  </button>
-                </form>
-                {claimError && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400" role="alert">{claimError}</p>}
-                {claimSuccess && <p className="mt-2 text-xs font-medium text-gokez-700 dark:text-gokez-300" role="status">{claimSuccess}</p>}
-              </section>
-            )}
           </div>
         )}
       </div>

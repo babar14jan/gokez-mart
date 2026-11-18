@@ -139,7 +139,8 @@ export class CustomerAuthService {
     // OTP verified — delete it
     await query(`DELETE FROM mart_otps WHERE phone = $1`, [cleaned]);
 
-    // Upsert customer
+    const existingCustomer = await query(`SELECT id FROM mart_customers WHERE phone = $1`, [cleaned]);
+    const isNewCustomer = !existingCustomer.rows[0];
     await query(
       `INSERT INTO mart_customers (id, phone, order_count, total_spent, last_seen_at, marketing_consent, marketing_consent_at)
        VALUES (gen_random_uuid(), $1, 0, 0, NOW(), true, NOW())
@@ -164,10 +165,11 @@ export class CustomerAuthService {
     });
     // A shared link is a pending attribution only. Attribution failures are
     // logged and swallowed: the customer is already verified and must still be
-    // able to sign in. claimCode itself refuses re-attribution and self-referrals.
-    if (typeof referralCode === 'string' && referralCode.trim()) {
-      await ReferralService.claimCode(customer.id, referralCode, 'link').catch(error => {
-        console.error('[referral] attribution skipped after OTP verification:', error?.message || error);
+    // able to sign in. Existing customers never reach claimCode, so a code from a
+    // later login cannot replace the original attribution.
+    if (isNewCustomer && typeof referralCode === 'string' && referralCode.trim()) {
+      await ReferralService.claimCode(customer.id, referralCode, 'registration').catch(() => {
+        console.error('[referral] attribution skipped after OTP verification');
       });
     }
 

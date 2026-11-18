@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Play, Pause, X, Loader2, History, Gift } from 'lucide-react';
 import {
   referralAdminApi, campaignToForm, campaignFormToPayload, num,
+  stageTotal, stagesMatchTotal, rebalanceStageAmounts, changeStageCount,
   type ReferralCampaign, type ReferralCampaignForm, type ReferralCampaignHistoryEntry, type CampaignAction,
 } from '../services/referralAdminApi';
 import { StatusBadge, PanelHeader, fmtDate, fmtMoney, inputClass } from '../components/referralUi';
@@ -35,18 +36,14 @@ const stageSummary = (campaign: ReferralCampaign): string => {
   return stages.map(stage => `Stage ${num(stage.stage)}: ${fmtMoney(stage.amount)}`).join(' · ');
 };
 
-const stageTotal = (amounts: string[]): number =>
-  Math.round(amounts.reduce((total, amount) => total + num(amount), 0) * 100) / 100;
-
-function ToggleRow({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void }) {
+function ToggleRow({ label, hint, checked, onChange, disabled = false }: { label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   return (
-    <label className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 dark:border-slate-700/60 last:border-0 cursor-pointer">
+    <label className={`flex items-center justify-between gap-3 py-2 border-b border-gray-50 dark:border-slate-700/60 last:border-0 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
       <span>
         <span className="block text-xs font-semibold text-gray-700 dark:text-slate-300">{label}</span>
         {hint && <span className="block text-[10px] text-gray-500 dark:text-slate-400">{hint}</span>}
       </span>
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)}
-        className="w-4 h-4 accent-emerald-500 flex-shrink-0" />
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} disabled={disabled} className="w-4 h-4 accent-emerald-500 flex-shrink-0" />
     </label>
   );
 }
@@ -100,12 +97,16 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
   const setField = <K extends keyof ReferralCampaignForm>(key: K, value: ReferralCampaignForm[K]) =>
     setForm(current => ({ ...current, [key]: value }));
 
-  const setStageCount = (count: number) => setForm(current => {
-    const next = Math.max(1, Math.min(10, count));
-    const amounts = [...current.stageAmounts];
-    while (amounts.length < next) amounts.push('0');
-    return { ...current, stageAmounts: amounts.slice(0, next) };
-  });
+  const setTotalRewardAmount = (value: string) => setForm(current => ({
+    ...current,
+    totalRewardAmount: value,
+    stageAmounts: rebalanceStageAmounts(current.stageAmounts, value),
+  }));
+
+  const setStageCount = (count: number) => setForm(current => ({
+    ...current,
+    stageAmounts: changeStageCount(current.stageAmounts, current.totalRewardAmount, count),
+  }));
 
   const setStageAmount = (index: number, value: string) => setForm(current => ({
     ...current,
@@ -115,8 +116,8 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Campaign name is required'); return; }
     if (editing && !form.reason.trim()) { setError('A reason is required for an audit-tracked edit'); return; }
-    if (!form.stageAmounts.length || stageTotal(form.stageAmounts) !== num(form.totalRewardAmount)) {
-      setError('Stage amounts must add up to the total reward amount');
+    if (!stagesMatchTotal(form.stageAmounts, form.totalRewardAmount)) {
+      setError('Stage amounts must be greater than zero and add up to the total reward amount');
       return;
     }
     setSaving(true);
@@ -145,6 +146,9 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
       setActionConfirm(null);
     }
   };
+
+  const stagesBalanced = stagesMatchTotal(form.stageAmounts, form.totalRewardAmount);
+  const unassigned = Math.round((num(form.totalRewardAmount) - stageTotal(form.stageAmounts)) * 100) / 100;
 
   if (loading) return <PageSkeleton />;
 
@@ -292,29 +296,45 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Total reward per customer (₹) *</label>
-                  <input type="number" className={inputClass} value={form.totalRewardAmount}
-                    onChange={e => setField('totalRewardAmount', e.target.value)} />
+                  <input type="number" min="0.01" step="0.01" className={inputClass} value={form.totalRewardAmount}
+                    onChange={e => setTotalRewardAmount(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Number of redemption stages</label>
-                  <input type="number" min="1" max="10" className={inputClass}
-                    value={form.stageAmounts.length}
-                    onChange={e => setStageCount(parseInt(e.target.value, 10) || 1)} />
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Redemption stages *</label>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setStageCount(form.stageAmounts.length - 1)}
+                      disabled={form.stageAmounts.length <= 1}
+                      className="w-8 h-8 rounded-lg border border-gray-200 dark:border-slate-600 text-sm font-bold text-gray-600 dark:text-slate-300 disabled:opacity-40">
+                      −
+                    </button>
+                    <span className="w-6 text-center text-sm font-bold text-gray-900 dark:text-white">
+                      {form.stageAmounts.length}
+                    </span>
+                    <button type="button" onClick={() => setStageCount(form.stageAmounts.length + 1)}
+                      disabled={form.stageAmounts.length >= 10}
+                      className="w-8 h-8 rounded-lg border border-gray-200 dark:border-slate-600 text-sm font-bold text-gray-600 dark:text-slate-300 disabled:opacity-40">
+                      +
+                    </button>
+                    <span className="text-[10px] text-gray-400">Add or remove; amounts stay balanced.</span>
+                  </div>
                 </div>
               </div>
               <div className={`grid gap-3 ${form.stageAmounts.length > 2 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                 {form.stageAmounts.map((amount, index) => (
                   <div key={index}>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Stage {index + 1} amount (₹)</label>
-                    <input type="number" className={inputClass} value={amount}
+                    <input type="number" min="0.01" step="0.01" className={inputClass} value={amount}
                       onChange={e => setStageAmount(index, e.target.value)} />
                   </div>
                 ))}
               </div>
-              <p className={`text-[11px] ${stageTotal(form.stageAmounts) === num(form.totalRewardAmount)
+              <p className={`text-[11px] ${stagesBalanced
                 ? 'text-emerald-600 dark:text-emerald-400'
                 : 'text-red-500'}`}>
                 Stage total: {fmtMoney(stageTotal(form.stageAmounts))} · Total reward: {fmtMoney(form.totalRewardAmount)}
+                {stagesBalanced
+                  ? ' · Balanced'
+                  : ` · ${unassigned > 0 ? `${fmtMoney(unassigned)} left to assign` : `${fmtMoney(Math.abs(unassigned))} over total`}`}
               </p>
               <div className="grid sm:grid-cols-3 gap-3">
                 <div>
@@ -356,7 +376,8 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
                 </div>
               </div>
               <div className="rounded-xl border border-gray-100 dark:border-slate-700 px-3 py-1">
-                <ToggleRow label="Stacking" hint="Allow referral rewards with other discounts" checked={form.stackingEnabled} onChange={v => setField('stackingEnabled', v)} />
+                <ToggleRow label="Stacking" hint="Referral rewards are always exclusive" checked={false} onChange={() => {}} disabled />
+
                 <ToggleRow label="Cash withdrawal" checked={form.cashWithdrawal} onChange={v => setField('cashWithdrawal', v)} />
                 <ToggleRow label="Transfers" checked={form.transferEnabled} onChange={v => setField('transferEnabled', v)} />
                 <ToggleRow label="Fraud review" hint="Add referrals to the fraud review queue" checked={form.fraudReviewEnabled} onChange={v => setField('fraudReviewEnabled', v)} />

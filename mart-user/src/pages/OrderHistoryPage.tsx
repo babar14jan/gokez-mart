@@ -195,7 +195,7 @@ function OrderDetailSheet({
                   )}
                   {referralDiscount > 0 && (
                     <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
-                      <span>Referral Reward Discount</span>
+                      <span>Referral Reward</span>
                       <span className="font-semibold">-₹{referralDiscount.toFixed(0)}</span>
                     </div>
                   )}

@@ -34,8 +34,8 @@ const DEFAULT_CAMPAIGN = {
   version: 1,
   totalRewardAmount: 50,
   rewardStages: [
-    { stage: 1, amount: 30 },
-    { stage: 2, amount: 20 },
+    { stage: 1, amount: 25 },
+    { stage: 2, amount: 25 },
   ] as ReferralRewardStage[],
   expiryDays: 90 as number | null,
   maxReferralsPerReferrer: 10,
@@ -173,11 +173,14 @@ export class ReferralService {
 
   private static async referralMinimum(client: DbClient): Promise<number> {
     const result = await client.query<{ minimum: unknown }>(
-      `SELECT MAX(NULLIF(value, '')::numeric)::float AS minimum
-         FROM mart_settings WHERE key = 'min_order_amount'`
+      `SELECT COALESCE(
+         MAX(CASE WHEN key = 'referral_min_order_amount' THEN NULLIF(value, '')::numeric END),
+         MAX(CASE WHEN key = 'min_order_amount' THEN NULLIF(value, '')::numeric END)
+       )::float AS minimum
+         FROM mart_settings`
     );
     const minimum = money(result.rows[0]?.minimum);
-    if (minimum <= 0) throw new Error('Global minimum order amount is not configured');
+    if (minimum <= 0) throw new Error('Referral minimum order amount is not configured');
     return minimum;
   }
 
@@ -291,11 +294,29 @@ export class ReferralService {
     actorAdminId?: string | null,
   ): Promise<number> {
     const credits = await client.query(
-      `SELECT id, customer_id, amount FROM mart_referral_credits
+      `SELECT id, customer_id, amount, status, order_id AS "orderId",
+              benefit_type AS "benefitType"
+         FROM mart_referral_credits
         WHERE referral_id = $1 AND status <> 'reversed' FOR UPDATE`,
       [referralId]
     );
     for (const credit of credits.rows) {
+      if (credit.benefitType === 'first_order') {
+        if (credit.status === 'available' && !credit.orderId) continue;
+        await client.query(
+          `UPDATE mart_referral_credits SET status = 'available', reserved_at = NULL,
+              reservation_expires_at = NULL, redeemed_at = NULL, order_id = NULL, updated_at = NOW()
+            WHERE id = $1`,
+          [credit.id]
+        );
+        await this.ledger(client, {
+          type: 'restore', amount: money(credit.amount), customerId: credit.customer_id,
+          creditId: credit.id, referralId, reason,
+          actorAdminId,
+          idempotencyKey: `RESTORE-FIRST-ORDER-${credit.id}-${referralId}`,
+        });
+        continue;
+      }
       await client.query(
         `UPDATE mart_referral_credits SET status = 'reversed', reserved_at = NULL,
             reservation_expires_at = NULL, order_id = NULL, updated_at = NOW()
@@ -417,6 +438,41 @@ export class ReferralService {
             message: 'You cannot use your own referral code',
           };
         }
+        if (customerId) {
+          const existing = await query(`SELECT id FROM mart_referrals WHERE referred_customer_id = $1`, [customerId]);
+          if (existing.rows[0]) {
+            return {
+              type: 'referral', valid: false, code: normalized, discount: 0, referralCode: normalized,
+              message: 'A referral code has already been applied to this account and cannot be changed',
+            };
+          }
+          const verified = await query(`SELECT 1 FROM mart_customer_leads WHERE customer_id = $1 AND verified_at IS NOT NULL`, [customerId]);
+          if (!verified.rows[0]) {
+            return {
+              type: 'referral', valid: false, code: normalized, discount: 0, referralCode: normalized,
+              message: 'Verify your phone number before applying a referral code',
+            };
+          }
+          const customer = await query<{ phone: string }>(`SELECT phone FROM mart_customers WHERE id = $1`, [customerId]);
+          const priorOrders = await query<{ count: number }>(
+            `SELECT COUNT(*)::int AS count FROM mart_orders
+              WHERE (customer_id = $1 OR guest_phone = $2) AND ${NON_CANCELLED}`,
+            [customerId, customer.rows[0]?.phone ?? '']
+          );
+          if (priorOrders.rows[0]?.count > 0) {
+            return {
+              type: 'referral', valid: false, code: normalized, discount: 0, referralCode: normalized,
+              message: 'Referral codes can only be applied before your first order',
+            };
+          }
+          const activeCampaign = await query(`SELECT 1 FROM mart_referral_campaigns WHERE ${ACTIVE_WINDOW} LIMIT 1`);
+          if (!activeCampaign.rows[0]) {
+            return {
+              type: 'referral', valid: false, code: normalized, discount: 0, referralCode: normalized,
+              message: 'The referral campaign is not active right now',
+            };
+          }
+        }
         return {
           type: 'referral', valid: true, code: normalized, discount: 0, referralCode: normalized,
           message: 'Referral reward unlocks after your first qualifying delivered order.',
@@ -448,8 +504,10 @@ export class ReferralService {
       query(`SELECT * FROM mart_referral_campaigns WHERE ${ACTIVE_WINDOW} ORDER BY created_at DESC LIMIT 1`),
       query(`SELECT id FROM mart_customers WHERE id = $1`, [customerId]),
       query<any>(
-        `SELECT id, amount::float AS amount, status, stage_number AS "stageNumber",
+        `SELECT id, benefit_type AS "benefitType", referral_id AS "referralId",
+                amount::float AS amount, status, stage_number AS "stageNumber",
                 unlocked_at AS "unlockedAt", expires_at AS "expiresAt",
+                reservation_expires_at AS "reservationExpiresAt",
                 order_id AS "orderId", created_at AS "createdAt"
            FROM mart_referral_credits WHERE customer_id = $1 ORDER BY created_at DESC`,
         [customerId]
@@ -460,7 +518,12 @@ export class ReferralService {
       ),
       query<any>(
         `SELECT id, status, attributed_at AS "attributedAt", rewarded_at AS "rewardedAt",
-                referrer_customer_id AS "referrerCustomerId"
+                referrer_customer_id AS "referrerCustomerId",
+                qualifying_order_id AS "qualifyingOrderId",
+                first_order_credit_id AS "firstOrderCreditId", notes,
+                reward_stages AS "rewardStages", total_reward_amount AS "totalRewardAmount",
+                campaign_version AS "campaignVersion",
+                CASE WHEN referrer_customer_id = $1 THEN 'referrer' ELSE 'referee' END AS role
            FROM mart_referrals
           WHERE referrer_customer_id = $1 OR referred_customer_id = $1
           ORDER BY attributed_at DESC`,
@@ -473,21 +536,31 @@ export class ReferralService {
         [customerId]
       ),
       query<{ minimum: unknown }>(
-        `SELECT MAX(NULLIF(value, '')::numeric)::float AS minimum
-           FROM mart_settings WHERE key = 'min_order_amount'`
+        `SELECT COALESCE(
+           MAX(CASE WHEN key = 'referral_min_order_amount' THEN NULLIF(value, '')::numeric END),
+           MAX(CASE WHEN key = 'min_order_amount' THEN NULLIF(value, '')::numeric END)
+         )::float AS minimum
+           FROM mart_settings`
       ),
     ]);
     if (!customerResult.rows[0]) throw notFound('Customer not found');
 
-    const credits = creditsResult.rows.map(row => ({
+    const hasPriorOrder = (orderResult.rows[0]?.count ?? 0) > 0;
+    const allCredits = creditsResult.rows.map(row => ({
       id: row.id,
+      benefitType: row.benefitType === 'first_order' ? 'first_order' : 'reward',
+      referralId: row.referralId || null,
       amount: money(row.amount),
       status: row.status,
       stageNumber: row.stageNumber === null || row.stageNumber === undefined ? null : Number(row.stageNumber),
       unlockedAt: row.unlockedAt ? new Date(row.unlockedAt).toISOString() : null,
       expiresAt: row.expiresAt ? new Date(row.expiresAt).toISOString() : null,
+      reservationExpiresAt: row.reservationExpiresAt ? new Date(row.reservationExpiresAt).toISOString() : null,
       orderId: row.orderId || null,
     }));
+    const credits = allCredits.filter(credit =>
+      credit.benefitType !== 'first_order' || !hasPriorOrder || credit.status === 'redeemed'
+    );
     const byStatus = (status: string) => credits
       .filter(credit => credit.status === status)
       .reduce((total, credit) => total + credit.amount, 0);
@@ -495,16 +568,37 @@ export class ReferralService {
     const myReferrals = referralsResult.rows.filter(
       row => row.status === 'rewarded' && row.referrerCustomerId === customerId
     );
+    const referralById = new Map(referralsResult.rows.map(row => [row.id, row]));
+    let promisedPending = 0;
+    for (const row of referralsResult.rows) {
+      if (!['pending', 'qualified'].includes(row.status)) continue;
+      const total = money(row.totalRewardAmount ?? campaignResult.rows[0]?.total_reward_amount ?? DEFAULT_CAMPAIGN.totalRewardAmount);
+      const stages = this.displayStages(
+        row.rewardStages ?? campaignResult.rows[0]?.reward_stages ?? DEFAULT_CAMPAIGN.rewardStages,
+        total
+      );
+      const remaining = stages.slice(1).reduce((sum, stage) => sum + stage.amount, 0);
+      promisedPending = roundMoney(promisedPending + (row.role === 'referee' ? remaining : total));
+    }
+    const firstOrderBenefits = allCredits
+      .filter(credit => credit.benefitType === 'first_order' && credit.status !== 'reversed')
+      .filter(credit => {
+        const referral = credit.referralId ? referralById.get(credit.referralId) : null;
+        return !referral || ['pending', 'qualified'].includes(referral.status);
+      })
+      .reduce((total, credit) => total + credit.amount, 0);
 
     return {
       code,
       campaign: this.publicCampaign(campaignResult.rows[0]),
       minimumOrderAmount: money(minimumResult.rows[0]?.minimum),
       stats: {
-        totalEarned: roundMoney(rewards.reduce((total, row) => total + money(row.amount), 0)),
+        totalEarned: roundMoney(
+          rewards.reduce((total, row) => total + money(row.amount), 0) + firstOrderBenefits + promisedPending
+        ),
         available: roundMoney(byStatus('available')),
         used: roundMoney(byStatus('redeemed')),
-        pending: roundMoney(byStatus('reserved')),
+        pending: roundMoney(byStatus('reserved') + promisedPending),
         expired: roundMoney(byStatus('expired')),
         reversed: roundMoney(byStatus('reversed')),
         successfulReferrals: myReferrals.length,
@@ -516,9 +610,13 @@ export class ReferralService {
       credits,
       referrals: referralsResult.rows.map(row => ({
         id: row.id,
+        role: row.role,
         status: row.status,
         attributedAt: row.attributedAt ? new Date(row.attributedAt).toISOString() : null,
         rewardedAt: row.rewardedAt ? new Date(row.rewardedAt).toISOString() : null,
+        qualifyingOrderId: row.qualifyingOrderId || null,
+        firstOrderCreditId: row.firstOrderCreditId || null,
+        notes: row.notes || null,
       })),
     };
   }
@@ -569,25 +667,55 @@ export class ReferralService {
         throw conflict('A referral code has already been applied to this account and cannot be changed');
       }
 
-      const inserted = await client.query(
-        `INSERT INTO mart_referrals
-           (id, code_id, referrer_customer_id, referred_customer_id, campaign_id, status,
-            attribution_source, attributed_at, notes)
-         VALUES ($1,$2,$3,$4,$5,'pending',$6,NOW(),$7)
-         RETURNING id, status, attributed_at AS "attributedAt"`,
-        [uuidv4(), codeRow.codeId, codeRow.referrerCustomerId, customerId, campaign.id, source,
-          'Pending attribution: rewards unlock on the first qualifying delivered order.']
-      );
+      const stages = this.configuredStages(campaign.reward_stages, campaign.total_reward_amount);
+      let inserted: { rows: any[] };
+      try {
+        inserted = await client.query(
+          `INSERT INTO mart_referrals
+             (id, code_id, referrer_customer_id, referred_customer_id, campaign_id, status,
+              attribution_source, attributed_at, notes, reward_stages, total_reward_amount, campaign_version)
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,NOW(),$7,$8::jsonb,$9,$10)
+           RETURNING id, status, attributed_at AS "attributedAt"`,
+          [uuidv4(), codeRow.codeId, codeRow.referrerCustomerId, customerId, campaign.id, source,
+            'First-order discount is ready; the remaining reward unlocks after successful delivery.',
+            JSON.stringify(stages), campaign.total_reward_amount, campaign.version ?? 1]
+        );
+      } catch (error: any) {
+        if (error?.code === '23505') {
+          throw conflict('A referral code has already been applied to this account and cannot be changed');
+        }
+        throw error;
+      }
       await this.audit(client, {
         entityType: 'referral', entityId: inserted.rows[0].id, action: 'attribution_created',
         actorCustomerId: customerId,
         after: { code: normalized, source, campaignId: campaign.id, status: 'pending' },
         reason: `Code claimed via ${source}`,
       });
+      const expiresAt = addDays(new Date(), campaign.expiry_days === null ? null : Number(campaign.expiry_days));
+      const firstOrderCredit = await client.query<{ id: string }>(
+        `INSERT INTO mart_referral_credits
+           (id, benefit_type, referral_id, customer_id, campaign_id, campaign_version,
+            amount, stage_number, status, unlocked_at, expires_at)
+         VALUES ($1, 'first_order', $2, $3, $4, $5, $6, 1, 'available', NOW(), $7)
+         RETURNING id`,
+        [uuidv4(), inserted.rows[0].id, customerId, campaign.id, campaign.version ?? 1, stages[0].amount, expiresAt]
+      );
+      await client.query(
+        `UPDATE mart_referrals SET first_order_credit_id = $2 WHERE id = $1`,
+        [inserted.rows[0].id, firstOrderCredit.rows[0].id]
+      );
+      await this.audit(client, {
+        entityType: 'referral_credit', entityId: firstOrderCredit.rows[0].id,
+        action: 'first_order_discount_created', actorCustomerId: customerId,
+        after: { amount: stages[0].amount, referralId: inserted.rows[0].id },
+      });
       return {
         ...inserted.rows[0],
         code: normalized,
-        message: 'Referral applied. Rewards unlock after your first qualifying delivered order.',
+        firstOrderCreditId: firstOrderCredit.rows[0].id,
+        firstOrderDiscountAmount: stages[0].amount,
+        message: 'Referral applied. Your first-order discount is ready and the remaining reward unlocks after delivery.',
       };
     });
   }
@@ -655,6 +783,7 @@ export class ReferralService {
       const credit = result.rows[0];
       if (!credit) throw notFound('Referral credit not found');
       if (credit.status !== 'reserved') return { id: creditId, status: credit.status, released: false };
+      if (credit.order_id) return { id: creditId, status: credit.status, released: false };
       if (isExpired(credit.expires_at)) {
         await client.query(
           `UPDATE mart_referral_credits SET status = 'expired', reserved_at = NULL,
@@ -695,7 +824,10 @@ export class ReferralService {
     subtotal: number,
   ): Promise<any> {
     const result = await client.query(
-      `SELECT c.*, cam.status AS campaign_status, cam.starts_at, cam.ends_at
+      `SELECT c.*, c.benefit_type AS "benefitType", c.referral_id AS "referralId",
+              cam.status AS campaign_status, cam.starts_at, cam.ends_at,
+              cam.total_reward_amount AS "campaignTotalRewardAmount",
+              cam.reward_stages AS "campaignRewardStages"
          FROM mart_referral_credits c
          LEFT JOIN mart_referral_campaigns cam ON cam.id = c.campaign_id
         WHERE c.id = $1 AND c.customer_id = $2 FOR UPDATE OF c`,
@@ -703,9 +835,14 @@ export class ReferralService {
     );
     const credit = result.rows[0];
     if (!credit) throw forbidden('This referral reward does not belong to you');
-    if (credit.status !== 'reserved') throw badRequest('Apply this referral reward before placing the order');
-    if (isExpired(credit.reservation_expires_at) || isExpired(credit.expires_at)) {
+    if (credit.status !== 'available' && credit.status !== 'reserved') {
+      throw badRequest('This referral reward is no longer available');
+    }
+    if (credit.status === 'reserved' && isExpired(credit.reservation_expires_at)) {
       throw badRequest('This referral reward reservation has expired. Apply it again.');
+    }
+    if (isExpired(credit.expires_at)) {
+      throw badRequest('This referral reward has expired');
     }
     if (credit.campaign_id && (credit.campaign_status !== 'active' ||
       (credit.starts_at && new Date(credit.starts_at) > new Date()) ||
@@ -714,6 +851,30 @@ export class ReferralService {
     }
     if (credit.unlocked_at && new Date(credit.unlocked_at) > new Date()) {
       throw badRequest('This referral reward is not active yet');
+    }
+    if (credit.benefitType === 'first_order') {
+      const referral = await client.query(
+        `SELECT r.id, r.status, r.referred_customer_id AS "referredCustomerId",
+                r.first_order_credit_id AS "firstOrderCreditId"
+           FROM mart_referrals r WHERE r.id = $1 FOR UPDATE OF r`,
+        [credit.referralId]
+      );
+      const row = referral.rows[0];
+      if (!row || row.referredCustomerId !== customerId || row.status !== 'pending' ||
+        row.firstOrderCreditId !== creditId) {
+        throw badRequest('This first-order referral discount is no longer valid');
+      }
+      const customer = await client.query<{ phone: string }>(
+        `SELECT phone FROM mart_customers WHERE id = $1`, [customerId]
+      );
+      const priorOrders = await client.query<{ count: number }>(
+        `SELECT COUNT(*)::int AS count FROM mart_orders
+          WHERE (customer_id = $1 OR guest_phone = $2) AND ${NON_CANCELLED}`,
+        [customerId, customer.rows[0]?.phone ?? '']
+      );
+      if (priorOrders.rows[0]?.count > 0) {
+        throw badRequest('The first-order referral discount can only be used on your first order');
+      }
     }
     await this.assertStageAvailable(client, credit);
     const minimum = await this.referralMinimum(client);
@@ -731,21 +892,43 @@ export class ReferralService {
     orderId: string,
   ): Promise<number> {
     const result = await client.query(
-      `SELECT * FROM mart_referral_credits WHERE id = $1 AND customer_id = $2 FOR UPDATE`,
+      `SELECT *, benefit_type AS "benefitType" FROM mart_referral_credits
+        WHERE id = $1 AND customer_id = $2 FOR UPDATE`,
       [creditId, customerId]
     );
     const credit = result.rows[0];
     if (!credit) throw forbidden('This referral reward does not belong to you');
     if (credit.status === 'redeemed' && credit.order_id === orderId) return money(credit.amount);
-    if (credit.status !== 'reserved' || (credit.order_id && credit.order_id !== orderId)) {
-      throw badRequest('This referral reward is no longer reserved for this order');
+    if ((credit.status !== 'available' && credit.status !== 'reserved') || (credit.order_id && credit.order_id !== orderId)) {
+      throw badRequest('This referral reward is no longer available');
+    }
+    const previousStatus = credit.status;
+    if (credit.benefitType === 'first_order') {
+      await client.query(
+        `UPDATE mart_referral_credits
+            SET status = 'reserved', order_id = $2, reserved_at = NOW(),
+                reservation_expires_at = NULL, redeemed_at = NULL, updated_at = NOW()
+          WHERE id = $1 AND status = $3`,
+        [creditId, orderId, previousStatus]
+      );
+      await this.ledger(client, {
+        type: 'reserve', amount: money(credit.amount), customerId, creditId,
+        referralId: credit.referral_id, orderId, reason: `First-order referral discount reserved on order ${orderId}`,
+        idempotencyKey: `RESERVE-FIRST-ORDER:${orderId}:${creditId}`,
+      });
+      await this.audit(client, {
+        entityType: 'referral_credit', entityId: creditId, action: 'first_order_discount_reserved',
+        actorCustomerId: customerId, before: { status: previousStatus },
+        after: { status: 'reserved', orderId },
+      });
+      return money(credit.amount);
     }
     await client.query(
       `UPDATE mart_referral_credits
           SET status = 'redeemed', order_id = $2, redeemed_at = NOW(),
               reserved_at = NULL, reservation_expires_at = NULL, updated_at = NOW()
-        WHERE id = $1 AND status = 'reserved'`,
-      [creditId, orderId]
+        WHERE id = $1 AND status = $3`,
+      [creditId, orderId, previousStatus]
     );
     await this.ledger(client, {
       type: 'redeem', amount: money(credit.amount), customerId, creditId,
@@ -754,7 +937,7 @@ export class ReferralService {
     });
     await this.audit(client, {
       entityType: 'referral_credit', entityId: creditId, action: 'credit_redeemed',
-      actorCustomerId: customerId, before: { status: 'reserved' },
+      actorCustomerId: customerId, before: { status: previousStatus },
       after: { status: 'redeemed', orderId },
     });
     return money(credit.amount);
@@ -776,7 +959,8 @@ export class ReferralService {
           `SELECT * FROM mart_referral_credits WHERE id = $1 FOR UPDATE`, [order.referralCreditId]
         );
         const credit = creditResult.rows[0];
-        if (credit && ['reserved', 'redeemed'].includes(credit.status) && !isExpired(credit.expires_at)) {
+        if (credit && credit.order_id === orderId &&
+          ['reserved', 'redeemed'].includes(credit.status) && !isExpired(credit.expires_at)) {
           await db.query(
             `UPDATE mart_referral_credits
                 SET status = 'available', order_id = NULL, redeemed_at = NULL,
@@ -815,11 +999,46 @@ export class ReferralService {
     });
   }
 
-  // ── Reward release on delivery ──────────────────────────────────────────────
+  private static async consumeFirstOrderCredit(
+    client: DbClient,
+    creditId: string,
+    orderId: string,
+    rewardId: string | null,
+  ): Promise<void> {
+    const updated = await client.query(
+      `UPDATE mart_referral_credits
+          SET reward_id = COALESCE($2, reward_id), status = 'redeemed', redeemed_at = NOW(),
+              order_id = $3, reserved_at = NULL, reservation_expires_at = NULL, updated_at = NOW()
+        WHERE id = $1 AND status IN ('available', 'reserved')
+          AND (order_id IS NULL OR order_id = $3)
+        RETURNING id, customer_id AS "customerId", referral_id AS "referralId", amount`,
+      [creditId, rewardId, orderId]
+    );
+    if (!updated.rows[0]) {
+      const existing = await client.query(
+        `SELECT 1 FROM mart_referral_credits
+          WHERE id = $1 AND status = 'redeemed' AND order_id = $2`, [creditId, orderId]
+      );
+      if (existing.rows[0]) return;
+      throw badRequest('The first-order referral discount is no longer available');
+    }
+    const credit = updated.rows[0];
+    await this.ledger(client, {
+      type: 'redeem', amount: money(credit.amount), customerId: credit.customerId,
+      creditId, rewardId, referralId: credit.referralId, orderId,
+      reason: `First-order referral discount used on order ${orderId}`,
+      idempotencyKey: `REDEEM-FIRST-ORDER:${orderId}:${creditId}`,
+    });
+    await this.audit(client, {
+      entityType: 'referral_credit', entityId: creditId, action: 'first_order_discount_consumed',
+      actorCustomerId: credit.customerId, after: { status: 'redeemed', orderId, rewardId },
+    });
+  }
 
   static async onOrderDelivered(client: DbClient, orderId: string): Promise<any> {
     const orderResult = await client.query(
-      `SELECT id, customer_id AS "customerId", subtotal::float AS subtotal,
+      `SELECT id, customer_id AS "customerId", referral_credit_id AS "referralCreditId",
+              subtotal::float AS subtotal,
               delivery_charge::float AS "deliveryCharge",
               campaign_discount::float AS "campaignDiscount",
               referral_discount::float AS "referralDiscount", status
@@ -839,6 +1058,10 @@ export class ReferralService {
     );
     const referral = referralResult.rows[0];
     if (!referral) return { issued: false, reason: 'no_pending_referral' };
+
+    if (referral.first_order_credit_id && order.referralCreditId === referral.first_order_credit_id) {
+      await this.consumeFirstOrderCredit(client, referral.first_order_credit_id, orderId, null);
+    }
 
     const campaignResult = await client.query(
       `SELECT * FROM mart_referral_campaigns WHERE id = $1 FOR UPDATE`, [referral.campaign_id]
@@ -867,10 +1090,14 @@ export class ReferralService {
 
     const paidItemSubtotal = Math.max(
       0,
-      money(order.subtotal) - money(order.campaignDiscount) - money(order.referralDiscount)
+      money(order.subtotal) - money(order.campaignDiscount)
     );
-    const stages = this.configuredStages(campaign.reward_stages, campaign.total_reward_amount);
-    const totalRewardAmount = money(campaign.total_reward_amount);
+    const totalRewardAmount = money(referral.total_reward_amount ?? campaign.total_reward_amount);
+    const stages = this.configuredStages(
+      referral.reward_stages ?? campaign.reward_stages,
+      totalRewardAmount
+    );
+    const rewardVersion = Number(referral.campaign_version ?? campaign.version ?? 1) || 1;
     const value = qualifyingOrderValue(paidItemSubtotal, money(order.deliveryCharge), campaign.value_basis);
     const minimum = await this.referralMinimum(client);
     if (value < minimum) {
@@ -904,6 +1131,7 @@ export class ReferralService {
       }
     }
 
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`referral-cap:${referral.referrer_customer_id}`]);
     const capResult = await client.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count
          FROM mart_referral_rewards rw
@@ -923,6 +1151,7 @@ export class ReferralService {
         actorCustomerId: order.customerId, reason: 'Referrer cap reached',
         after: { status: 'capped' },
       });
+      await this.consumeFirstOrderCredit(client, referral.first_order_credit_id, orderId, null);
       return { issued: false, reason: 'capped' };
     }
 
@@ -931,33 +1160,69 @@ export class ReferralService {
     const rewards: Array<{ id: string; customer_id: string; role: string; amount: unknown }> = [];
     for (const role of ['referrer', 'referee'] as const) {
       const customerId = role === 'referrer' ? referral.referrer_customer_id : referral.referred_customer_id;
-      const inserted = await client.query(
-        `INSERT INTO mart_referral_rewards
-           (id, referral_id, customer_id, role, campaign_id, campaign_version, amount, status, reward_stages)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'issued',$8::jsonb)
-         RETURNING id, customer_id, role, amount`,
-        [uuidv4(), referral.id, customerId, role, campaign.id, campaign.version,
-          totalRewardAmount, JSON.stringify(stages)]
+      const existingReward = await client.query(
+        `SELECT id FROM mart_referral_rewards WHERE referral_id = $1 AND role = $2 FOR UPDATE`,
+        [referral.id, role]
       );
-      rewards.push(inserted.rows[0]);
+      let rewardResult: { rows: any[] };
+      if (existingReward.rows[0]) {
+        rewardResult = await client.query(
+          `UPDATE mart_referral_rewards
+              SET campaign_id = $2, campaign_version = $3, amount = $4, status = 'issued',
+                  reward_stages = $5::jsonb
+            WHERE id = $1
+            RETURNING id, customer_id, role, amount`,
+          [existingReward.rows[0].id, campaign.id, rewardVersion, totalRewardAmount, JSON.stringify(stages)]
+        );
+      } else {
+        rewardResult = await client.query(
+          `INSERT INTO mart_referral_rewards
+             (id, referral_id, customer_id, role, campaign_id, campaign_version, amount, status, reward_stages)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'issued',$8::jsonb)
+           RETURNING id, customer_id, role, amount`,
+          [uuidv4(), referral.id, customerId, role, campaign.id, rewardVersion,
+            totalRewardAmount, JSON.stringify(stages)]
+        );
+      }
+      rewards.push(rewardResult.rows[0]);
     }
 
+    const refereeReward = rewards.find(reward => reward.role === 'referee');
+    if (refereeReward && referral.first_order_credit_id) {
+      await client.query(
+        `UPDATE mart_referral_credits
+            SET reward_id = $2, updated_at = NOW()
+          WHERE id = $1`,
+        [referral.first_order_credit_id, refereeReward.id]
+      );
+    }
+    let issuedCredits = referral.first_order_credit_id ? 1 : 0;
     for (const reward of rewards) {
-      for (const stage of stages) {
+      const rewardStages = reward.role === 'referee'
+        ? stages.filter(stage => stage.stage !== stages[0].stage)
+        : stages;
+      for (const stage of rewardStages) {
         const inserted = await client.query(
           `INSERT INTO mart_referral_credits
-             (id, reward_id, referral_id, customer_id, campaign_id, campaign_version,
+             (id, benefit_type, reward_id, referral_id, customer_id, campaign_id, campaign_version,
               amount, stage_number, status, unlocked_at, expires_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'available',$9,$10)
-           RETURNING id`,
-          [uuidv4(), reward.id, referral.id, reward.customer_id, campaign.id, campaign.version,
+            VALUES ($1, 'reward', $2,$3,$4,$5,$6,$7,$8,'available',$9,$10)
+            ON CONFLICT (reward_id, stage_number)
+              WHERE reward_id IS NOT NULL AND stage_number IS NOT NULL
+            DO UPDATE SET benefit_type = 'reward', amount = EXCLUDED.amount, status = 'available',
+                          unlocked_at = EXCLUDED.unlocked_at, expires_at = EXCLUDED.expires_at,
+                          reserved_at = NULL, reservation_expires_at = NULL, redeemed_at = NULL,
+                          order_id = NULL, updated_at = NOW()
+            RETURNING id`,
+          [uuidv4(), reward.id, referral.id, reward.customer_id, campaign.id, rewardVersion,
             stage.amount, stage.stage, unlockedAt, expiresAt]
         );
+        issuedCredits += 1;
         await this.ledger(client, {
           type: 'issue', amount: stage.amount, customerId: reward.customer_id,
           creditId: inserted.rows[0].id, rewardId: reward.id, referralId: referral.id,
           reason: `Referral ${reward.role} stage ${stage.stage} unlocked by delivered order ${orderId}`,
-          idempotencyKey: `ISSUE:${referral.id}:${reward.id}:stage:${stage.stage}`,
+          idempotencyKey: `ISSUE:${referral.id}:${reward.id}:stage:${stage.stage}:${orderId}`,
         });
       }
     }
@@ -975,7 +1240,7 @@ export class ReferralService {
       before: { status: referral.status },
       after: {
         status: 'rewarded', qualifyingOrderId: orderId, qualifyingOrderValue: value,
-        rewards: rewards.length, credits: rewards.length * stages.length,
+        rewards: rewards.length, credits: issuedCredits,
       },
       reason: 'First qualifying delivered order',
     });
@@ -985,7 +1250,7 @@ export class ReferralService {
       value,
       expiryDays: campaign.expiry_days === null ? null : Number(campaign.expiry_days),
       rewards: rewards.length,
-      credits: rewards.length * stages.length,
+      credits: issuedCredits,
     };
   }
 
@@ -1024,6 +1289,7 @@ export class ReferralService {
       const expired = await client.query(
         `SELECT * FROM mart_referral_credits
           WHERE status IN ('available', 'reserved') AND expires_at IS NOT NULL AND expires_at <= NOW()
+            AND NOT (benefit_type = 'first_order' AND order_id IS NOT NULL)
           FOR UPDATE SKIP LOCKED`
       );
       for (const credit of expired.rows) {
@@ -1376,6 +1642,25 @@ export class ReferralService {
       if (!before.rows[0]) throw notFound('Referral record not found');
       if (status === 'rejected' && before.rows[0].status === 'rewarded') {
         await this.reverseRewards(client, id, notes || 'Rejected by fraud review', adminId);
+      }
+      if (status === 'rejected' && before.rows[0].status !== 'rewarded') {
+        const revoked = await client.query(
+          `UPDATE mart_referral_credits
+              SET status = 'reversed', reserved_at = NULL, reservation_expires_at = NULL,
+                  redeemed_at = NULL, order_id = NULL, updated_at = NOW()
+            WHERE referral_id = $1 AND benefit_type = 'first_order'
+              AND status IN ('available', 'reserved') AND order_id IS NULL
+            RETURNING id, customer_id AS "customerId", amount`,
+          [id]
+        );
+        for (const credit of revoked.rows) {
+          await this.ledger(client, {
+            type: 'reverse', amount: -money(credit.amount), customerId: credit.customerId,
+            creditId: credit.id, referralId: id, reason: notes || 'Rejected by fraud review',
+            actorAdminId: adminId,
+            idempotencyKey: `REVERSE-FIRST-ORDER:${id}:${credit.id}`,
+          });
+        }
       }
       const updated = await client.query(
         `UPDATE mart_referrals

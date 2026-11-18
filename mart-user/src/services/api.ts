@@ -467,11 +467,14 @@ export const campaignApi = {
 // ── Referral & Earn (customer) ───────────────────────────────────────────────────────────────
 export interface ReferralCredit {
   id: string;
+  benefitType: 'first_order' | 'reward';
+  referralId: string | null;
   amount: number;
   status: string;
   stageNumber: number | null;
   unlockedAt: string | null;
   expiresAt: string | null;
+  reservationExpiresAt: string | null;
   orderId: string | null;
 }
 
@@ -497,9 +500,13 @@ export interface ReferralStats {
 
 export interface ReferralRecord {
   id: string;
+  role: 'referrer' | 'referee';
   status: string;
   attributedAt: string | null;
   rewardedAt: string | null;
+  qualifyingOrderId: string | null;
+  firstOrderCreditId: string | null;
+  notes: string | null;
 }
 
 export interface ReferralMeData {
@@ -518,12 +525,6 @@ export interface ReferralValidateData {
   [key: string]: unknown;
 }
 
-export interface ReferralClaimData {
-  referralId: string;
-  status: string;
-  [key: string]: unknown;
-}
-
 export interface ReferralReservation {
   id: string;
   amount: number;
@@ -535,7 +536,6 @@ export interface ReferralReservation {
 export const referralApi = {
   getMe: () => api.get<{ success: boolean; data: ReferralMeData }>('/referrals/me'),
   validate: (code: string) => api.post<{ success: boolean; data: ReferralValidateData }>('/referrals/validate', { code }),
-  claim: (code: string) => api.post<{ success: boolean; data: ReferralClaimData }>('/referrals/claim', { code }),
   getCredits: (opts?: FetchOpts) => api.get<{ data: { items: ReferralCredit[]; total: number } }>('/referrals/credits', { fresh: opts?.fresh }),
   reserve: (creditId: string, idempotencyKey: string) =>
     api.post<{ data: ReferralReservation }>('/referrals/credits/reserve', { creditId, idempotencyKey }),

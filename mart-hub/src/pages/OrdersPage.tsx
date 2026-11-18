@@ -1289,6 +1289,7 @@ export default function OrdersPage() {
                         ? `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.viewerSubtotal} (your items)`
                         : `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.subtotal} + ₹${order.deliveryCharge} delivery`}
                       {Number(order.campaignDiscount) > 0 ? ` − ₹${order.campaignDiscount} offer` : ''}
+                      {Number(order.referralDiscount) > 0 ? ` − ₹${order.referralDiscount} referral` : ''}
                     </span>
                   </div>
                   <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} strokeWidth={3} />
@@ -1336,8 +1337,9 @@ export default function OrdersPage() {
                         const itemSavings = Number(order.itemSavings) || 0;
                         const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
                         const campaignDiscount = Number(order.campaignDiscount) || 0;
+                        const referralDiscount = Number(order.referralDiscount) || 0;
                         const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
-                        const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
+                        const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount + referralDiscount;
                         const adjustmentUpdates = getAdjustmentUpdates(order);
                         return (
                           <>
@@ -1380,6 +1382,12 @@ export default function OrdersPage() {
                               <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
                                 <span>{order.couponCodeUsed ? `Coupon ${order.couponCodeUsed}` : 'Offer discount'}</span>
                                 {campaignDiscount > 0 && <span>-₹{order.campaignDiscount}</span>}
+                              </div>
+                            )}
+                            {referralDiscount > 0 && (
+                              <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                                <span>Referral Reward</span>
+                                <span>-₹{referralDiscount}</span>
                               </div>
                             )}
                             <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">

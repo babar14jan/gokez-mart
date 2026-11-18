@@ -27,8 +27,8 @@ export interface ReferralRewardStage {
 
 const DEFAULT_TOTAL_REWARD_AMOUNT = '50';
 const DEFAULT_REWARD_STAGES: ReferralRewardStage[] = [
-  { stage: 1, amount: 30 },
-  { stage: 2, amount: 20 },
+  { stage: 1, amount: 25 },
+  { stage: 2, amount: 25 },
 ];
 
 export interface ReferralSummary {
@@ -336,6 +336,58 @@ export async function downloadReferralCsv(type: ReferralExportType, filters: Rec
 export const num = (value: unknown): number => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toCents = (value: unknown): number => Math.round(num(value) * 100);
+const fromCents = (cents: number): string => String(Math.round(cents) / 100);
+
+const splitCents = (cents: number, count: number): number[] => {
+  if (count <= 0) return [];
+  const base = Math.floor(Math.max(0, cents) / count);
+  const remainder = Math.max(0, cents) - base * count;
+  return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
+};
+
+export const stageCents = (amounts: string[]): number[] => amounts.map(toCents);
+
+export const stageTotal = (amounts: string[]): number =>
+  stageCents(amounts).reduce((total, cents) => total + cents, 0) / 100;
+
+export const stagesMatchTotal = (amounts: string[], total: unknown): boolean => {
+  const cents = stageCents(amounts);
+  return cents.length > 0 && cents.every(amount => amount > 0)
+    && cents.reduce((sum, amount) => sum + amount, 0) === toCents(total);
+};
+
+export const rebalanceStageAmounts = (amounts: string[], total: unknown): string[] => {
+  const cents = stageCents(amounts);
+  if (!cents.length) return splitCents(toCents(total), 1).map(fromCents);
+  const delta = toCents(total) - cents.reduce((sum, amount) => sum + amount, 0);
+  const last = cents.length - 1;
+  if (delta >= 0 || cents[last] + delta > 0) {
+    const next = [...cents];
+    next[last] += delta;
+    return next.map(fromCents);
+  }
+  return splitCents(toCents(total), cents.length).map(fromCents);
+};
+
+export const changeStageCount = (amounts: string[], total: unknown, count: number): string[] => {
+  const nextCount = Math.max(1, Math.min(10, Math.floor(num(count)) || 1));
+  const cents = stageCents(amounts);
+  if (nextCount === cents.length) return cents.map(fromCents);
+  const totalCents = toCents(total);
+  if (nextCount > cents.length) {
+    const added = nextCount - cents.length;
+    const remaining = totalCents - cents.reduce((sum, amount) => sum + amount, 0);
+    if (remaining >= added) return [...cents, ...splitCents(remaining, added)].map(fromCents);
+  } else {
+    const kept = cents.slice(0, nextCount);
+    const removed = cents.slice(nextCount).reduce((sum, amount) => sum + amount, 0);
+    kept[0] += removed;
+    return kept.map(fromCents);
+  }
+  return splitCents(totalCents, nextCount).map(fromCents);
 };
 
 export const campaignToForm = (campaign: ReferralCampaign | null | undefined): ReferralCampaignForm => {
