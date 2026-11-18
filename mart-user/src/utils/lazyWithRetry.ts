@@ -30,6 +30,12 @@ const CHUNK_ERROR_PATTERNS: RegExp[] = [
   /Importing a module script failed/i,
   /Loading chunk \d+ failed/i,
   /Loading CSS chunk \d+ failed/i,
+  /Failed to fetch/i,
+  /Load failed/i,
+  /NetworkError/i,
+  /Unexpected token/i,
+  /text\/html/i,
+  /504/i,
 ];
 
 export function isChunkLoadError(error: unknown): boolean {
