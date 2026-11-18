@@ -116,8 +116,8 @@ export function ScheduledFilterButton({ active, count, onClick }: {
           ? 'bg-indigo-500 text-white shadow-sm'
           : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-indigo-300'
       }`}>
-      <span className="hidden sm:inline">Scheduled</span>
-      <span className="sm:hidden">Sched</span>
+      <span className="hidden sm:inline">Schedule</span>
+      <span className="sm:hidden">Schedule</span>
       <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
         active
           ? 'bg-white/20 text-white'

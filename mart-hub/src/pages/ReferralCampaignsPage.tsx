@@ -149,6 +149,7 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
 
   const stagesBalanced = stagesMatchTotal(form.stageAmounts, form.totalRewardAmount);
   const unassigned = Math.round((num(form.totalRewardAmount) - stageTotal(form.stageAmounts)) * 100) / 100;
+  const minimumOrderAmount = Number(active?.min_order_amount || 0) || 0;
 
   if (loading) return <PageSkeleton />;
 
@@ -172,7 +173,7 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">v{active.version}</span>
               </div>
               <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                {fmtMoney(active.total_reward_amount)} per customer · {stageSummary(active)}
+                {fmtMoney(active.total_reward_amount)} per customer · {stageSummary(active)} · Eligible orders: {fmtMoney(minimumOrderAmount)}
               </p>
             </div>
             <p className="text-[10px] text-gray-500 dark:text-slate-400">
@@ -184,6 +185,7 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
             {[
               ['Total per customer', fmtMoney(active.total_reward_amount)],
               ['Stages', String(Array.isArray(active.reward_stages) ? active.reward_stages.length : 0)],
+              ['Minimum order eligible', fmtMoney(minimumOrderAmount)],
               ['Referral cap', String(num(active.max_referrals_per_referrer))],
               ['Expiry', active.expiry_days === null ? 'Never' : `${active.expiry_days} days`],
               ['Value basis', String(active.value_basis || '—')],
