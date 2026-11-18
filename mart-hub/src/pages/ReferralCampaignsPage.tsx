@@ -149,7 +149,7 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
 
   const stagesBalanced = stagesMatchTotal(form.stageAmounts, form.totalRewardAmount);
   const unassigned = Math.round((num(form.totalRewardAmount) - stageTotal(form.stageAmounts)) * 100) / 100;
-  const minimumOrderAmount = Number((active as { min_order_amount?: number | string | null }).min_order_amount || 0) || 0;
+  const minimumOrderAmount = Number(active?.min_order_amount || 0) || 0;
 
   if (loading) return <PageSkeleton />;
 

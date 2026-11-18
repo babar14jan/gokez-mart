@@ -12,7 +12,7 @@ import LoginFlow, { type Step } from '../components/LoginFlow';
 import PageHeader from '../components/PageHeader';
 import { track } from '../utils/track';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
-import { buildReferralLink, normalizeReferralCode } from '../utils/referral';
+import { buildReferralLink, normalizeReferralCode, availableReferralBalance } from '../utils/referral';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { readTrackingTokens } from '../utils/guestTracking';
 
@@ -329,58 +329,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     }
   };
 
-  const handleShareApp = async () => {
-    // Count the intent to share regardless of whether the OS share sheet is then
-    // completed or cancelled. The funnel event carries device/platform, so the
-    // hub can slice share clicks by phone type.
-    track('share_app_clicked');
-    const base = window.location.origin;
-    const url = `${base}/`;
-    const shareText = 'Shop local. Support local. Order everyday essentials from nearby stores.';
-    try {
-      let files: File[] | undefined;
-      const nav = navigator as any;
-      if ('canShare' in nav || nav.share) {
-        try {
-          const res = await fetch(`${base}/share_app.webp`);
-          if (res.ok) {
-            const blob = await res.blob();
-            if (blob.type.startsWith('image/')) {
-              files = [new File([blob], 'share_app.webp', { type: blob.type || 'image/webp' })];
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const shareData: ShareData & { files?: File[] } = {
-        title: 'Gokez Mart',
-        text: shareText,
-        url,
-      };
-      if (files?.length) shareData.files = files;
-
-      if (nav.share) {
-        if (files?.length && nav.canShare && !nav.canShare(shareData)) {
-          // skip files if not supported
-          delete shareData.files;
-        }
-        await nav.share(shareData);
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      setShareNotice('Link copied');
-      window.setTimeout(() => setShareNotice(''), 2500);
-    } catch {
-      try {
-        await navigator.clipboard.writeText(url);
-        setShareNotice('Link copied');
-        window.setTimeout(() => setShareNotice(''), 2500);
-      } catch {}
-    }
-  };
-
   const handleMarketingNotifications = async () => {
     const next = !marketingConsent;
     setMarketingConsent(next);
@@ -576,17 +524,17 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                     Code: {normalizeReferralCode(referralData?.code) || '—'}
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-medium text-ink dark:text-white">
-                  Total referral balance:
+                <p className="mt-1 text-xs font-medium text-ink dark:text-white sm:text-sm">
+                  Available referral balance:
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    {formatReferralRupees(referralData?.stats?.totalEarned)}
+                    {formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))}
                   </span>
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => void handleShareReferral()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-black px-3 py-1.5 text-sm font-extrabold leading-tight text-white transition-colors hover:bg-gray-900"
+                className="inline-flex items-center gap-1 rounded-xl bg-black px-2.5 py-1 text-xs font-extrabold leading-tight text-white transition-colors hover:bg-gray-900 sm:px-3 sm:py-1.5 sm:text-sm"
               >
                 <Share className="h-4 w-4" aria-hidden="true" /> Share
                 <span className="sr-only">{buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin)}</span>
@@ -597,9 +545,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <button
                 type="button"
                 onClick={() => navigate('/referrals')}
-                className="text-xs font-bold text-gokez-700 underline-offset-2 hover:underline dark:text-gokez-400"
+                className="text-xs font-bold text-gray-500 underline underline-offset-2 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300"
               >
-                View referral details
+                View details
               </button>
             </div>
           </section>
@@ -615,32 +563,15 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <MessageSquare className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
               <span>Feedback</span>
             </button>
-            <button type="button" onClick={handleShareApp} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white px-2 py-2 text-center text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
-              <Share className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
-              <span>Share App</span>
+            <button type="button" onClick={() => setSuggestOpen(true)} className="flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-xl border border-cream-200 bg-white px-2 py-2 text-center text-xs font-semibold text-ink shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white">
+              <Sparkles className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
+              <span>Suggest product</span>
             </button>
           </div>
           {shareNotice && <p className="mt-2 text-center text-[11px] font-medium text-gokez-700 dark:text-gokez-400" role="status">{shareNotice}</p>}
         </section>
 
 
-
-        <section>
-          <button
-            type="button"
-            onClick={() => setSuggestOpen(true)}
-            className="flex w-full items-center gap-4 rounded-[18px] border border-cream-200 bg-white p-4 text-left shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-gokez-500/60"
-          >
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
-              <Sparkles className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Suggest a product</p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Tell us what you would like us to stock.</p>
-            </div>
-            <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-500 dark:text-slate-400" aria-hidden="true" />
-          </button>
-        </section>
 
         {(storeName || storeAddress || supportPhone || whatsappNumber) && (
           <section>

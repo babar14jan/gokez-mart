@@ -225,7 +225,7 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                   onClick={() => setShowDetails(true)}
                   className="rounded-xl bg-gokez-700 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-gokez-800"
                 >
-                  View referral details
+                  View details
                 </button>
               </div>
             </section>

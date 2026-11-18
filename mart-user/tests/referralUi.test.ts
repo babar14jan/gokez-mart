@@ -224,11 +224,11 @@ describe('referral integration points', () => {
       '{isLoggedIn && (',
       'Refer & Earn',
       'normalizeReferralCode(referralData?.code) || \'—\'',
-      'Total referral balance:',
-      'formatReferralRupees(referralData?.stats?.totalEarned)',
+      'Available referral balance:',
+      'formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))',
       'handleShareReferral',
       'Share',
-      'View referral details',
+      'View details',
       "navigate('/referrals')",
     ]);
     assert.ok(!source('src/pages/AccountPage.tsx').includes('<ReferEarnSheet'), 'the referral flow should open a subpage, not a sheet');
