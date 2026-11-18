@@ -8,9 +8,11 @@ import {
   generateReferralCode,
   isExpired,
   normalizeReferralCode,
+  parseRewardStages,
   qualifyingOrderValue,
   reservationExpiry,
   roundMoney,
+  type ReferralRewardStage,
 } from '../utils/referralLogic';
 
 type DbClient = { query: <T = any>(text: string, params?: unknown[]) => Promise<{ rows: T[] }> };
@@ -30,12 +32,11 @@ const DEFAULT_CAMPAIGN = {
   name: 'Referral & Earn',
   status: 'active',
   version: 1,
-  referrerReward: 100,
-  refereeReward: 100,
-  creditAmount: 20,
-  creditsPerReward: 5,
-  qualifyingOrderMin: 149,
-  redemptionMin: 99,
+  totalRewardAmount: 50,
+  rewardStages: [
+    { stage: 1, amount: 30 },
+    { stage: 2, amount: 20 },
+  ] as ReferralRewardStage[],
   expiryDays: 90 as number | null,
   maxReferralsPerReferrer: 10,
   stackingEnabled: false,
@@ -55,12 +56,8 @@ const money = (value: unknown): number => roundMoney(Number(value ?? 0));
 
 const campaignFields: Record<string, string> = {
   name: 'name',
-  referrerReward: 'referrer_reward',
-  refereeReward: 'referee_reward',
-  creditAmount: 'credit_amount',
-  creditsPerReward: 'credits_per_reward',
-  qualifyingOrderMin: 'qualifying_order_min',
-  redemptionMin: 'redemption_min',
+  totalRewardAmount: 'total_reward_amount',
+  rewardStages: 'reward_stages',
   expiryDays: 'expiry_days',
   maxReferralsPerReferrer: 'max_referrals_per_referrer',
   stackingEnabled: 'stacking_enabled',
@@ -76,6 +73,8 @@ const campaignFields: Record<string, string> = {
   categoryIds: 'category_ids',
   reason: 'reason',
 };
+
+const TEXT_CAMPAIGN_FIELDS = new Set(['startsAt', 'endsAt', 'reason']);
 
 function finiteNumber(value: unknown, label: string, { integer = false, nullable = false } = {}): number | null {
   if ((value === null || value === undefined || value === '') && nullable) return null;
@@ -94,6 +93,28 @@ function pagination(queryParams: Record<string, unknown>): { limit: number; offs
   const limit = Math.min(Math.max(parseInt(String(queryParams.limit ?? 50), 10) || 50, 1), 500);
   const offset = Math.max(parseInt(String(queryParams.offset ?? 0), 10) || 0, 0);
   return { limit, offset };
+}
+
+function dayStart(value: unknown): Date | null {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const date = new Date(`${text}T00:00:00+05:30`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function appendDayRange(
+  filters: Record<string, unknown>,
+  column: string,
+  conditions: string[],
+  params: unknown[],
+  nextIndex: number,
+): number {
+  const from = dayStart(filters.from);
+  const to = dayStart(filters.to);
+  let index = nextIndex;
+  if (from) { conditions.push(`${column} >= $${index++}`); params.push(from); }
+  if (to) { conditions.push(`${column} < $${index++}`); params.push(new Date(to.getTime() + 86400000)); }
+  return index;
 }
 
 function csvCell(value: unknown): string {
@@ -134,6 +155,45 @@ export class ReferralService {
     return campaign;
   }
 
+  private static configuredStages(value: unknown, totalAmount: unknown): ReferralRewardStage[] {
+    try {
+      return parseRewardStages(value, Number(totalAmount));
+    } catch (error) {
+      throw badRequest(error instanceof Error ? error.message : 'Invalid referral reward stages');
+    }
+  }
+
+  private static displayStages(value: unknown, totalAmount: unknown): ReferralRewardStage[] {
+    try {
+      return parseRewardStages(value, Number(totalAmount));
+    } catch {
+      return DEFAULT_CAMPAIGN.rewardStages;
+    }
+  }
+
+  private static async referralMinimum(client: DbClient): Promise<number> {
+    const result = await client.query<{ minimum: unknown }>(
+      `SELECT MAX(NULLIF(value, '')::numeric)::float AS minimum
+         FROM mart_settings WHERE key = 'min_order_amount'`
+    );
+    const minimum = money(result.rows[0]?.minimum);
+    if (minimum <= 0) throw new Error('Global minimum order amount is not configured');
+    return minimum;
+  }
+
+  private static async assertStageAvailable(client: DbClient, credit: any): Promise<void> {
+    const stage = Number(credit.stage_number);
+    if (!credit.reward_id || !Number.isInteger(stage) || stage < 2) return;
+    const previous = await client.query<{ status: string }>(
+      `SELECT status FROM mart_referral_credits WHERE reward_id = $1 AND stage_number = $2 FOR SHARE`,
+      [credit.reward_id, stage - 1]
+    );
+    if (!previous.rows[0]) throw badRequest('The previous referral reward stage is not available');
+    if (previous.rows[0].status !== 'redeemed') {
+      throw badRequest(`Redeem referral reward stage ${stage - 1} first`);
+    }
+  }
+
   private static publicCampaign(campaign: any | null): typeof DEFAULT_CAMPAIGN {
     if (!campaign) return { ...DEFAULT_CAMPAIGN, categoryIds: [] };
     return {
@@ -141,12 +201,11 @@ export class ReferralService {
       name: campaign.name,
       status: campaign.status,
       version: Number(campaign.version) || 1,
-      referrerReward: money(campaign.referrer_reward),
-      refereeReward: money(campaign.referee_reward),
-      creditAmount: money(campaign.credit_amount),
-      creditsPerReward: parseInt(campaign.credits_per_reward, 10) || 5,
-      qualifyingOrderMin: money(campaign.qualifying_order_min),
-      redemptionMin: money(campaign.redemption_min),
+      totalRewardAmount: money(campaign.total_reward_amount ?? DEFAULT_CAMPAIGN.totalRewardAmount),
+      rewardStages: this.displayStages(
+        campaign.reward_stages ?? DEFAULT_CAMPAIGN.rewardStages,
+        campaign.total_reward_amount ?? DEFAULT_CAMPAIGN.totalRewardAmount,
+      ),
       expiryDays: campaign.expiry_days === null || campaign.expiry_days === undefined
         ? null
         : parseInt(campaign.expiry_days, 10),
@@ -385,11 +444,11 @@ export class ReferralService {
 
   static async getMe(customerId: string): Promise<any> {
     const code = await this.ensureCode(customerId);
-    const [campaignResult, customerResult, creditsResult, rewardsResult, referralsResult, priorAttributionResult, leadResult, orderResult] = await Promise.all([
+    const [campaignResult, customerResult, creditsResult, rewardsResult, referralsResult, priorAttributionResult, leadResult, orderResult, minimumResult] = await Promise.all([
       query(`SELECT * FROM mart_referral_campaigns WHERE ${ACTIVE_WINDOW} ORDER BY created_at DESC LIMIT 1`),
       query(`SELECT id FROM mart_customers WHERE id = $1`, [customerId]),
       query<any>(
-        `SELECT id, amount::float AS amount, status,
+        `SELECT id, amount::float AS amount, status, stage_number AS "stageNumber",
                 unlocked_at AS "unlockedAt", expires_at AS "expiresAt",
                 order_id AS "orderId", created_at AS "createdAt"
            FROM mart_referral_credits WHERE customer_id = $1 ORDER BY created_at DESC`,
@@ -413,6 +472,10 @@ export class ReferralService {
         `SELECT COUNT(*)::int AS count FROM mart_orders WHERE (customer_id = $1 OR guest_phone = (SELECT phone FROM mart_customers WHERE id = $1)) AND ${NON_CANCELLED}`,
         [customerId]
       ),
+      query<{ minimum: unknown }>(
+        `SELECT MAX(NULLIF(value, '')::numeric)::float AS minimum
+           FROM mart_settings WHERE key = 'min_order_amount'`
+      ),
     ]);
     if (!customerResult.rows[0]) throw notFound('Customer not found');
 
@@ -420,6 +483,7 @@ export class ReferralService {
       id: row.id,
       amount: money(row.amount),
       status: row.status,
+      stageNumber: row.stageNumber === null || row.stageNumber === undefined ? null : Number(row.stageNumber),
       unlockedAt: row.unlockedAt ? new Date(row.unlockedAt).toISOString() : null,
       expiresAt: row.expiresAt ? new Date(row.expiresAt).toISOString() : null,
       orderId: row.orderId || null,
@@ -435,6 +499,7 @@ export class ReferralService {
     return {
       code,
       campaign: this.publicCampaign(campaignResult.rows[0]),
+      minimumOrderAmount: money(minimumResult.rows[0]?.minimum),
       stats: {
         totalEarned: roundMoney(rewards.reduce((total, row) => total + money(row.amount), 0)),
         available: roundMoney(byStatus('available')),
@@ -554,6 +619,10 @@ export class ReferralService {
       }
       if (credit.status !== 'available') throw badRequest('This referral credit is not available');
       if (isExpired(credit.expires_at)) throw badRequest('This referral credit has expired');
+      if (credit.unlocked_at && new Date(credit.unlocked_at) > new Date()) {
+        throw badRequest('This referral reward is not active yet');
+      }
+      await this.assertStageAvailable(client, credit);
 
       const expiresAt = reservationExpiry(new Date(), REFERRAL_RESERVATION_TTL_MINUTES);
       const updated = await client.query(
@@ -626,8 +695,7 @@ export class ReferralService {
     subtotal: number,
   ): Promise<any> {
     const result = await client.query(
-      `SELECT c.*, cam.redemption_min, cam.status AS campaign_status,
-              cam.starts_at, cam.ends_at
+      `SELECT c.*, cam.status AS campaign_status, cam.starts_at, cam.ends_at
          FROM mart_referral_credits c
          LEFT JOIN mart_referral_campaigns cam ON cam.id = c.campaign_id
         WHERE c.id = $1 AND c.customer_id = $2 FOR UPDATE OF c`,
@@ -644,7 +712,11 @@ export class ReferralService {
       (credit.ends_at && new Date(credit.ends_at) < new Date()))) {
       throw badRequest('The referral campaign for this reward is no longer active');
     }
-    const minimum = money(credit.redemption_min ?? DEFAULT_CAMPAIGN.redemptionMin);
+    if (credit.unlocked_at && new Date(credit.unlocked_at) > new Date()) {
+      throw badRequest('This referral reward is not active yet');
+    }
+    await this.assertStageAvailable(client, credit);
+    const minimum = await this.referralMinimum(client);
     if (money(subtotal) < minimum) {
       throw badRequest(`Add items worth ₹${minimum} to use your referral reward`);
     }
@@ -797,8 +869,10 @@ export class ReferralService {
       0,
       money(order.subtotal) - money(order.campaignDiscount) - money(order.referralDiscount)
     );
+    const stages = this.configuredStages(campaign.reward_stages, campaign.total_reward_amount);
+    const totalRewardAmount = money(campaign.total_reward_amount);
     const value = qualifyingOrderValue(paidItemSubtotal, money(order.deliveryCharge), campaign.value_basis);
-    const minimum = money(campaign.qualifying_order_min);
+    const minimum = await this.referralMinimum(client);
     if (value < minimum) {
       await client.query(
         `UPDATE mart_referrals SET notes = $2, updated_at = NOW() WHERE id = $1`,
@@ -857,35 +931,33 @@ export class ReferralService {
     const rewards: Array<{ id: string; customer_id: string; role: string; amount: unknown }> = [];
     for (const role of ['referrer', 'referee'] as const) {
       const customerId = role === 'referrer' ? referral.referrer_customer_id : referral.referred_customer_id;
-      const amount = role === 'referrer' ? campaign.referrer_reward : campaign.referee_reward;
       const inserted = await client.query(
         `INSERT INTO mart_referral_rewards
-           (id, referral_id, customer_id, role, campaign_id, campaign_version, amount, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'issued')
+           (id, referral_id, customer_id, role, campaign_id, campaign_version, amount, status, reward_stages)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'issued',$8::jsonb)
          RETURNING id, customer_id, role, amount`,
-        [uuidv4(), referral.id, customerId, role, campaign.id, campaign.version, money(amount)]
+        [uuidv4(), referral.id, customerId, role, campaign.id, campaign.version,
+          totalRewardAmount, JSON.stringify(stages)]
       );
       rewards.push(inserted.rows[0]);
     }
 
-    const creditsPerReward = Math.max(0, parseInt(campaign.credits_per_reward, 10) || 0);
-    const creditAmount = money(campaign.credit_amount);
     for (const reward of rewards) {
-      for (let index = 0; index < creditsPerReward; index += 1) {
+      for (const stage of stages) {
         const inserted = await client.query(
           `INSERT INTO mart_referral_credits
              (id, reward_id, referral_id, customer_id, campaign_id, campaign_version,
-              amount, status, unlocked_at, expires_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'available',$8,$9)
+              amount, stage_number, status, unlocked_at, expires_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'available',$9,$10)
            RETURNING id`,
           [uuidv4(), reward.id, referral.id, reward.customer_id, campaign.id, campaign.version,
-            creditAmount, unlockedAt, expiresAt]
+            stage.amount, stage.stage, unlockedAt, expiresAt]
         );
         await this.ledger(client, {
-          type: 'issue', amount: creditAmount, customerId: reward.customer_id,
+          type: 'issue', amount: stage.amount, customerId: reward.customer_id,
           creditId: inserted.rows[0].id, rewardId: reward.id, referralId: referral.id,
-          reason: `Referral ${reward.role} reward unlocked by delivered order ${orderId}`,
-          idempotencyKey: `ISSUE:${referral.id}:${reward.id}:${index}`,
+          reason: `Referral ${reward.role} stage ${stage.stage} unlocked by delivered order ${orderId}`,
+          idempotencyKey: `ISSUE:${referral.id}:${reward.id}:stage:${stage.stage}`,
         });
       }
     }
@@ -903,7 +975,7 @@ export class ReferralService {
       before: { status: referral.status },
       after: {
         status: 'rewarded', qualifyingOrderId: orderId, qualifyingOrderValue: value,
-        rewards: rewards.length, credits: rewards.length * creditsPerReward,
+        rewards: rewards.length, credits: rewards.length * stages.length,
       },
       reason: 'First qualifying delivered order',
     });
@@ -913,7 +985,7 @@ export class ReferralService {
       value,
       expiryDays: campaign.expiry_days === null ? null : Number(campaign.expiry_days),
       rewards: rewards.length,
-      credits: rewards.length * creditsPerReward,
+      credits: rewards.length * stages.length,
     };
   }
 
@@ -1028,7 +1100,7 @@ export class ReferralService {
     values.status = ['draft', 'active', 'paused', 'ended'].includes(data.status) ? data.status : 'draft';
 
     for (const [key, column] of Object.entries(campaignFields)) {
-      if (key === 'name' || data[key] === undefined) continue;
+      if (key === 'name' || key === 'rewardStages' || data[key] === undefined) continue;
       if (key === 'categoryIds') {
         if (!Array.isArray(data[key])) throw badRequest('categoryIds must be an array');
         values[column] = data[key].map((id: unknown) => String(id));
@@ -1038,11 +1110,15 @@ export class ReferralService {
         values[column] = toBoolean(data[key]);
         continue;
       }
-      if (['expiryDays', 'startsAt', 'endsAt', 'budget', 'reason'].includes(key) && (data[key] === null || data[key] === '')) {
+      if (TEXT_CAMPAIGN_FIELDS.has(key)) {
+        values[column] = data[key] === '' ? null : data[key];
+        continue;
+      }
+      if (['expiryDays', 'budget'].includes(key) && (data[key] === null || data[key] === '')) {
         values[column] = null;
         continue;
       }
-      const integer = ['creditsPerReward', 'maxReferralsPerReferrer', 'expiryDays', 'codeLength'].includes(key);
+      const integer = ['maxReferralsPerReferrer', 'expiryDays', 'codeLength'].includes(key);
       values[column] = finiteNumber(data[key], key, { integer });
     }
     if (values.value_basis && !['item_subtotal', 'grand_total'].includes(String(values.value_basis))) {
@@ -1051,6 +1127,11 @@ export class ReferralService {
     if (values.code_length !== undefined && (Number(values.code_length) < 4 || Number(values.code_length) > 12)) {
       throw badRequest('codeLength must be between 4 and 12');
     }
+    const totalRewardAmount = values.total_reward_amount ?? DEFAULT_CAMPAIGN.totalRewardAmount;
+    const rewardStages = data.rewardStages === undefined ? DEFAULT_CAMPAIGN.rewardStages : data.rewardStages;
+    const stages = this.configuredStages(rewardStages, totalRewardAmount);
+    values.total_reward_amount = money(totalRewardAmount);
+    values.reward_stages = JSON.stringify(stages);
 
     const columns = [...Object.keys(values), 'created_by'];
     const placeholders = columns.map((_column, index) => `$${index + 1}`);
@@ -1076,20 +1157,33 @@ export class ReferralService {
       const params: unknown[] = [];
       let i = 1;
       for (const [key, column] of Object.entries(campaignFields)) {
-        if (data[key] === undefined) continue;
+        if (key === 'rewardStages' || key === 'totalRewardAmount' || data[key] === undefined) continue;
         let value: unknown = data[key];
         if (key === 'categoryIds') {
           if (!Array.isArray(value)) throw badRequest('categoryIds must be an array');
           value = value.map((entry: unknown) => String(entry));
         } else if (['stackingEnabled', 'cashWithdrawal', 'transferEnabled', 'fraudReviewEnabled'].includes(key)) {
           value = toBoolean(value);
+        } else if (TEXT_CAMPAIGN_FIELDS.has(key)) {
+          value = value === '' ? null : value;
         } else if (value !== null && value !== '') {
-          value = finiteNumber(value, key, { integer: ['creditsPerReward', 'maxReferralsPerReferrer', 'expiryDays', 'codeLength'].includes(key) });
-        } else if (['expiryDays', 'startsAt', 'endsAt', 'budget', 'reason'].includes(key)) {
+          value = finiteNumber(value, key, { integer: ['maxReferralsPerReferrer', 'expiryDays', 'codeLength'].includes(key) });
+        } else if (['expiryDays', 'budget'].includes(key)) {
           value = null;
         }
         assignments.push(`${column} = $${i++}`);
         params.push(value);
+      }
+      if (data.totalRewardAmount !== undefined || data.rewardStages !== undefined) {
+        const total = data.totalRewardAmount === undefined
+          ? before.rows[0].total_reward_amount ?? DEFAULT_CAMPAIGN.totalRewardAmount
+          : data.totalRewardAmount;
+        const stagesInput = data.rewardStages === undefined
+          ? before.rows[0].reward_stages ?? DEFAULT_CAMPAIGN.rewardStages
+          : data.rewardStages;
+        const stages = this.configuredStages(stagesInput, total);
+        assignments.push(`total_reward_amount = $${i++}`, `reward_stages = $${i++}::jsonb`);
+        params.push(money(total), JSON.stringify(stages));
       }
       if (!assignments.length) throw badRequest('No campaign changes supplied');
       assignments.push(`version = version + 1`, `updated_at = NOW()`);
@@ -1159,6 +1253,7 @@ export class ReferralService {
       const term = `%${String(filters.query)}%`;
       params.push(term, term, term);
     }
+    i = appendDayRange(filters, 'r.attributed_at', conditions, params, i);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { limit, offset } = pagination(filters);
     const total = await query<{ count: number }>(
@@ -1231,6 +1326,7 @@ export class ReferralService {
       const term = `%${String(filters.query)}%`;
       params.push(term, term);
     }
+    i = appendDayRange(filters, 'created_at', conditions, params, i);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { limit, offset } = pagination(filters);
     const total = await query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM mart_referral_transactions ${where}`, params);
@@ -1296,7 +1392,15 @@ export class ReferralService {
     });
   }
 
-  static async getSummary(): Promise<any> {
+  static async getSummary(filters: Record<string, unknown> = {}): Promise<any> {
+    const referralConditions: string[] = [];
+    const referralParams: unknown[] = [];
+    appendDayRange(filters, 'attributed_at', referralConditions, referralParams, 1);
+    const creditConditions: string[] = [];
+    const creditParams: unknown[] = [];
+    appendDayRange(filters, 'created_at', creditConditions, creditParams, 1);
+    const referralWhere = referralConditions.length ? `WHERE ${referralConditions.join(' AND ')}` : '';
+    const creditWhere = creditConditions.length ? `WHERE ${creditConditions.join(' AND ')}` : '';
     const result = await query(
       `SELECT COUNT(*)::int AS referrals,
               COUNT(*) FILTER (WHERE status = 'rewarded')::int AS rewarded,
@@ -1305,14 +1409,16 @@ export class ReferralService {
               COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
               COUNT(*) FILTER (WHERE status = 'expired')::int AS expired,
               COALESCE(SUM(qualifying_order_value) FILTER (WHERE status = 'rewarded'), 0)::float AS qualifying_value
-         FROM mart_referrals`
+         FROM mart_referrals ${referralWhere}`,
+      referralParams
     );
     const moneyResult = await query(
       `SELECT COALESCE(SUM(amount) FILTER (WHERE status = 'issued'), 0)::float AS rewards_issued,
               COALESCE(SUM(amount) FILTER (WHERE status = 'available' OR status = 'reserved'), 0)::float AS liability,
               COALESCE(SUM(amount) FILTER (WHERE status = 'redeemed'), 0)::float AS redeemed,
               COUNT(*)::int AS credits
-         FROM mart_referral_credits`
+         FROM mart_referral_credits ${creditWhere}`,
+      creditParams
     );
     return {
       referrals: result.rows[0].referrals,
@@ -1329,37 +1435,49 @@ export class ReferralService {
     };
   }
 
-  static async getReport(type: ReportType): Promise<{ items: any[]; total: number }> {
+  static async getReport(type: ReportType, filters: Record<string, unknown> = {}): Promise<{ items: any[]; total: number }> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
     let sql: string;
+    let where = '';
     switch (type) {
       case 'conversion':
-        sql = `SELECT status, COUNT(*)::int AS count,
-                      COUNT(*) FILTER (WHERE qualifying_order_id IS NOT NULL)::int AS delivered
-                 FROM mart_referrals GROUP BY status ORDER BY status`;
+        appendDayRange(filters, 'r.attributed_at', conditions, params, 1);
+        where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        sql = `SELECT r.status, COUNT(*)::int AS count,
+                      COUNT(*) FILTER (WHERE r.qualifying_order_id IS NOT NULL)::int AS delivered
+                 FROM mart_referrals r ${where} GROUP BY r.status ORDER BY r.status`;
         break;
       case 'orders':
+        conditions.push('r.qualified_at IS NOT NULL');
+        appendDayRange(filters, 'r.qualified_at', conditions, params, 1);
+        where = `WHERE ${conditions.join(' AND ')}`;
         sql = `SELECT DATE_TRUNC('day', r.qualified_at) AS day,
                       COUNT(*)::int AS orders,
                       COALESCE(SUM(r.qualifying_order_value), 0)::float AS value
-                 FROM mart_referrals r WHERE r.qualified_at IS NOT NULL
+                 FROM mart_referrals r ${where}
                 GROUP BY day ORDER BY day DESC LIMIT 500`;
         break;
       case 'customers':
-        sql = `SELECT referrer_customer_id AS "customerId", COUNT(*)::int AS referrals,
-                      COUNT(*) FILTER (WHERE status = 'rewarded')::int AS rewarded
-                 FROM mart_referrals GROUP BY referrer_customer_id
+        appendDayRange(filters, 'r.attributed_at', conditions, params, 1);
+        where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        sql = `SELECT r.referrer_customer_id AS "customerId", COUNT(*)::int AS referrals,
+                      COUNT(*) FILTER (WHERE r.status = 'rewarded')::int AS rewarded
+                 FROM mart_referrals r ${where} GROUP BY r.referrer_customer_id
                 ORDER BY referrals DESC LIMIT 500`;
         break;
       case 'liability':
-        sql = `SELECT customer_id AS "customerId", status, COUNT(*)::int AS credits,
-                      COALESCE(SUM(amount), 0)::float AS amount
-                 FROM mart_referral_credits
-                GROUP BY customer_id, status ORDER BY amount DESC LIMIT 500`;
+        appendDayRange(filters, 'c.created_at', conditions, params, 1);
+        where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        sql = `SELECT c.customer_id AS "customerId", c.status, COUNT(*)::int AS credits,
+                      COALESCE(SUM(c.amount), 0)::float AS amount
+                 FROM mart_referral_credits c ${where}
+                GROUP BY c.customer_id, c.status ORDER BY amount DESC LIMIT 500`;
         break;
       default:
         throw badRequest('Unknown referral report type');
     }
-    const result = await query(sql);
+    const result = await query(sql, params);
     return { items: result.rows, total: result.rows.length };
   }
 
@@ -1410,9 +1528,13 @@ export class ReferralService {
     return { items: items.rows, total: total.rows[0]?.count || 0 };
   }
 
-  static async exportCsv(type: ExportType): Promise<string> {
+  static async exportCsv(type: ExportType, filters: Record<string, unknown> = {}): Promise<string> {
     if (!['records', 'ledger'].includes(type)) throw badRequest('Invalid export type');
+    const conditions: string[] = [];
+    const params: unknown[] = [];
     if (type === 'records') {
+      appendDayRange(filters, 'r.attributed_at', conditions, params, 1);
+      const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
       const result = await query(
         `SELECT r.id, rc.code, r.status, r.attribution_source, r.attributed_at, r.qualified_at,
                 r.rewarded_at, r.qualifying_order_value, referred.phone AS referred_phone,
@@ -1421,16 +1543,21 @@ export class ReferralService {
            LEFT JOIN mart_referral_codes rc ON rc.id = r.code_id
            LEFT JOIN mart_customers referred ON referred.id = r.referred_customer_id
            LEFT JOIN mart_customers referrer ON referrer.id = r.referrer_customer_id
-          ORDER BY r.attributed_at DESC`
+          ${where}
+          ORDER BY r.attributed_at DESC`,
+        params
       );
       const header = ['id', 'code', 'status', 'attributionSource', 'attributedAt', 'qualifiedAt',
         'rewardedAt', 'qualifyingOrderValue', 'referredPhone', 'referrerPhone'];
       return [header.join(','), ...result.rows.map(row => header.map(key => csvCell(row[key])).join(','))].join('\n');
     }
+    appendDayRange(filters, 'created_at', conditions, params, 1);
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const result = await query(
       `SELECT id, reference, type, amount, balance_after, customer_id, credit_id, reward_id,
               referral_id, order_id, reason, created_at
-         FROM mart_referral_transactions ORDER BY created_at DESC`
+         FROM mart_referral_transactions ${where} ORDER BY created_at DESC`,
+      params
     );
     const header = ['id', 'reference', 'type', 'amount', 'balanceAfter', 'customerId', 'creditId',
       'rewardId', 'referralId', 'orderId', 'reason', 'createdAt'];

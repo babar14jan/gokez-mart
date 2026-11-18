@@ -20,6 +20,17 @@ export type ReferralReportType = 'conversion' | 'orders' | 'customers' | 'liabil
 export type ReferralExportType = 'records' | 'ledger';
 export type CampaignAction = 'activate' | 'pause';
 
+export interface ReferralRewardStage {
+  stage: number;
+  amount: number;
+}
+
+const DEFAULT_TOTAL_REWARD_AMOUNT = '50';
+const DEFAULT_REWARD_STAGES: ReferralRewardStage[] = [
+  { stage: 1, amount: 30 },
+  { stage: 2, amount: 20 },
+];
+
 export interface ReferralSummary {
   referrals: number;
   rewarded: number;
@@ -39,12 +50,8 @@ export interface ReferralCampaign {
   name: string;
   status: string;
   version: number;
-  referrer_reward: number | string | null;
-  referee_reward: number | string | null;
-  credit_amount: number | string | null;
-  credits_per_reward: number | string | null;
-  qualifying_order_min: number | string | null;
-  redemption_min: number | string | null;
+  total_reward_amount: number | string | null;
+  reward_stages: ReferralRewardStage[] | null;
   expiry_days: number | string | null;
   max_referrals_per_referrer: number | string | null;
   stacking_enabled: boolean;
@@ -67,12 +74,8 @@ export interface ReferralCampaign {
 
 export interface ReferralCampaignForm {
   name: string;
-  referrerReward: string;
-  refereeReward: string;
-  creditAmount: string;
-  creditsPerReward: string;
-  qualifyingOrderMin: string;
-  redemptionMin: string;
+  totalRewardAmount: string;
+  stageAmounts: string[];
   expiryDays: string;
   maxReferralsPerReferrer: string;
   stackingEnabled: boolean;
@@ -308,14 +311,18 @@ export const referralAdminApi = {
     list<Paged<ReferralAuditEntry>>('/admin/referral/audit', filters),
 };
 
-export function getExportUrl(type: ReferralExportType): string {
+export function getExportUrl(type: ReferralExportType, filters: Record<string, string | number | boolean | null | undefined> = {}): string {
   const base = (api.defaults.baseURL || '').replace(/\/$/, '');
-  return `${base}/admin/referral/export?type=${type}`;
+  const search = new URLSearchParams({ type });
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value));
+  });
+  return `${base}/admin/referral/export?${search}`;
 }
 
 /** Authenticated direct download of the backend's CSV export endpoint. */
-export async function downloadReferralCsv(type: ReferralExportType): Promise<void> {
-  const response = await api.get<Blob>(getExportUrl(type), { responseType: 'blob' });
+export async function downloadReferralCsv(type: ReferralExportType, filters: Record<string, string | number | boolean | null | undefined> = {}): Promise<void> {
+  const response = await api.get<Blob>(getExportUrl(type, filters), { responseType: 'blob' });
   const url = URL.createObjectURL(response.data as Blob);
   const link = document.createElement('a');
   link.href = url;
@@ -331,38 +338,35 @@ export const num = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export const campaignToForm = (campaign: ReferralCampaign | null | undefined): ReferralCampaignForm => ({
-  name: campaign?.name || '',
-  referrerReward: campaign ? String(num(campaign.referrer_reward)) : '100',
-  refereeReward: campaign ? String(num(campaign.referee_reward)) : '100',
-  creditAmount: campaign ? String(num(campaign.credit_amount)) : '20',
-  creditsPerReward: campaign ? String(num(campaign.credits_per_reward)) : '5',
-  qualifyingOrderMin: campaign ? String(num(campaign.qualifying_order_min)) : '149',
-  redemptionMin: campaign ? String(num(campaign.redemption_min)) : '99',
-  expiryDays: campaign?.expiry_days === null || campaign?.expiry_days === undefined || campaign?.expiry_days === ''
-    ? '' : String(campaign.expiry_days),
-  maxReferralsPerReferrer: campaign ? String(num(campaign.max_referrals_per_referrer)) : '10',
-  stackingEnabled: Boolean(campaign?.stacking_enabled),
-  unlockTrigger: campaign?.unlock_trigger || 'delivered',
-  cashWithdrawal: Boolean(campaign?.cash_withdrawal),
-  transferEnabled: Boolean(campaign?.transfer_enabled),
-  startsAt: campaign?.starts_at ? String(campaign.starts_at).slice(0, 16) : '',
-  endsAt: campaign?.ends_at ? String(campaign.ends_at).slice(0, 16) : '',
-  budget: campaign?.budget === null || campaign?.budget === undefined || campaign?.budget === ''
-    ? '' : String(campaign.budget),
-  fraudReviewEnabled: Boolean(campaign?.fraud_review_enabled),
-  valueBasis: campaign?.value_basis || 'item_subtotal',
-  reason: '',
-});
+export const campaignToForm = (campaign: ReferralCampaign | null | undefined): ReferralCampaignForm => {
+  const configuredStages = Array.isArray(campaign?.reward_stages) && campaign.reward_stages.length
+    ? campaign.reward_stages
+    : DEFAULT_REWARD_STAGES;
+  return {
+    name: campaign?.name || '',
+    totalRewardAmount: campaign ? String(num(campaign.total_reward_amount)) : DEFAULT_TOTAL_REWARD_AMOUNT,
+    stageAmounts: configuredStages.map(stage => String(num(stage.amount))),
+    expiryDays: campaign?.expiry_days === null || campaign?.expiry_days === undefined || campaign?.expiry_days === ''
+      ? '' : String(campaign.expiry_days),
+    maxReferralsPerReferrer: campaign ? String(num(campaign.max_referrals_per_referrer)) : '10',
+    stackingEnabled: Boolean(campaign?.stacking_enabled),
+    unlockTrigger: campaign?.unlock_trigger || 'delivered',
+    cashWithdrawal: Boolean(campaign?.cash_withdrawal),
+    transferEnabled: Boolean(campaign?.transfer_enabled),
+    startsAt: campaign?.starts_at ? String(campaign.starts_at).slice(0, 16) : '',
+    endsAt: campaign?.ends_at ? String(campaign.ends_at).slice(0, 16) : '',
+    budget: campaign?.budget === null || campaign?.budget === undefined || campaign?.budget === ''
+      ? '' : String(campaign.budget),
+    fraudReviewEnabled: Boolean(campaign?.fraud_review_enabled),
+    valueBasis: campaign?.value_basis || 'item_subtotal',
+    reason: '',
+  };
+};
 
 export const campaignFormToPayload = (form: ReferralCampaignForm): Record<string, unknown> => ({
   name: form.name.trim(),
-  referrerReward: num(form.referrerReward),
-  refereeReward: num(form.refereeReward),
-  creditAmount: num(form.creditAmount),
-  creditsPerReward: num(form.creditsPerReward),
-  qualifyingOrderMin: num(form.qualifyingOrderMin),
-  redemptionMin: num(form.redemptionMin),
+  totalRewardAmount: num(form.totalRewardAmount),
+  rewardStages: form.stageAmounts.map((amount, index) => ({ stage: index + 1, amount: num(amount) })),
   expiryDays: form.expiryDays === '' ? null : num(form.expiryDays),
   maxReferralsPerReferrer: num(form.maxReferralsPerReferrer),
   stackingEnabled: form.stackingEnabled,

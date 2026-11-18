@@ -4,7 +4,8 @@ import {
   referralAdminApi, apiErrorMessage, type ReferralFraudEntry,
 } from '../services/referralAdminApi';
 import {
-  Pagination, EmptyState, StatusBadge, DetailDrawer, FieldRow, fmtDate, inputClass,
+  Pagination, EmptyState, StatusBadge, DetailDrawer, FieldRow, PanelHeader,
+  FilterBar, fmtDate, filterClass, inputClass,
 } from '../components/referralUi';
 
 const PAGE_SIZE = 20;
@@ -22,7 +23,7 @@ function signalsOf(entry: ReferralFraudEntry): string[] {
   return [];
 }
 
-export default function ReferralFraudPage() {
+export default function ReferralFraudPage({ embedded = false }: { embedded?: boolean }) {
   const [status, setStatus] = useState('');
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<ReferralFraudEntry[]>([]);
@@ -71,19 +72,17 @@ export default function ReferralFraudPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-base font-bold text-gray-900 dark:text-white">Fraud Review Queue</h1>
-        <p className="text-xs text-gray-500 dark:text-slate-400">Review flagged referrals and record the decision in the referral audit trail.</p>
-      </div>
+      <PanelHeader embedded={embedded} title="Fraud Review Queue"
+        subtitle="Review flagged referrals and record the decision in the referral audit trail." />
 
-      <div className="page-card p-3 flex flex-wrap items-center gap-2">
+      <FilterBar>
         <select value={status} onChange={e => { setStatus(e.target.value); setOffset(0); }}
-          className={`${inputClass} w-auto text-xs py-2`}>
+          className={`${filterClass} w-auto`}>
           <option value="">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <span className="text-[11px] text-gray-500">{total.toLocaleString('en-IN')} referrals in view</span>
-      </div>
+      </FilterBar>
       {error && <p className="text-xs text-red-500">{error}</p>}
       {notice && <p className="text-xs text-emerald-600 dark:text-emerald-400">{notice}</p>}
 

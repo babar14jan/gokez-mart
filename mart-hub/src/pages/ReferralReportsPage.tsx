@@ -5,7 +5,10 @@ import {
   type ReferralReportType, type ReferralReportRow,
   type ConversionReportRow, type OrdersReportRow, type CustomersReportRow, type LiabilityReportRow,
 } from '../services/referralAdminApi';
-import { EmptyState, StatusBadge, fmtMoney, inputClass } from '../components/referralUi';
+import {
+  EmptyState, StatusBadge, PanelHeader, FilterBar, DateRangeFilter,
+  fmtMoney, filterClass,
+} from '../components/referralUi';
 
 const TYPES: Array<{ value: ReferralReportType; label: string }> = [
   { value: 'conversion', label: 'Conversion funnel' },
@@ -20,7 +23,7 @@ const isOrders = (row: ReferralReportRow): row is OrdersReportRow => 'day' in ro
 const isCustomers = (row: ReferralReportRow): row is CustomersReportRow => 'referrals' in row && !('status' in row);
 const isLiability = (row: ReferralReportRow): row is LiabilityReportRow => 'credits' in row && 'status' in row;
 
-export default function ReferralReportsPage() {
+export default function ReferralReportsPage({ embedded = false }: { embedded?: boolean }) {
   const [type, setType] = useState<ReferralReportType>('conversion');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -51,7 +54,7 @@ export default function ReferralReportsPage() {
   const exportCsv = async (kind: 'records' | 'ledger') => {
     setExporting(kind);
     setError('');
-    try { await downloadReferralCsv(kind); }
+    try { await downloadReferralCsv(kind, { from: from || undefined, to: to || undefined }); }
     catch (e) { setError(apiErrorMessage(e, 'Could not download the export.')); }
     finally { setExporting(''); }
   };
@@ -98,35 +101,27 @@ export default function ReferralReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-gray-900 dark:text-white">Referral Reports</h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400">Conversion, order, customer and credit-liability views with CSV exports.</p>
-        </div>
-        <div className="flex gap-2">
+      <PanelHeader embedded={embedded} title="Referral Reports"
+        subtitle="Conversion, order, customer and credit-liability views with CSV exports."
+        actions={<>
           <button onClick={() => exportCsv('records')} disabled={Boolean(exporting)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50">
             <Download className="w-3.5 h-3.5" /> {exporting === 'records' ? 'Preparing…' : 'Export records'}
           </button>
           <button onClick={() => exportCsv('ledger')} disabled={Boolean(exporting)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50">
             <Download className="w-3.5 h-3.5" /> {exporting === 'ledger' ? 'Preparing…' : 'Export ledger'}
           </button>
-        </div>
-      </div>
+        </>} />
 
-      <div className="page-card p-3 flex flex-wrap items-center gap-2">
+      <FilterBar>
         <select value={type} onChange={e => setType(e.target.value as ReferralReportType)}
-          className={`${inputClass} w-auto text-xs py-2`}>
+          className={`${filterClass} w-auto`}>
           {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
-        <input type="date" value={from} onChange={e => setFrom(e.target.value)} aria-label="From date"
-          className={`${inputClass} w-auto text-xs py-2`} />
-        <span className="text-xs text-gray-500">to</span>
-        <input type="date" value={to} onChange={e => setTo(e.target.value)} aria-label="To date"
-          className={`${inputClass} w-auto text-xs py-2`} />
+        <DateRangeFilter from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} />
         <span className="text-[11px] text-gray-500">{total.toLocaleString('en-IN')} rows</span>
-      </div>
+      </FilterBar>
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       <div className="page-card">
@@ -149,7 +144,7 @@ export default function ReferralReportsPage() {
         )}
       </div>
       <p className="text-[10px] text-gray-500 dark:text-slate-400">
-        Date range inputs are passed to the backend, which currently applies them only to the orders report.
+        Date range inputs are applied by the backend to all referral reports.
         CSV exports are authenticated downloads from the backend export endpoint.
       </p>
     </div>

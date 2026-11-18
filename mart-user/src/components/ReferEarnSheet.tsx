@@ -9,7 +9,6 @@ import {
   buildReferralShareMessage,
   buildWhatsAppReferralLink,
   normalizeReferralCode,
-  REFERRAL_CREDIT_AMOUNT,
 } from '../utils/referral';
 
 function dateLabel(value: string | null | undefined): string {
@@ -104,10 +103,10 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
   const code = normalizeReferralCode(data?.code);
   const link = buildReferralLink(code, window.location.origin);
   const campaign = data?.campaign;
-  const reward = Number(campaign?.refereeReward) > 0 ? Number(campaign?.refereeReward) : 100;
-  const creditAmount = Number(campaign?.creditAmount) > 0 ? Number(campaign?.creditAmount) : REFERRAL_CREDIT_AMOUNT;
-  const qualifyingMin = Number(campaign?.qualifyingOrderMin) || 0;
-  const redemptionMin = Number(campaign?.redemptionMin) || 0;
+  const reward = Number(campaign?.totalRewardAmount) || 0;
+  const stages = Array.isArray(campaign?.rewardStages) ? campaign.rewardStages : [];
+  const stageText = stages.map(stage => `Stage ${stage.stage}: ${rupees(stage.amount)}`).join(' · ');
+  const minimumOrderAmount = Number(data?.minimumOrderAmount) || 0;
   const expiryDays = Number(campaign?.expiryDays) || 0;
   const cap = Number(campaign?.maxReferralsPerReferrer) || 0;
   const stats = data?.stats;
@@ -168,7 +167,7 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
               <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-gokez-300">
                 <Gift className="h-5 w-5" aria-hidden="true" />
               </div>
-              <p className="mt-3 text-xl font-extrabold text-gokez-700 dark:text-gokez-300">Earn ₹100</p>
+              <p className="mt-3 text-xl font-extrabold text-gokez-700 dark:text-gokez-300">Earn {rupees(reward)}</p>
               <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">for every friend who places their first qualifying order.</p>
               <div className="mt-3 rounded-xl border border-dashed border-gokez-300 bg-white px-3 py-3 dark:border-gokez-700 dark:bg-slate-800">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Your referral code</p>
@@ -206,12 +205,12 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
               <ol className="list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
                 <li>Share your code or your link with a friend.</li>
                 <li>They sign up with your code, or open your link and verify their number.</li>
-                <li>Both of you get {rupees(creditAmount)} in rewards after their first qualifying order is successfully delivered.</li>
+                <li>Both of you get {rupees(reward)} in rewards after their first qualifying order is successfully delivered.</li>
               </ol>
-              {(qualifyingMin > 0 || redemptionMin > 0 || expiryDays > 0) && (
+              {(stageText || minimumOrderAmount > 0 || expiryDays > 0) && (
                 <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-                  {qualifyingMin > 0 && `Qualifying order: ${rupees(qualifyingMin)} or more. `}
-                  {redemptionMin > 0 && `Use rewards on orders of ${rupees(redemptionMin)} or more. `}
+                  {stageText && `${stageText}. `}
+                  {minimumOrderAmount > 0 && `Eligible orders: ${rupees(minimumOrderAmount)} product subtotal or more. `}
                   {expiryDays > 0 && `Credits expire ${expiryDays} days after they unlock. `}
                 </p>
               )}
@@ -256,7 +255,9 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                   {credits.map(credit => (
                     <div key={credit.id} className="flex items-center justify-between gap-2 px-3 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-ink dark:text-white">{rupees(credit.amount)} reward</p>
+                        <p className="text-sm font-bold text-ink dark:text-white">
+                          {credit.stageNumber ? `Stage ${credit.stageNumber} · ` : ''}{rupees(credit.amount)} reward
+                        </p>
                         <p className="text-[11px] text-gray-500 dark:text-slate-400">Expires {dateLabel(credit.expiresAt)}</p>
                       </div>
                       <span className="flex-shrink-0 rounded-full bg-gokez-50 px-2.5 py-1 text-[10px] font-bold text-gokez-700 dark:bg-gokez-900/30 dark:text-gokez-300">{statusLabel(credit.status)}</span>

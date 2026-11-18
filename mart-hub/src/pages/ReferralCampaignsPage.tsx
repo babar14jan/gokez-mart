@@ -4,7 +4,7 @@ import {
   referralAdminApi, campaignToForm, campaignFormToPayload, num,
   type ReferralCampaign, type ReferralCampaignForm, type ReferralCampaignHistoryEntry, type CampaignAction,
 } from '../services/referralAdminApi';
-import { StatusBadge, fmtDate, fmtMoney, inputClass } from '../components/referralUi';
+import { StatusBadge, PanelHeader, fmtDate, fmtMoney, inputClass } from '../components/referralUi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PageSkeleton from '../components/PageSkeleton';
 
@@ -29,6 +29,15 @@ const displayValue = (value: unknown): string => {
   return String(value);
 };
 
+const stageSummary = (campaign: ReferralCampaign): string => {
+  const stages = Array.isArray(campaign.reward_stages) ? campaign.reward_stages : [];
+  if (!stages.length) return '—';
+  return stages.map(stage => `Stage ${num(stage.stage)}: ${fmtMoney(stage.amount)}`).join(' · ');
+};
+
+const stageTotal = (amounts: string[]): number =>
+  Math.round(amounts.reduce((total, amount) => total + num(amount), 0) * 100) / 100;
+
 function ToggleRow({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
     <label className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 dark:border-slate-700/60 last:border-0 cursor-pointer">
@@ -42,7 +51,7 @@ function ToggleRow({ label, hint, checked, onChange }: { label: string; hint?: s
   );
 }
 
-export default function ReferralCampaignsPage() {
+export default function ReferralCampaignsPage({ embedded = false }: { embedded?: boolean }) {
   const [campaigns, setCampaigns] = useState<ReferralCampaign[]>([]);
   const [history, setHistory] = useState<ReferralCampaignHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,9 +100,25 @@ export default function ReferralCampaignsPage() {
   const setField = <K extends keyof ReferralCampaignForm>(key: K, value: ReferralCampaignForm[K]) =>
     setForm(current => ({ ...current, [key]: value }));
 
+  const setStageCount = (count: number) => setForm(current => {
+    const next = Math.max(1, Math.min(10, count));
+    const amounts = [...current.stageAmounts];
+    while (amounts.length < next) amounts.push('0');
+    return { ...current, stageAmounts: amounts.slice(0, next) };
+  });
+
+  const setStageAmount = (index: number, value: string) => setForm(current => ({
+    ...current,
+    stageAmounts: current.stageAmounts.map((amount, position) => position === index ? value : amount),
+  }));
+
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Campaign name is required'); return; }
     if (editing && !form.reason.trim()) { setError('A reason is required for an audit-tracked edit'); return; }
+    if (!form.stageAmounts.length || stageTotal(form.stageAmounts) !== num(form.totalRewardAmount)) {
+      setError('Stage amounts must add up to the total reward amount');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -125,15 +150,11 @@ export default function ReferralCampaignsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-gray-900 dark:text-white">Referral Campaigns</h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400">{campaigns.length} version{campaigns.length !== 1 ? 's' : ''} · edits create a new audited version</p>
-        </div>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl shadow-sm">
+      <PanelHeader embedded={embedded} title="Referral Campaigns"
+        subtitle={`${campaigns.length} version${campaigns.length !== 1 ? 's' : ''} · edits create a new audited version`}
+        actions={<button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl shadow-sm">
           <Plus className="w-3.5 h-3.5" /> New version
-        </button>
-      </div>
+        </button>} />
       {error && !showModal && <p className="text-xs text-red-500">{error}</p>}
 
       {active && (
@@ -147,7 +168,7 @@ export default function ReferralCampaignsPage() {
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">v{active.version}</span>
               </div>
               <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                {fmtMoney(active.referrer_reward)} referrer · {fmtMoney(active.referee_reward)} referee · {num(active.credits_per_reward)} × {fmtMoney(active.credit_amount)} credits
+                {fmtMoney(active.total_reward_amount)} per customer · {stageSummary(active)}
               </p>
             </div>
             <p className="text-[10px] text-gray-500 dark:text-slate-400">
@@ -157,8 +178,8 @@ export default function ReferralCampaignsPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
             {[
-              ['Qualifying min', fmtMoney(active.qualifying_order_min)],
-              ['Redemption min', fmtMoney(active.redemption_min)],
+              ['Total per customer', fmtMoney(active.total_reward_amount)],
+              ['Stages', String(Array.isArray(active.reward_stages) ? active.reward_stages.length : 0)],
               ['Referral cap', String(num(active.max_referrals_per_referrer))],
               ['Expiry', active.expiry_days === null ? 'Never' : `${active.expiry_days} days`],
               ['Value basis', String(active.value_basis || '—')],
@@ -193,7 +214,7 @@ export default function ReferralCampaignsPage() {
               <p className="text-[10px] text-gray-500">{c.createdByName || '—'}</p>
             </div>
             <StatusBadge status={c.status} />
-            <p className="text-xs text-gray-600 dark:text-slate-400">{fmtMoney(c.referrer_reward)} / {fmtMoney(c.referee_reward)}</p>
+            <p className="text-xs text-gray-600 dark:text-slate-400">{fmtMoney(c.total_reward_amount)}</p>
             <p className="text-[10px] text-gray-500">{fmtDate(c.created_at, false)}</p>
             <div className="flex items-center justify-end gap-1 col-span-2 sm:col-span-1">
               <button onClick={() => openEdit(c)} title="Edit" className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20">
@@ -268,30 +289,33 @@ export default function ReferralCampaignsPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">Campaign name *</label>
                 <input className={inputClass} value={form.name} onChange={e => setField('name', e.target.value)} placeholder="Referral & Earn" />
               </div>
-              <div className="grid sm:grid-cols-3 gap-3">
-                {([
-                  ['referrerReward', 'Referrer reward (₹)'],
-                  ['refereeReward', 'Referee reward (₹)'],
-                  ['creditAmount', 'Credit amount (₹)'],
-                ] as const).map(([key, label]) => (
-                  <div key={key}>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-                    <input type="number" className={inputClass} value={form[key]} onChange={e => setField(key, e.target.value)} />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Total reward per customer (₹) *</label>
+                  <input type="number" className={inputClass} value={form.totalRewardAmount}
+                    onChange={e => setField('totalRewardAmount', e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Number of redemption stages</label>
+                  <input type="number" min="1" max="10" className={inputClass}
+                    value={form.stageAmounts.length}
+                    onChange={e => setStageCount(parseInt(e.target.value, 10) || 1)} />
+                </div>
+              </div>
+              <div className={`grid gap-3 ${form.stageAmounts.length > 2 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                {form.stageAmounts.map((amount, index) => (
+                  <div key={index}>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Stage {index + 1} amount (₹)</label>
+                    <input type="number" className={inputClass} value={amount}
+                      onChange={e => setStageAmount(index, e.target.value)} />
                   </div>
                 ))}
               </div>
-              <div className="grid sm:grid-cols-3 gap-3">
-                {([
-                  ['creditsPerReward', 'Credits per reward'],
-                  ['qualifyingOrderMin', 'Qualifying min (₹)'],
-                  ['redemptionMin', 'Redemption min (₹)'],
-                ] as const).map(([key, label]) => (
-                  <div key={key}>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-                    <input type="number" className={inputClass} value={form[key]} onChange={e => setField(key, e.target.value)} />
-                  </div>
-                ))}
-              </div>
+              <p className={`text-[11px] ${stageTotal(form.stageAmounts) === num(form.totalRewardAmount)
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-red-500'}`}>
+                Stage total: {fmtMoney(stageTotal(form.stageAmounts))} · Total reward: {fmtMoney(form.totalRewardAmount)}
+              </p>
               <div className="grid sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Expiry days</label>

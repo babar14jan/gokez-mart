@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 
 export const fmtMoney = (value: unknown): string =>
   `₹${Number(value ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -12,6 +12,66 @@ export const fmtDate = (value: unknown, withTime = true): string => {
     ? { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }
     : { day: '2-digit', month: 'short', year: 'numeric' });
 };
+
+export const filterClass = 'px-3 py-2 text-xs border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 placeholder:text-gray-400';
+
+export { DateRangeFilter, DateRangeChips, CustomDateInputs, DATE_RANGE_OPTIONS, istDay } from './DateRangeFilter';
+export type { DateRangeId } from './DateRangeFilter';
+
+export function useDebounced<T>(value: T, delay = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
+export function PanelHeader({ title, subtitle, embedded, actions }: {
+  title: string; subtitle: string; embedded?: boolean; actions?: ReactNode;
+}) {
+  if (embedded) return actions ? <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div> : null;
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 className="text-base font-bold text-gray-900 dark:text-white">{title}</h1>
+        <p className="text-xs text-gray-500 dark:text-slate-400">{subtitle}</p>
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+export function FilterBar({ children }: { children: ReactNode }) {
+  return <div className="page-card flex flex-wrap items-center gap-2 p-3">{children}</div>;
+}
+
+export function SearchField({ value, onChange, placeholder }: {
+  value: string; onChange: (value: string) => void; placeholder: string;
+}) {
+  return (
+    <div className="relative min-w-[180px] flex-1">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+      <input value={value} onChange={event => onChange(event.target.value)} placeholder={placeholder}
+        className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-8 text-xs text-gray-700 placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" />
+      {value && (
+        <button type="button" onClick={() => onChange('')} aria-label="Clear search"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2">
+          <X className="h-3.5 w-3.5 text-gray-400" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function ClearButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900 dark:hover:text-white">
+      <X className="h-3 w-3" /> Clear
+    </button>
+  );
+}
 
 const STATUS_STYLES: Record<string, string> = {
   pending:   'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -39,13 +99,15 @@ export function KpiCard({ label, value, sub, icon, gradient }: {
   label: string; value: string | number; sub?: string; icon: ReactNode; gradient: string;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white flex-shrink-0`}>{icon}</div>
+    <div className="kpi-card h-full cursor-default">
+      <div className="flex items-center gap-3 w-full min-w-0">
+        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0`}>{icon}</div>
         <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{value}</p>
       </div>
-      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5">{label}</p>
-      {sub && <p className="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5">{sub}</p>}
+      <div className="min-w-0 w-full">
+        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 truncate">{label}</p>
+        {sub && <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 truncate">{sub}</p>}
+      </div>
     </div>
   );
 }

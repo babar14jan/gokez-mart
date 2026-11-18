@@ -469,6 +469,7 @@ export interface ReferralCredit {
   id: string;
   amount: number;
   status: string;
+  stageNumber: number | null;
   unlockedAt: string | null;
   expiresAt: string | null;
   orderId: string | null;
@@ -477,12 +478,8 @@ export interface ReferralCredit {
 export interface ReferralCampaign {
   name: string;
   status: string;
-  referrerReward: number;
-  refereeReward: number;
-  creditAmount: number;
-  creditsPerReward: number;
-  qualifyingOrderMin: number;
-  redemptionMin: number;
+  totalRewardAmount: number;
+  rewardStages: Array<{ stage: number; amount: number }>;
   expiryDays: number;
   maxReferralsPerReferrer: number;
 }
@@ -508,6 +505,7 @@ export interface ReferralRecord {
 export interface ReferralMeData {
   code: string;
   campaign: ReferralCampaign;
+  minimumOrderAmount: number;
   stats: ReferralStats;
   eligibleForCode: boolean;
   credits: ReferralCredit[];

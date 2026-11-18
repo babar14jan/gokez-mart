@@ -5,6 +5,7 @@ import { orderBrowseDate } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
+import { DateRangeChips } from '../components/DateRangeFilter';
 
 type Tab = 'revenue' | 'orders' | 'products';
 type DateRange = 'today' | 'yesterday' | 'all' | 'custom';
@@ -104,27 +105,10 @@ function DateSelector({ range, setRange, customFrom, setCustomFrom, customTo, se
   customFrom: string; setCustomFrom: (s: string) => void;
   customTo: string; setCustomTo: (s: string) => void;
 }) {
-  const tabs: { id: DateRange; label: string }[] = [
-    { id: 'today', label: 'Today' },
-    { id: 'yesterday', label: 'Yesterday' },
-    { id: 'all', label: 'All' },
-    { id: 'custom', label: 'Custom' },
-  ];
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {tabs.map(t => (
-        <button key={t.id} onClick={() => setRange(t.id)}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${range === t.id ? 'bg-emerald-500 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'}`}>
-          {t.id === 'custom' && <Calendar className="w-3 h-3" />}{t.label}
-        </button>
-      ))}
-      {range === 'custom' && (
-        <div className="flex items-center gap-2">
-          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-          <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
-          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-        </div>
-      )}
+      <DateRangeChips active={range} onSelect={setRange}
+        from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo} />
     </div>
   );
 }

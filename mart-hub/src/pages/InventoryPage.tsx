@@ -398,15 +398,19 @@ export default function InventoryPage() {
       )}
 
       {/* Compact filter pills + KPIs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="inline-flex shrink-0 flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40">
         {[
-          { key: 'all', label: `All ${items.length}`, color: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200' },
-          { key: 'out', label: `Out ${outCount}`, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
-          { key: 'low', label: `Low ${lowCount}`, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
-          ...(untrackedCount > 0 ? [{ key: 'untracked', label: `Untracked ${untrackedCount}`, color: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300' }] : []),
+          { key: 'all', label: `All ${items.length}` },
+          { key: 'out', label: `Out ${outCount}` },
+          { key: 'low', label: `Low ${lowCount}` },
+          ...(untrackedCount > 0 ? [{ key: 'untracked', label: `Untracked ${untrackedCount}` }] : []),
         ].map(pill => (
           <button key={pill.key} onClick={() => setStatusFilter(pill.key as any)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${statusFilter === pill.key ? 'bg-emerald-500 text-white' : pill.color}`}>
+            className={`inline-flex items-center justify-center whitespace-nowrap rounded-md border px-2 py-1.5 text-xs font-bold transition-colors sm:px-2.5 ${
+              statusFilter === pill.key
+                ? 'border-emerald-500 bg-emerald-500 text-white'
+                : 'border-gray-200 text-gray-600 dark:border-slate-600 dark:text-slate-300'
+            }`}>
             {pill.label}
           </button>
         ))}

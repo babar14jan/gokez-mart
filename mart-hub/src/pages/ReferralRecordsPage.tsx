@@ -1,22 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Search, X, Loader2, FileText } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import {
   referralAdminApi,
   type ReferralRecord, type ReferralRecordDetail, type ReferralAuditEntry,
 } from '../services/referralAdminApi';
 import {
-  StatusBadge, Pagination, DetailDrawer, FieldRow, EmptyState,
-  fmtDate, fmtMoney, inputClass,
+  StatusBadge, Pagination, DetailDrawer, FieldRow, EmptyState, PanelHeader,
+  FilterBar, SearchField, DateRangeFilter, ClearButton, useDebounced, filterClass,
+  fmtDate, fmtMoney,
 } from '../components/referralUi';
 
 const PAGE_SIZE = 20;
 const STATUSES = ['pending', 'qualified', 'rewarded', 'capped', 'rejected', 'expired'];
 
-export default function ReferralRecordsPage() {
+export default function ReferralRecordsPage({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<ReferralRecord[]>([]);
   const [total, setTotal] = useState(0);
-  const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const search = useDebounced(searchInput).trim();
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -64,6 +65,7 @@ export default function ReferralRecordsPage() {
   }, [dateFiltered, status, search, from, to, offset]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setOffset(0); }, [search, status, from, to]);
 
   const openDetail = async (id: string) => {
     setDetail(null);
@@ -81,42 +83,22 @@ export default function ReferralRecordsPage() {
     } finally { setDetailLoading(false); }
   };
 
-  const submitSearch = () => { setOffset(0); setSearch(searchInput.trim()); };
-
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-base font-bold text-gray-900 dark:text-white">Referral Records</h1>
-        <p className="text-xs text-gray-500 dark:text-slate-400">Attributions, qualification state and reward lifecycle per referral.</p>
-      </div>
+      <PanelHeader embedded={embedded} title="Referral Records"
+        subtitle="Attributions, qualification state and reward lifecycle per referral." />
 
-      <div className="page-card p-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 flex-1 min-w-[220px]">
-          <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') submitSearch(); }}
-            placeholder="Search phone, code, referrer or referee"
-            className={inputClass} />
-          <button onClick={submitSearch} className="p-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 flex-shrink-0" title="Search">
-            <Search className="w-4 h-4" />
-          </button>
-        </div>
-        <select value={status} onChange={e => { setStatus(e.target.value); setOffset(0); }}
-          className={`${inputClass} w-auto text-xs py-2`}>
+      <FilterBar>
+        <SearchField value={searchInput} onChange={setSearchInput} placeholder="Search phone, code, referrer or referee" />
+        <select value={status} onChange={e => setStatus(e.target.value)} className={`${filterClass} w-auto`}>
           <option value="">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <input type="date" value={from} onChange={e => { setFrom(e.target.value); setOffset(0); }} aria-label="From date"
-          className={`${inputClass} w-auto text-xs py-2`} />
-        <span className="text-xs text-gray-500">to</span>
-        <input type="date" value={to} onChange={e => { setTo(e.target.value); setOffset(0); }} aria-label="To date"
-          className={`${inputClass} w-auto text-xs py-2`} />
-        {(search || status || from || to) && (
-          <button onClick={() => { setSearch(''); setSearchInput(''); setStatus(''); setFrom(''); setTo(''); setOffset(0); }}
-            className="text-xs font-semibold text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center gap-1">
-            <X className="w-3 h-3" /> Clear
-          </button>
+        <DateRangeFilter from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} />
+        {(searchInput || status || from || to) && (
+          <ClearButton onClick={() => { setSearchInput(''); setStatus(''); setFrom(''); setTo(''); setOffset(0); }} />
         )}
-      </div>
+      </FilterBar>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 

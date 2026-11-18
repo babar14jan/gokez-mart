@@ -66,7 +66,7 @@ describe('referral link helpers', () => {
     const message = buildReferralShareMessage('k7p9x2', link);
     assert.ok(message.includes('K7P9X2'));
     assert.ok(message.includes(link));
-    assert.ok(message.includes('₹100'));
+    assert.ok(message.includes('₹50'));
     assert.ok(message.includes('successfully delivered'));
   });
 
@@ -129,7 +129,7 @@ describe('referral discount rules', () => {
   test('order referral discount reads explicit fields before the credit fallback', () => {
     assert.equal(getOrderReferralDiscount({ referralDiscount: 20 }), 20);
     assert.equal(getOrderReferralDiscount({ referralRewardDiscount: 20 }), 20);
-    assert.equal(getOrderReferralDiscount({ referralCreditId: 'credit-1' }), 20);
+    assert.equal(getOrderReferralDiscount({ referralCreditId: 'credit-1' }), 0);
     assert.equal(getOrderReferralDiscount({ referralDiscount: 0, referralCreditId: 'credit-1' }), 0);
     assert.equal(getOrderReferralDiscount(null), 0);
   });
@@ -187,7 +187,7 @@ describe('referral integration points', () => {
       '<ReferEarnSheet',
     ]);
     assertIncludes('src/components/ReferEarnSheet.tsx', [
-      'Earn ₹100',
+      'Earn {rupees(reward)}',
       'Copy Code',
       'Copy Link',
       'WhatsApp',

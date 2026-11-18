@@ -1,15 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Smartphone, MonitorSmartphone, CheckCircle, XCircle, HelpCircle, Trash2, Users, Share2 } from 'lucide-react';
 import { installAnalyticsApi } from '../services/api';
+import { DateRangeChips } from '../components/DateRangeFilter';
 
 type DateRange = 'today' | 'yesterday' | 'all' | 'custom';
-
-const RANGES: { key: DateRange; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'all', label: 'All' },
-  { key: 'custom', label: 'Custom' },
-];
 
 // A local calendar day turned into an ISO instant the backend can compare
 // against `created_at` (TIMESTAMPTZ). `end` picks 23:59:59.999 so the whole day
@@ -124,44 +118,9 @@ export default function InstallAnalyticsPage() {
         How shoppers add Gokez Mart to their home screen, and how often they share the app. Times are India time.
       </p>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {RANGES.map(r => (
-            <button
-              key={r.key}
-              type="button"
-              onClick={() => setRange(r.key)}
-              aria-pressed={range === r.key}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                range === r.key
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-
-        {range === 'custom' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={customFrom}
-              max={customTo || undefined}
-              onChange={e => setCustomFrom(e.target.value)}
-              className="text-sm border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200"
-            />
-            <span className="text-xs text-gray-400">to</span>
-            <input
-              type="date"
-              value={customTo}
-              min={customFrom || undefined}
-              onChange={e => setCustomTo(e.target.value)}
-              className="text-sm border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200"
-            />
-          </div>
-        )}
+      <div className="flex flex-wrap items-center gap-2">
+        <DateRangeChips active={range} onSelect={setRange}
+          from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo} />
       </div>
 
       {/* Section 1 — Install funnel */}

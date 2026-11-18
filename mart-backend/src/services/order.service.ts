@@ -100,7 +100,7 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
               o.referral_discount::float as "referralDiscount",
               COALESCE(
                 (SELECT (u.terms_snapshot ->> 'requires_scheduled_delivery')::boolean
-                 FROM mart_campaign_uses u WHERE u.order_id = o.id LIMIT 1),
+                 FROM mart_campaign_uses u WHERE u.order_id = o.id AND u.reversed_at IS NULL LIMIT 1),
                 (SELECT c.requires_scheduled_delivery FROM mart_campaigns c WHERE c.id = o.campaign_id),
                 false
               ) as "campaignRequiresScheduledDelivery",
@@ -1305,11 +1305,12 @@ export class OrderService {
     actor: { id: string; username: string; role: string; storeId: string | null },
     paymentMethod?: 'cod' | 'upi' | null,
     additions: Array<{ productId: string; quantity: number; unit?: string; price?: number }> = [],
+    removeNextDayCoupon = false,
   ) {
     const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
     const additionList = Array.isArray(additions) ? additions : [];
-    if (adjustmentList.length === 0 && additionList.length === 0 && !paymentMethod) {
-      throw badRequest('Choose at least one item to adjust or add, or change the payment mode');
+    if (adjustmentList.length === 0 && additionList.length === 0 && !paymentMethod && !removeNextDayCoupon) {
+      throw badRequest('Choose at least one item to adjust or add, change the payment mode, or remove the next-day coupon');
     }
     if (paymentMethod && !['cod', 'upi'].includes(paymentMethod)) {
       throw badRequest('Choose a valid payment mode');
@@ -1321,6 +1322,10 @@ export class OrderService {
                 o.subtotal::float, o.delivery_charge::float as "deliveryCharge",
                 o.campaign_discount::float as "campaignDiscount", o.total::float,
                 o.item_savings::float as "itemSavings",
+                o.free_delivery_saving::float as "freeDeliverySaving",
+                o.referral_discount::float as "referralDiscount",
+                o.campaign_id as "campaignId", o.coupon_code_used as "couponCodeUsed",
+                o.delivery_preference as "deliveryPreference", o.scheduled_for as "scheduledFor",
                 o.customer_id as "customerId", o.payment_method as "paymentMethod"
            FROM mart_orders o WHERE o.id = $1 FOR UPDATE`,
         [orderId]
@@ -1332,6 +1337,24 @@ export class OrderService {
       }
       if (actor.role !== 'super_admin' && actor.storeId !== order.storeId) {
         throw forbidden('Only the ordering store can edit this order');
+      }
+
+      const couponResult = removeNextDayCoupon
+        ? await client.query(
+            `SELECT cu.discount_applied as "discountApplied", cu.terms_snapshot as "termsSnapshot",
+                    COALESCE(c.discount_type, cu.terms_snapshot ->> 'discount_type') as "discountType",
+                    COALESCE(c.requires_scheduled_delivery, (cu.terms_snapshot ->> 'requires_scheduled_delivery')::boolean, false) as "requiresScheduledDelivery"
+               FROM mart_campaign_uses cu
+               LEFT JOIN mart_campaigns c ON c.id = cu.campaign_id
+              WHERE cu.order_id = $1 AND cu.reversed_at IS NULL
+              ORDER BY cu.used_at DESC
+              LIMIT 1`,
+            [orderId],
+          )
+        : { rows: [] as any[] };
+      const couponUse = couponResult.rows[0];
+      if (removeNextDayCoupon && !couponUse?.requiresScheduledDelivery) {
+        throw badRequest('This order does not have an active next-day coupon');
       }
 
       const itemsResult = await client.query(
@@ -1366,8 +1389,11 @@ export class OrderService {
         return input.deliveredQuantity !== item.quantity;
       });
       const paymentChanged = !!paymentMethod && paymentMethod !== order.paymentMethod;
-      if (changed.length === 0 && additionList.length === 0 && !paymentChanged) {
+      if (changed.length === 0 && additionList.length === 0 && !paymentChanged && !removeNextDayCoupon) {
         throw badRequest('No changes to save');
+      }
+      if (removeNextDayCoupon) {
+        await this.reverseCampaignRedemption(orderId, 'next_day_coupon_removed', client);
       }
 
       // An order with nothing delivered is a cancellation, not a partial
@@ -1514,12 +1540,28 @@ export class OrderService {
         [orderId]
       );
       const subtotal = Number(subtotalResult.rows[0]?.subtotal ?? 0);
-      const total = Math.ceil(Math.max(0, subtotal + order.deliveryCharge - order.campaignDiscount));
+      const effectiveCampaignDiscount = removeNextDayCoupon ? 0 : Number(order.campaignDiscount);
+      let deliveryCharge = Number(order.deliveryCharge);
+      let freeDeliverySaving = Number(order.freeDeliverySaving || 0);
+      if (removeNextDayCoupon && couponUse?.discountType === 'free_delivery') {
+        const normalDeliveryCharge = parseFloat(settings.delivery_charge || '0');
+        const freeAbove = parseFloat(settings.free_delivery_above || '0');
+        deliveryCharge = freeAbove > 0 && subtotal >= freeAbove ? 0 : normalDeliveryCharge;
+        freeDeliverySaving = deliveryCharge === 0 && normalDeliveryCharge > 0 ? normalDeliveryCharge : 0;
+      }
+      const total = Math.ceil(Math.max(
+        0,
+        subtotal + deliveryCharge - effectiveCampaignDiscount - Number(order.referralDiscount || 0),
+      ));
       const retainedSubtotal = Math.max(0, subtotal - addedTotal);
       const retainedSavings = Number(order.subtotal) > 0
         ? Number(order.itemSavings) * retainedSubtotal / Number(order.subtotal)
         : 0;
       const itemSavings = Number((retainedSavings + addedSavings).toFixed(2));
+      const restoredAmount = removeNextDayCoupon
+        ? Number((Number(order.campaignDiscount) + Math.max(0, Number(order.freeDeliverySaving || 0) - freeDeliverySaving)).toFixed(2))
+        : 0;
+      const clearNextDaySchedule = removeNextDayCoupon;
 
       const effectivePaymentMethod = paymentMethod || order.paymentMethod;
       await client.query(
@@ -1528,10 +1570,30 @@ export class OrderService {
                 total = $2,
                 item_savings = $4,
                 payment_method = COALESCE($5, payment_method),
+                campaign_id = CASE WHEN $6::boolean THEN NULL ELSE campaign_id END,
+                campaign_discount = CASE WHEN $6::boolean THEN 0 ELSE campaign_discount END,
+                coupon_code_used = CASE WHEN $6::boolean THEN NULL ELSE coupon_code_used END,
+                delivery_charge = $7,
+                free_delivery_saving = $8,
+                delivery_preference = CASE WHEN $9::boolean THEN 'within_15' ELSE delivery_preference END,
+                scheduled_for = CASE WHEN $9::boolean THEN NULL ELSE scheduled_for END,
+                scheduled_label = CASE WHEN $9::boolean THEN NULL ELSE scheduled_label END,
+                confirmed_next_open = CASE WHEN $9::boolean THEN false ELSE confirmed_next_open END,
+                promised_delivery_at = CASE WHEN $9::boolean THEN NULL ELSE promised_delivery_at END,
+                cancellation_window_ends_at = CASE WHEN $9::boolean THEN NULL ELSE cancellation_window_ends_at END,
                 updated_at = NOW()
           WHERE id = $3`,
-        [subtotal, total, orderId, itemSavings, paymentMethod || null]
+        [subtotal, total, orderId, itemSavings, paymentMethod || null, removeNextDayCoupon,
+          deliveryCharge, freeDeliverySaving, clearNextDaySchedule]
       );
+
+      if (clearNextDaySchedule) {
+        await client.query(
+          `INSERT INTO mart_order_delivery_events (order_id, event_type, scheduled_for, actor_id, actor_name)
+           VALUES ($1, 'rescheduled', COALESCE($4::timestamptz, NOW()), $2, $3)`,
+          [orderId, actor.id, adjustedByName, order.scheduledFor || null]
+        );
+      }
 
       const removedFromTotal = Number((Number(order.total) - total).toFixed(2));
       if (order.customerId && removedFromTotal !== 0) {
@@ -1551,6 +1613,15 @@ export class OrderService {
         subtotal,
         total,
         paymentMethod: effectivePaymentMethod,
+        campaignId: removeNextDayCoupon ? null : order.campaignId,
+        couponCodeUsed: removeNextDayCoupon ? null : order.couponCodeUsed,
+        campaignDiscount: effectiveCampaignDiscount,
+        deliveryCharge,
+        freeDeliverySaving,
+        deliveryPreference: clearNextDaySchedule ? 'within_15' : order.deliveryPreference,
+        scheduledFor: clearNextDaySchedule ? null : order.scheduledFor,
+        nextDayCouponRemoved: removeNextDayCoupon,
+        restoredAmount,
         removedTotal: Number(removedTotal.toFixed(2)),
         adjustedItems: changed.length,
         addedItems: addedItemsCount,

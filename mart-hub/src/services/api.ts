@@ -233,7 +233,8 @@ export const ordersApi = {
     reason: string,
     paymentMethod?: 'cod' | 'upi',
     additions?: Array<{ productId: string; quantity: number; unit?: string; price?: number }>,
-  ) => api.put(`/admin/orders/${id}/items`, { adjustments, reason, paymentMethod, additions }),
+    removeNextDayCoupon?: boolean,
+  ) => api.put(`/admin/orders/${id}/items`, { adjustments, reason, paymentMethod, additions, removeNextDayCoupon }),
   reschedule: (id: string, scheduledFor: string) =>
     api.put(`/admin/orders/${id}/reschedule`, { scheduledFor }),
   // Acknowledge an after-hours order for delivery at the next opening hours

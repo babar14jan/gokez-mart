@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Loader2, Users, ExternalLink, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Users, ExternalLink, SlidersHorizontal } from 'lucide-react';
 import {
   referralAdminApi, apiErrorMessage,
   type ReferralCustomer, type ReferralLedgerEntry,
 } from '../services/referralAdminApi';
-import { Pagination, EmptyState, fmtMoney, fmtDate, inputClass } from '../components/referralUi';
+import {
+  Pagination, EmptyState, PanelHeader, FilterBar, SearchField, useDebounced,
+  fmtMoney, fmtDate, inputClass,
+} from '../components/referralUi';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 const PAGE_SIZE = 20;
@@ -28,9 +31,9 @@ function totalsFromLedger(entries: ReferralLedgerEntry[]): LedgerTotals {
   };
 }
 
-export default function ReferralCustomerRewardsPage() {
+export default function ReferralCustomerRewardsPage({ embedded = false }: { embedded?: boolean }) {
   const [searchInput, setSearchInput] = useState('');
-  const [query, setQuery] = useState('');
+  const query = useDebounced(searchInput).trim();
   const [customers, setCustomers] = useState<ReferralCustomer[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -59,6 +62,7 @@ export default function ReferralCustomerRewardsPage() {
   }, [query, offset]);
 
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
+  useEffect(() => { setOffset(0); }, [query]);
 
   const loadLedger = async (customerId: string) => {
     setLedgerLoading(true);
@@ -79,7 +83,6 @@ export default function ReferralCustomerRewardsPage() {
   };
 
   const totals = useMemo(() => totalsFromLedger(ledger), [ledger]);
-  const submitSearch = () => { setOffset(0); setQuery(searchInput.trim()); };
 
   const submitAdjustment = async () => {
     if (!selected || !amount.trim() || !reason.trim()) return;
@@ -100,22 +103,13 @@ export default function ReferralCustomerRewardsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-base font-bold text-gray-900 dark:text-white">Customer Rewards</h1>
-        <p className="text-xs text-gray-500 dark:text-slate-400">Search customers, review their referral rewards and apply manual adjustments.</p>
-      </div>
+      <PanelHeader embedded={embedded} title="Customer Rewards"
+        subtitle="Search customers, review their referral rewards and apply manual adjustments." />
 
-      <div className="page-card p-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 flex-1 min-w-[220px]">
-          <input value={searchInput} onChange={e => setSearchInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') submitSearch(); }}
-            placeholder="Search by phone, name or referral code" className={inputClass} />
-          <button onClick={submitSearch} className="p-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 flex-shrink-0" title="Search">
-            <Search className="w-4 h-4" />
-          </button>
-        </div>
+      <FilterBar>
+        <SearchField value={searchInput} onChange={setSearchInput} placeholder="Search by phone, name or referral code" />
         <span className="text-[11px] text-gray-500">{total.toLocaleString('en-IN')} customers</span>
-      </div>
+      </FilterBar>
       {error && <p className="text-xs text-red-500">{error}</p>}
       {notice && <p className="text-xs text-emerald-600 dark:text-emerald-400">{notice}</p>}
 
@@ -158,7 +152,7 @@ export default function ReferralCustomerRewardsPage() {
                   <p className="text-sm font-bold text-gray-900 dark:text-white">{selected.name || 'Customer'}</p>
                   <p className="text-[11px] text-gray-500">{selected.phone || '—'} · {selected.code || 'No code'}</p>
                 </div>
-                <Link to={`/referral-ledger?customerId=${encodeURIComponent(selected.id)}`}
+                <Link to={`/referrals?tab=ledger&customerId=${encodeURIComponent(selected.id)}`}
                   className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex-shrink-0">
                   Ledger <ExternalLink className="w-3 h-3" />
                 </Link>

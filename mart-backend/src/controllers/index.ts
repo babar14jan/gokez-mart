@@ -1782,11 +1782,12 @@ export const adminUpdateOrderFulfilment = asyncHandler(async (req: AdminRequest,
 // order money, returns any stock for an already-delivered order, and writes an
 // audit row so the original quantity is never lost.
 export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { adjustments, reason, paymentMethod, additions } = req.body;
+  const { adjustments, reason, paymentMethod, additions, removeNextDayCoupon } = req.body;
+  const couponRemoval = removeNextDayCoupon === true || removeNextDayCoupon === 'true';
   const adjustmentList = Array.isArray(adjustments) ? adjustments : [];
   const additionList = Array.isArray(additions) ? additions : [];
-  if (adjustmentList.length === 0 && additionList.length === 0 && paymentMethod === undefined) {
-    res.status(400).json({ success: false, error: 'Choose at least one item to adjust or add, or change the payment mode' }); return;
+  if (adjustmentList.length === 0 && additionList.length === 0 && paymentMethod === undefined && !couponRemoval) {
+    res.status(400).json({ success: false, error: 'Choose at least one item to adjust or add, change the payment mode, or remove the next-day coupon' }); return;
   }
   if (paymentMethod !== undefined && paymentMethod !== 'cod' && paymentMethod !== 'upi') {
     res.status(400).json({ success: false, error: 'Choose a valid payment mode' }); return;
@@ -1822,16 +1823,17 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     req.admin!,
     paymentMethod,
     normalizedAdditions,
+    couponRemoval,
   );
 
   ComplianceService.logAudit({
     adminId: req.admin!.id,
     username: req.admin!.username,
     role: req.admin!.role,
-    action: 'order_items_adjusted',
+    action: result.nextDayCouponRemoved ? 'next_day_coupon_removed' : 'order_items_adjusted',
     entityType: 'order',
     entityId: result.id,
-    detail: `Order #${result.orderNumber}: ${result.adjustedItems} line(s) adjusted, ₹${result.removedTotal.toFixed(2)} removed, ${result.addedItems} line(s) added, ₹${result.addedTotal.toFixed(2)} added, new total ₹${result.total.toFixed(2)}, payment ${result.paymentMethod}${reason ? ` — ${reason}` : ''}`,
+    detail: `Order #${result.orderNumber}: ${result.adjustedItems} line(s) adjusted, ₹${result.removedTotal.toFixed(2)} removed, ${result.addedItems} line(s) added, ₹${result.addedTotal.toFixed(2)} added${result.nextDayCouponRemoved ? `, next-day coupon removed (₹${result.restoredAmount.toFixed(2)} restored)` : ''}, new total ₹${result.total.toFixed(2)}, payment ${result.paymentMethod}${reason ? ` — ${reason}` : ''}`,
     ipAddress: req.ip,
     userAgent: req.get('user-agent'),
   });
@@ -1849,6 +1851,15 @@ export const adminAdjustOrderItems = asyncHandler(async (req: AdminRequest, res:
     PushService.notifyOrderRecipient(result.id, {
       title: `Order #${result.orderNumber} updated`,
       body: `An item was added to your order. Your updated total is ₹${result.total.toFixed(0)}.`,
+      url: '/orders',
+      tag: `order-${result.id}`,
+    }).catch(() => {});
+  }
+
+  if (result.nextDayCouponRemoved) {
+    PushService.notifyOrderRecipient(result.id, {
+      title: `Order #${result.orderNumber} updated`,
+      body: `The next-day coupon was removed. Your updated total is ₹${result.total.toFixed(0)}.`,
       url: '/orders',
       tag: `order-${result.id}`,
     }).catch(() => {});
@@ -4528,7 +4539,7 @@ export const adminReviewReferralFraud = asyncHandler(async (req: AdminRequest, r
 });
 
 export const adminGetReferralSummary = asyncHandler(async (req: AdminRequest, res: Response) => {
-  res.json({ success: true, data: await ReferralService.getSummary() });
+  res.json({ success: true, data: await ReferralService.getSummary(req.query as Record<string, unknown>) });
 });
 
 export const adminGetReferralReport = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -4536,7 +4547,7 @@ export const adminGetReferralReport = asyncHandler(async (req: AdminRequest, res
   if (!['conversion', 'orders', 'customers', 'liability'].includes(type)) {
     res.status(400).json({ success: false, error: 'Unknown referral report type' }); return;
   }
-  res.json({ success: true, data: await ReferralService.getReport(type as 'conversion' | 'orders' | 'customers' | 'liability') });
+  res.json({ success: true, data: await ReferralService.getReport(type as 'conversion' | 'orders' | 'customers' | 'liability', req.query as Record<string, unknown>) });
 });
 
 export const adminAdjustReferral = asyncHandler(async (req: AdminRequest, res: Response) => {
@@ -4554,7 +4565,7 @@ export const adminGetReferralAudit = asyncHandler(async (req: AdminRequest, res:
 
 export const adminExportReferralCsv = asyncHandler(async (req: AdminRequest, res: Response) => {
   const type = req.query.type === 'ledger' ? 'ledger' : 'records';
-  const csv = await ReferralService.exportCsv(type);
+  const csv = await ReferralService.exportCsv(type, req.query as Record<string, unknown>);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="referral-${type}.csv"`);
   res.send(csv);

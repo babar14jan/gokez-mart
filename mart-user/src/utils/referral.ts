@@ -1,6 +1,5 @@
 export const REFERRAL_LINK_CODE_KEY = 'mart_referral_link_code';
 export const REFERRAL_CODE_LENGTH = 6;
-export const REFERRAL_CREDIT_AMOUNT = 20;
 export const REFERRAL_DISCOUNT_EXCLUSIVITY_MESSAGE = 'Remove your existing offer/coupon first — only one discount per order';
 
 const CODE_PATTERN = /^[A-Z0-9]{6}$/;
@@ -48,7 +47,7 @@ export function buildReferralLink(code: string, origin: string): string {
   return `${origin.replace(/\/+$/, '')}/?ref=${normalized}`;
 }
 
-export function buildReferralShareMessage(code: string, link: string, reward = 100): string {
+export function buildReferralShareMessage(code: string, link: string, reward = 50): string {
   return `Join Gokez Mart and use my referral code ${normalizeReferralCode(code)}. Both of us can earn ₹${finite(reward)} after your first qualifying order is successfully delivered! ${link}`;
 }
 
@@ -125,7 +124,7 @@ export function getOrderReferralDiscount(order: any): number {
   if (explicit !== null && explicit !== undefined && explicit !== '') {
     return Math.max(0, finite(explicit));
   }
-  return order.referralCreditId ? REFERRAL_CREDIT_AMOUNT : 0;
+  return 0;
 }
 
 export function referralCreditTotal(order: any): number {

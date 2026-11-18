@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Download, Loader2, X } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import {
   referralAdminApi, downloadReferralCsv, apiErrorMessage,
   type ReferralLedgerEntry,
 } from '../services/referralAdminApi';
-import { Pagination, EmptyState, StatusBadge, fmtMoney, fmtDate, inputClass } from '../components/referralUi';
+import {
+  Pagination, EmptyState, StatusBadge, PanelHeader, FilterBar, SearchField,
+  DateRangeFilter, ClearButton, useDebounced, filterClass, fmtMoney, fmtDate,
+} from '../components/referralUi';
 
 const PAGE_SIZE = 20;
-const TYPES = ['issue', 'redeem', 'expire', 'reverse', 'admin_adjust', 'earn', 'spend'];
+const TYPES = ['issue', 'reserve', 'restore', 'redeem', 'expire', 'reverse', 'admin_adjust'];
 
-export default function ReferralRewardsLedgerPage() {
+export default function ReferralRewardsLedgerPage({ embedded = false }: { embedded?: boolean }) {
   const [params, setParams] = useSearchParams();
   const [customerId, setCustomerId] = useState(params.get('customerId') || '');
   const [type, setType] = useState('');
   const [queryInput, setQueryInput] = useState('');
-  const [query, setQuery] = useState('');
+  const query = useDebounced(queryInput).trim();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [offset, setOffset] = useState(0);
@@ -48,61 +51,41 @@ export default function ReferralRewardsLedgerPage() {
   }, [customerId, type, query, from, to, offset]);
 
   useEffect(() => { load(); }, [load]);
-
-  const submitSearch = () => { setOffset(0); setQuery(queryInput.trim()); };
+  useEffect(() => { setOffset(0); }, [query, customerId, type, from, to]);
 
   const exportCsv = async () => {
     setExporting(true);
     setError('');
-    try { await downloadReferralCsv('ledger'); }
+    try { await downloadReferralCsv('ledger', { from: from || undefined, to: to || undefined }); }
     catch (e) { setError(apiErrorMessage(e, 'Could not download the ledger export.')); }
     finally { setExporting(false); }
   };
 
   const clearFilters = () => {
-    setCustomerId(''); setType(''); setQuery(''); setQueryInput(''); setFrom(''); setTo(''); setOffset(0);
-    setParams({});
+    setCustomerId(''); setType(''); setQueryInput(''); setFrom(''); setTo(''); setOffset(0);
+    setParams({ tab: 'ledger' }, { replace: true });
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-base font-bold text-gray-900 dark:text-white">Rewards Ledger</h1>
-          <p className="text-xs text-gray-500 dark:text-slate-400">Append-only history of every reward, credit, redemption and adjustment.</p>
-        </div>
-        <button onClick={exportCsv} disabled={exporting}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50">
+      <PanelHeader embedded={embedded} title="Rewards Ledger"
+        subtitle="Append-only history of every reward, credit, redemption and adjustment."
+        actions={<button onClick={exportCsv} disabled={exporting}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50">
           <Download className="w-3.5 h-3.5" /> {exporting ? 'Preparing…' : 'Export CSV'}
-        </button>
-      </div>
+        </button>} />
 
-      <div className="page-card p-3 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1 flex-1 min-w-[200px]">
-          <input value={queryInput} onChange={e => setQueryInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') submitSearch(); }}
-            placeholder="Search reference, reason or ID" className={inputClass} />
-          <button onClick={submitSearch} className="p-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600" title="Search">
-            <Search className="w-4 h-4" />
-          </button>
-        </div>
-        <input value={customerId} onChange={e => { setCustomerId(e.target.value.trim()); setOffset(0); }}
-          placeholder="Customer ID" className={`${inputClass} w-auto text-xs py-2`} />
-        <select value={type} onChange={e => { setType(e.target.value); setOffset(0); }}
-          className={`${inputClass} w-auto text-xs py-2`}>
+      <FilterBar>
+        <SearchField value={queryInput} onChange={setQueryInput} placeholder="Search reference, reason or ID" />
+        <input value={customerId} onChange={e => setCustomerId(e.target.value.trim())}
+          placeholder="Customer ID" className={`${filterClass} w-32`} />
+        <select value={type} onChange={e => setType(e.target.value)} className={`${filterClass} w-auto`}>
           <option value="">All types</option>
           {TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
         </select>
-        <input type="date" value={from} onChange={e => { setFrom(e.target.value); setOffset(0); }} aria-label="From date"
-          className={`${inputClass} w-auto text-xs py-2`} />
-        <input type="date" value={to} onChange={e => { setTo(e.target.value); setOffset(0); }} aria-label="To date"
-          className={`${inputClass} w-auto text-xs py-2`} />
-        {(customerId || type || query || from || to) && (
-          <button onClick={clearFilters} className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900 dark:hover:text-white">
-            <X className="w-3 h-3" /> Clear
-          </button>
-        )}
-      </div>
+        <DateRangeFilter from={from} to={to} onChange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); }} />
+        {(customerId || type || queryInput || from || to) && <ClearButton onClick={clearFilters} />}
+      </FilterBar>
       {error && <p className="text-xs text-red-500">{error}</p>}
 
       <div className="page-card">

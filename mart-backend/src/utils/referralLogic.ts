@@ -13,6 +13,7 @@ export const REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR =
   'Select only one discount: an offer, a coupon code, or a referral reward';
 
 export type RandomInt = (max: number) => number;
+export type ReferralRewardStage = { stage: number; amount: number };
 
 const REFERRAL_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 
@@ -84,4 +85,49 @@ export function qualifyingOrderValue(
 
 export function referralDiscount(amount: number, subtotal: number): number {
   return roundMoney(Math.min(Math.max(0, Number(amount) || 0), Math.max(0, Number(subtotal) || 0)));
+}
+
+export function parseRewardStages(value: unknown, totalAmount: number): ReferralRewardStage[] {
+  let raw = value;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      throw new Error('Reward stages must be a JSON array');
+    }
+  }
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error('At least one reward stage is required');
+  }
+
+  const stages = raw.map((entry, index) => {
+    const stageValue = (entry !== null && typeof entry === 'object' ? entry : { amount: entry }) as {
+      stage?: unknown;
+      amount?: unknown;
+    };
+    const stage = Number(stageValue.stage ?? index + 1);
+    const amountValue = Number(stageValue.amount);
+    if (!Number.isInteger(stage) || stage < 1) {
+      throw new Error(`Reward stage ${index + 1} must have a positive whole stage number`);
+    }
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      throw new Error(`Reward stage ${stage} must have a positive amount`);
+    }
+    const amount = roundMoney(amountValue);
+    if (amount <= 0 || amount !== Math.round(amountValue * 100) / 100) {
+      throw new Error(`Reward stage ${stage} must be an amount with at most two decimal places`);
+    }
+    return { stage, amount };
+  }).sort((left, right) => left.stage - right.stage);
+
+  if (stages.some((stage, index) => stage.stage !== index + 1)) {
+    throw new Error('Reward stages must be numbered sequentially from 1');
+  }
+
+  const total = roundMoney(Number(totalAmount));
+  const sum = roundMoney(stages.reduce((running, stage) => running + stage.amount, 0));
+  if (!Number.isFinite(total) || total <= 0 || sum !== total) {
+    throw new Error(`Reward stage amounts must add up to the total reward amount (₹${total})`);
+  }
+  return stages;
 }

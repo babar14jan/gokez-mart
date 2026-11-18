@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   REFERRAL_CODE_ALPHABET,
   REFERRAL_CODE_LENGTH,
@@ -11,6 +12,7 @@ import {
   hasDiscountStack,
   isExpired,
   normalizeReferralCode,
+  parseRewardStages,
   qualifyingOrderValue,
   referralDiscount,
   reservationExpiry,
@@ -106,5 +108,60 @@ describe('referral discount amounts', () => {
     assert.equal(referralDiscount(20, 149), 20);
     assert.equal(referralDiscount(20, 10), 10);
     assert.equal(roundMoney(10.005), 10.01);
+  });
+});
+
+describe('referral reward stages', () => {
+  test('accepts any configured stage count whose amounts equal the total', () => {
+    assert.deepEqual(parseRewardStages([
+      { stage: 1, amount: 30 },
+      { stage: 2, amount: 20 },
+    ], 50), [
+      { stage: 1, amount: 30 },
+      { stage: 2, amount: 20 },
+    ]);
+    assert.deepEqual(parseRewardStages([
+      { stage: 1, amount: 25 },
+      { stage: 2, amount: 15 },
+      { stage: 3, amount: 10 },
+    ], 50).length, 3);
+    assert.deepEqual(parseRewardStages('[{"stage":2,"amount":20},{"stage":1,"amount":30}]', 50)[0],
+      { stage: 1, amount: 30 });
+    assert.deepEqual(parseRewardStages([30, 20], 50), [
+      { stage: 1, amount: 30 },
+      { stage: 2, amount: 20 },
+    ]);
+  });
+
+  test('rejects totals that do not match the stage amounts', () => {
+    assert.throws(() => parseRewardStages([
+      { stage: 1, amount: 30 },
+      { stage: 2, amount: 20 },
+    ], 60), /add up to the total/);
+  });
+
+  test('rejects invalid stage numbers and non-positive amounts', () => {
+    assert.throws(() => parseRewardStages([{ stage: 2, amount: 50 }], 50), /sequentially/);
+    assert.throws(() => parseRewardStages([{ stage: 1, amount: 0 }], 0), /positive amount/);
+    assert.throws(() => parseRewardStages([], 50), /At least one/);
+  });
+});
+
+describe('referral campaign updates', () => {
+  test('assigns total_reward_amount only once', () => {
+    const service = readFileSync(new URL('../src/services/referral.service.ts', import.meta.url), 'utf8');
+    assert.ok(service.includes("key === 'rewardStages' || key === 'totalRewardAmount' || data[key] === undefined"));
+  });
+});
+
+describe('referral admin date filters', () => {
+  test('applies from/to to summaries, reports, records and ledger', () => {
+    const service = readFileSync(new URL('../src/services/referral.service.ts', import.meta.url), 'utf8');
+    assert.ok(service.includes("appendDayRange(filters, 'attributed_at'"));
+    assert.ok(service.includes("appendDayRange(filters, 'created_at'"));
+    assert.ok(service.includes("appendDayRange(filters, 'r.attributed_at'"));
+    assert.ok(service.includes("appendDayRange(filters, 'r.qualified_at'"));
+    assert.ok(service.includes("appendDayRange(filters, 'c.created_at'"));
+    assert.ok(service.includes('static async exportCsv(type: ExportType, filters: Record<string, unknown> = {})'));
   });
 });
