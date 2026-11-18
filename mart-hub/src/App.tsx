@@ -46,6 +46,7 @@ const DailySalesPage = lazyWithRetry(() => import('./pages/DailySalesPage'));
 const TopSellingProductsPage = lazyWithRetry(() => import('./pages/TopSellingProductsPage'));
 const PromotionsPage = lazyWithRetry(() => import('./pages/PromotionsPage'));
 const RestoreOrderPage = lazyWithRetry(() => import('./pages/RestoreOrderPage'));
+const ReferralPage = lazyWithRetry(() => import('./pages/ReferralPage'));
 
 // Fallback for the public routes (no app shell yet): same page-shaped
 // skeleton as the rest of the hub, so nothing flashes a bare dark screen.
@@ -90,7 +91,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/top-selling', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/home-sections', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/top-selling', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/home-sections', '/referrals', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -213,6 +214,14 @@ export default function App() {
         <Route path="/restore-order"     element={<ProtectedRoute path="/restore-order"><RestoreOrderPage /></ProtectedRoute>} />
         <Route path="/carousel"          element={<ProtectedRoute path="/carousel"><CarouselPage /></ProtectedRoute>} />
         <Route path="/home-sections"     element={<ProtectedRoute path="/home-sections"><HomeSectionsPage /></ProtectedRoute>} />
+        <Route path="/referrals"        element={<ProtectedRoute path="/referrals"><ReferralPage /></ProtectedRoute>} />
+        <Route path="/referral-overview" element={<Navigate to="/referrals?tab=overview" replace />} />
+        <Route path="/referral-campaigns" element={<Navigate to="/referrals?tab=campaigns" replace />} />
+        <Route path="/referral-records" element={<Navigate to="/referrals?tab=records" replace />} />
+        <Route path="/referral-customer-rewards" element={<Navigate to="/referrals?tab=customers" replace />} />
+        <Route path="/referral-ledger" element={<Navigate to="/referrals?tab=ledger" replace />} />
+        <Route path="/referral-fraud" element={<Navigate to="/referrals?tab=fraud" replace />} />
+        <Route path="/referral-reports" element={<Navigate to="/referrals?tab=reports" replace />} />
         <Route path="/daily-sales"      element={<ProtectedRoute path="/daily-sales"><DailySalesPage /></ProtectedRoute>} />
         <Route path="/top-selling"     element={<ProtectedRoute path="/top-selling"><TopSellingProductsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />

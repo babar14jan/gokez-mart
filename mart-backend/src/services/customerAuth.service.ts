@@ -4,6 +4,7 @@ import { query, transaction } from '../database/db';
 import { config } from '../config';
 import { ComplianceService } from './compliance.service';
 import { CustomerLeadService } from './customerLead.service';
+import { ReferralService } from './referral.service';
 import { badRequest, unauthorized, notFound, tooManyRequests, badGateway } from '../utils/apiError';
 import { OUTBOUND_TIMEOUTS, timeoutSignal } from '../utils/timeouts';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
@@ -73,7 +74,7 @@ export class CustomerAuthService {
   }
 
   // ── Verify OTP ──────────────────────────────────────────────────────────────
-  static async verifyOtp(phone: string, otp: string): Promise<{ token: string; customer: any }> {
+  static async verifyOtp(phone: string, otp: string, referralCode?: string | null): Promise<{ token: string; customer: any }> {
     const cleaned = normalizeCustomerPhone(phone);
     if (!isValidCustomerPhone(cleaned)) throw badRequest('Enter a valid 10-digit mobile number');
 
@@ -138,7 +139,8 @@ export class CustomerAuthService {
     // OTP verified — delete it
     await query(`DELETE FROM mart_otps WHERE phone = $1`, [cleaned]);
 
-    // Upsert customer
+    const existingCustomer = await query(`SELECT id FROM mart_customers WHERE phone = $1`, [cleaned]);
+    const isNewCustomer = !existingCustomer.rows[0];
     await query(
       `INSERT INTO mart_customers (id, phone, order_count, total_spent, last_seen_at, marketing_consent, marketing_consent_at)
        VALUES (gen_random_uuid(), $1, 0, 0, NOW(), true, NOW())
@@ -155,6 +157,21 @@ export class CustomerAuthService {
     const customer = customerRes.rows[0];
 
     await CustomerLeadService.markVerified(cleaned, customer.id);
+
+    // Every verified customer owns exactly one referral code. Code allocation is
+    // best-effort here so a transient failure can never block a valid login.
+    await ReferralService.ensureCode(customer.id).catch(error => {
+      console.error('[referral] code allocation failed after OTP verification:', error);
+    });
+    // A shared link is a pending attribution only. Attribution failures are
+    // logged and swallowed: the customer is already verified and must still be
+    // able to sign in. Existing customers never reach claimCode, so a code from a
+    // later login cannot replace the original attribution.
+    if (isNewCustomer && typeof referralCode === 'string' && referralCode.trim()) {
+      await ReferralService.claimCode(customer.id, referralCode, 'registration').catch(() => {
+        console.error('[referral] attribution skipped after OTP verification');
+      });
+    }
 
     // Record consent on first login (DPDP Act 2023)
     await ComplianceService.recordConsent(customer.id).catch(() => {});

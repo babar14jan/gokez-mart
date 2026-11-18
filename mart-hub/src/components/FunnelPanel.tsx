@@ -2,13 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Filter, Repeat2, TrendingDown, UserPlus } from 'lucide-react';
 import { customerLeadsApi } from '../services/api';
 import type { FunnelRange, FunnelSummary } from '../services/api';
-
-const RANGES: Array<{ id: FunnelRange | 'yesterday'; label: string }> = [
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday', label: 'Yesterday' },
-  { id: 'all', label: 'All' },
-  { id: 'custom', label: 'Custom' },
-];
+import { DateRangeChips, type DateRangeId } from './DateRangeFilter';
 
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 
@@ -61,6 +55,21 @@ export default function FunnelPanel({ range: controlledRange, from: controlledFr
     if (onDateRangeChange) onDateRangeChange(nextFrom, nextTo);
     else { setInternalFrom(nextFrom); setInternalTo(nextTo); }
   };
+  const handleRangeSelect = (id: DateRangeId) => {
+    if (id === 'yesterday') {
+      const y = yesterdayInIst();
+      setDates(y, y);
+      setRange('custom' as FunnelRange);
+      return;
+    }
+    if (id === 'custom' && (!from || !to)) setDates(todayInIst(), todayInIst());
+    setRange(id as FunnelRange);
+  };
+  const activeRange = range === 'custom'
+    && from === yesterdayInIst()
+    && to === yesterdayInIst()
+    ? 'yesterday'
+    : range;
   const [summary, setSummary] = useState<FunnelSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -118,38 +127,10 @@ const stopMax = Math.max(1, ...(canonical?.journey?.stopPoints ?? []).map(s => s
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Customer journey</h2>
         </div>
         {!hideControls && (
-          <div className="inline-flex w-full rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40 sm:w-auto">
-            {RANGES.map(item => (
-              <button key={item.id} type="button" onClick={() => {
-                if (item.id === 'custom' && (!from || !to)) {
-                  const today = todayInIst();
-                  setDates(today, today);
-                } else if (item.id === 'yesterday') {
-                  const y = yesterdayInIst();
-                  setDates(y, y);
-                  setRange('custom' as FunnelRange);
-                  return;
-                }
-                setRange(item.id as FunnelRange);
-              }}
-                className={`min-w-0 flex-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors sm:flex-none ${item.id === 'yesterday' ? (range === 'custom' && from === yesterdayInIst() && to === yesterdayInIst() ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700') : (range === item.id ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700')}`}>
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <DateRangeChips active={activeRange} onSelect={handleRangeSelect}
+            from={from} to={to} onFromChange={value => setDates(value, to)} onToChange={value => setDates(from, value)} />
         )}
       </div>
-
-      {!hideControls && range === 'custom' && (
-        <div className="mb-3 flex flex-wrap items-end gap-2">
-          <label className="text-xs font-medium text-gray-600 dark:text-slate-300">From
-            <input type="date" value={from} max={to} onChange={event => setDates(event.target.value, to)} className="mt-1 block rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
-          </label>
-          <label className="text-xs font-medium text-gray-600 dark:text-slate-300">To
-            <input type="date" value={to} min={from} max={todayInIst()} onChange={event => setDates(from, event.target.value)} className="mt-1 block rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
-          </label>
-        </div>
-      )}
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
 

@@ -9,6 +9,7 @@ import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../uti
 import { readTrackingTokens } from '../utils/guestTracking';
 import { isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
 import { getDeviceInfo } from '../utils/install';
+import { clearLinkReferralCode, normalizeReferralCode, readLinkReferralCode } from '../utils/referral';
 
 export interface LoginFlowProps {
   /** Optional: the page host has no overlay to dismiss. */
@@ -85,6 +86,8 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     setError('');
   }, [backSignal]);
   const [phone, setPhone] = useState(() => restoredFlow?.phone || '');
+  const [referralCode, setReferralCode] = useState(() => useLoginFlowStore.getState().referralCode || readLinkReferralCode() || '');
+  const [referralOpen, setReferralOpen] = useState(() => Boolean(referralCode));
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -173,7 +176,11 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     setLoading(true); setError('');
     try {
       track('otp_entered', { otpChannel: 'phone_call' });
-      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp, getFunnelSessionId(), readTrackingTokens());
+      const codeForSignup = normalizeReferralCode(referralCode || readLinkReferralCode());
+      const res = await authApi.verifyOtp(
+        phone.replace(/\D/g, ''), otp, getFunnelSessionId(), readTrackingTokens(), codeForSignup || undefined,
+      );
+      clearLinkReferralCode();
       track('login_verified');
       const { token, customer } = res.data.data;
       loginFlow.clear();
@@ -341,6 +348,13 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     // the layout viewport. Wait for either keyboard animation to finish before
     // restoring the page instead of leaving the login hero scrolled mid-page.
     window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 240);
+  };
+
+  const clearReferral = () => {
+    setReferralCode('');
+    setReferralOpen(false);
+    useLoginFlowStore.getState().setReferralCode(null);
+    clearLinkReferralCode();
   };
 
   /**
@@ -511,6 +525,41 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     className="flex-1 bg-transparent py-2.5 text-[15px] font-medium tracking-wide text-slate-900 dark:text-white placeholder:text-gray-500 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
                     autoFocus={finePointer} />
                 </div>
+
+                {referralOpen ? (
+                  <div>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                      <label htmlFor="login-referral-code" className="block text-xs font-medium text-gray-600 dark:text-slate-300">
+                        Referral code <span className="font-normal text-gray-500 dark:text-slate-400">(optional)</span>
+                      </label>
+                      <button type="button" onClick={clearReferral}
+                        className="text-[11px] font-semibold text-gray-500 underline decoration-dotted underline-offset-2 dark:text-slate-400">
+                        Remove
+                      </button>
+                    </div>
+                    <input
+                      id="login-referral-code"
+                      name="referralCode"
+                      type="text"
+                      value={referralCode}
+                      maxLength={6}
+                      onChange={e => {
+                        const next = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
+                        setReferralCode(next);
+                        useLoginFlowStore.getState().setReferralCode(next || null);
+                      }}
+                      placeholder="Enter Referral code"
+                      autoComplete="off"
+                      className="w-full rounded-xl border border-gray-300 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-200 placeholder:font-normal placeholder:normal-case placeholder:tracking-normal placeholder:text-[11px] placeholder:text-gray-500 dark:border-slate-600 dark:bg-slate-700/60 dark:text-white dark:focus:border-slate-400 dark:focus:ring-slate-500/30"
+                      autoFocus={finePointer}
+                    />
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setReferralOpen(true)}
+                    className="ml-auto block text-right text-xs font-semibold text-gokez-700 underline decoration-dotted underline-offset-2 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400 dark:hover:text-gokez-300">
+                    Have Referral code?
+                  </button>
+                )}
 
                 <button type="submit" disabled={loading || !phoneValid} className={primaryBtn(phoneValid)}>
                   {loading ? <Spinner /> : <>Continue with OTP</>}

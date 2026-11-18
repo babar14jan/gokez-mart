@@ -379,7 +379,7 @@ export default function ProductsPage() {
     low_stock: 'Low Stock', hidden: 'Hidden',
   };
   const sortLabels: Record<SortMode, string> = {
-    manual: 'Manual Order', discount: 'By Discount',
+    manual: 'Sort', discount: 'By Discount',
     stock: 'Low Stock First', az: 'A → Z',
   };
   const activeCategoryLabel = filterCategory === 'all' ? 'All Categories'
@@ -760,7 +760,7 @@ export default function ProductsPage() {
         {/* Reorder */}
         {!reorderMode ? (
           <button onClick={enterReorderMode} disabled={!canReorder}
-            title={!canReorder ? 'Clear filters and use Manual Order to reorder' : ''}
+            title={!canReorder ? 'Clear filters and use Reorder to reorder' : ''}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
             <GripVertical className="w-3.5 h-3.5" /> Reorder
           </button>

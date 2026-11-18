@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ClipboardList, TrendingUp, Clock, XCircle, Calendar, Users } from 'lucide-react';
+import { ShoppingBag, ClipboardList, TrendingUp, Clock, XCircle, Users } from 'lucide-react';
 import { ordersApi, customersApi, type OrderSummary, type CustomerAggregates } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { orderDisplayName } from '../utils/orderName';
@@ -8,6 +8,7 @@ import { orderBrowseDate } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
+import { DATE_RANGE_OPTIONS, CustomDateInputs, DateRangeChips, ScheduledFilterButton, type DateRangeId } from '../components/DateRangeFilter';
 
 type Range = 'today' | 'yesterday' | 'custom' | 'all';
 
@@ -55,22 +56,14 @@ function rangeBounds(r: Range, from: string, to: string): { start: Date | null; 
   return { start: null, end: null };
 }
 
-const RANGES: { id: Range; label: string }[] = [
-  { id: 'today',     label: 'Today' },
-  { id: 'yesterday', label: 'Yesterday' },
-  { id: 'all',       label: 'All' },
-  { id: 'custom',    label: 'Custom' },
-];
-
 export default function DashboardPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('today');
   const [scheduledView, setScheduledView] = useState(false);
-  // The range to return to when Custom is clicked a second time (the date
-  // range toggles closed instead of staying stuck open).
   const prevRangeRef = useRef<Range>('today');
-  const handleRangeClick = (id: Range) => {
+  const handleRangeSelect = (id: DateRangeId) => {
+    setScheduledView(false);
     if (id !== 'custom') { setRange(id); return; }
     if (range === 'custom') { setRange(prevRangeRef.current); return; }
     prevRangeRef.current = range;
@@ -154,6 +147,13 @@ export default function DashboardPage() {
     });
   }, [allOrders, range, customFrom, customTo, scheduledView]);
 
+  const scheduledCount = useMemo(
+    () => allOrders.filter(o =>
+      o.deliveryPreference === 'scheduled' && !['delivered', 'cancelled', 'failed_delivery', 'terminated'].includes(o.status),
+    ).length,
+    [allOrders],
+  );
+
   const kpis = useMemo(() => {
     if (scheduledView) {
       const preparing = filtered.filter(o => o.status === 'preparing').length;
@@ -195,7 +195,7 @@ export default function DashboardPage() {
 
   const rangeLabel = range === 'custom'
     ? `${customFrom || '…'} – ${customTo || '…'}`
-    : RANGES.find(r => r.id === range)?.label || '';
+    : DATE_RANGE_OPTIONS.find(r => r.id === range)?.label || '';
   const inProgressSub = [
     kpis.preparing > 0 ? `${kpis.preparing} preparing` : '',
     kpis.readyToPickup > 0 ? `${kpis.readyToPickup} ready` : '',
@@ -229,38 +229,15 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Date range tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {RANGES.map(r => (
-          <button key={r.id} onClick={() => { setScheduledView(false); handleRangeClick(r.id); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              !scheduledView && range === r.id
-                ? 'bg-emerald-500 text-white shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
-            }`}>
-            {r.id === 'custom' && <Calendar className="w-3 h-3 hidden sm:inline" />}
-            <span className="hidden md:inline">{r.label}</span>
-            <span className="md:hidden">{r.id === 'yesterday' ? "Y'day" : r.label}</span>
-          </button>
-        ))}
-        <button onClick={() => setScheduledView(true)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-            scheduledView
-              ? 'bg-indigo-500 text-white shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-indigo-300'
-          }`}>
-          Scheduled
-        </button>
-        {range === 'custom' && (
-          <div className="flex items-center gap-2">
-            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-            <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
-            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-          </div>
-        )}
+      {/* Date range chips */}
+      <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+        <DateRangeChips active={scheduledView ? '' : range} onSelect={handleRangeSelect}
+          showCustomInputs={false} />
+        <ScheduledFilterButton active={scheduledView} count={scheduledCount}
+          onClick={() => setScheduledView(true)} />
       </div>
+      <CustomDateInputs active={scheduledView ? '' : range} from={customFrom} to={customTo}
+        onFromChange={setCustomFrom} onToChange={setCustomTo} />
 
       {/* KPI cards */}
       <div className={`grid grid-cols-2 sm:grid-cols-3 ${canSeeCustomers ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3 items-stretch`}>

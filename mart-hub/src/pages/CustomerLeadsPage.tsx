@@ -1,17 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Calendar, Download, Phone, Users } from 'lucide-react';
+import { Download, Phone, Users } from 'lucide-react';
 import { customerLeadsApi, type FunnelRange } from '../services/api';
 import FunnelPanel from '../components/FunnelPanel';
 import { useAuthStore } from '../store/authStore';
-
-type LeadRange = FunnelRange | 'yesterday';
-
-const RANGES: { id: LeadRange; label: string }[] = [
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday', label: 'Yesterday' },
-  { id: 'all', label: 'All' },
-  { id: 'custom', label: 'Custom' },
-];
+import { DateRangeChips, type DateRangeId } from '../components/DateRangeFilter';
 
 const todayInIst = () => {
   const parts = new Intl.DateTimeFormat('en', {
@@ -79,7 +71,7 @@ export default function CustomerLeadsPage() {
       .finally(() => setLoading(false));
   }, [range, customFrom, customTo, canAccessLeads]);
 
-  const handleRangeClick = (id: LeadRange) => {
+  const handleRangeSelect = (id: DateRangeId) => {
     if (id === 'yesterday') {
       const yesterday = yesterdayInIst();
       setCustomFrom(yesterday);
@@ -95,9 +87,11 @@ export default function CustomerLeadsPage() {
     setRange(id as FunnelRange);
   };
 
-  const isRangeActive = (id: LeadRange) => id === 'yesterday'
-    ? range === 'custom' && customFrom === yesterdayInIst() && customTo === yesterdayInIst()
-    : range === id;
+  const activeRange = range === 'custom'
+    && customFrom === yesterdayInIst()
+    && customTo === yesterdayInIst()
+    ? 'yesterday'
+    : range;
 
   const downloadMarketingCsv = async () => {
     setDownloading(true);
@@ -118,28 +112,10 @@ export default function CustomerLeadsPage() {
 
   return (
     <div className="space-y-3">
-      {/* Compact date filter + marketing download, same pattern as the other pages */}
+      {/* Date range chips + marketing download */}
       <div className="flex flex-wrap items-center gap-2">
-        {RANGES.map(r => (
-          <button key={r.id} type="button" onClick={() => handleRangeClick(r.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              isRangeActive(r.id)
-                ? 'bg-emerald-500 text-white shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
-            }`}>
-            {r.id === 'custom' && <Calendar className="w-3 h-3" />}
-            {r.label}
-          </button>
-        ))}
-        {range === 'custom' && (
-          <div className="flex items-center gap-2">
-            <input type="date" value={customFrom} max={customTo} onChange={e => setCustomFrom(e.target.value)}
-              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-            <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
-            <input type="date" value={customTo} min={customFrom} max={todayInIst()} onChange={e => setCustomTo(e.target.value)}
-              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-          </div>
-        )}
+        <DateRangeChips active={activeRange} onSelect={handleRangeSelect}
+          from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo} />
         <div className="flex-1" />
         <button
           type="button"

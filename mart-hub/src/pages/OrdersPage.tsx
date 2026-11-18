@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  ClipboardList, Calendar, CalendarClock, ChevronDown, Phone, MapPin,
+  ClipboardList, CalendarClock, ChevronDown, Phone, MapPin,
   Navigation, Package, XCircle, CheckSquare, Square,
   Truck, Clock, IndianRupee, Search, X,
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import ManageOrderDialog from '../components/ManageOrderDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
+import { CustomDateInputs, DateRangeChips, ScheduledFilterButton, type DateRangeId } from '../components/DateRangeFilter';
 
 type DateRange = 'today' | 'yesterday' | 'custom' | 'all';
 type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
@@ -129,13 +130,6 @@ const STATUS_TABS: { id: StatusFilter; label: string; dot: string }[] = [
   { id: 'cancelled',        label: 'Cancelled',  dot: 'bg-red-400' },
   { id: 'failed_delivery',  label: 'Failed',     dot: 'bg-orange-500' },
   { id: 'terminated',       label: 'Terminated', dot: 'bg-gray-400' },
-];
-
-const DATE_TABS: { id: DateRange; label: string }[] = [
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday',  label: 'Yesterday' },
-  { id: 'all',   label: 'All' },
-  { id: 'custom',label: 'Custom' },
 ];
 
 const PREF_LABELS: Record<string, string> = {
@@ -276,10 +270,8 @@ export default function OrdersPage() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | null>('today');
-  // The range to return to when Custom is clicked a second time (the date
-  // range toggles closed instead of staying stuck open).
   const prevDateRangeRef = useRef<DateRange>('today');
-  const handleDateRangeClick = (id: DateRange) => {
+  const handleDateRangeSelect = (id: DateRangeId) => {
     setDeliveryPreferenceFilter('all');
     if (id !== 'custom') { setDateRange(id); return; }
     if (dateRange === 'custom') { setDateRange(prevDateRangeRef.current); return; }
@@ -605,47 +597,30 @@ export default function OrdersPage() {
     );
   }, [allOrders, dateBounds, deliveryPreferenceFilter]);
 
+  const scheduledCount = useMemo(
+    () => allOrders.filter(o => o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status)).length,
+    [allOrders],
+  );
+
   if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-3">
 
-      {/* Date range tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {DATE_TABS.map(tab => (
-          <button key={tab.id} onClick={() => handleDateRangeClick(tab.id)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-              dateRange === tab.id
-                ? 'bg-emerald-500 text-white shadow-sm'
-                : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-emerald-300'
-             }`}>
-             {tab.id === 'custom' && <Calendar className="w-3 h-3 hidden sm:inline" />}
-             <span className="hidden sm:inline">{tab.label}</span>
-             <span className="sm:hidden">{tab.id === 'yesterday' ? "Y'day" : tab.label}</span>
-           </button>
-        ))}
-        <button type="button" onClick={() => {
-          if (deliveryPreferenceFilter !== 'scheduled') setDateRange(null);
-          setDeliveryPreferenceFilter(current => current === 'scheduled' ? 'all' : 'scheduled');
-          setStatusFilter('');
-        }}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-            deliveryPreferenceFilter === 'scheduled'
-              ? 'bg-indigo-500 text-white shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:border-indigo-300'
-          }`}>
-          <span className="sm:hidden">Sched</span><span className="hidden sm:inline">Scheduled</span>
-        </button>
-        {dateRange === 'custom' && (
-          <div className="flex items-center gap-2">
-            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-            <span className="text-xs text-gray-500 dark:text-slate-400">to</span>
-            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-              className="px-2 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white" />
-          </div>
-        )}
+      {/* Date range chips */}
+      <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+        <DateRangeChips active={deliveryPreferenceFilter === 'scheduled' ? '' : dateRange || ''} onSelect={handleDateRangeSelect}
+          showCustomInputs={false} />
+        <ScheduledFilterButton active={deliveryPreferenceFilter === 'scheduled'} count={scheduledCount}
+          onClick={() => {
+            if (deliveryPreferenceFilter !== 'scheduled') setDateRange(null);
+            setDeliveryPreferenceFilter(current => current === 'scheduled' ? 'all' : 'scheduled');
+            setStatusFilter('');
+          }} />
       </div>
+      <CustomDateInputs active={deliveryPreferenceFilter === 'scheduled' ? '' : dateRange || ''} from={customFrom} to={customTo}
+        onFromChange={setCustomFrom} onToChange={setCustomTo} />
+
 
       {/* Status filter dropdown + search */}
       <div className="flex items-center gap-2">
@@ -1314,6 +1289,7 @@ export default function OrdersPage() {
                         ? `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.viewerSubtotal} (your items)`
                         : `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.subtotal} + ₹${order.deliveryCharge} delivery`}
                       {Number(order.campaignDiscount) > 0 ? ` − ₹${order.campaignDiscount} offer` : ''}
+                      {Number(order.referralDiscount) > 0 ? ` − ₹${order.referralDiscount} referral` : ''}
                     </span>
                   </div>
                   <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} strokeWidth={3} />
@@ -1361,8 +1337,9 @@ export default function OrdersPage() {
                         const itemSavings = Number(order.itemSavings) || 0;
                         const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
                         const campaignDiscount = Number(order.campaignDiscount) || 0;
+                        const referralDiscount = Number(order.referralDiscount) || 0;
                         const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
-                        const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
+                        const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount + referralDiscount;
                         const adjustmentUpdates = getAdjustmentUpdates(order);
                         return (
                           <>
@@ -1405,6 +1382,12 @@ export default function OrdersPage() {
                               <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
                                 <span>{order.couponCodeUsed ? `Coupon ${order.couponCodeUsed}` : 'Offer discount'}</span>
                                 {campaignDiscount > 0 && <span>-₹{order.campaignDiscount}</span>}
+                              </div>
+                            )}
+                            {referralDiscount > 0 && (
+                              <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                                <span>Referral Reward</span>
+                                <span>-₹{referralDiscount}</span>
                               </div>
                             )}
                             <div className="flex justify-between text-sm font-bold text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-slate-600">

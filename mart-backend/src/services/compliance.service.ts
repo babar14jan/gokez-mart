@@ -81,13 +81,41 @@ export class ComplianceService {
       const req = await query(`SELECT customer_id FROM mart_deletion_requests WHERE id = $1`, [id]);
       const customerId = req.rows[0]?.customer_id;
       if (customerId) {
-        await query(
-          `UPDATE mart_customers SET
-             name = '[Deleted]', phone = concat('deleted_', id::text), address = null, address2 = null,
-             updated_at = NOW()
-           WHERE id = $1`,
-          [customerId]
-        );
+        await transaction(async client => {
+          await client.query(
+            `UPDATE mart_customers SET
+                name = '[Deleted]', phone = concat('deleted_', id::text), address = null, address2 = null,
+                updated_at = NOW()
+              WHERE id = $1`,
+            [customerId]
+          );
+          // Referral data must not keep the deleted customer's code, notes or
+          // reasons. Financial rows are retained for audit, but no longer carry
+          // any directly identifying referral text or actor reference.
+          await client.query(
+            `UPDATE mart_referral_codes
+                SET code = concat('DELETED_', id::text), is_active = false, regenerated_at = NOW()
+              WHERE customer_id = $1`,
+            [customerId]
+          );
+          await client.query(
+            `UPDATE mart_referrals SET notes = '[redacted]'
+              WHERE referrer_customer_id = $1 OR referred_customer_id = $1`,
+            [customerId]
+          );
+          await client.query(
+            `UPDATE mart_referral_transactions
+                SET reason = '[redacted]', actor_admin_id = NULL
+              WHERE customer_id = $1`,
+            [customerId]
+          );
+          await client.query(
+            `UPDATE mart_referral_audit_logs
+                SET before = NULL, after = NULL, reason = '[redacted]', actor_customer_id = NULL
+              WHERE actor_customer_id = $1`,
+            [customerId]
+          );
+        });
       }
     }
   }
@@ -186,7 +214,7 @@ export class ComplianceService {
       );
       if (existing.rows.length) return existing.rows[0];
 
-      const [profile, orders, grievances, consents] = await Promise.all([
+      const [profile, orders, grievances, consents, referralCode, referrals, referralRewards, referralCredits, referralLedger] = await Promise.all([
         client.query(`SELECT id, phone, name, address, address2, order_count, total_spent, created_at FROM mart_customers WHERE id = $1`, [customerId]),
         client.query(
         `SELECT o.order_number, o.status, o.total, o.payment_method, o.created_at,
@@ -200,6 +228,27 @@ export class ComplianceService {
         ),
         client.query(`SELECT subject, description, status, response, created_at FROM mart_grievances WHERE customer_id = $1`, [customerId]),
         client.query(`SELECT consent_type, granted, created_at FROM mart_consents WHERE customer_id = $1`, [customerId]),
+        client.query(`SELECT code, is_active, created_at FROM mart_referral_codes WHERE customer_id = $1`, [customerId]),
+        client.query(
+          `SELECT id, status, attribution_source, qualifying_order_value::float AS qualifyingOrderValue,
+                  attributed_at, qualified_at, rewarded_at, notes
+             FROM mart_referrals WHERE referrer_customer_id = $1 OR referred_customer_id = $1`,
+          [customerId]
+        ),
+        client.query(
+          `SELECT id, role, amount::float AS amount, status, created_at FROM mart_referral_rewards WHERE customer_id = $1`,
+          [customerId]
+        ),
+        client.query(
+          `SELECT id, amount::float AS amount, status, unlocked_at, expires_at, redeemed_at, order_id
+             FROM mart_referral_credits WHERE customer_id = $1`,
+          [customerId]
+        ),
+        client.query(
+          `SELECT reference, type, amount::float AS amount, balance_after::float AS balanceAfter,
+                  reason, created_at FROM mart_referral_transactions WHERE customer_id = $1`,
+          [customerId]
+        ),
       ]);
 
     const exportData = {
@@ -208,6 +257,11 @@ export class ComplianceService {
       orders: orders.rows,
       grievances: grievances.rows,
       consents: consents.rows,
+      referralCode: referralCode.rows[0] || null,
+      referrals: referrals.rows,
+      referralRewards: referralRewards.rows,
+      referralCredits: referralCredits.rows,
+      referralLedger: referralLedger.rows,
     };
 
       const result = await client.query(

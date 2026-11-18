@@ -34,6 +34,14 @@ router.get('/catalog/stamp',       ctrl.getCatalogStamp);    // ?storeId=
 router.post('/geocode/reverse',    ctrl.reverseGeocode);
 router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
 router.post('/guest-details',      ctrl.saveGuestDetails);
+
+// ── Referral & Earn (customer) ───────────────────────────────────────────────
+router.get('/referrals/me',               authenticateCustomer, ctrl.referralGetMe);
+router.post('/referrals/validate',        authenticateCustomerIfPresent, ctrl.referralValidate);
+router.post('/referrals/claim',           authenticateCustomer, ctrl.referralClaim);
+router.get('/referrals/credits',          authenticateCustomer, ctrl.referralGetCredits);
+router.post('/referrals/credits/reserve', authenticateCustomer, ctrl.referralReserveCredit);
+router.post('/referrals/credits/:id/release', authenticateCustomer, ctrl.referralReleaseCredit);
 router.get('/orders/track',         authenticateCustomer, ctrl.trackOrder);
 router.get('/orders/track/tokens',  ctrl.trackGuestOrdersByTokens);
 router.post('/orders/track/:id/cancel', ctrl.guestCancelOrder);
@@ -243,6 +251,24 @@ router.get('/admin/inventory/valuation',              authenticate, ctrl.adminGe
 router.get('/admin/inventory/profitability',          authenticate, ctrl.adminGetInventoryProfitability);
 router.put('/admin/inventory/:productId/stock',         authenticate, ctrl.adminSetProductStock);
 router.get('/admin/inventory/:productId/history',       authenticate, ctrl.adminGetInventoryHistory);
+
+// ── Referral & Earn (admin, super_admin only) ────────────────────────────────────
+router.get('/admin/referral/campaigns',           authenticate, requireSuperAdmin, ctrl.adminGetReferralCampaigns);
+router.post('/admin/referral/campaigns',          authenticate, requireSuperAdmin, ctrl.adminCreateReferralCampaign);
+router.put('/admin/referral/campaigns/:id',       authenticate, requireSuperAdmin, ctrl.adminUpdateReferralCampaign);
+router.post('/admin/referral/campaigns/:id/:action', authenticate, requireSuperAdmin, ctrl.adminReferralCampaignAction);
+router.get('/admin/referral/campaigns/history',   authenticate, requireSuperAdmin, ctrl.adminGetReferralCampaignHistory);
+router.get('/admin/referral/records',             authenticate, requireSuperAdmin, ctrl.adminGetReferralRecords);
+router.get('/admin/referral/records/:id',         authenticate, requireSuperAdmin, ctrl.adminGetReferralRecord);
+router.get('/admin/referral/customers',           authenticate, requireSuperAdmin, ctrl.adminGetReferralCustomers);
+router.get('/admin/referral/ledger',              authenticate, requireSuperAdmin, ctrl.adminGetReferralLedger);
+router.get('/admin/referral/fraud',               authenticate, requireSuperAdmin, ctrl.adminGetReferralFraud);
+router.put('/admin/referral/fraud/:id',           authenticate, requireSuperAdmin, ctrl.adminReviewReferralFraud);
+router.get('/admin/referral/summary',             authenticate, requireSuperAdmin, ctrl.adminGetReferralSummary);
+router.get('/admin/referral/reports/:type',       authenticate, requireSuperAdmin, ctrl.adminGetReferralReport);
+router.post('/admin/referral/adjustments',        authenticate, requireSuperAdmin, ctrl.adminAdjustReferral);
+router.get('/admin/referral/audit',               authenticate, requireSuperAdmin, ctrl.adminGetReferralAudit);
+router.get('/admin/referral/export',              authenticate, requireSuperAdmin, ctrl.adminExportReferralCsv);
 
 // ── Team management ────────────────────────────────────────────────────────────────
 // requireStoreAccess authorises the :storeId path parameter. Without it any

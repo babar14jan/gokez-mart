@@ -28,11 +28,13 @@ interface LoginFlowState {
    * '/orders', but giving up has to return to whatever page they came from.
    */
   guestReturnPath: string | null;
+  referralCode: string | null;
   beginOtp: (phone: string, pendingCheckout: boolean, pendingCouponApply?: boolean) => void;
   markOtpResent: () => void;
   setPendingCouponApply: (pendingCouponApply: boolean, campaignId?: string | null) => void;
   setPostLoginPath: (path: string | null) => void;
   setGuestReturnPath: (path: string | null) => void;
+  setReferralCode: (code: string | null) => void;
   clear: () => void;
   getActiveOtpFlow: () => ActiveOtpFlow | null;
 }
@@ -46,6 +48,7 @@ const emptyFlow = {
   pendingCampaignId: null,
   postLoginPath: null,
   guestReturnPath: null,
+  referralCode: null,
 };
 
 export const useLoginFlowStore = create<LoginFlowState>()(
@@ -75,6 +78,7 @@ export const useLoginFlowStore = create<LoginFlowState>()(
       }),
       setPostLoginPath: (path) => set({ postLoginPath: path }),
       setGuestReturnPath: (path) => set({ guestReturnPath: path }),
+      setReferralCode: (code) => set({ referralCode: code }),
       // Preserves both redirect targets: the OTP handlers call clear() before
       // handing control back to the view that still needs to read them.
       clear: () => set({ ...emptyFlow, postLoginPath: get().postLoginPath, guestReturnPath: get().guestReturnPath }),
@@ -92,7 +96,7 @@ export const useLoginFlowStore = create<LoginFlowState>()(
     {
       name: 'mart-login-flow',
       storage: createJSONStorage(() => sessionStorage),
-      partialize: ({ phone, expiresAt, resendAvailableAt, pendingCheckout, pendingCouponApply, pendingCampaignId, postLoginPath, guestReturnPath }) => ({
+      partialize: ({ phone, expiresAt, resendAvailableAt, pendingCheckout, pendingCouponApply, pendingCampaignId, postLoginPath, guestReturnPath, referralCode }) => ({
         phone,
         expiresAt,
         resendAvailableAt,
@@ -101,6 +105,7 @@ export const useLoginFlowStore = create<LoginFlowState>()(
         pendingCampaignId,
         postLoginPath,
         guestReturnPath,
+        referralCode,
       }),
     }
   )
