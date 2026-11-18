@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../services/api';
 import { hideSplash } from '../utils/splash';
+import { readClosedCopy, type StoreClosedCopy } from '../utils/storeClosed';
 
 // Generous on purpose. A dead backend rejects the connection instantly (or
 // answers with a 5xx), so a long ceiling costs nothing there; what it buys is
@@ -104,7 +105,10 @@ function probeConnectivityOnce(): Promise<Connectivity> {
 }
 
 type Status = 'checking' | 'connected' | 'failed';
-type Mode = 'offline' | 'timeout';
+// `server` and `timeout` both mean "the backend did not answer" and share one
+// screen; `offline` means the customer's own device has no connection and keeps
+// its own.
+type Mode = 'offline' | 'server' | 'timeout';
 
 interface NoticeView {
   img: string;
@@ -124,19 +128,62 @@ const OFFLINE_VIEW: NoticeView = {
   button: 'Try Again',
 };
 
-const TIMEOUT_VIEW: NoticeView = {
+// The backend itself is unreachable — a suspended or stopped server, a failed
+// deploy, a database outage. It is not the customer's own device being
+// offline; that keeps its own screen above.
+//
+// There is one server-down screen, not a separate notice for it: the artwork
+// is the closed storefront and the copy says the store is taking a break,
+// which is what the customer is actually experiencing.
+const SERVER_DOWN_VIEW: NoticeView = {
   img: '/backend_donw.webp',
   width: 841,
   height: 619,
-  title: 'This is taking longer than usual.',
+  // Plainly a connection problem, and not the store having shut. The store is
+  // open; our server is the thing that is down, and the customer should not
+  // be left thinking the shop has closed because of it.
+  title: 'We can\u2019t reach your neighbourhood store right now.',
   body: ['Please try again in a moment.'],
   button: 'Check Again',
 };
 
 const VIEWS: Record<Mode, NoticeView> = {
   offline: OFFLINE_VIEW,
-  timeout: TIMEOUT_VIEW,
+  server: SERVER_DOWN_VIEW,
+  timeout: SERVER_DOWN_VIEW,
 };
+
+/**
+ * The store's own words, for the screen that says the store cannot be reached.
+ *
+ * "We could not load the store" is the platform talking about itself. What the
+ * customer needs to know is that the store is taking a break and that their
+ * order still counts — and that is what the store wrote for exactly this
+ * situation, so it is what is shown. The wording is kept on the device, because
+ * when the backend is down the app cannot ask it for the message.
+ */
+function withStoreCopy(view: NoticeView, copy: StoreClosedCopy | null): NoticeView {
+  if (!copy) return view;
+  const greeting = copy.greeting.trim();
+  const message = copy.message.trim();
+  if (!greeting && !message) return view;
+  // The store's own words go underneath the heading, not instead of it. The
+  // heading says what is actually happening -- we cannot reach the store --
+  // and the store's message says what the customer should make of it.
+  //
+  // The message may carry the "{until}" placeholder. There is no reopening
+  // time to put in it here -- the server that would tell us is the thing
+  // that is down -- so the customer would have been shown the placeholder
+  // itself. A soft phrase is the honest answer.
+  const body = [
+    ...(greeting ? [greeting] : []),
+    ...(message ? [message.replace(/\{until\}/g, 'shortly')] : []),
+  ];
+  return {
+    ...view,
+    body: body.length ? body : view.body,
+  };
+}
 
 interface ApiFailedDetail {
   offline?: boolean;
@@ -222,14 +269,14 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
           const connectivity = await probeConnectivityOnce();
           if (disposed) return;
           if (connectivity === 'offline') { showFailure('offline'); scheduleProbe(RETRY_INTERVAL_MS); return; }
-          if (connectivity === 'online') { showFailure('timeout'); scheduleProbe(RETRY_INTERVAL_MS); return; }
+          if (connectivity === 'online') { showFailure('server'); scheduleProbe(RETRY_INTERVAL_MS); return; }
           // Reachable but slow: honest about it rather than blaming the wifi,
           // and the notice still offers a way to re-check.
           showFailure('timeout');
           scheduleProbe(RETRY_INTERVAL_MS);
           return;
         }
-        showFailure('timeout');
+        showFailure('server');
         scheduleProbe(RETRY_INTERVAL_MS);
       }
     };
@@ -251,14 +298,14 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
         if (disposed) return;
         if (detail.server) {
           // An HTTP 5xx: the backend answered, so the customer's connection is fine.
-          showFailure('timeout');
+          showFailure('server');
           return;
         }
         if (!detail.offline && !detail.timeout) return;
         const connectivity = await probeConnectivityOnce();
         if (disposed) return;
         if (connectivity === 'offline') showFailure('offline');
-        else if (connectivity === 'online') showFailure('timeout');
+        else if (connectivity === 'online') showFailure('server');
         else showFailure('timeout');
         })();
       }, delay);
@@ -309,7 +356,12 @@ export default function NetworkStatus({ children }: { children: ReactNode }) {
     setRetryKey((key) => key + 1);
   };
 
-  const view = VIEWS[mode];
+  // Read once per mount: the store's copy only changes when the store
+  // changes it, and the outage screen is the only place that uses it.
+  const [storeCopy] = useState(() => readClosedCopy());
+  const view = mode === 'offline'
+    ? VIEWS.offline
+    : withStoreCopy(VIEWS[mode], storeCopy);
   const visible = status === 'failed' || checking;
 
   // The app stays mounted underneath at all times, so recovering from an outage

@@ -1,5 +1,5 @@
 {
-  "mode": "force",
+  "mode": "silent",
   "_mode_values": ["silent", "force"],
   "_note": "force = exceptional critical deployments immediately reload open tabs and installed PWAs; set it back to silent after the deployment."
 }
