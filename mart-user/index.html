@@ -201,10 +201,10 @@
       var standaloneLaunch = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
         || navigator.standalone === true;
       if (standaloneLaunch) document.documentElement.classList.add('installed-pwa');
-      // The status bar colour during the cold start. The app sets this again at
-      // runtime after the splash has left. Set it here before first paint so
-      // every launch has the same brand-green splash, regardless of the saved
-      // light or dark app preference.
+      // The status bar colour during the cold start. App.tsx takes over on the
+      // first render and sets the colour for the active route. Set it here
+      // before first paint so every launch starts on the same brand-green
+      // splash, regardless of the saved light or dark app preference.
       // Desktop keeps the white bar the app uses there.
       var mobileUA = /android/i.test(navigator.userAgent)
         || /iphone|ipad|ipod/i.test(navigator.userAgent)
@@ -221,15 +221,8 @@
       if (!skipLaunchSplash) {
         window.setTimeout(function () {
           var splash = document.getElementById('app-splash');
-          if (!splash) return;
-          // Same dissolve the app uses, so this last-resort path does not
-          // differ visually from the normal one. The canvas goes back to the
-          // app's own colours with it.
-          splash.classList.add('is-leaving');
-          window.setTimeout(function () {
-            splash.remove();
-            document.documentElement.classList.remove('splash-active');
-          }, 260);
+          if (splash) splash.remove();
+          document.documentElement.classList.remove('splash-active');
         }, 8000);
       }
     </script>
@@ -259,14 +252,6 @@
       .seo-static nav { margin-top: 1.25rem; font-size: 0.875rem; display: flex; gap: 1rem; flex-wrap: wrap; }
       .js .seo-static { display: none; }
 
-      /* How long the splash's entrance animation takes to finish (the last
-         staggered element, the loading line, lands at ~780ms). App.tsx reads
-         this so the earliest possible removal waits for the animation to
-         complete — cutting it short would freeze the logo mid-fade — while
-         the splash still comes down as soon as the app is ready after that.
-         One source of truth, so the CSS and the JS cannot drift apart. */
-      :root { --app-splash-reveal: 800ms; }
-
       /* Launch splash. Painted from static markup in <body>, so it is on screen
          before the React bundle is even parsed — there is no empty or white
          frame between the browser's first paint and the app's first render.
@@ -288,25 +273,19 @@
         height: 100dvh;
         z-index: 2147483000;
         display: none;
-        background: #ffffff url('/spalsh_1.GIF') center / contain no-repeat;
+        /* One fixed, centred size on every device: the overlay still covers the
+           whole screen so nothing behind it can show through, but the artwork
+           never scales up to fill a tall phone. */
+        background: #ffffff url('/spalsh_1.GIF') center / auto min(60vh, 320px) no-repeat;
       }
       .js #app-splash { display: block; }
       .skip-launch-splash #app-splash { display: none !important; }
-      /* The artwork is a portrait composition designed for phones. Full-bleed
-         cover would crop it badly on a wide desktop viewport, and a
-         full-screen launch splash is unnecessary there — show the whole image
-         at a compact, centred size on the same brand green instead. The
-         overlay itself stays full-screen so there is no unpainted gap. */
-      @media (min-width: 768px) {
-        #app-splash { background-size: auto min(40vh, 320px); }
-      }
-      /* Hand-off to the live app: the app adds .is-leaving when it is ready and
-         the overlay dissolves. The element is removed right after, so the fade
-         is a visual transition, not a hold — the splash is never kept up for a
-         fixed time. Taps are only let through once it is fading: while the
-         splash is still painted it must keep blocking, or a tap would land on
-         an app the customer cannot see. */
-      #app-splash.is-leaving { opacity: 0; transition: opacity 220ms ease-out; pointer-events: none; }
+      /* Hand-off to the live app: the app adds .is-leaving the moment it is
+         ready and the element is removed on the next tick, so the splash never
+         sits over the loaded app. Taps are only let through once it is leaving:
+         while it is still painted it must keep blocking, or a tap would land
+         on an app the customer cannot see. */
+      #app-splash.is-leaving { opacity: 0; transition: none; pointer-events: none; }
 
       #app-splash .app-splash-status {
         position: absolute;
@@ -348,21 +327,6 @@
         #app-splash.is-leaving { transition: none; }
       }
     </style>
-      <script>
-      (function () {
-        function apply(src) {
-          var el = document.getElementById('app-splash');
-          if (!el) return;
-          el.style.backgroundImage = 'url(' + src + ')';
-        }
-        document.addEventListener('DOMContentLoaded', function () {
-          apply('/spalsh_1.GIF');
-          // If the app is still booting after a moment, switch to the
-          // longer-loading splash and keep it until the app takes over.
-          window.setTimeout(function () { apply('/spalsh_2.GIF'); }, 2500);
-        });
-      })();
-    </script>
 </head>
   <body>
     <!-- Static crawlable content for crawlers that do not execute JavaScript.

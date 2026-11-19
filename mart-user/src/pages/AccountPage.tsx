@@ -420,7 +420,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div className="login-brand-hero relative z-10 w-full shrink-0 text-center">
-            <div className="login-brand-header flex h-14 items-center justify-between gap-2 px-3 sm:px-4">
+            <div className="login-brand-header flex h-14 items-center justify-between gap-2 pl-3 pr-4 sm:pl-4 sm:pr-5">
               {brandImgError ? (
                 <span className="ml-[10px] text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
               ) : (
