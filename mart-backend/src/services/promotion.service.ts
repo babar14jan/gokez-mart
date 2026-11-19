@@ -318,17 +318,17 @@ const audienceBaseSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
            SELECT *,
              (cardinality($1::uuid[]) = 0 OR zone_id = ANY($1::uuid[])) AS zone_match,
              jsonb_build_object(
-               'recent_purchaser', ('recent_purchaser' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '7 days' AND last_delivered_at < NOW() - INTERVAL '3 days'),
-               'winback_7', ('winback_7' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '14 days' AND last_delivered_at < NOW() - INTERVAL '7 days'),
-               'winback_15', ('winback_15' = ANY($2::text[]) AND last_delivered_at >= NOW() - INTERVAL '30 days' AND last_delivered_at < NOW() - INTERVAL '14 days'),
-               'winback_30', ('winback_30' = ANY($2::text[]) AND last_delivered_at < NOW() - INTERVAL '30 days'),
-               'first_order_followup', ('first_order_followup' = ANY($2::text[]) AND delivered_orders = 1 AND last_delivered_at <= NOW() - INTERVAL '7 days'),
-               'repeat_buyer', ('repeat_buyer' = ANY($2::text[]) AND delivered_orders >= 3),
-               'signed_in_no_order', ('signed_in_no_order' = ANY($2::text[]) AND is_signed_in AND delivered_orders = 0),
-               'signed_in_one_order', ('signed_in_one_order' = ANY($2::text[]) AND is_signed_in AND delivered_orders = 1),
-               'signed_in_repeat_lapsed_7', ('signed_in_repeat_lapsed_7' = ANY($2::text[]) AND is_signed_in AND delivered_orders > 2 AND last_delivered_at < NOW() - INTERVAL '7 days'),
-               'guest_0_1_delivered', ('guest_0_1_delivered' = ANY($2::text[]) AND NOT is_signed_in AND delivered_orders < 2),
-               'guest_2_plus_delivered', ('guest_2_plus_delivered' = ANY($2::text[]) AND NOT is_signed_in AND delivered_orders >= 2)
+               'recent_purchaser', (last_delivered_at >= NOW() - INTERVAL '7 days' AND last_delivered_at < NOW() - INTERVAL '3 days'),
+               'winback_7', (last_delivered_at >= NOW() - INTERVAL '14 days' AND last_delivered_at < NOW() - INTERVAL '7 days'),
+               'winback_15', (last_delivered_at >= NOW() - INTERVAL '30 days' AND last_delivered_at < NOW() - INTERVAL '14 days'),
+               'winback_30', (last_delivered_at < NOW() - INTERVAL '30 days'),
+               'first_order_followup', (delivered_orders = 1 AND last_delivered_at <= NOW() - INTERVAL '7 days'),
+               'repeat_buyer', (delivered_orders >= 3),
+               'signed_in_no_order', (is_signed_in AND delivered_orders = 0),
+               'signed_in_one_order', (is_signed_in AND delivered_orders = 1),
+               'signed_in_repeat_lapsed_7', (is_signed_in AND delivered_orders > 2 AND last_delivered_at < NOW() - INTERVAL '7 days'),
+               'guest_0_1_delivered', (NOT is_signed_in AND delivered_orders < 2),
+               'guest_2_plus_delivered', (NOT is_signed_in AND delivered_orders >= 2)
              ) AS cohort_hits
            FROM audience
          ),
