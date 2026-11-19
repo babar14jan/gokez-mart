@@ -2,6 +2,7 @@ import type { Category, HomeSection, Product } from '../services/api';
 import ProductCard from './ProductCard';
 import Button from './ui/Button';
 import SectionHeading from './ui/SectionHeading';
+import ReferralBanner from './ReferralBanner';
 
 function getKind(section: HomeSection) {
   return section.kind || section.sectionKey || 'manual';
@@ -12,6 +13,8 @@ export function resolveSectionItems(
   products: Product[],
   categories: Category[],
 ): Product[] {
+  if (section.kind === 'referral_banner') return [];
+
   if (Array.isArray((section as any).items) && (section as any).items.length) {
     const byId = new Map(products.map(p => [p.id, p]));
     const merged: Product[] = [];
@@ -122,6 +125,10 @@ export default function HomeSections({ entries, categories, onViewAll, onSelectC
         const isTiles = kind === 'category_tiles' || layout === 'tiles';
         const visibleItems = items;
         const canViewAll = !isTiles;
+
+        if (kind === 'referral_banner') {
+          return <ReferralBanner key={section.id} section={section} />;
+        }
 
         const viewAllLabel = section.badge || 'View all';
 
