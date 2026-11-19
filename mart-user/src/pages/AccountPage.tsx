@@ -538,6 +538,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   </button>
                 </p>
               </div>
+            </div>
+            <div className="mt-3 flex justify-center">
               <button
                 type="button"
                 onClick={() => void handleShareReferral()}
