@@ -126,6 +126,6 @@ describe('promotion audience rules', () => {
     assert.deepEqual(lastQuery?.params, ['promotion-id']);
 
     databaseRows = [{ destination_url: 'https://example.com' }];
-    assert.equal(await PromotionService.registerClick('promotion-id'), null);
+    assert.equal(await PromotionService.registerClick('promotion-id'), 'http://localhost:5177/');
   });
 });

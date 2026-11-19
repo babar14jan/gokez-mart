@@ -478,7 +478,7 @@ export class PromotionService {
       WHERE id = $1 AND status = 'sent'
       RETURNING destination_url`, [id]);
     if (!result.rows[0]) return null;
-    return customerDestination(result.rows[0].destination_url) || config.urls.customerApp;
+    return customerDestination(result.rows[0].destination_url) || new URL('/', config.urls.customerApp).toString();
   }
 
   static async create(data: Record<string, unknown>, adminId: string): Promise<unknown> {
@@ -702,7 +702,7 @@ export class PromotionService {
   ): Promise<{ sent: number; failed: number }> {
     const unique = Array.from(new Map(subscriptions.map(subscription => [subscription.endpoint, subscription])).values());
     const destination = options.isTest
-      ? customerDestination(promotion.destination_url) || config.urls.customerApp
+      ? customerDestination(promotion.destination_url) || new URL('/', config.urls.customerApp).toString()
       : options.trackClicks
         ? `${config.urls.publicApi}/promotions/${promotion.id}/click`
         : promotion.destination_url;
