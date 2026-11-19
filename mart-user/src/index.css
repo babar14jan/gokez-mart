@@ -200,6 +200,10 @@ html, body { overscroll-behavior-y: none; }
      short Android and a tall iPhone and never looks stretched. */
   .login-page-view.login-brand-bg {
     background-position: center bottom;
+    /* Login page keeps only the bottom sweep. The shared .login-brand-bg also
+       has a top wave for the modal/profile surfaces; on taller Android Chrome
+       viewports `cover` let that top wave peek in, which iOS cropped away. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23087A43' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23087A43' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%234ac78d' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23e8f6ec'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23087A43' fill-opacity='.50'/%3E%3C/svg%3E");
   }
 
   /* App shell: a frame pinned to the viewport box.

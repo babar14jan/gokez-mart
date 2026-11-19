@@ -8,53 +8,34 @@
  * and the offline overlay needs the screen).
  *
  * The splash is always removed by an explicit call, never by a timer that
- * decides for itself. The only waits involved are the hand-off animation
- * (FADE_MS) and, on the normal path, the splash's own entrance animation.
+ * decides for itself. The app waits for this minimum window AND for the first
+ * screen to be ready, so the catalog/images can load behind the animation and
+ * the overlay still never outlives the load.
  */
 
-/** Matches the .is-leaving opacity transition in index.html. */
-const FADE_MS = 220;
+/** No fade: once the hold and the load are done, the overlay goes straight away. */
+const FADE_MS = 0;
 
-/** A little slack on top of the fade so the transition always completes. */
-const REMOVE_DELAY_MS = FADE_MS + 40;
+/** Remove on the next tick so .is-leaving can release pointer events first. */
+const REMOVE_DELAY_MS = FADE_MS;
 
 /**
- * Put the page canvas back to the app's own colours.
+ * Short brand moment while the first screen loads. Data fetching runs behind
+ * the splash; a slower load keeps it up longer, but a fast one is not held for
+ * the full 6s GIF.
+ */
+export const MIN_SPLASH_MS = 3000;
+
+/**
+ * Drop the launch-only canvas flag.
  *
- * While the splash is up the canvas is the brand green, so the strip below
- * the iOS home indicator is green rather than white. The splash overlay does
- * not reach that strip, so the canvas is what shows there. It has to go back
- * to the app's own background the moment the splash does, or the loaded page
- * would sit on a green canvas.
+ * The theme colour is owned by App.tsx now: it knows the active route and sets
+ * the login page's light green. Touching the meta tag here would overwrite that
+ * when the splash comes down three seconds into an open on the login screen.
  */
 function releaseCanvas(): void {
   document.documentElement.classList.remove('splash-active');
-  const isDark = document.documentElement.classList.contains('dark');
-  const mobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent)
-    || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute(
-    'content',
-    isDark ? '#18191a' : mobile ? '#087a43' : '#ffffff',
-  );
 }
-
-/**
- * How long the splash is guaranteed to stay up.
- *
- * This is a deliberate brand moment, not a loading hack: the app is already
- * live and interactive behind the overlay while it is up. Its job is to give
- * the launch a finished, deliberate feel and to cover the boot-time work —
- * the catalogue, settings and home sections are fetched as the app mounts, and
- * the stamp-based poll then keeps them warm without re-downloading everything
- * on every visit. A cold start on a slow connection is slower than this, and
- * then the splash simply stays up until the data is really there, so the
- * customer never sees a half-built screen.
- *
- * It is a floor, not a fixed delay: the splash comes down the moment the app
- * is ready AND this window has passed, so a fast start is never held longer
- * than it has to be.
- */
-export const MIN_SPLASH_MS = 2000;
 
 /**
  * Hold the splash while a build swap is in flight.
@@ -99,21 +80,4 @@ export function hideSplash(): void {
   splash.dataset.hiding = '1';
   splash.classList.add('is-leaving');
   window.setTimeout(() => { splash.remove(); releaseCanvas(); }, REMOVE_DELAY_MS);
-}
-
-/**
- * The splash's entrance animation length, in milliseconds.
- *
- * Read from the `--app-splash-reveal` custom property so the CSS and this
- * module cannot disagree. The splash must stay up for at least this long, or
- * the removal would cut the logo's fade-in short and freeze it mid-animation.
- */
-export function splashRevealMs(): number {
-  if (typeof window === 'undefined') return 800;
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue('--app-splash-reveal')
-    .trim()
-    .replace(/ms$/, '');
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 800;
 }
