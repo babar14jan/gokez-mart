@@ -518,14 +518,14 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer & Earn</p>
                   <span className="rounded-full bg-gokez-50 px-2 py-0.5 font-mono text-xs font-bold text-gokez-700 dark:bg-gokez-900/30 dark:text-gokez-400">
                     Code: {normalizeReferralCode(referralData?.code) || '—'}
                   </span>
                 </div>
                 <p className="mt-1 text-xs font-medium text-ink dark:text-white sm:text-sm">
-                  Available referral balance:
+                  Available balance:
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                     {formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))}
                   </span>

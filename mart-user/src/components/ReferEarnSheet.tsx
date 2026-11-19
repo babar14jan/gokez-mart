@@ -237,7 +237,7 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-xl border border-gokez-100 bg-gokez-50/70 p-3 dark:border-gokez-900/40 dark:bg-gokez-900/15">
                   <p className="text-xs font-bold text-gokez-700 dark:text-gokez-300">1 · Use code</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">A new customer enters a friend’s code during registration. Only one code can be used per customer.</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">A new customer enters a friend’s code during registration.</p>
                 </div>
                 <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-900/15">
                   <p className="text-xs font-bold text-amber-700 dark:text-amber-300">2 · First order</p>
