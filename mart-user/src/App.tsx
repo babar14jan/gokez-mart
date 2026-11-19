@@ -16,6 +16,7 @@ import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import HomeSections, { resolveSectionItems } from './components/HomeSections';
+import ReferralBanner from './components/ReferralBanner';
 import ComboSheet from './components/ComboSheet';
 import DealsSheet from './components/DealsSheet';
 import CatalogSearchSheet from './components/CatalogSearchSheet';
@@ -875,7 +876,7 @@ export default function App() {
       return a.sortOrder - b.sortOrder;
     })
     .map(section => ({ section, items: resolveSectionItems(section, products, categories) }))
-    .filter(entry => entry.items.length > 0 || (entry.section.kind === 'referral_banner'));
+    .filter(entry => entry.items.length > 0);
 
   // Fresh page config (a `fresh` Home Section row). It never renders as a home
   // shelf; it only drives the middle nav button. Fall back to Vegetables when
@@ -1603,6 +1604,13 @@ export default function App() {
               <HomeCarousel className="pb-6" />
             </>
           )}
+
+          {/* Referral banners (above Shop by categories) */}
+          {homeSections.filter(s => s.isEnabled && s.kind === 'referral_banner').map(s => (
+            <div key={s.id} className="mt-4 mb-4">
+              <ReferralBanner section={s} />
+            </div>
+          ))}
 
           {/* Shop by categories */}
           {(() => {
