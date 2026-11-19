@@ -36,6 +36,8 @@ interface FormState {
   sort: 'catalogue' | 'discount' | 'price_asc' | 'price_desc' | 'newest' | 'bestselling';
   imageUrl: string;
   buttonText: string;
+  aspectRatio: string;
+  buttonColor: string;
   href: string;
   alt: string;
   visibilityRule: string;
@@ -46,7 +48,7 @@ const emptyForm = (k: KindKey): FormState => ({
   categorySlugs: k === 'fresh' ? ['vegetables'] : [], productIds: [], excludeProductIds: [],
   limit: '', columns: '', layout: '', isEnabled: true, badge: '',
   fallback: 'none', sort: 'catalogue',
-  imageUrl: '', buttonText: '', href: '', alt: '', visibilityRule: 'always',
+  imageUrl: '', buttonText: '', href: '', alt: '', visibilityRule: 'always', aspectRatio: '16/5', buttonColor: 'white',
 });
 
 const inp = "w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
@@ -120,6 +122,8 @@ export default function HomeSectionsPage() {
       href: cfg.href || '',
       alt: cfg.alt || '',
       visibilityRule: s.visibilityRule || 'always',
+      aspectRatio: cfg.aspectRatio || '16/5',
+      buttonColor: cfg.buttonColor || 'white',
     });
     setShowGallery(false);
     setShowModal(true);
@@ -149,6 +153,8 @@ export default function HomeSectionsPage() {
       href: (form.href||'').trim() || null,
       alt: (form.alt||'').trim() || null,
       buttonText: ((form as any).buttonText||'').trim() || null,
+      aspectRatio: (form as any).aspectRatio || '16/5',
+      buttonColor: (form as any).buttonColor || 'white',
     },
       };
       if (editing) await homeSectionsApi.update(storeId, editing.id, data);
@@ -391,6 +397,8 @@ export default function HomeSectionsPage() {
                 <div className="space-y-2">
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Image URL</label><input value={form.imageUrl || ''} onChange={e => setForm((f:any) => ({...f, imageUrl: e.target.value}))} className={inp} placeholder="https://..." /></div>
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Button text (optional)</label><input value={(form as any).buttonText || ''} onChange={e => setForm((f:any) => ({...f, buttonText: e.target.value} as any))} className={inp} placeholder="Shop now" /></div>
+                  <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Aspect ratio</label><select value={(form as any).aspectRatio || '16/5'} onChange={e => setForm((f:any) => ({...f, aspectRatio: e.target.value} as any))} className={inp}><option value="16/5">16:5 (wide)</option><option value="16/4">16:4</option><option value="16/3">16:3</option><option value="4/1">4:1 (narrow)</option></select></div>
+                  <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Share button color</label><select value={(form as any).buttonColor || 'white'} onChange={e => setForm((f:any) => ({...f, buttonColor: e.target.value} as any))} className={inp}><option value="white">White</option><option value="banner">Banner color</option></select></div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Link (optional)</label>
                     <select value={(form.href && (form.href.startsWith('#') || form.href.startsWith('/category/'))) ? form.href : (form.href ? 'custom' : '')} onChange={e => {
@@ -406,6 +414,22 @@ export default function HomeSectionsPage() {
                       <option value="custom">Custom URL</option>
                     </select>
                     {form.href && !String(form.href).startsWith('#') && !String(form.href).startsWith('/category/') && <input value={form.href} onChange={e => setForm((f:any) => ({...f, href: e.target.value}))} className={`${inp} mt-2`} placeholder="https://..." />}
+                  </div>
+                </div>
+              )}
+
+              {form.kind === 'referral_banner' && (
+                <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                  <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-slate-300">Preview</p>
+                  <div className="relative w-full overflow-hidden rounded-lg bg-gradient-to-r from-gokez-700 to-gokez-500" style={{ aspectRatio: (form as any).aspectRatio || '16/5' }}>
+                    <div className="absolute inset-0 flex items-center justify-between px-4">
+                      <div>
+                        <p className="text-sm font-bold text-white">{form.title || 'Refer & Earn'}</p>
+                        {form.subtitle && <p className="text-xs text-white/90">{form.subtitle}</p>}
+                        <span className="mt-1 inline-block rounded bg-white/20 px-2 py-0.5 font-mono text-xs font-bold text-white">CODE123</span>
+                      </div>
+                      <button className={`rounded-lg px-3 py-1.5 text-xs font-bold ${(form as any).buttonColor === 'banner' ? 'bg-gokez-700 text-white' : 'bg-white text-gokez-800'}`}>{(form as any).buttonText || 'Share'}</button>
+                    </div>
                   </div>
                 </div>
               )}

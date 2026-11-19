@@ -63,32 +63,36 @@ export default function ReferralBanner({ section }: Props) {
     <section className="w-full">
       <div
         className="relative w-full overflow-hidden rounded-2xl"
-        style={{ aspectRatio: '16 / 5' }}
+        style={{ aspectRatio: (cfg.aspectRatio || '16/5').replace('/', ' / ') }}
       >
         {image ? (
           <img src={image} alt={section.title || 'Refer and earn'} className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-r from-gokez-700 to-gokez-500" />
         )}
-        <div className="absolute inset-0 flex flex-col justify-center gap-1 px-4 sm:px-6">
-          <p className="text-sm font-bold text-white sm:text-base">{title}</p>
-          {subtitle && <p className="text-xs text-white/90 sm:text-sm">{subtitle}</p>}
+        <div className="absolute inset-0 flex items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-white sm:text-base">{title}</p>
+            {subtitle && <p className="text-xs text-white/90 sm:text-sm">{subtitle}</p>}
+            {code && (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-white/20 px-2 py-1 font-mono text-xs font-bold text-white backdrop-blur-sm">
+                  {code}
+                </span>
+              </div>
+            )}
+            {notice && <p className="mt-1 text-[11px] font-medium text-white/90">{notice}</p>}
+          </div>
           {code && (
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span className="rounded-lg bg-white/20 px-2 py-1 font-mono text-xs font-bold text-white backdrop-blur-sm">
-                {code}
-              </span>
-              <button
-                type="button"
-                onClick={handleShare}
-                className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-gokez-800 transition-colors hover:bg-cream-50"
-              >
-                <Share className="h-3.5 w-3.5" aria-hidden="true" />
-                {buttonLabel}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleShare}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${cfg.buttonColor === 'banner' ? 'bg-gokez-700 text-white hover:bg-gokez-800' : 'bg-white text-gokez-800 hover:bg-cream-50'}`}
+            >
+              <Share className="h-3.5 w-3.5" aria-hidden="true" />
+              {buttonLabel}
+            </button>
           )}
-          {notice && <p className="mt-1 text-[11px] font-medium text-white/90">{notice}</p>}
         </div>
       </div>
     </section>

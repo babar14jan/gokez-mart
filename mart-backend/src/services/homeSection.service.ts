@@ -37,6 +37,8 @@ export interface HomeSectionConfig {
   windowDays?: number;
   // Banner / tiles
   imageUrl?: string | null;
+  aspectRatio?: string | null;
+  buttonColor?: string | null;
   href?: string | null;
   alt?: string | null;
   columns?: number | null;
@@ -169,6 +171,8 @@ export function normalizeSectionConfig(config: unknown): HomeSectionConfig {
   const windowDays = Number.isInteger(Number(source.windowDays)) && Number(source.windowDays) > 0 ? Math.min(Number(source.windowDays), 365) : undefined;
 
   const imageUrl = typeof source.imageUrl === 'string' && source.imageUrl.trim() ? source.imageUrl.trim() : null;
+  const aspectRatio = typeof source.aspectRatio === 'string' && source.aspectRatio.trim() ? source.aspectRatio.trim() : null;
+  const buttonColor = typeof source.buttonColor === 'string' && source.buttonColor.trim() ? source.buttonColor.trim() : null;
   const href = typeof source.href === 'string' && source.href.trim() ? source.href.trim() : null;
   const alt = typeof source.alt === 'string' && source.alt.trim() ? source.alt.trim() : null;
   const buttonText = typeof (source as any).buttonText === 'string' && (source as any).buttonText.trim() ? (source as any).buttonText.trim() : (typeof (source as any).cta === 'string' && (source as any).cta.trim() ? (source as any).cta.trim() : null);
@@ -185,6 +189,8 @@ export function normalizeSectionConfig(config: unknown): HomeSectionConfig {
   if (minDiscount !== undefined) result.minDiscount = minDiscount;
   if (windowDays !== undefined) result.windowDays = windowDays;
   if (imageUrl !== null) result.imageUrl = imageUrl;
+  if (aspectRatio !== null) result.aspectRatio = aspectRatio;
+  if (buttonColor !== null) result.buttonColor = buttonColor;
   if (href !== null) result.href = href;
   if (alt !== null) result.alt = alt;
   if (buttonText !== null) { result.buttonText = buttonText; result.cta = buttonText; }

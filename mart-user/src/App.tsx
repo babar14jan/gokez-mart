@@ -865,7 +865,15 @@ export default function App() {
   // built-in category-grouped layout so the home page is never blank.
   const resolvedHomeSections = [...homeSections]
     .filter(s => s.isEnabled)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .sort((a, b) => {
+      const aRef = a.kind === 'referral_banner';
+      const bRef = b.kind === 'referral_banner';
+      const aTiles = a.kind === 'category_tiles';
+      const bTiles = b.kind === 'category_tiles';
+      if (aRef && bTiles) return -1;
+      if (bRef && aTiles) return 1;
+      return a.sortOrder - b.sortOrder;
+    })
     .map(section => ({ section, items: resolveSectionItems(section, products, categories) }))
     .filter(entry => entry.items.length > 0 || (entry.section.kind === 'referral_banner'));
 

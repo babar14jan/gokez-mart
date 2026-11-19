@@ -227,6 +227,8 @@ export interface HomeSection {
     minDiscount?: number;
     windowDays?: number;
     imageUrl?: string | null;
+    aspectRatio?: string | null;
+    buttonColor?: string | null;
     href?: string | null;
     alt?: string | null;
     columns?: number | null;
