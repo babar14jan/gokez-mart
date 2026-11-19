@@ -71,7 +71,7 @@ export default function DashboardPage() {
   };
   const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
   const [customTo, setCustomTo] = useState(toDateStr(new Date()));
-  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 });
+  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 });
   const [customerAgg, setCustomerAgg] = useState<CustomerAggregates>({ totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
   const { name, role } = useAuthStore();
   const canSeeCustomers = !!role && ['super_admin', 'store_owner', 'store_manager'].includes(role);
@@ -156,33 +156,37 @@ export default function DashboardPage() {
 
   const kpis = useMemo(() => {
     if (scheduledView) {
+      const pending = filtered.filter(o => o.status === 'pending').length;
+      const confirmed = filtered.filter(o => o.status === 'confirmed').length;
       const preparing = filtered.filter(o => o.status === 'preparing').length;
       const readyToPickup = filtered.filter(o => o.status === 'ready_to_pickup').length;
       const outForDelivery = filtered.filter(o => o.status === 'out_for_delivery').length;
       const pickedUp = filtered.filter(o => o.status === 'picked_up').length;
       return {
         total:     filtered.length,
-        pending:   filtered.filter(o => o.status === 'pending').length,
+        pending,
+        confirmed,
         delivered: filtered.filter(o => o.status === 'delivered').length,
         cancelled: filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length,
         preparing,
         readyToPickup,
         outForDelivery,
         pickedUp,
-        inProgress: preparing + readyToPickup + outForDelivery + pickedUp,
+        inProgress: pending + confirmed + preparing + readyToPickup + outForDelivery + pickedUp,
         revenue:   0,
       };
     }
     return {
       total:     summary.placed,
       pending:   summary.pending,
+      confirmed: summary.confirmed,
       delivered: summary.delivered,
       cancelled: summary.cancelled,
       preparing: summary.preparing,
       readyToPickup: summary.readyToPickup,
       outForDelivery: summary.outForDelivery,
       pickedUp: summary.pickedUp,
-      inProgress: summary.preparing + summary.readyToPickup + summary.outForDelivery + summary.pickedUp,
+      inProgress: summary.pending + summary.confirmed + summary.preparing + summary.readyToPickup + summary.outForDelivery + summary.pickedUp,
       revenue:   summary.revenue,
     };
   }, [scheduledView, filtered, summary]);
@@ -197,6 +201,8 @@ export default function DashboardPage() {
     ? `${customFrom || '…'} – ${customTo || '…'}`
     : DATE_RANGE_OPTIONS.find(r => r.id === range)?.label || '';
   const inProgressSub = [
+    kpis.pending > 0 ? `${kpis.pending} pending` : '',
+    kpis.confirmed > 0 ? `${kpis.confirmed} confirmed` : '',
     kpis.preparing > 0 ? `${kpis.preparing} preparing` : '',
     kpis.readyToPickup > 0 ? `${kpis.readyToPickup} ready` : '',
     kpis.outForDelivery > 0 ? `${kpis.outForDelivery} out` : '',
@@ -357,6 +363,8 @@ export default function DashboardPage() {
             ) : (() => {
               const bars = range === 'today'
                 ? [
+                    { label: 'Pending',    keys: ['pending'],                                                    color: 'bg-amber-400',   textColor: 'text-amber-600 dark:text-amber-400' },
+                    { label: 'Confirmed',  keys: ['confirmed'],                                                  color: 'bg-blue-400',    textColor: 'text-blue-600 dark:text-blue-400' },
                     { label: 'Preparing',  keys: ['preparing', 'ready_to_pickup'],                              color: 'bg-indigo-400',  textColor: 'text-indigo-600 dark:text-indigo-400' },
                     { label: 'On Way',     keys: ['out_for_delivery', 'picked_up'],                             color: 'bg-violet-400',  textColor: 'text-violet-600 dark:text-violet-400' },
                     { label: 'Delivered',  keys: ['delivered'],                                                  color: 'bg-emerald-500', textColor: 'text-emerald-600 dark:text-emerald-400' },
@@ -365,7 +373,7 @@ export default function DashboardPage() {
                 : [
                     { label: 'Delivered',  keys: ['delivered'],                                                  color: 'bg-emerald-500', textColor: 'text-emerald-600 dark:text-emerald-400' },
                     { label: 'Cancelled',  keys: ['cancelled', 'failed_delivery', 'terminated'],                color: 'bg-red-400',     textColor: 'text-red-500 dark:text-red-400' },
-                    { label: 'In Progress',keys: ['preparing','ready_to_pickup','out_for_delivery','picked_up'], color: 'bg-amber-400', textColor: 'text-amber-600 dark:text-amber-400' },
+                    { label: 'In Progress',keys: ['pending','confirmed','preparing','ready_to_pickup','out_for_delivery','picked_up'], color: 'bg-amber-400', textColor: 'text-amber-600 dark:text-amber-400' },
                   ];
 
               const counts = bars.map(b => ({
