@@ -12,6 +12,13 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
+/* Remove the 300ms double-tap delay and the grey tap flash on touch screens.
+   `manipulation` still allows pinch-zoom; it only drops the click delay. */
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body { background-color: #f7f8fa; color: #14201a; }
 .dark body { background-color: #18191a; color: #e4e6eb; }
 
@@ -147,13 +154,52 @@ html, body { overscroll-behavior-y: none; }
     min-height: 100vh;
   }
 
-  /* Branded login background: soft organic gradient waves (lightweight SVG), full-viewport and readable. */
+  /* Full-height login dialog. The vh declaration first is a fallback for older
+     iOS releases that do not understand dvh -- without it the dialog would
+     collapse to its content height and the submit button could sit behind the
+     keyboard. The keyboard inset is subtracted so the panel tracks the visible
+     area on both Android and iOS. */
+  .login-dialog {
+    min-height: 100vh;
+    min-height: calc(100dvh - var(--kb, 0px));
+  }
+
+  /* The login view is measured against the app scroller, not 100vh. vh changes
+     with the mobile browser toolbar, which is what stretched the branded base
+     and shifted the logo / Skip / banner between iPhone and Android. */
+  .login-page-view {
+    min-height: 100%;
+  }
+
+  /* Safe area belongs to the hero, not to a margin on the logo row: the row
+     itself stays exactly 56px on every device, so the logo and Skip button land
+     in the same place relative to the notch / status bar. */
+  .login-brand-hero {
+    padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
+  }
+
+  /* Short landscape phones: keep the hero compact without moving its children. */
+  @media (max-height: 520px) and (orientation: landscape) {
+    .login-page-view .login-brand-hero { padding-top: 0.5rem; }
+    .login-page-view .login-brand-banner-wrap { height: 40px; }
+    .login-page-view .login-brand-banner { max-height: 40px; }
+  }
+
+  /* Branded login background: soft organic gradient waves (lightweight SVG) on
+     a light brand-green base rather than white, full-viewport and readable. */
   .login-brand-bg {
-    background-color: #ffffff;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3CradialGradient id='t' cx='28%25' cy='10%25' r='45%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff' stop-opacity='0'/%3E%3Cstop offset='45%25' stop-color='%23087A43' stop-opacity='.10'/%3E%3Cstop offset='100%25' stop-color='%23087A43' stop-opacity='.45'/%3E%3C/radialGradient%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23087A43' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23087A43' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%234ac78d' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23ffffff'/%3E%3Cpath d='M-20 150C80 40 170 190 250 110C320 40 365 70 400 40V-20H-20Z' fill='url(%23t)'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23087A43' fill-opacity='.50'/%3E%3C/svg%3E");
+    background-color: #e8f6ec;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3CradialGradient id='t' cx='28%25' cy='10%25' r='45%25'%3E%3Cstop offset='0%25' stop-color='%23e8f6ec' stop-opacity='0'/%3E%3Cstop offset='45%25' stop-color='%23087A43' stop-opacity='.10'/%3E%3Cstop offset='100%25' stop-color='%23087A43' stop-opacity='.45'/%3E%3C/radialGradient%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23087A43' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23087A43' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%234ac78d' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23e8f6ec'/%3E%3Cpath d='M-20 150C80 40 170 190 250 110C320 40 365 70 400 40V-20H-20Z' fill='url(%23t)'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23087A43' fill-opacity='.50'/%3E%3C/svg%3E");
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
+  }
+
+  /* On the login page the green sweep is pinned to the bottom of the scroller
+     instead of being centred in a 100vh box, so it lands in the same place on a
+     short Android and a tall iPhone and never looks stretched. */
+  .login-page-view.login-brand-bg {
+    background-position: center bottom;
   }
 
   /* App shell: a frame pinned to the viewport box.

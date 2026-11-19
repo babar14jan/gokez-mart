@@ -408,13 +408,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     const showBrandHeader = loginStepView === 'phone';
     const showOtpHeader = loginStepView === 'otp';
     return (
-      <div className={`page-shell relative font-sans ${
-        showBrandHeader
-          ? 'login-brand-bg dark:bg-slate-900 overflow-y-auto overflow-x-hidden'
-          : showOtpHeader
-            ? 'login-brand-bg flex flex-col dark:bg-slate-900'
-            : 'login-brand-bg flex flex-col justify-start pt-[64px] dark:bg-slate-900'
-      }`}>
+      <div className="page-shell login-page-view login-brand-bg relative flex flex-col overflow-x-hidden font-sans dark:bg-slate-900">
         {showOtpHeader && (
           <PageHeader
             onBack={() => setLoginBackSignal((n) => n + 1)}
@@ -425,29 +419,29 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
           />
         )}
         {showBrandHeader && (
-          <div className="w-full text-center sm:mx-auto sm:max-w-sm">
-            <div className="mb-0 mt-10 flex items-center justify-between px-2">
+          <div className="login-brand-hero relative z-10 w-full shrink-0 text-center">
+            <div className="login-brand-header flex h-14 items-center justify-between gap-2 px-3 sm:px-4">
               {brandImgError ? (
                 <span className="ml-[10px] text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
               ) : (
                 <img
                   src="/mart_brand_new.webp"
                   alt="Gokez Mart"
-                  className="ml-[10px] h-[55px] w-auto"
+                  className="ml-1 h-[56px] w-auto max-w-[45%] object-contain"
                   onError={() => setBrandImgError(true)}
                 />
               )}
               <button
                 type="button"
                 onClick={leaveAsGuest}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-gray-900 shadow-md ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white px-4 text-sm font-bold text-gray-900 shadow-md ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600"
               >
                 Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-                        <div className="relative mt-[3px] overflow-hidden bg-transparent dark:bg-transparent sm:rounded-3xl">
+            <div className="login-brand-banner-wrap mt-1 flex h-[88px] w-full items-center justify-center overflow-hidden px-3 sm:h-[110px]">
               {bannerImgError ? (
-                <div className="flex h-[54px] w-full items-center justify-center text-3xl" role="img" aria-label="Fresh vegetables">
+                <div className="flex h-full w-full items-center justify-center text-3xl" role="img" aria-label="Fresh vegetables">
                   <span>🥦🥕🍅</span>
                 </div>
               ) : (
@@ -457,21 +451,21 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   width={960}
                   height={541}
                   decoding="async"
-                  className="block h-auto max-h-[54px] w-full object-contain"
+                  className="login-brand-banner h-full w-auto max-w-full object-contain"
                   onError={() => setBannerImgError(true)}
                 />
               )}
             </div>
           </div>
         )}
-        <div className={`relative w-full ${
-          showBrandHeader
-            ? 'overflow-visible bg-transparent sm:mx-auto sm:max-w-sm sm:rounded-3xl dark:bg-slate-800'
-            : showOtpHeader
-              ? 'flex-1 overflow-hidden bg-transparent sm:mx-auto sm:max-w-sm'
-              : 'overflow-hidden bg-transparent sm:mx-auto sm:max-w-sm'
-        }`}>
-          <div className={showBrandHeader ? "px-5 pb-20 pt-0 mt-0" : showOtpHeader ? "px-5 pb-6 pt-[44px] space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
+        <div className="login-form-area relative min-h-0 w-full flex-1 overflow-y-auto">
+          <div className={`mx-auto w-full max-w-sm px-4 sm:px-6 ${
+            showBrandHeader
+              ? 'pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-3'
+              : showOtpHeader
+                ? 'space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6'
+                : 'space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2'
+          }`}>
             {showBrandHeader && <h1 className="mb-0 text-center text-[18px] font-black text-gray-900 dark:text-white">Log in or Sign up</h1>}
             <div className={showBrandHeader ? "-mt-2" : undefined}>
 <LoginFlow
@@ -528,7 +522,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         <div className="sticky top-0 z-30 -mx-4 overflow-hidden rounded-none border-y border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6">
           <div className="min-w-0">
               <p className="text-sm font-semibold text-center text-gray-500 dark:text-slate-400">Log in or sign up to access your complete account.</p>
-              <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-black px-3 text-sm font-semibold text-white transition-colors hover:bg-gray-900 dark:bg-gokez-700 dark:hover:bg-gokez-800">Continue login</button>
+              <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-gray-800 px-3 text-sm font-semibold text-white transition-colors hover:bg-gray-900 dark:bg-gokez-700 dark:hover:bg-gokez-800">Continue login</button>
           </div>
         </div>
         )}

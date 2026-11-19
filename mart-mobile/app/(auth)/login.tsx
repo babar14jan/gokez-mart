@@ -7,6 +7,7 @@ import {
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
@@ -57,6 +58,7 @@ function BenefitRow({ icon, title, subtitle }: { icon: string; title: string; su
 }
 
 export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const isDark = useThemeStore(s => s.isDark);
   const { login, updateProfile } = useAuthStore();
@@ -172,14 +174,28 @@ export default function LoginScreen() {
     >
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 60, paddingBottom: 40 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          width: '100%',
+          maxWidth: 480,
+          alignSelf: 'center',
+          paddingHorizontal: 24,
+          paddingTop: Math.max(60, insets.top + 16),
+          paddingBottom: Math.max(40, insets.bottom + 16),
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {step !== 'profile' && (
           <TouchableOpacity
-            className="absolute top-12 right-6 w-9 h-9 rounded-xl items-center justify-center"
-            style={{ backgroundColor: colors.gray100 }}
+            className="absolute rounded-xl items-center justify-center"
+            style={{
+              top: insets.top + 12,
+              right: 16,
+              width: 44,
+              height: 44,
+              backgroundColor: colors.gray100,
+            }}
             onPress={() => step === 'welcome' ? router.back() : setStep('welcome')}
           >
             <Ionicons name="close" size={18} color={colors.gray500} />
@@ -308,13 +324,13 @@ export default function LoginScreen() {
               </View>
             )}
 
-            <View className="flex-row items-center justify-center mb-4" style={{ gap: 8 }}>
+            <View className="flex-row items-center justify-center mb-4" style={{ gap: 8, width: '100%', maxWidth: 360, alignSelf: 'center' }}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <TextInput
                   key={i}
                   ref={el => { otpRefs.current[i] = el; }}
-                  className="rounded-xl h-14 w-12 text-center text-2xl font-bold"
-                  style={{ fontFamily: 'Inter-Bold', borderWidth: 1, borderColor: colors.gray200, backgroundColor: colors.gray50, color: colors.gray900 }}
+                  className="rounded-xl h-14 flex-1 text-center text-xl font-bold"
+                  style={{ minWidth: 0, maxWidth: 52, fontFamily: 'Inter-Bold', borderWidth: 1, borderColor: colors.gray200, backgroundColor: colors.gray50, color: colors.gray900 }}
                   placeholder={i === 0 ? '------' : String(i + 1)}
                   placeholderTextColor={colors.gray400}
                   keyboardType="number-pad"
