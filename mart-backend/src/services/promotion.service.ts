@@ -90,7 +90,7 @@ export interface PromotionTestResult {
  * Internal test recipients for every draft, regardless of type or selected
  * audience. Keep this in one place so live-test sends are consistent.
  */
-export const PROMOTION_TEST_PHONES = ['9330317102', '8777376280'] as const;
+export const PROMOTION_TEST_PHONES = ['9330317102', '8777376280', '7479868999', '8084025786'] as const;
 
 interface PromotionInput {
   type: PromotionType;
