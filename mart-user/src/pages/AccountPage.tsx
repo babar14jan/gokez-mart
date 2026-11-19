@@ -534,7 +534,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <button
                 type="button"
                 onClick={() => void handleShareReferral()}
-                className="inline-flex items-center gap-1 rounded-xl bg-black px-2.5 py-1 text-xs font-extrabold leading-tight text-white transition-colors hover:bg-gray-900 sm:px-3 sm:py-1.5 sm:text-sm"
+                className="inline-flex items-center gap-1 rounded-xl bg-black px-2.5 py-[7px] text-xs font-extrabold leading-tight text-white transition-colors hover:bg-gray-900 sm:px-3 sm:py-[9px] sm:text-sm"
               >
                 <Share className="h-4 w-4" aria-hidden="true" /> Share
                 <span className="sr-only">{buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin)}</span>
