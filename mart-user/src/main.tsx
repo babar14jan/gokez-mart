@@ -34,9 +34,8 @@ try { sessionStorage.setItem('mart-loaded', '1'); } catch {}
 
 // The launch splash is removed by App once the first data load has finished
 // (see App.tsx). This timeout is only a safety net so the overlay can never
-// outlive a failed render, and index.html carries a slightly longer inline
-// fallback for the case where this module never runs at all. Kept comfortably
-// above a normal slow load so the splash is not cut short mid-animation.
+// outlive a failed render, and index.html carries a longer inline fallback for
+// the case where this module never runs at all.
 window.setTimeout(hideSplash, 6000);
 
 // After the first render on purpose: a throw in service-worker registration

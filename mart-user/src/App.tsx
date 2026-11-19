@@ -29,7 +29,7 @@ import { useCustomerAuthStore } from './store/customerAuthStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
 import { useUpdateStore } from './store/updateStore';
-import { hideSplash, splashRevealMs, MIN_SPLASH_MS } from './utils/splash';
+import { hideSplash, MIN_SPLASH_MS } from './utils/splash';
 import { rememberClosedCopy } from './utils/storeClosed';
 import { useCartStore } from './store/cartStore';
 import { useInstallGuide, dismissInstallGuide } from './utils/install';
@@ -624,8 +624,9 @@ export default function App() {
     const effectiveDark = isDark && !loginActive;
     document.documentElement.classList.toggle('dark', effectiveDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    // Keep launch chrome on the common splash green until the splash completes.
-    if (meta && !document.getElementById('app-splash')) {
+    // Set this on every run: the splash is removed outside React, so waiting for
+    // it here left Android Chrome stuck on the darker launch colour after boot.
+    if (meta) {
       if (loginPageActive) {
         meta.setAttribute('content', '#e8f6ec');
       } else if (loginActive) {
@@ -724,44 +725,22 @@ export default function App() {
     return () => { cancelled = true; };
   }, [catalogRequest]);
 
-  // Remove the browser-tab launch splash (index.html) once the app is ready.
-  //
-  // The splash is a deliberate brand moment, not a loading hack. The app is
-  // live and interactive behind it: the catalogue, settings and home sections
-  // are fetched as the app mounts, and the stamp-based poll keeps them warm
-  // afterwards without re-downloading everything on every visit. So the splash
-  // gets a minimum window (MIN_SPLASH_MS) to play, and comes down as soon as
-  // BOTH the app is ready and that window has passed. A slow connection is
-  // slower than the window, and then the splash simply stays up until the
-  // data is really there — the customer never sees a half-built screen.
-  //
-  // It also waits for the version check to resolve, and stays up while a build
-  // swap is in flight. That is what makes a forced deploy work in an installed
-  // PWA: the splash covers the swap, so the customer sees one continuous
-  // launch that ends on the new build, instead of the stale app, then the
-  // splash, then the new app.
-  //
-  // The hand-off is a short dissolve (.is-leaving) so the overlay does not
-  // snap away. main.tsx and the inline timeouts in index.html remain as
-  // safety nets for a failed boot.
-  const updateChecked = useUpdateStore((s) => s.checked);
+  // Keep the launch splash up for a short brand moment while the first screen
+  // loads. Data fetching runs behind it; the overlay comes down as soon as BOTH
+  // the app is ready and the minimum hold has passed. No fade, so it never sits
+  // over the loaded app. A build swap still holds it until the reload lands.
+  // main.tsx and the inline timeout in index.html are safety nets.
   const updateSwapPending = useUpdateStore((s) => s.swapPending);
   useEffect(() => {
     if (loading) return;
-    // Until the version check has resolved we do not know whether this is the
-    // build the server is serving, so the splash stays up.
-    if (!updateChecked) return;
     // A forced swap is under way: the splash is the cover for it.
     if (updateSwapPending) return;
     if (!document.getElementById('app-splash')) return;
     const start = (window as unknown as { __splashStart?: number }).__splashStart ?? Date.now();
-    // The entrance animation has to finish too, or the logo would be cut
-    // off mid-fade.
-    const floor = Math.max(MIN_SPLASH_MS, splashRevealMs());
-    const wait = Math.max(0, floor - (Date.now() - start));
+    const wait = Math.max(0, MIN_SPLASH_MS - (Date.now() - start));
     const timer = window.setTimeout(hideSplash, wait);
     return () => window.clearTimeout(timer);
-  }, [loading, updateChecked, updateSwapPending]);
+  }, [loading, updateSwapPending]);
 
   // Catalog + settings for the active delivery zone. Refires whenever the zone
   // changes (navbar picker, "Use my location", Account toggle, GPS prefill) or
