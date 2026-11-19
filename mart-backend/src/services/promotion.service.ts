@@ -579,26 +579,28 @@ export class PromotionService {
     const targets: PromotionTestTarget[] = [];
     for (const phone of normalizedPhones) {
       const customer = customerByPhone.get(phone);
-      if (!customer) {
+      const subscriptions = (await query<Subscription & { name: string | null }>(
+        `SELECT ps.id, ps.customer_id AS "customerId", ps.endpoint, ps.p256dh, ps.auth, c.name
+         FROM mart_push_subscriptions ps
+         JOIN mart_customers c ON c.id = ps.customer_id
+         WHERE RIGHT(REGEXP_REPLACE(c.phone, '\\D', '', 'g'), 10) = $1
+         ORDER BY ps.created_at DESC`,
+        [phone],
+      )).rows;
+      const resolvedCustomer = customer || (subscriptions.length ? { id: subscriptions[0].customerId, name: subscriptions[0].name, phone } : null);
+      if (!resolvedCustomer) {
         targets.push({ phone, name: null, customerId: null, subscriptions: 0, sent: 0, failed: 0, note: 'Customer not found' });
         continue;
       }
-      const subscriptions = (await query<Subscription>(
-        `SELECT id, customer_id AS "customerId", endpoint, p256dh, auth
-         FROM mart_push_subscriptions
-         WHERE customer_id = $1
-         ORDER BY created_at DESC`,
-        [customer.id],
-      )).rows;
       if (!subscriptions.length) {
-        targets.push({ phone, name: customer.name, customerId: customer.id, subscriptions: 0, sent: 0, failed: 0, note: 'No active push subscription' });
+        targets.push({ phone, name: resolvedCustomer.name, customerId: resolvedCustomer.id, subscriptions: 0, sent: 0, failed: 0, note: 'No active push subscription' });
         continue;
       }
       const outcome = await this.deliver(subscriptions, promotion, { isTest: true });
       targets.push({
         phone,
-        name: customer.name,
-        customerId: customer.id,
+        name: resolvedCustomer.name,
+        customerId: resolvedCustomer.id,
         subscriptions: subscriptions.length,
         sent: outcome.sent,
         failed: outcome.failed,
