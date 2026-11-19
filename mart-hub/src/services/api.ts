@@ -198,6 +198,7 @@ export type SummaryRange = 'today' | '7d' | '30d' | 'last_month' | 'custom' | 'a
 export interface OrderSummary {
   placed: number;
   pending: number;
+  confirmed: number;
   delivered: number;
   cancelled: number;
   preparing: number;

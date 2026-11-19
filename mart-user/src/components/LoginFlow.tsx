@@ -350,13 +350,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
     onGuest?.();
   };
 
-  const handlePhoneBlur = () => {
-    // iOS restores the visual viewport after blur, while Android first resizes
-    // the layout viewport. Wait for either keyboard animation to finish before
-    // restoring the page instead of leaving the login hero scrolled mid-page.
-    window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 240);
-  };
-
   const clearReferral = () => {
     setReferralCode('');
     setReferralOpen(false);
@@ -433,7 +426,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             // self-contained full-page sheet with its own green app bar (no back
             // button and no guest exit). It renders above whatever hosted the
             // flow, so the account page and the checkout overlay behave the same.
-            <div className="fixed inset-0 z-[60] flex flex-col bg-white dark:bg-slate-900">
+            <div className="login-brand-bg fixed inset-0 z-[60] flex flex-col dark:bg-slate-900">
               <div className="relative shrink-0 bg-gradient-to-r from-[#087a43] to-[#087a43] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
                 <div className="h-14" />
               </div>
@@ -525,7 +518,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     onFocus={() => {
                       trackOnce('login_field_focused');
                     }}
-                    onBlur={handlePhoneBlur}
                     placeholder="Enter mobile number"
                     inputMode="numeric" autoComplete="tel"
                     aria-invalid={Boolean(error)}
@@ -533,7 +525,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     autoFocus={finePointer} />
                 </div>
 
-                {referralOpen ? (
+                {referralOpen && (
                   <div>
                     <div className="mb-1 flex items-center justify-between gap-3">
                       <label htmlFor="login-referral-code" className="block text-xs font-medium text-gray-600 dark:text-slate-300">
@@ -561,11 +553,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                       autoFocus={finePointer}
                     />
                   </div>
-                ) : (
-                  <button type="button" onClick={() => setReferralOpen(true)}
-                    className="ml-auto block text-right text-xs font-semibold text-gokez-700 underline decoration-dotted underline-offset-2 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400 dark:hover:text-gokez-300">
-                    Have Referral Code?
-                  </button>
                 )}
 
                 <button type="submit" disabled={loading || !phoneValid} className={primaryBtn(phoneValid)}>
@@ -579,6 +566,15 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 and{' '}
                 <button type="button" onClick={() => onNavigateLegal?.('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
               </p>
+
+              {!referralOpen && (
+                <button type="button" onClick={() => setReferralOpen(true)}
+                  className="!mt-2 block mx-auto text-center text-xs font-semibold text-gokez-700 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400 dark:hover:text-gokez-300">
+                  Have Referral Code?
+                </button>
+              )}
+
+
             </>
           ) : (
             <>
@@ -630,6 +626,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                     </button>
                   )}
                 </p>
+
               </form>
             </>
           )}

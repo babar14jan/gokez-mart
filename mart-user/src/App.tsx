@@ -619,13 +619,19 @@ export default function App() {
   }, [view]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
+    const loginActive = showLoginModal || view === 'login' || (view === 'account' && accountLoginOpen && !isLoggedIn);
+    const effectiveDark = isDark && !loginActive;
+    document.documentElement.classList.toggle('dark', effectiveDark);
     const meta = document.querySelector('meta[name="theme-color"]');
     // Keep launch chrome on the common splash green until the splash completes.
     if (meta && !document.getElementById('app-splash')) {
-      meta.setAttribute('content', isDark ? '#18191a' : (detectPlatform() === 'ios' || detectPlatform() === 'android') ? '#087a43' : '#ffffff');
+      if (loginActive) {
+        meta.setAttribute('content', '#ffffff');
+      } else {
+        meta.setAttribute('content', effectiveDark ? '#18191a' : (detectPlatform() === 'ios' || detectPlatform() === 'android') ? '#087a43' : '#ffffff');
+      }
     }
-  }, [isDark, view]);
+  }, [isDark, view, showLoginModal, accountLoginOpen, isLoggedIn]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
   // title, description, canonical and robots correct as the view changes, and
