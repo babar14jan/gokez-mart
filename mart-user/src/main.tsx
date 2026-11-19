@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstallPrompt from './components/InstallPrompt';
+import PushOptInPrompt from './components/PushOptInPrompt';
 import NetworkStatus from './components/NetworkStatus';
 import { registerServiceWorker } from './services/push';
 import { hideSplash } from './utils/splash';
@@ -20,6 +21,7 @@ createRoot(document.getElementById('root')!).render(
       <NetworkStatus>
         <App />
         <InstallPrompt />
+        <PushOptInPrompt />
       </NetworkStatus>
     </ErrorBoundary>
   </StrictMode>
