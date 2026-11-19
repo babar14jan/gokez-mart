@@ -489,6 +489,8 @@ export interface PromotionAudienceCustomer {
   cohorts: AudienceCohort[];
   eligible: boolean;
   exclusionReason: string | null;
+  referralCode: string | null;
+  referralLink: string | null;
 }
 
 export interface PromotionAudienceCustomers {
