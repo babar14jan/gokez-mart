@@ -75,7 +75,7 @@ export default function ReferralBanner({ section }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-bold text-white drop-shadow sm:text-base">{title}</p>
               {code && (
-                <span className="rounded-full bg-white/25 px-2.5 py-0.5 font-mono text-xs font-bold text-white backdrop-blur-sm">
+                <span className="rounded-full bg-amber-400 px-2.5 py-0.5 font-mono text-xs font-bold text-black">
                   Code: {code}
                 </span>
               )}
