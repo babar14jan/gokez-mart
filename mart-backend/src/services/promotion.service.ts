@@ -343,8 +343,7 @@ const audienceBaseSql = (zoneIds: string[], cohorts: AudienceCohort[]) => ({
          ),
          eligible_customers AS MATERIALIZED (
            SELECT * FROM matched
-           WHERE marketing_consent
-             AND has_subscription
+           WHERE has_subscription
              AND target_match
              AND sent_promotion_last_7d = 0
              AND NOT active_order
