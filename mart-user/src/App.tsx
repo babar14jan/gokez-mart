@@ -867,7 +867,7 @@ export default function App() {
     .filter(s => s.isEnabled)
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map(section => ({ section, items: resolveSectionItems(section, products, categories) }))
-    .filter(entry => entry.items.length > 0);
+    .filter(entry => entry.items.length > 0 || (entry.section.kind === 'referral_banner'));
 
   // Fresh page config (a `fresh` Home Section row). It never renders as a home
   // shelf; it only drives the middle nav button. Fall back to Vegetables when

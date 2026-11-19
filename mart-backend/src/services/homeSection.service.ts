@@ -11,6 +11,7 @@ export type SectionKind =
   | 'new_arrivals'
   | 'buy_again'
   | 'banner'
+  | 'referral_banner'
   | 'category_tiles'
   | 'fresh';
 
@@ -64,7 +65,7 @@ export interface HomeSection {
 }
 
 export const SECTION_KINDS: SectionKind[] = [
-  'manual', 'category', 'combo', 'deals', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'category_tiles', 'fresh'
+  'manual', 'category', 'combo', 'deals', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'referral_banner', 'category_tiles', 'fresh'
 ];
 // Keep old test name/export for compatibility
 export const HOME_SECTION_KEYS = ['todays_combos', 'fresh_vegetables', 'deals', 'top_picks'];
@@ -235,7 +236,7 @@ async function resolveItems(storeId: string, section: HomeSection): Promise<any[
   const inStock = cfg.inStockOnly !== false;
 
   // Banner / tiles / the Fresh page config are config-driven, not product lists
-  if (section.kind === 'banner' || section.kind === 'category_tiles' || section.kind === 'fresh') return [];
+  if (section.kind === 'banner' || section.kind === 'referral_banner' || section.kind === 'category_tiles' || section.kind === 'fresh') return [];
 
   // Manual picks
   if (section.kind === 'manual') {
@@ -458,7 +459,7 @@ export class HomeSectionService {
       if (sec.startsAt && new Date(sec.startsAt) > now) continue;
       if (sec.endsAt && new Date(sec.endsAt) < now) continue;
       const items = await resolveItems(storeId, sec as any);
-      if (kind === 'banner' || kind === 'category_tiles' || kind === 'fresh') {
+      if (kind === 'banner' || kind === 'referral_banner' || kind === 'category_tiles' || kind === 'fresh') {
         // Fresh is a page config consumed by nav, not a home shelf; keep it in
         // the payload even though it resolves no items.
         const cfg = normalizeSectionConfig(sec.config || {});

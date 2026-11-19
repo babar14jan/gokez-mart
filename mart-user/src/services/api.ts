@@ -203,7 +203,7 @@ export interface Product {
  */
 export interface HomeSection {
   id: string;
-  kind?: 'manual' | 'category' | 'combo' | 'deals' | 'bestsellers' | 'new_arrivals' | 'buy_again' | 'banner' | 'category_tiles' | 'fresh' | string;
+  kind?: 'manual' | 'category' | 'combo' | 'deals' | 'bestsellers' | 'new_arrivals' | 'buy_again' | 'banner' | 'referral_banner' | 'category_tiles' | 'fresh' | string;
   sectionKey?: 'todays_combos' | 'fresh_vegetables' | 'deals' | 'top_picks' | string;
   title: string;
   subtitle: string | null;

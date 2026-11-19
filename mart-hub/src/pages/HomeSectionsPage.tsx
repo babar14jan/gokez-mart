@@ -13,6 +13,7 @@ const KINDS = [
   { key: 'bestsellers', label: 'Bestsellers', hint: 'Top-selling products for this store in the last 30 days.', icon: Sparkles, usesProducts: false, multiCategory: true },
   { key: 'new_arrivals', label: 'New arrivals', hint: 'Recently added products.', icon: Sparkles, usesProducts: false, multiCategory: true },
   { key: 'banner', label: 'Banner', hint: 'Image with an optional link.', icon: Image, usesProducts: false, multiCategory: false },
+  { key: 'referral_banner', label: 'Referral banner', hint: '16:5 Refer & Earn banner with the customer\'s own code.', icon: Image, usesProducts: false, multiCategory: false },
   { key: 'category_tiles', label: 'Category tiles', hint: 'Tap to jump to categories.', icon: LayoutGrid, usesProducts: false, multiCategory: true },
   { key: 'fresh', label: 'Fresh page', hint: 'Choose the Fresh tabs (categories) and how products display.', icon: LayoutGrid, usesProducts: false, multiCategory: true },
 ] as const;
@@ -37,14 +38,15 @@ interface FormState {
   buttonText: string;
   href: string;
   alt: string;
+  visibilityRule: string;
 }
 
 const emptyForm = (k: KindKey): FormState => ({
-  kind: k, title: k === 'fresh' ? 'Fresh' : (KINDS.find(x => x.key === k)?.label || k), subtitle: '',
+  kind: k, title: k === 'fresh' ? 'Fresh' : (k === 'referral_banner' ? 'Refer & Earn' : (KINDS.find(x => x.key === k)?.label || k)), subtitle: '',
   categorySlugs: k === 'fresh' ? ['vegetables'] : [], productIds: [], excludeProductIds: [],
   limit: '', columns: '', layout: '', isEnabled: true, badge: '',
   fallback: 'none', sort: 'catalogue',
-  imageUrl: '', buttonText: '', href: '', alt: '',
+  imageUrl: '', buttonText: '', href: '', alt: '', visibilityRule: 'always',
 });
 
 const inp = "w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
@@ -117,6 +119,7 @@ export default function HomeSectionsPage() {
       buttonText: cfg.buttonText || (cfg as any).cta || '',
       href: cfg.href || '',
       alt: cfg.alt || '',
+      visibilityRule: s.visibilityRule || 'always',
     });
     setShowGallery(false);
     setShowModal(true);
@@ -133,6 +136,7 @@ export default function HomeSectionsPage() {
         isEnabled: form.isEnabled,
         layout: form.layout || (form.kind === 'fresh' ? 'grid' : 'row'),
         badge: form.badge.trim() || null,
+        visibilityRule: form.visibilityRule || 'always',
         config: {
           categorySlugs: form.categorySlugs,
           productIds: form.kind === 'fresh' ? [] : form.productIds,
@@ -335,6 +339,8 @@ export default function HomeSectionsPage() {
               </div>
               <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Subtitle <span className="text-gray-400">(optional)</span></label><input value={form.subtitle} onChange={e => setForm(f => ({...f, subtitle: e.target.value}))} className={inp} /></div>
 
+              <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Show to</label><select value={form.visibilityRule} onChange={e => setForm(f => ({...f, visibilityRule: e.target.value}))} className={inp}><option value="always">Everyone</option><option value="logged_in">Logged-in customers</option><option value="guests">Guests only</option></select></div>
+
               {form.kind === 'fresh' ? (
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Fresh categories (tab order)</label>
@@ -381,7 +387,7 @@ export default function HomeSectionsPage() {
                 </div>
               )}
 
-              {form.kind === 'banner' && (
+              {(form.kind === 'banner' || form.kind === 'referral_banner') && (
                 <div className="space-y-2">
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Image URL</label><input value={form.imageUrl || ''} onChange={e => setForm((f:any) => ({...f, imageUrl: e.target.value}))} className={inp} placeholder="https://..." /></div>
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Button text (optional)</label><input value={(form as any).buttonText || ''} onChange={e => setForm((f:any) => ({...f, buttonText: e.target.value} as any))} className={inp} placeholder="Shop now" /></div>
