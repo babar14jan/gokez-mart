@@ -318,6 +318,40 @@ html, body { overscroll-behavior-y: none; }
     background-color: #18191a;
   }
 
+  /* The login page has no Navbar/PageHeader at the top edge for Safari to
+     sample, so it needs its own strip to keep the status bar on the brand
+     canvas instead of the white document background. Bottom strip follows the
+     same canvas while login is up; both disappear as soon as the header or
+     bottom nav is back. */
+  .app-tint-top {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 45;
+    height: 12px;
+    pointer-events: none;
+    background-color: #e8f6ec;
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    .app-tint-top {
+      display: block;
+    }
+  }
+
+  .app-shell.login-active .app-tint-bottom {
+    background-color: #e8f6ec;
+  }
+
+  /* No bottom nav on the login page: let the branded surface own the whole
+     scroller so its gradient reaches the screen edge instead of stopping above
+     the reserved nav strip. */
+  .app-shell.login-active .app-scroll {
+    padding-bottom: 0;
+  }
+
   .app-scroll {
     flex: 1 1 auto;
     min-height: 0;

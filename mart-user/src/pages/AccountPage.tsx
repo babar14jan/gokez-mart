@@ -12,7 +12,7 @@ import LoginFlow, { type Step } from '../components/LoginFlow';
 import PageHeader from '../components/PageHeader';
 import { track } from '../utils/track';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
-import { buildReferralLink, normalizeReferralCode, availableReferralBalance } from '../utils/referral';
+import { buildReferralLink, normalizeReferralCode } from '../utils/referral';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { readTrackingTokens } from '../utils/guestTracking';
 
@@ -541,9 +541,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   </span>
                 </div>
                 <p className="mt-1 text-xs font-medium text-ink dark:text-white sm:text-sm">
-                  Available to use:
+                  Total referral balance:
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    {formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))}
+                    {formatReferralRupees((referralData?.stats?.available ?? 0) + (referralData?.stats?.pending ?? 0))}
                   </span>
                 </p>
               </div>

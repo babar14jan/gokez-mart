@@ -60,6 +60,8 @@ export interface AudienceCustomer {
   cohorts: AudienceCohort[];
   eligible: boolean;
   exclusionReason: string | null;
+  referralCode: string | null;
+  referralLink: string | null;
 }
 
 export interface AudienceCustomerPage {
@@ -412,6 +414,7 @@ const audienceCustomersSql = (
              matched.is_signed_in,
              matched.cohort_hits,
              (eligible.customer_id IS NOT NULL) AS eligible,
+             rc.code AS referral_code,
              CASE
                WHEN NOT matched.marketing_consent THEN 'Marketing consent missing'
                WHEN NOT matched.has_subscription THEN 'No push subscription'
@@ -425,6 +428,7 @@ const audienceCustomersSql = (
              ARRAY(SELECT key FROM jsonb_each_text(matched.cohort_hits) WHERE value = 'true') AS cohorts
            FROM matched
            JOIN mart_customers c ON c.id = matched.customer_id
+           LEFT JOIN mart_referral_codes rc ON rc.customer_id = matched.customer_id
            LEFT JOIN eligible_customers eligible ON eligible.customer_id = matched.customer_id
            LEFT JOIN LATERAL (
              SELECT o.guest_name, o.guest_address
@@ -451,7 +455,8 @@ const audienceCustomersSql = (
                'isSignedIn', is_signed_in,
                'cohorts', cohorts,
                'eligible', eligible,
-               'exclusionReason', exclusion_reason
+               'exclusionReason', exclusion_reason,
+               'referralCode', referral_code
              ) ORDER BY last_delivered_at DESC NULLS LAST, name ASC NULLS LAST, id)
              FROM (
                SELECT * FROM audience_customers
@@ -546,14 +551,20 @@ export class PromotionService {
     const offset = Math.max(Number(data.offset) || 0, 0);
     await this.validateZones(zoneIds);
     const sql = audienceCustomersSql(zoneIds, cohorts, cohort, limit, offset);
-    const result = (await query<{ total: number; customers: AudienceCustomer[] }>(sql.text, sql.params)).rows[0];
+    const result = await query<{ total: number; customers: AudienceCustomer[] }>(sql.text, sql.params);
+    const page = result.rows[0];
+    const customerApp = config.urls.customerApp.replace(/\/+$/, '');
     return {
-      total: Number(result?.total || 0),
-      customers: (result?.customers || []).map(customer => ({
+      total: Number(page?.total || 0),
+      customers: (page?.customers || []).map(customer => ({
         ...customer,
         deliveredOrders: Number(customer.deliveredOrders || 0),
         eligible: customer.eligible === true,
         exclusionReason: customer.exclusionReason || null,
+        referralCode: customer.referralCode || null,
+        referralLink: customer.referralCode
+          ? `${customerApp}/?ref=${encodeURIComponent(customer.referralCode)}`
+          : customerApp,
       })),
       limit,
       offset,

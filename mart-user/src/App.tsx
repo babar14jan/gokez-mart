@@ -523,6 +523,8 @@ export default function App() {
   // Checkout deliberately does NOT reset: it is an overlay over the current view,
   // so opening and closing it leaves `view` untouched and the offset survives.
   const showingSuccess = Boolean(successData);
+  const loginPageActive = view === 'login' || (view === 'account' && accountLoginOpen && !isLoggedIn);
+  const loginActive = showLoginModal || loginPageActive;
   const scrollRef = useRef<HTMLDivElement>(null);
   // Categories scrolls inside its product pane, not .app-scroll. Held in state
   // (callback ref) so useScrollChrome re-attaches when the pane mounts.
@@ -619,19 +621,20 @@ export default function App() {
   }, [view]);
 
   useEffect(() => {
-    const loginActive = showLoginModal || view === 'login' || (view === 'account' && accountLoginOpen && !isLoggedIn);
     const effectiveDark = isDark && !loginActive;
     document.documentElement.classList.toggle('dark', effectiveDark);
     const meta = document.querySelector('meta[name="theme-color"]');
     // Keep launch chrome on the common splash green until the splash completes.
     if (meta && !document.getElementById('app-splash')) {
-      if (loginActive) {
+      if (loginPageActive) {
+        meta.setAttribute('content', '#e8f6ec');
+      } else if (loginActive) {
         meta.setAttribute('content', '#ffffff');
       } else {
         meta.setAttribute('content', effectiveDark ? '#18191a' : (detectPlatform() === 'ios' || detectPlatform() === 'android') ? '#087a43' : '#ffffff');
       }
     }
-  }, [isDark, view, showLoginModal, accountLoginOpen, isLoggedIn]);
+  }, [isDark, loginActive, loginPageActive]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
   // title, description, canonical and robots correct as the view changes, and
@@ -1315,7 +1318,7 @@ export default function App() {
 
   return (
     <AppShell
-      className={view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'}
+      className={loginPageActive ? 'login-active bg-[#e8f6ec]' : view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'}
       scrollRef={scrollRef}
       onTouchStart={handlePullTouchStart}
       onTouchMove={handlePullTouchMove}
@@ -1323,6 +1326,7 @@ export default function App() {
       onTouchCancel={cancelPullGesture}
       overlay={
         <>
+      {loginPageActive && <div className="app-tint-top" aria-hidden="true" />}
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNavigateLegal={(path) => {
         // Reading Terms/Privacy leaves the login behind: close the overlay so the
         // page is not hidden under it, but keep the in-progress OTP flow so
