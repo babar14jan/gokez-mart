@@ -423,10 +423,12 @@ export default function HomeSectionsPage() {
                   <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-slate-300">Preview</p>
                   <div className="relative w-full overflow-hidden rounded-lg bg-gradient-to-r from-gokez-700 to-gokez-500" style={{ aspectRatio: (form as any).aspectRatio || '16/5' }}>
                     <div className="absolute inset-0 flex items-center justify-between px-4">
-                      <div>
-                        <p className="text-sm font-bold text-white">{form.title || 'Refer & Earn'}</p>
-                        {form.subtitle && <p className="text-xs text-white/90">{form.subtitle}</p>}
-                        <span className="mt-1 inline-block rounded bg-white/20 px-2 py-0.5 font-mono text-xs font-bold text-white">CODE123</span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold text-white">{form.title || 'Refer & Earn'}</p>
+                          <span className="rounded-full bg-white/25 px-2.5 py-0.5 font-mono text-xs font-bold text-white">Code: SHH657</span>
+                        </div>
+                        {form.subtitle && <p className="mt-0.5 text-xs text-white/90">{form.subtitle}</p>}
                       </div>
                       <button className={`rounded-lg px-3 py-1.5 text-xs font-bold ${(form as any).buttonColor === 'banner' ? 'bg-gokez-700 text-white' : 'bg-white text-gokez-800'}`}>{(form as any).buttonText || 'Share'}</button>
                     </div>
