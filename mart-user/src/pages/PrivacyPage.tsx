@@ -94,7 +94,7 @@ export default function PrivacyPage({ embed = false }: { embed?: boolean } = {})
 
           <section>
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">8. Push Notifications</h2>
-            <p>We send push notifications for order status updates (e.g. "Your order is out for delivery"). You can enable or disable notifications at any time from Account → Settings. We never send promotional notifications without your consent.</p>
+            <p>We send push notifications for order status updates (e.g. "Your order is out for delivery") and, when you enable notifications, promotional offers and new arrivals. You can enable or disable notifications at any time from Account → Settings; turning them off stops promotional push notifications too.</p>
           </section>
 
           <section>
