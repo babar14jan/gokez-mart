@@ -507,19 +507,19 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
   return (
     <div className="page-shell bg-[#f7f8fa] dark:bg-slate-900 font-sans">
-      <div className="mx-auto max-w-2xl space-y-7 px-4 py-5 pb-10 sm:px-6 sm:py-7">
+      <div className={`mx-auto max-w-2xl space-y-7 px-4 pb-10 sm:px-6 sm:pb-7 ${isLoggedIn ? 'py-5 sm:py-7' : 'pt-0'}`}>
         {/* Sticky under the fixed header band: the prompt stays pinned at
             top-0 of the scroller while the account options scroll beneath
             it, so "Log in / Continue login" is always one tap away. The
             band lives outside the scroller, so top-0 pins directly below
             it — no offset math. No negative top margin: the old -mt-5
             tucked the card under the in-flow header, which no longer
-            exists; at rest the wrapper's own py-5 gives the breathing room
-            and when pinned the solid bg + border-y + shadow separate it
+            exists; the page drops its top padding for guests so the card sits
+            flush under the header, and when pinned the solid bg + border-y + shadow separate it
             from the content scrolling under. z-30 keeps it below the
             band's z-40. */}
         {!isLoggedIn && (
-        <div className="sticky top-0 z-30 -mx-4 overflow-hidden rounded-none border-y border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:-mx-6">
+        <div className="sticky top-0 z-30 -mx-4 overflow-hidden rounded-none border-y border-cream-200 bg-white px-4 pb-4 pt-2 shadow-[0_2px_10px_rgba(23,32,51,0.04)] dark:border-slate-700 dark:bg-slate-800 sm:px-6">
           <div className="min-w-0">
               <p className="text-sm font-semibold text-center text-gray-500 dark:text-slate-400">Log in or sign up to access your complete account.</p>
               <button type="button" onClick={openLogin} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-md bg-gray-800 px-3 text-sm font-semibold text-white transition-colors hover:bg-gray-900 dark:bg-gokez-700 dark:hover:bg-gokez-800">Continue login</button>
@@ -529,7 +529,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
         {isLoggedIn && (
           <section className="rounded-[18px] border border-gokez-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-gokez-800 dark:bg-slate-800">
-            <div className="flex items-center gap-4">
+            <div className="flex items-stretch gap-3">
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
                 <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               </div>
@@ -541,27 +541,29 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   </span>
                 </div>
                 <p className="mt-1 text-xs font-medium text-ink dark:text-white sm:text-sm">
-                  Available balance:
+                  Available to use:
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                     {formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/referrals')}
-                    className="ml-2 text-xs font-bold text-gokez-700 hover:text-gokez-800 dark:text-gokez-400 dark:hover:text-gokez-300"
-                  >
-                    View details
-                  </button>
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleShareReferral()}
-                className="inline-flex items-center gap-1 rounded-xl bg-black px-2.5 py-[7px] text-xs font-extrabold leading-tight text-white transition-colors hover:bg-gray-900 sm:px-3 sm:py-[9px] sm:text-sm"
-              >
-                <Share className="h-4 w-4" aria-hidden="true" /> Share
-                <span className="sr-only">{buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin)}</span>
-              </button>
+              <div className="flex w-20 flex-shrink-0 flex-col items-stretch justify-between gap-1 py-0.5">
+                <button
+                  type="button"
+                  onClick={() => void handleShareReferral()}
+                  className="-translate-y-1 flex min-h-9 items-center justify-center gap-0.5 rounded-xl bg-gray-900 px-1 text-sm font-extrabold text-white transition-colors hover:bg-black dark:bg-gokez-700 dark:hover:bg-gokez-800 sm:text-base"
+                >
+                  <Share className="h-4 w-4" aria-hidden="true" /> Share
+                  <span className="sr-only">{buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin)}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/referrals')}
+                  className="translate-y-1 text-center text-[11px] font-bold leading-none text-gray-500 transition-colors hover:text-gray-700 dark:text-slate-300 dark:hover:text-slate-100 sm:text-xs"
+                >
+                  View details
+                </button>
+              </div>
             </div>
             {shareNotice && <p className="mt-2 text-[11px] font-medium text-gokez-700 dark:text-gokez-300" role="status">{shareNotice}</p>}
           </section>

@@ -743,7 +743,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
             Log in to view your order history, or continue shopping as a guest.
           </p>
           <button
-            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/login'); window.dispatchEvent(new PopStateEvent('popstate')); }}
             className="mb-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
           >
             <User className="h-4 w-4" /> Log in
@@ -806,7 +806,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
         )}
         <div className="text-center">
           <button
-            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/account'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+            onClick={() => { useLoginFlowStore.getState().setPostLoginPath('/orders'); useLoginFlowStore.getState().setGuestReturnPath('/orders'); window.history.pushState({}, '', '/login'); window.dispatchEvent(new PopStateEvent('popstate')); }}
             className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
           >
             Log in to see all orders →
