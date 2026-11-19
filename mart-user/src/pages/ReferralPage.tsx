@@ -153,25 +153,6 @@ export default function ReferralPage() {
               </ul>
             </section>
 
-            {refereeReferral && (
-              <section className="rounded-2xl border border-gokez-100 bg-white p-3 dark:border-gokez-900/40 dark:bg-slate-900/40">
-                <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your referral benefit</p>
-                <p className="text-sm font-extrabold text-ink dark:text-white">Total referral reward: {rupees(reward)}</p>
-                <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">
-                  <p>{rupees(firstStageAmount)} – {firstOrderStatus}</p>
-                  {remainingStageAmount > 0 && <p>{rupees(remainingStageAmount)} – {remainingStatus}</p>}
-                </div>
-                <p className="mt-2 rounded-xl bg-white p-2.5 text-[11px] leading-relaxed text-gray-600 dark:bg-slate-800 dark:text-slate-300">
-                  Only unlocked credits are shown as “Available to use” and can be spent at checkout — up to {rupees(firstStageAmount)} on each eligible order. Pending rewards ({rupees(stats?.pending)}) are tracked separately and cannot be used yet.
-                </p>
-                {firstOrderCompleted && remainingStageAmount > 0 && (
-                  <p className="mt-3 rounded-xl bg-gokez-50 p-3 text-[11px] font-semibold leading-relaxed text-gokez-700 dark:bg-gokez-900/20 dark:text-gokez-300" role="status">
-                    Congratulations! Your {rupees(firstStageAmount)} first-order referral discount has been used successfully. Another {rupees(remainingStageAmount)} reward is now available for your next eligible order.
-                  </p>
-                )}
-              </section>
-            )}
-
             <section className="space-y-2">
               <div>
                 <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your progress</p>
@@ -196,6 +177,24 @@ export default function ReferralPage() {
                     </div>
                   ))}
                 </div>
+                {refereeReferral && (
+                  <div className="mt-2 rounded-xl border border-gokez-100 bg-white p-3 dark:border-gokez-900/40 dark:bg-slate-900/40">
+                    <p className="mb-1.5 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your referral benefit</p>
+                    <p className="text-sm font-extrabold text-ink dark:text-white">Total referral reward: {rupees(reward)}</p>
+                    <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">
+                      <p>{rupees(firstStageAmount)} – {firstOrderStatus}</p>
+                      {remainingStageAmount > 0 && <p>{rupees(remainingStageAmount)} – {remainingStatus}</p>}
+                    </div>
+                    <p className="mt-2 rounded-xl bg-gokez-50 p-2.5 text-[11px] leading-relaxed text-gokez-700 dark:bg-gokez-900/20 dark:text-gokez-300">
+                      Only unlocked credits are shown as “Available to use” and can be spent at checkout — up to {rupees(firstStageAmount)} on each eligible order. Pending rewards ({rupees(stats?.pending)}) are tracked separately and cannot be used yet.
+                    </p>
+                    {firstOrderCompleted && remainingStageAmount > 0 && (
+                      <p className="mt-2 rounded-xl bg-gokez-50 p-2.5 text-[11px] font-semibold leading-relaxed text-gokez-700 dark:bg-gokez-900/20 dark:text-gokez-300" role="status">
+                        Congratulations! Your {rupees(firstStageAmount)} first-order referral discount has been used successfully. Another {rupees(remainingStageAmount)} reward is now available for your next eligible order.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
 
