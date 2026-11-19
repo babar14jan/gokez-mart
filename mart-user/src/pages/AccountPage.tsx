@@ -401,26 +401,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             ? 'flex flex-col bg-[#f3f8f2] dark:bg-slate-900'
             : 'flex flex-col justify-start bg-[#e8f5e9] pt-[64px] dark:bg-slate-900'
       }`}>
-        {showBrandHeader && (
-          <PageHeader
-            onBack={() => {
-              const flow = useLoginFlowStore.getState();
-              const guestReturnPath = flow.guestReturnPath;
-              flow.clear();
-              flow.setGuestReturnPath(null);
-              closeLogin();
-              setLoginStepView('phone');
-              navigate(guestReturnPath || '/');
-            }}
-            backLabel={(() => {
-              const { guestReturnPath } = useLoginFlowStore.getState();
-              return guestReturnPath ? 'Back to checkout' : 'Back to home';
-            })()}
-            position="static"
-            gradient="r"
-            darkTo="#18191a"
-          />
-        )}
         {showOtpHeader && (
           <PageHeader
             onBack={() => setLoginBackSignal((n) => n + 1)}
@@ -432,7 +412,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div className="w-full text-center sm:mx-auto sm:max-w-sm">
-            <div className="overflow-hidden bg-white dark:bg-slate-900 sm:rounded-3xl">
+            <div className="relative overflow-hidden bg-white dark:bg-slate-900 sm:rounded-3xl">
               <img
                 src="/login_banner.webp"
                 alt="Gokez Mart - Shop Local. Support Local."
@@ -441,8 +421,14 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 decoding="async"
                 className="block h-auto w-full"
               />
+              <button
+                type="button"
+                onClick={leaveAsGuest}
+                className="absolute right-[15px] top-[52px] inline-flex items-center gap-1.5 rounded-full bg-white/80 px-4 py-2 text-sm font-bold text-gray-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-white dark:bg-slate-700/80 dark:text-slate-200"
+              >
+                Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
-            <h1 className="text-[15px] font-black leading-tight text-gray-600 dark:text-gray-300">Log in or sign up</h1>
           </div>
         )}
         <div className={`relative w-full overflow-hidden ${

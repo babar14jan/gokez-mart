@@ -197,7 +197,7 @@ describe('referral integration points', () => {
   test('login flow stores and forwards the optional code', () => {
     assertIncludes('src/components/LoginFlow.tsx', [
       'id="login-referral-code"',
-      'Have Referral code?',
+      'Have Referral Code?',
       'placeholder="Enter Referral code"',
       'const [referralOpen, setReferralOpen] = useState(() => Boolean(referralCode))',
       'const clearReferral = () => {',

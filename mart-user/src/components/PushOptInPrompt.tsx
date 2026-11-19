@@ -2,15 +2,18 @@ import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
 import { authApi } from '../services/api';
 import { isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
+import { useCustomerAuthStore } from '../store/customerAuthStore';
 
 const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const PROMPT_KEY = 'mart_push_prompt_at';
 
 export default function PushOptInPrompt() {
+  const isLoggedIn = useCustomerAuthStore((s) => s.isLoggedIn);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     if (!isPushSupported()) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
     const last = Number(localStorage.getItem(PROMPT_KEY) || 0);
