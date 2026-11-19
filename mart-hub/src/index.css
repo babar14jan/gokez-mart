@@ -13,6 +13,20 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
+/* Remove the 300ms double-tap delay and the grey tap flash on touch screens. */
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Login/auth screens follow the visible viewport. The vh value is the fallback
+   for browsers without dvh (older iOS), so the card is never shorter than the
+   screen and the submit button stays reachable. */
+.auth-viewport {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 input[inputmode="decimal"][placeholder="Amount"] {
   flex: 0 0 7rem;
   min-width: 7rem;

@@ -18,7 +18,7 @@ export default function LoginModal(props: LoginFlowProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-title"
-        className="login-brand-bg relative flex w-full max-w-md flex-col overflow-hidden shadow-2xl dark:bg-slate-800 min-h-[calc(100dvh_-_var(--kb,0px))] sm:min-h-0 sm:rounded-3xl">
+        className="login-brand-bg login-dialog relative flex w-full max-w-md flex-col overflow-hidden shadow-2xl dark:bg-slate-800 sm:min-h-0 sm:rounded-3xl">
 
         <div className="flex flex-1 flex-col overflow-y-auto px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-7 sm:pb-7">
           <LoginFlow {...props} variant="modal" />

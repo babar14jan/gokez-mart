@@ -12,6 +12,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [loadingTime, setLoadingTime] = useState(0);
   const [error, setError] = useState('');
+  // A phone keyboard springs open on mount when a field is auto-focused, which
+  // scrolls the whole login card out of view. Only focus on mouse/trackpad.
+  const [autoFocusEnabled] = useState(() =>
+    typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: fine)').matches),
+  );
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
@@ -37,11 +42,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col">
+    <div className="auth-viewport flex min-h-screen flex-col bg-gray-50 dark:bg-slate-900">
 
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        <div className="mx-auto flex min-h-[3.5rem] max-w-5xl items-center justify-between gap-3 px-4 pt-[env(safe-area-inset-top)] sm:px-6">
           <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-10 w-auto object-contain" />
           <a href="/hub" className="text-xs font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
             ← Home
@@ -50,7 +55,7 @@ export default function LoginPage() {
       </header>
 
       {/* Centered content */}
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
+      <div className="flex flex-1 items-center justify-center px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8">
         <div className="w-full max-w-sm">
 
           {/* Logo */}
@@ -62,7 +67,7 @@ export default function LoginPage() {
           </div>
 
           {/* Form card */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
             {error && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-xl mb-5">
                 {error}
@@ -72,7 +77,7 @@ export default function LoginPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5">Username</label>
                 <input type="text" value={username} onChange={e => setUsername(e.target.value)}
-                  required autoFocus placeholder="Enter your username"
+                  required autoFocus={autoFocusEnabled} placeholder="Enter your username"
                   className="w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
               </div>
               <div>
@@ -80,15 +85,16 @@ export default function LoginPage() {
                 <div className="relative">
                   <input type={showPassword ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)} required placeholder="Enter your password"
-                    className="w-full px-4 py-3 pr-11 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
+                    className="w-full px-4 py-3 pr-12 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-gray-500 bg-gray-50 dark:bg-slate-700 focus:bg-white dark:focus:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
                   <button type="button" onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-600 dark:hover:text-slate-200">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
               <button type="submit" disabled={loading}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-sm">
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-600 disabled:opacity-50">
                 {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> {loadingTime > 5 ? 'Server waking up...' : 'Signing in...'}</> : 'Sign In'}
               </button>
             </form>
@@ -102,7 +108,7 @@ export default function LoginPage() {
 
           <div className="mt-5 text-center">
             <p className="text-xs text-gray-500 dark:text-slate-400">Want to bring your store online?</p>
-            <a href="/apply" className="inline-flex items-center gap-1 mt-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors">
+            <a href="/apply" className="mt-1 inline-flex min-h-[44px] items-center gap-1 text-sm font-semibold text-emerald-600 transition-colors hover:text-emerald-700 dark:text-emerald-400">
               Apply to become a store partner →
             </a>
           </div>
