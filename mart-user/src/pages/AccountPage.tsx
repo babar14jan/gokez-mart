@@ -424,7 +424,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <button
                 type="button"
                 onClick={leaveAsGuest}
-                className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                className="absolute right-3 top-[22px] inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/70"
               >
                 Skip <span aria-hidden="true">&gt;</span>
               </button>
