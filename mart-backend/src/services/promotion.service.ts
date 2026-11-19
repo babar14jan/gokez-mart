@@ -473,11 +473,12 @@ export class PromotionService {
   }
 
   static async registerClick(id: string): Promise<string | null> {
-    const result = await query<{ destination_url: string }>(`UPDATE mart_promotions
+    const result = await query<{ destination_url: string | null }>(`UPDATE mart_promotions
       SET click_count = click_count + 1
       WHERE id = $1 AND status = 'sent'
       RETURNING destination_url`, [id]);
-    return customerDestination(result.rows[0]?.destination_url);
+    if (!result.rows[0]) return null;
+    return customerDestination(result.rows[0].destination_url) || config.urls.customerApp;
   }
 
   static async create(data: Record<string, unknown>, adminId: string): Promise<unknown> {
@@ -699,7 +700,7 @@ export class PromotionService {
   ): Promise<{ sent: number; failed: number }> {
     const unique = Array.from(new Map(subscriptions.map(subscription => [subscription.endpoint, subscription])).values());
     const destination = options.isTest
-      ? customerDestination(promotion.destination_url) || promotion.destination_url
+      ? customerDestination(promotion.destination_url) || config.urls.customerApp
       : options.trackClicks
         ? `${config.urls.publicApi}/promotions/${promotion.id}/click`
         : promotion.destination_url;

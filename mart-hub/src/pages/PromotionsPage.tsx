@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { BarChart3, Calendar, CalendarClock, Eye, Loader2, MapPin, Megaphone, MousePointerClick, Plus, Send, TestTube2, Trash2, Upload, UserCheck, Users, X } from 'lucide-react';
+import { BarChart3, Calendar, CalendarClock, Edit, Eye, Loader2, MapPin, Megaphone, MousePointerClick, Plus, Send, TestTube2, Trash2, Upload, UserCheck, Users, X } from 'lucide-react';
 import { productsApi, promotionsApi, type AudienceCohort, type Promotion, type PromotionAudienceCustomer, type PromotionAudienceCustomers, type PromotionInput, type PromotionPreview, type PromotionTestResult, type PromotionType, zonesApi } from '../services/api';
 import PageSkeleton from '../components/PageSkeleton';
 
@@ -53,6 +53,7 @@ export default function PromotionsPage() {
   const [scheduleError, setScheduleError] = useState('');
   const [testResult, setTestResult] = useState<PromotionTestResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [originalForm, setOriginalForm] = useState<PromotionInput>(initialForm);
   const [error, setError] = useState('');
 
   const load = async () => {
@@ -85,6 +86,7 @@ export default function PromotionsPage() {
     setComposerOpen(true);
     setEditing(null);
     setForm(initialForm);
+    setOriginalForm(initialForm);
     setAudiencePreview(null);
     setError('');
   };
@@ -92,7 +94,9 @@ export default function PromotionsPage() {
     setActiveTab('history');
     setComposerOpen(true);
     setEditing(promotion);
-    setForm({ type: promotion.type, title: promotion.title, body: promotion.body, imageUrl: promotion.image_url, destinationUrl: promotion.destination_url, zoneIds: promotion.zone_ids || [], audienceRules: promotion.audience_rules || { cohorts: [] }, scheduledAt: formatPromotionScheduleForInput(promotion.scheduled_at) });
+    const nextForm = { type: promotion.type, title: promotion.title, body: promotion.body, imageUrl: promotion.image_url, destinationUrl: promotion.destination_url, zoneIds: promotion.zone_ids || [], audienceRules: promotion.audience_rules || { cohorts: [] }, scheduledAt: formatPromotionScheduleForInput(promotion.scheduled_at) };
+    setForm(nextForm);
+    setOriginalForm(nextForm);
     setAudiencePreview(null);
     setError('');
   };
@@ -100,6 +104,7 @@ export default function PromotionsPage() {
     setComposerOpen(false);
     setEditing(null);
     setForm(initialForm);
+    setOriginalForm(initialForm);
     setAudiencePreview(null);
   };
   const save = async (): Promise<Promotion | null> => {
@@ -109,6 +114,7 @@ export default function PromotionsPage() {
       const response = editing ? await promotionsApi.update(editing.id, form) : await promotionsApi.create(form);
       const saved = response.data.data;
       setEditing(saved);
+      setOriginalForm(form);
       await load();
       return saved;
     } catch (caught: unknown) {
@@ -263,7 +269,7 @@ export default function PromotionsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button disabled={busy || !form.title.trim() || !form.body.trim() || !form.destinationUrl.startsWith('/')} onClick={() => setContentPreview({ title: form.title, body: form.body, imageUrl: form.imageUrl || null, destinationUrl: form.destinationUrl })} className="flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"><Eye className="h-4 w-4" /> Preview</button>
-          <button disabled={busy || !form.title.trim() || !form.body.trim() || !form.destinationUrl.startsWith('/')} onClick={() => { void save(); }} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? 'Save draft' : 'Create draft'}</button>
+          <button disabled={busy || !form.title.trim() || !form.body.trim() || !form.destinationUrl.startsWith('/') || JSON.stringify(form) === JSON.stringify(originalForm)} onClick={() => { void save(); }} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? 'Save draft' : 'Create draft'}</button>
           {editing?.status === 'draft' && <><button disabled={busy} onClick={() => action(editing, 'test')} className="flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-slate-600"><TestTube2 className="h-4 w-4" /> Test send</button><button disabled={busy} onClick={() => action(editing, 'send')} className="flex items-center gap-1 rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-white"><Send className="h-4 w-4" /> Send now</button></>}
         </div>
       </div>
@@ -273,7 +279,7 @@ export default function PromotionsPage() {
       const clicks = promotion.clickCount || 0;
       const scope: AudienceScope = { zoneIds: promotion.zone_ids || [], cohorts: promotion.audience_rules?.cohorts || [] };
       const draftTargeting = `${promotion.zone_ids?.length ? `${promotion.zone_ids.length} selected zone${promotion.zone_ids.length === 1 ? '' : 's'}` : 'All zones'} · ${promotion.audience_rules?.cohorts.length ? promotion.audience_rules.cohorts.map(value => cohorts.find(cohort => cohort.value === value)?.label || value).join(', ') : 'All consented subscribers'}`;
-      return <article key={promotion.id} className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-900 dark:text-white">{promotion.title}</h2><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${promotion.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : promotion.status === 'sending' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>{promotion.status}</span></div><p className="mt-1 truncate text-xs text-gray-500 dark:text-slate-400">{promotion.body}</p><p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{promotion.status === 'sent' ? `${promotion.recipient_count} recipients · ${delivered} accepted deliveries · ${promotion.fail_count} failures · ${clicks} clicks · ${rate(clicks, promotion.recipient_count)} click rate` : promotion.status === 'sending' ? 'Sending to the eligible audience...' : `${draftTargeting}${promotion.scheduled_at ? ` · Scheduled ${formatScheduleDisplay(promotion.scheduled_at)}` : ''}`}</p></div><div className="flex shrink-0 gap-1"><button title="Preview notification" aria-label="Preview notification" onClick={() => setContentPreview({ title: promotion.title, body: promotion.body, imageUrl: promotion.image_url, destinationUrl: promotion.destination_url })} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><Eye className="h-4 w-4" /></button>{promotion.status === 'draft' && <><button title="Edit draft" aria-label="Edit draft" onClick={() => openEdit(promotion)} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><Megaphone className="h-4 w-4" /></button><button title="View audience customers" aria-label="View audience customers" onClick={() => openAudience(scope)} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><Users className="h-4 w-4" /></button><button title="Schedule draft" aria-label="Schedule draft" onClick={() => openSchedule(promotion)} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><CalendarClock className="h-4 w-4" /></button><button title="Delete draft" aria-label="Delete draft" onClick={() => action(promotion, 'delete')} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></>}</div></article>;
+      return <article key={promotion.id} className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-sm font-bold text-gray-900 dark:text-white">{promotion.title}</h2><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${promotion.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : promotion.status === 'sending' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300'}`}>{promotion.status}</span></div><p className="mt-1 truncate text-xs text-gray-500 dark:text-slate-400">{promotion.body}</p><p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{promotion.status === 'sent' ? `${promotion.recipient_count} recipients · ${delivered} accepted deliveries · ${promotion.fail_count} failures · ${clicks} clicks · ${rate(clicks, promotion.recipient_count)} click rate` : promotion.status === 'sending' ? 'Sending to the eligible audience...' : `${draftTargeting}${promotion.scheduled_at ? ` · Scheduled ${formatScheduleDisplay(promotion.scheduled_at)}` : ''}`}</p></div><div className="flex shrink-0 gap-1"><button title="Preview notification" aria-label="Preview notification" onClick={() => setContentPreview({ title: promotion.title, body: promotion.body, imageUrl: promotion.image_url, destinationUrl: promotion.destination_url })} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><Eye className="h-4 w-4" /></button>{promotion.status === 'draft' && <><button title="Edit draft" aria-label="Edit draft" onClick={() => openEdit(promotion)} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><Edit className="h-4 w-4" /></button><button title="View audience customers" aria-label="View audience customers" onClick={() => openAudience(scope)} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><Users className="h-4 w-4" /></button><button title="Schedule draft" aria-label="Schedule draft" onClick={() => openSchedule(promotion)} className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"><CalendarClock className="h-4 w-4" /></button><button title="Delete draft" aria-label="Delete draft" onClick={() => action(promotion, 'delete')} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></>}</div></article>;
     })}</section>}
     </div>}
     {activeTab === 'analytics' && <section id="analytics-panel" role="tabpanel" aria-labelledby="analytics-tab" className="space-y-4"><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"><Metric label="Sent" value={sentPromotions.length} /><Metric label="Recipients" value={totals.recipients} /><Metric label="Accepted" value={totals.delivered} /><Metric label="Failed" value={totals.failed} /><Metric label="Clicks" value={totals.clicks} icon /><Metric label="Click rate" value={rate(totals.clicks, totals.recipients)} /></div><div className="overflow-x-auto border-y border-gray-200 dark:border-slate-700"><table className="w-full min-w-[700px] text-left text-xs"><thead className="text-gray-500 dark:text-slate-400"><tr><th className="px-3 py-2 font-semibold">Promotion</th><th className="px-3 py-2 font-semibold">Recipients</th><th className="px-3 py-2 font-semibold">Accepted</th><th className="px-3 py-2 font-semibold">Failed</th><th className="px-3 py-2 font-semibold">Clicks</th><th className="px-3 py-2 font-semibold">Click rate</th></tr></thead><tbody>{sentPromotions.map(promotion => <tr key={promotion.id} className="border-t border-gray-100 dark:border-slate-800"><td className="px-3 py-2 font-semibold text-gray-800 dark:text-slate-100">{promotion.title}</td><td className="px-3 py-2">{promotion.recipient_count}</td><td className="px-3 py-2">{promotion.delivery_count || promotion.deliveredCount || 0}</td><td className="px-3 py-2">{promotion.fail_count || 0}</td><td className="px-3 py-2">{promotion.clickCount || 0}</td><td className="px-3 py-2">{rate(promotion.clickCount || 0, promotion.recipient_count)}</td></tr>)}{sentPromotions.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-500 dark:text-slate-400">No sent promotions to analyse.</td></tr>}</tbody></table></div></section>}
