@@ -429,7 +429,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <h1 className="text-[15px] font-black leading-tight text-gray-600 dark:text-gray-300">Log in or sign up</h1>
           </div>
         )}
         <div className={`relative w-full overflow-hidden ${

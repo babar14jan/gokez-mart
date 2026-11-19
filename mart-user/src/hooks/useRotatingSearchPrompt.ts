@@ -9,7 +9,7 @@ export function useRotatingSearchPrompt(products: Product[]): string {
     const seen = new Set<string>();
     for (const product of products) {
       for (const value of [product.name?.trim(), product.localName?.trim()]) {
-        if (value && !seen.has(value)) {
+        if (value && !/[(),+]/.test(value) && !seen.has(value)) {
           seen.add(value);
           list.push(value);
         }

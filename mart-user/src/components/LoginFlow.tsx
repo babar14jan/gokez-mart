@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ShieldCheck, Tag } from 'lucide-react';
+import { ArrowRight, Tag } from 'lucide-react';
 import { authApi, campaignApi } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useFinePointer } from '../utils/useFinePointer';
@@ -564,7 +564,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 ) : (
                   <button type="button" onClick={() => setReferralOpen(true)}
                     className="ml-auto block text-right text-xs font-semibold text-gokez-700 underline decoration-dotted underline-offset-2 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400 dark:hover:text-gokez-300">
-                    Have Referral code?
+                    Have Referral Code?
                   </button>
                 )}
 
@@ -579,10 +579,6 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 and{' '}
                 <button type="button" onClick={() => onNavigateLegal?.('/privacy/')} className="font-normal text-current underline decoration-dotted underline-offset-2">Privacy Policy</button>.
               </p>
-              <div className="login-privacy-note flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                <span>Your number is private. No Spam</span>
-              </div>
             </>
           ) : (
             <>
