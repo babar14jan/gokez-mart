@@ -975,7 +975,7 @@ export class OrderService {
        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
        : baseWhere;
      const result = await query<{
-      placed: number; pending: number; delivered: number; cancelled: number;
+      placed: number; pending: number; confirmed: number; delivered: number; cancelled: number;
       preparing: number; ready_to_pickup: number; out_for_delivery: number; picked_up: number;
       revenue: string | number; delivered_revenue: string | number;
       delivery_collected: string | number;
@@ -983,6 +983,7 @@ export class OrderService {
     }>(
       `SELECT COUNT(*)::int AS placed,
          COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
+         COUNT(*) FILTER (WHERE o.status = 'confirmed')::int AS confirmed,
          COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
          COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
          COUNT(*) FILTER (WHERE o.status = 'preparing')::int AS preparing,
@@ -1009,6 +1010,7 @@ export class OrderService {
     return {
       placed: row?.placed ?? 0,
       pending: row?.pending ?? 0,
+      confirmed: row?.confirmed ?? 0,
       delivered,
       cancelled: row?.cancelled ?? 0,
       preparing: row?.preparing ?? 0,

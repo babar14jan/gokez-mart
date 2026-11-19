@@ -356,6 +356,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // Bumped by the OTP app bar's back chevron to ask LoginFlow to return to the
   // phone step (the bar is page chrome, so it cannot reach the flow's step state).
   const [loginBackSignal, setLoginBackSignal] = useState(0);
+  const [brandImgError, setBrandImgError] = useState(false);
+  const [bannerImgError, setBannerImgError] = useState(false);
 
   const leaveAsGuest = () => {
     // The guest escape is keyboard-only now, but it still has to report the
@@ -387,6 +389,18 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     </div>
   );
 
+  useEffect(() => {
+    const scroller = document.querySelector<HTMLElement>('.app-scroll');
+    if (!isLoggedIn && accountLoginOpen) {
+      document.body.style.overflow = 'hidden';
+      if (scroller) scroller.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; if (scroller) scroller.style.overflow = ''; };
+    }
+    document.body.style.overflow = '';
+    if (scroller) scroller.style.overflow = '';
+    return undefined;
+  }, [isLoggedIn, accountLoginOpen]);
+
   if (!isLoggedIn && accountLoginOpen) {
     // The phone step gets the tall green hero. The OTP step uses a pale green base with a
     // slim app bar and back chevron (page chrome that nudges the flow back via
@@ -396,10 +410,10 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     return (
       <div className={`page-shell relative font-sans ${
         showBrandHeader
-          ? 'bg-white dark:bg-slate-900'
+          ? 'login-brand-bg dark:bg-slate-900 overflow-y-auto overflow-x-hidden'
           : showOtpHeader
-            ? 'flex flex-col bg-[#f3f8f2] dark:bg-slate-900'
-            : 'flex flex-col justify-start bg-[#e8f5e9] pt-[64px] dark:bg-slate-900'
+            ? 'login-brand-bg flex flex-col dark:bg-slate-900'
+            : 'login-brand-bg flex flex-col justify-start pt-[64px] dark:bg-slate-900'
       }`}>
         {showOtpHeader && (
           <PageHeader
@@ -412,33 +426,54 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div className="w-full text-center sm:mx-auto sm:max-w-sm">
-            <div className="relative overflow-hidden bg-white dark:bg-slate-900 sm:rounded-3xl">
-              <img
-                src="/login_banner.webp"
-                alt="Gokez Mart - Shop Local. Support Local."
-                width={960}
-                height={541}
-                decoding="async"
-                className="block h-auto w-full"
-              />
+            <div className="mb-0 mt-10 flex items-center justify-between px-2">
+              {brandImgError ? (
+                <span className="ml-[10px] text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
+              ) : (
+                <img
+                  src="/mart_brand_new.webp"
+                  alt="Gokez Mart"
+                  className="ml-[10px] h-[55px] w-auto"
+                  onError={() => setBrandImgError(true)}
+                />
+              )}
               <button
                 type="button"
                 onClick={leaveAsGuest}
-                className="absolute right-[15px] top-[52px] inline-flex items-center gap-1.5 rounded-full bg-white/80 px-4 py-2 text-sm font-bold text-gray-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-white dark:bg-slate-700/80 dark:text-slate-200"
+                className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-gray-900 shadow-md ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600"
               >
                 Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
+                        <div className="relative mt-[3px] overflow-hidden bg-transparent dark:bg-transparent sm:rounded-3xl">
+              {bannerImgError ? (
+                <div className="flex h-[54px] w-full items-center justify-center text-3xl" role="img" aria-label="Fresh vegetables">
+                  <span>🥦🥕🍅</span>
+                </div>
+              ) : (
+                <img
+                  src="/login_banner.webp"
+                  alt="Gokez Mart - Shop Local. Support Local."
+                  width={960}
+                  height={541}
+                  decoding="async"
+                  className="block h-auto max-h-[54px] w-full object-contain"
+                  onError={() => setBannerImgError(true)}
+                />
+              )}
+            </div>
           </div>
         )}
-        <div className={`relative w-full overflow-hidden ${
+        <div className={`relative w-full ${
           showBrandHeader
-            ? 'bg-white sm:mx-auto sm:max-w-sm sm:rounded-3xl sm:shadow-xl dark:bg-slate-800'
+            ? 'overflow-visible bg-transparent sm:mx-auto sm:max-w-sm sm:rounded-3xl dark:bg-slate-800'
             : showOtpHeader
-              ? 'flex-1 sm:mx-auto sm:max-w-sm'
-              : 'sm:mx-auto sm:max-w-sm'
+              ? 'flex-1 overflow-hidden bg-transparent sm:mx-auto sm:max-w-sm'
+              : 'overflow-hidden bg-transparent sm:mx-auto sm:max-w-sm'
         }`}>
-          <div className={showBrandHeader ? "px-5 pb-6 pt-0 space-y-4" : showOtpHeader ? "px-5 pb-6 pt-[44px] space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
+          <div className={showBrandHeader ? "px-5 pb-20 pt-0 mt-0" : showOtpHeader ? "px-5 pb-6 pt-[44px] space-y-4" : "px-5 pb-6 pt-2 space-y-4"}>
+            {showBrandHeader && <h1 className="mb-0 text-center text-[18px] font-black text-gray-900 dark:text-white">Log in or Sign up</h1>}
+            <div className={showBrandHeader ? "-mt-2" : undefined}>
 <LoginFlow
               variant="page"
               showPhoneHeading={false}
@@ -469,6 +504,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               }}
               onClose={closeLogin}
             />
+            </div>
           </div>
         </div>
       </div>
