@@ -513,7 +513,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
         {isLoggedIn && (
           <section className="rounded-[18px] border border-gokez-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-gokez-800 dark:bg-slate-800">
-            <div className="flex items-start gap-4">
+            <div className="flex items-center gap-4">
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
                 <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               </div>
@@ -538,8 +538,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   </button>
                 </p>
               </div>
-            </div>
-            <div className="mt-3 flex justify-center">
               <button
                 type="button"
                 onClick={() => void handleShareReferral()}
