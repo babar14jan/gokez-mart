@@ -529,6 +529,13 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                     {formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/referrals')}
+                    className="ml-2 text-xs font-bold text-gokez-700 hover:text-gokez-800 dark:text-gokez-400 dark:hover:text-gokez-300"
+                  >
+                    View details
+                  </button>
                 </p>
               </div>
               <button
@@ -541,15 +548,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               </button>
             </div>
             {shareNotice && <p className="mt-2 text-[11px] font-medium text-gokez-700 dark:text-gokez-300" role="status">{shareNotice}</p>}
-            <div className="mt-0.5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => navigate('/referrals')}
-                className="text-xs font-bold text-gokez-700 hover:text-gokez-800 dark:text-gokez-400 dark:hover:text-gokez-300"
-              >
-                View details
-              </button>
-            </div>
           </section>
         )}
 
