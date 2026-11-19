@@ -196,11 +196,18 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
           if (!isMobile) return;
           if (!isPushSupported()) return;
           if (typeof Notification === 'undefined') return;
-          if (Notification.permission === 'default') {
+          const wasDefault = Notification.permission === 'default';
+          if (wasDefault) {
             await requestNotificationPermission();
           }
           if (Notification.permission === 'granted') {
             await subscribeToPush();
+            // A first-time grant is treated as consent to promotional push
+            // notifications too; the customer can still turn this off later in
+            // Account → Settings.
+            if (wasDefault) {
+              try { await authApi.updateMarketingConsent(true); } catch { /* best effort */ }
+            }
           }
         } catch { /* noop */ }
       })();

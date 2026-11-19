@@ -11,6 +11,7 @@ export type SectionKind =
   | 'new_arrivals'
   | 'buy_again'
   | 'banner'
+  | 'referral_banner'
   | 'category_tiles'
   | 'fresh';
 
@@ -36,6 +37,8 @@ export interface HomeSectionConfig {
   windowDays?: number;
   // Banner / tiles
   imageUrl?: string | null;
+  aspectRatio?: string | null;
+  buttonColor?: string | null;
   href?: string | null;
   alt?: string | null;
   columns?: number | null;
@@ -64,7 +67,7 @@ export interface HomeSection {
 }
 
 export const SECTION_KINDS: SectionKind[] = [
-  'manual', 'category', 'combo', 'deals', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'category_tiles', 'fresh'
+  'manual', 'category', 'combo', 'deals', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'referral_banner', 'category_tiles', 'fresh'
 ];
 // Keep old test name/export for compatibility
 export const HOME_SECTION_KEYS = ['todays_combos', 'fresh_vegetables', 'deals', 'top_picks'];
@@ -168,6 +171,8 @@ export function normalizeSectionConfig(config: unknown): HomeSectionConfig {
   const windowDays = Number.isInteger(Number(source.windowDays)) && Number(source.windowDays) > 0 ? Math.min(Number(source.windowDays), 365) : undefined;
 
   const imageUrl = typeof source.imageUrl === 'string' && source.imageUrl.trim() ? source.imageUrl.trim() : null;
+  const aspectRatio = typeof source.aspectRatio === 'string' && source.aspectRatio.trim() ? source.aspectRatio.trim() : null;
+  const buttonColor = typeof source.buttonColor === 'string' && source.buttonColor.trim() ? source.buttonColor.trim() : null;
   const href = typeof source.href === 'string' && source.href.trim() ? source.href.trim() : null;
   const alt = typeof source.alt === 'string' && source.alt.trim() ? source.alt.trim() : null;
   const buttonText = typeof (source as any).buttonText === 'string' && (source as any).buttonText.trim() ? (source as any).buttonText.trim() : (typeof (source as any).cta === 'string' && (source as any).cta.trim() ? (source as any).cta.trim() : null);
@@ -184,6 +189,8 @@ export function normalizeSectionConfig(config: unknown): HomeSectionConfig {
   if (minDiscount !== undefined) result.minDiscount = minDiscount;
   if (windowDays !== undefined) result.windowDays = windowDays;
   if (imageUrl !== null) result.imageUrl = imageUrl;
+  if (aspectRatio !== null) result.aspectRatio = aspectRatio;
+  if (buttonColor !== null) result.buttonColor = buttonColor;
   if (href !== null) result.href = href;
   if (alt !== null) result.alt = alt;
   if (buttonText !== null) { result.buttonText = buttonText; result.cta = buttonText; }
@@ -235,7 +242,7 @@ async function resolveItems(storeId: string, section: HomeSection): Promise<any[
   const inStock = cfg.inStockOnly !== false;
 
   // Banner / tiles / the Fresh page config are config-driven, not product lists
-  if (section.kind === 'banner' || section.kind === 'category_tiles' || section.kind === 'fresh') return [];
+  if (section.kind === 'banner' || section.kind === 'referral_banner' || section.kind === 'category_tiles' || section.kind === 'fresh') return [];
 
   // Manual picks
   if (section.kind === 'manual') {
@@ -458,7 +465,7 @@ export class HomeSectionService {
       if (sec.startsAt && new Date(sec.startsAt) > now) continue;
       if (sec.endsAt && new Date(sec.endsAt) < now) continue;
       const items = await resolveItems(storeId, sec as any);
-      if (kind === 'banner' || kind === 'category_tiles' || kind === 'fresh') {
+      if (kind === 'banner' || kind === 'referral_banner' || kind === 'category_tiles' || kind === 'fresh') {
         // Fresh is a page config consumed by nav, not a home shelf; keep it in
         // the payload even though it resolves no items.
         const cfg = normalizeSectionConfig(sec.config || {});

@@ -224,7 +224,7 @@ describe('referral integration points', () => {
       '{isLoggedIn && (',
       'Refer & Earn',
       'normalizeReferralCode(referralData?.code) || \'—\'',
-      'Available referral balance:',
+      'Available balance:',
       'formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))',
       'handleShareReferral',
       'Share',

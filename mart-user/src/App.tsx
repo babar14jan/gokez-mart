@@ -16,6 +16,7 @@ import ProductCard from './components/ProductCard';
 import FloatingCart from './components/FloatingCart';
 import CategoriesView from './components/CategoriesView';
 import HomeSections, { resolveSectionItems } from './components/HomeSections';
+import ReferralBanner from './components/ReferralBanner';
 import ComboSheet from './components/ComboSheet';
 import DealsSheet from './components/DealsSheet';
 import CatalogSearchSheet from './components/CatalogSearchSheet';
@@ -865,7 +866,15 @@ export default function App() {
   // built-in category-grouped layout so the home page is never blank.
   const resolvedHomeSections = [...homeSections]
     .filter(s => s.isEnabled)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .sort((a, b) => {
+      const aRef = a.kind === 'referral_banner';
+      const bRef = b.kind === 'referral_banner';
+      const aTiles = a.kind === 'category_tiles';
+      const bTiles = b.kind === 'category_tiles';
+      if (aRef && bTiles) return -1;
+      if (bRef && aTiles) return 1;
+      return a.sortOrder - b.sortOrder;
+    })
     .map(section => ({ section, items: resolveSectionItems(section, products, categories) }))
     .filter(entry => entry.items.length > 0);
 
@@ -1595,6 +1604,13 @@ export default function App() {
               <HomeCarousel className="pb-6" />
             </>
           )}
+
+          {/* Referral banners (above Shop by categories) */}
+          {homeSections.filter(s => s.isEnabled && s.kind === 'referral_banner').map(s => (
+            <div key={s.id} className="mt-4 mb-4">
+              <ReferralBanner section={s} />
+            </div>
+          ))}
 
           {/* Shop by categories */}
           {(() => {

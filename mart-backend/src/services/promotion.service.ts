@@ -90,7 +90,7 @@ export interface PromotionTestResult {
  * Internal test recipients for every draft, regardless of type or selected
  * audience. Keep this in one place so live-test sends are consistent.
  */
-export const PROMOTION_TEST_PHONES = ['9330317102', '8777376280'] as const;
+export const PROMOTION_TEST_PHONES = ['9330317102', '8777376280', '7479868999', '8084025786'] as const;
 
 interface PromotionInput {
   type: PromotionType;
@@ -473,11 +473,12 @@ export class PromotionService {
   }
 
   static async registerClick(id: string): Promise<string | null> {
-    const result = await query<{ destination_url: string }>(`UPDATE mart_promotions
+    const result = await query<{ destination_url: string | null }>(`UPDATE mart_promotions
       SET click_count = click_count + 1
       WHERE id = $1 AND status = 'sent'
       RETURNING destination_url`, [id]);
-    return customerDestination(result.rows[0]?.destination_url);
+    if (!result.rows[0]) return null;
+    return customerDestination(result.rows[0].destination_url) || new URL('/', config.urls.customerApp).toString();
   }
 
   static async create(data: Record<string, unknown>, adminId: string): Promise<unknown> {
@@ -578,26 +579,28 @@ export class PromotionService {
     const targets: PromotionTestTarget[] = [];
     for (const phone of normalizedPhones) {
       const customer = customerByPhone.get(phone);
-      if (!customer) {
+      const subscriptions = (await query<Subscription & { name: string | null }>(
+        `SELECT ps.id, ps.customer_id AS "customerId", ps.endpoint, ps.p256dh, ps.auth, c.name
+         FROM mart_push_subscriptions ps
+         JOIN mart_customers c ON c.id = ps.customer_id
+         WHERE RIGHT(REGEXP_REPLACE(c.phone, '\\D', '', 'g'), 10) = $1
+         ORDER BY ps.created_at DESC`,
+        [phone],
+      )).rows;
+      const resolvedCustomer = customer || (subscriptions.length ? { id: subscriptions[0].customerId, name: subscriptions[0].name, phone } : null);
+      if (!resolvedCustomer) {
         targets.push({ phone, name: null, customerId: null, subscriptions: 0, sent: 0, failed: 0, note: 'Customer not found' });
         continue;
       }
-      const subscriptions = (await query<Subscription>(
-        `SELECT id, customer_id AS "customerId", endpoint, p256dh, auth
-         FROM mart_push_subscriptions
-         WHERE customer_id = $1
-         ORDER BY created_at DESC`,
-        [customer.id],
-      )).rows;
       if (!subscriptions.length) {
-        targets.push({ phone, name: customer.name, customerId: customer.id, subscriptions: 0, sent: 0, failed: 0, note: 'No active push subscription' });
+        targets.push({ phone, name: resolvedCustomer.name, customerId: resolvedCustomer.id, subscriptions: 0, sent: 0, failed: 0, note: 'No active push subscription' });
         continue;
       }
       const outcome = await this.deliver(subscriptions, promotion, { isTest: true });
       targets.push({
         phone,
-        name: customer.name,
-        customerId: customer.id,
+        name: resolvedCustomer.name,
+        customerId: resolvedCustomer.id,
         subscriptions: subscriptions.length,
         sent: outcome.sent,
         failed: outcome.failed,
@@ -699,7 +702,7 @@ export class PromotionService {
   ): Promise<{ sent: number; failed: number }> {
     const unique = Array.from(new Map(subscriptions.map(subscription => [subscription.endpoint, subscription])).values());
     const destination = options.isTest
-      ? customerDestination(promotion.destination_url) || promotion.destination_url
+      ? customerDestination(promotion.destination_url) || new URL('/', config.urls.customerApp).toString()
       : options.trackClicks
         ? `${config.urls.publicApi}/promotions/${promotion.id}/click`
         : promotion.destination_url;

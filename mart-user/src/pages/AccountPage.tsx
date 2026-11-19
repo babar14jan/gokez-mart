@@ -513,43 +513,41 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
         {isLoggedIn && (
           <section className="rounded-[18px] border border-gokez-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-gokez-800 dark:bg-slate-800">
-            <div className="flex items-start gap-4">
+            <div className="flex items-center gap-4">
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
                 <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer & Earn</p>
-                  <span className="rounded-full bg-gokez-50 px-2 py-0.5 font-mono text-xs font-bold text-gokez-700 dark:bg-gokez-900/30 dark:text-gokez-400">
+                  <span className="rounded-full bg-amber-400 px-2 py-0.5 font-mono text-xs font-bold text-black dark:bg-amber-300 dark:text-black">
                     Code: {normalizeReferralCode(referralData?.code) || '—'}
                   </span>
                 </div>
                 <p className="mt-1 text-xs font-medium text-ink dark:text-white sm:text-sm">
-                  Available referral balance:
+                  Available balance:
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                     {formatReferralRupees(referralData?.stats?.available ?? availableReferralBalance(referralData?.credits || []))}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/referrals')}
+                    className="ml-2 text-xs font-bold text-gokez-700 hover:text-gokez-800 dark:text-gokez-400 dark:hover:text-gokez-300"
+                  >
+                    View details
+                  </button>
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => void handleShareReferral()}
-                className="inline-flex items-center gap-1 rounded-xl bg-black px-2.5 py-1 text-xs font-extrabold leading-tight text-white transition-colors hover:bg-gray-900 sm:px-3 sm:py-1.5 sm:text-sm"
+                className="inline-flex items-center gap-1 rounded-xl bg-black px-2.5 py-[7px] text-xs font-extrabold leading-tight text-white transition-colors hover:bg-gray-900 sm:px-3 sm:py-[9px] sm:text-sm"
               >
                 <Share className="h-4 w-4" aria-hidden="true" /> Share
                 <span className="sr-only">{buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin)}</span>
               </button>
             </div>
             {shareNotice && <p className="mt-2 text-[11px] font-medium text-gokez-700 dark:text-gokez-300" role="status">{shareNotice}</p>}
-            <div className="mt-0.5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => navigate('/referrals')}
-                className="text-xs font-bold text-gray-500 underline underline-offset-2 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300"
-              >
-                View details
-              </button>
-            </div>
           </section>
         )}
 

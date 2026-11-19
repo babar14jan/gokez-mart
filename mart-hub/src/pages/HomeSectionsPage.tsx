@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, GripVertical, Pencil, Trash2, Eye, EyeOff, LayoutGrid, Copy, Search, X, ArrowUp, ArrowDown, Image, Sparkles, Package } from 'lucide-react';
-import { homeSectionsApi, productsApi, categoriesApi } from '../services/api';
+import { homeSectionsApi, productsApi, categoriesApi, carouselApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
@@ -13,6 +13,7 @@ const KINDS = [
   { key: 'bestsellers', label: 'Bestsellers', hint: 'Top-selling products for this store in the last 30 days.', icon: Sparkles, usesProducts: false, multiCategory: true },
   { key: 'new_arrivals', label: 'New arrivals', hint: 'Recently added products.', icon: Sparkles, usesProducts: false, multiCategory: true },
   { key: 'banner', label: 'Banner', hint: 'Image with an optional link.', icon: Image, usesProducts: false, multiCategory: false },
+  { key: 'referral_banner', label: 'Referral banner', hint: '16:5 Refer & Earn banner with the customer\'s own code.', icon: Image, usesProducts: false, multiCategory: false },
   { key: 'category_tiles', label: 'Category tiles', hint: 'Tap to jump to categories.', icon: LayoutGrid, usesProducts: false, multiCategory: true },
   { key: 'fresh', label: 'Fresh page', hint: 'Choose the Fresh tabs (categories) and how products display.', icon: LayoutGrid, usesProducts: false, multiCategory: true },
 ] as const;
@@ -35,16 +36,19 @@ interface FormState {
   sort: 'catalogue' | 'discount' | 'price_asc' | 'price_desc' | 'newest' | 'bestselling';
   imageUrl: string;
   buttonText: string;
+  aspectRatio: string;
+  buttonColor: string;
   href: string;
   alt: string;
+  visibilityRule: string;
 }
 
 const emptyForm = (k: KindKey): FormState => ({
-  kind: k, title: k === 'fresh' ? 'Fresh' : (KINDS.find(x => x.key === k)?.label || k), subtitle: '',
+  kind: k, title: k === 'fresh' ? 'Fresh' : (k === 'referral_banner' ? 'Refer & Earn' : (KINDS.find(x => x.key === k)?.label || k)), subtitle: '',
   categorySlugs: k === 'fresh' ? ['vegetables'] : [], productIds: [], excludeProductIds: [],
   limit: '', columns: '', layout: '', isEnabled: true, badge: '',
   fallback: 'none', sort: 'catalogue',
-  imageUrl: '', buttonText: '', href: '', alt: '',
+  imageUrl: '', buttonText: '', href: '', alt: '', visibilityRule: 'always', aspectRatio: '16/5', buttonColor: 'white',
 });
 
 const inp = "w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
@@ -63,6 +67,7 @@ export default function HomeSectionsPage() {
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [showGallery, setShowGallery] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const load = async () => {
     try {
@@ -78,6 +83,21 @@ export default function HomeSectionsPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleImageUpload = async (file: File | null) => {
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const res: any = await carouselApi.uploadImage(file, 'banner');
+      const url = res?.data?.data?.url || res?.data?.url || res?.data?.data?.photoUrl;
+      if (url) setForm((f: any) => ({ ...f, imageUrl: url }));
+      else alert('Upload failed');
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Upload failed');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const openCreate = (kind?: KindKey) => {
     const k = kind || 'manual';
@@ -117,6 +137,9 @@ export default function HomeSectionsPage() {
       buttonText: cfg.buttonText || (cfg as any).cta || '',
       href: cfg.href || '',
       alt: cfg.alt || '',
+      visibilityRule: s.visibilityRule || 'always',
+      aspectRatio: cfg.aspectRatio || '16/5',
+      buttonColor: cfg.buttonColor || 'white',
     });
     setShowGallery(false);
     setShowModal(true);
@@ -133,6 +156,7 @@ export default function HomeSectionsPage() {
         isEnabled: form.isEnabled,
         layout: form.layout || (form.kind === 'fresh' ? 'grid' : 'row'),
         badge: form.badge.trim() || null,
+        visibilityRule: form.visibilityRule || 'always',
         config: {
           categorySlugs: form.categorySlugs,
           productIds: form.kind === 'fresh' ? [] : form.productIds,
@@ -145,6 +169,8 @@ export default function HomeSectionsPage() {
       href: (form.href||'').trim() || null,
       alt: (form.alt||'').trim() || null,
       buttonText: ((form as any).buttonText||'').trim() || null,
+      aspectRatio: (form as any).aspectRatio || '16/5',
+      buttonColor: (form as any).buttonColor || 'white',
     },
       };
       if (editing) await homeSectionsApi.update(storeId, editing.id, data);
@@ -335,6 +361,8 @@ export default function HomeSectionsPage() {
               </div>
               <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Subtitle <span className="text-gray-400">(optional)</span></label><input value={form.subtitle} onChange={e => setForm(f => ({...f, subtitle: e.target.value}))} className={inp} /></div>
 
+              <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Show to</label><select value={form.visibilityRule} onChange={e => setForm(f => ({...f, visibilityRule: e.target.value}))} className={inp}><option value="always">Everyone</option><option value="logged_in">Logged-in customers</option><option value="guests">Guests only</option></select></div>
+
               {form.kind === 'fresh' ? (
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Fresh categories (tab order)</label>
@@ -381,10 +409,13 @@ export default function HomeSectionsPage() {
                 </div>
               )}
 
-              {form.kind === 'banner' && (
+              {(form.kind === 'banner' || form.kind === 'referral_banner') && (
                 <div className="space-y-2">
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Image URL</label><input value={form.imageUrl || ''} onChange={e => setForm((f:any) => ({...f, imageUrl: e.target.value}))} className={inp} placeholder="https://..." /></div>
+                  <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Or upload image</label><input type="file" accept="image/*" disabled={uploadingImage} onChange={e => handleImageUpload(e.target.files?.[0] || null)} className={inp} /></div>
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Button text (optional)</label><input value={(form as any).buttonText || ''} onChange={e => setForm((f:any) => ({...f, buttonText: e.target.value} as any))} className={inp} placeholder="Shop now" /></div>
+                  <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Aspect ratio</label><select value={(form as any).aspectRatio || '16/5'} onChange={e => setForm((f:any) => ({...f, aspectRatio: e.target.value} as any))} className={inp}><option value="16/5">16:5 (wide)</option><option value="16/4">16:4</option><option value="16/3">16:3</option><option value="4/1">4:1 (narrow)</option></select></div>
+                  <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Share button color</label><select value={(form as any).buttonColor || 'white'} onChange={e => setForm((f:any) => ({...f, buttonColor: e.target.value} as any))} className={inp}><option value="white">White</option><option value="banner">Banner color</option></select></div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Link (optional)</label>
                     <select value={(form.href && (form.href.startsWith('#') || form.href.startsWith('/category/'))) ? form.href : (form.href ? 'custom' : '')} onChange={e => {
@@ -400,6 +431,24 @@ export default function HomeSectionsPage() {
                       <option value="custom">Custom URL</option>
                     </select>
                     {form.href && !String(form.href).startsWith('#') && !String(form.href).startsWith('/category/') && <input value={form.href} onChange={e => setForm((f:any) => ({...f, href: e.target.value}))} className={`${inp} mt-2`} placeholder="https://..." />}
+                  </div>
+                </div>
+              )}
+
+              {form.kind === 'referral_banner' && (
+                <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                  <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-slate-300">Preview</p>
+                  <div className="relative w-full overflow-hidden rounded-lg bg-gradient-to-r from-gokez-700 to-gokez-500" style={{ aspectRatio: (form as any).aspectRatio || '16/5' }}>
+                    <div className="absolute inset-0 flex items-center justify-between px-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold text-white">{form.title || 'Refer & Earn'}</p>
+                          <span className="rounded-full bg-white/25 px-2.5 py-0.5 font-mono text-xs font-bold text-white">Code: SHH657</span>
+                        </div>
+                        {form.subtitle && <p className="mt-0.5 text-xs text-white/90">{form.subtitle}</p>}
+                      </div>
+                      <button className={`rounded-lg px-3 py-1.5 text-xs font-bold ${(form as any).buttonColor === 'banner' ? 'bg-gokez-700 text-white' : 'bg-white text-gokez-800'}`}>{(form as any).buttonText || 'Share'}</button>
+                    </div>
                   </div>
                 </div>
               )}
