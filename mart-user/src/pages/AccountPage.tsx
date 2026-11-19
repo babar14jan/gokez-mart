@@ -424,9 +424,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <button
                 type="button"
                 onClick={leaveAsGuest}
-                className="absolute right-[15px] top-[37px] inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                className="absolute right-[15px] top-[52px] inline-flex items-center gap-1.5 rounded-full bg-white/80 px-4 py-2 text-sm font-bold text-gray-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-white dark:bg-slate-700/80 dark:text-slate-200"
               >
-                Skip <span aria-hidden="true">&gt;</span>
+                Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             <h1 className="text-[15px] font-black leading-tight text-gray-600 dark:text-gray-300">Log in or sign up</h1>
