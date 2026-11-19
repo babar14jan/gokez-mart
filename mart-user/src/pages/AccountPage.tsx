@@ -545,7 +545,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <button
                 type="button"
                 onClick={() => navigate('/referrals')}
-                className="text-xs font-bold text-gray-500 underline underline-offset-2 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-300"
+                className="text-xs font-bold text-gokez-700 hover:text-gokez-800 dark:text-gokez-400 dark:hover:text-gokez-300"
               >
                 View details
               </button>
