@@ -98,7 +98,7 @@ export default function ReferralPage() {
           : 'Pending after first-order delivery';
   const firstOrderCompleted = firstOrderCredit?.status === 'redeemed' && remainingCredit?.status === 'available';
   const wallet = [
-    { label: 'Total referral reward earned', value: rupees(stats?.totalEarned) },
+    { label: 'Total earned (incl. pending)', value: rupees(stats?.totalEarned) },
     { label: 'Available to use', value: rupees(stats?.available ?? available) },
     { label: 'Used', value: rupees(stats?.used) },
     { label: 'Pending', value: rupees(stats?.pending), pending: true },
@@ -138,10 +138,11 @@ export default function ReferralPage() {
             <section className="rounded-xl border border-cream-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40">
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">How it works</p>
               <ul className="list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">
-                {refereeReferral && (
-                  <li>Used a friend’s code? {rupees(firstStageAmount)} applies on your first eligible order and {rupees(remainingStageAmount)} unlocks after delivery.</li>
-                )}
-                <li>Refer friends to earn {rupees(reward)} per successful referral.</li>
+                  {refereeReferral && (
+                    <li>Used a friend’s code? You get {rupees(reward)} in total: {rupees(firstStageAmount)} is ready for your first eligible order and {rupees(remainingStageAmount)} stays pending until that order is delivered.</li>
+                  )}
+                  <li>Pending rewards are not redeemable until they unlock.</li>
+                  <li>Refer friends to earn {rupees(reward)} per successful referral.</li>
                 <li>Use up to {rupees(firstStageAmount)} of referral balance on each eligible order.</li>
                 <li>
                   {expiryDays > 0 ? `Credits expire ${expiryDays} days after they unlock.` : 'Credits do not expire.'}
@@ -160,6 +161,9 @@ export default function ReferralPage() {
                   <p>{rupees(firstStageAmount)} – {firstOrderStatus}</p>
                   {remainingStageAmount > 0 && <p>{rupees(remainingStageAmount)} – {remainingStatus}</p>}
                 </div>
+                <p className="mt-2 rounded-xl bg-white p-2.5 text-[11px] leading-relaxed text-gray-600 dark:bg-slate-800 dark:text-slate-300">
+                  Only unlocked credits are shown as “Available to use” and can be spent at checkout — up to {rupees(firstStageAmount)} on each eligible order. Pending rewards ({rupees(stats?.pending)}) are tracked separately and cannot be used yet.
+                </p>
                 {firstOrderCompleted && remainingStageAmount > 0 && (
                   <p className="mt-3 rounded-xl bg-gokez-50 p-3 text-[11px] font-semibold leading-relaxed text-gokez-700 dark:bg-gokez-900/20 dark:text-gokez-300" role="status">
                     Congratulations! Your {rupees(firstStageAmount)} first-order referral discount has been used successfully. Another {rupees(remainingStageAmount)} reward is now available for your next eligible order.
