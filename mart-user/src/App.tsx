@@ -203,11 +203,10 @@ export default function App() {
           return storedView;
         }
       }
-      // A first visit lands on the catalogue, signed in or not. Browsing comes
-      // before an account: the old rule sent every signed-out visitor to
-      // Account first, which put a login wall in front of the products and
-      // asked for the least urgent thing first. Sign-in is still required to
-      // check out, and that is where it is asked for.
+      // A first visit for a signed-out shopper lands on the login page, unless
+      // the link carries tracking/referral parameters (e.g. a QR code), in which
+      // case it lands on Home so the campaign is not blocked by a login wall.
+      if (!useCustomerAuthStore.getState().isLoggedIn && !window.location.search) return 'login';
       return 'home';
     }
     // Unrecognized/private routes boot to Home and are normalized so the address
@@ -257,6 +256,14 @@ export default function App() {
   // moment the tab is left so a return visit lands on the Account page rather
   // than mid-login.
   const accountLoginOpen = useAccountLoginStore((s) => s.open);
+  useEffect(() => {
+    if (isLoggedIn) return;
+    if (window.location.search) return;
+    if (sessionStorage.getItem('mart-boot-login-done')) return;
+    sessionStorage.setItem('mart-boot-login-done', '1');
+    useLoginFlowStore.getState().setGuestReturnPath('/');
+    useAccountLoginStore.getState().openLogin();
+  }, [isLoggedIn]);
   useEffect(() => {
     if (view !== 'account' && view !== 'login') useAccountLoginStore.getState().closeLogin();
   }, [view]);
