@@ -13,6 +13,8 @@ export function resolveSectionItems(
   products: Product[],
   categories: Category[],
 ): Product[] {
+  if (section.kind === 'referral_banner') return [];
+
   if (Array.isArray((section as any).items) && (section as any).items.length) {
     const byId = new Map(products.map(p => [p.id, p]));
     const merged: Product[] = [];
