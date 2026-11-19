@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, GripVertical, Pencil, Trash2, Eye, EyeOff, LayoutGrid, Copy, Search, X, ArrowUp, ArrowDown, Image, Sparkles, Package } from 'lucide-react';
-import { homeSectionsApi, productsApi, categoriesApi } from '../services/api';
+import { homeSectionsApi, productsApi, categoriesApi, carouselApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
@@ -67,6 +67,7 @@ export default function HomeSectionsPage() {
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [showGallery, setShowGallery] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const load = async () => {
     try {
@@ -82,6 +83,21 @@ export default function HomeSectionsPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleImageUpload = async (file: File | null) => {
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const res: any = await carouselApi.uploadImage(file, 'banner');
+      const url = res?.data?.data?.url || res?.data?.url || res?.data?.data?.photoUrl;
+      if (url) setForm((f: any) => ({ ...f, imageUrl: url }));
+      else alert('Upload failed');
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Upload failed');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const openCreate = (kind?: KindKey) => {
     const k = kind || 'manual';
@@ -396,6 +412,7 @@ export default function HomeSectionsPage() {
               {(form.kind === 'banner' || form.kind === 'referral_banner') && (
                 <div className="space-y-2">
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Image URL</label><input value={form.imageUrl || ''} onChange={e => setForm((f:any) => ({...f, imageUrl: e.target.value}))} className={inp} placeholder="https://..." /></div>
+                  <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Or upload image</label><input type="file" accept="image/*" disabled={uploadingImage} onChange={e => handleImageUpload(e.target.files?.[0] || null)} className={inp} /></div>
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Button text (optional)</label><input value={(form as any).buttonText || ''} onChange={e => setForm((f:any) => ({...f, buttonText: e.target.value} as any))} className={inp} placeholder="Shop now" /></div>
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Aspect ratio</label><select value={(form as any).aspectRatio || '16/5'} onChange={e => setForm((f:any) => ({...f, aspectRatio: e.target.value} as any))} className={inp}><option value="16/5">16:5 (wide)</option><option value="16/4">16:4</option><option value="16/3">16:3</option><option value="4/1">4:1 (narrow)</option></select></div>
                   <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Share button color</label><select value={(form as any).buttonColor || 'white'} onChange={e => setForm((f:any) => ({...f, buttonColor: e.target.value} as any))} className={inp}><option value="white">White</option><option value="banner">Banner color</option></select></div>
