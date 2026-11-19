@@ -393,7 +393,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
   const primaryBtn = (enabled = true) =>
     `flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl py-3 text-[17px] font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800 ${enabled
       ? 'bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600'
-      : 'bg-gray-200 text-gray-500 focus-visible:ring-gray-400 dark:bg-slate-700 dark:text-slate-400'}`;
+      : 'bg-gray-600 text-white focus-visible:ring-gray-600 dark:bg-gray-600 dark:text-white'}`;
 
   return (
     <>
@@ -417,7 +417,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                   </div>
                 )}
               </div>
-                <button onClick={finalizeLogin} className="flex h-[34px] w-full items-center justify-center gap-2 rounded-2xl py-0 text-[11px] font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800 bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600">
+                <button onClick={finalizeLogin} className={primaryBtn(true)}>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" /> Start Shopping
               </button>
             </>
@@ -431,7 +431,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 <div className="h-14" />
               </div>
 
-              <div className="flex flex-1 flex-col overflow-y-auto px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-9">
+              <div className="mx-auto flex w-full max-w-sm flex-1 flex-col overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8 sm:px-6">
                 <h2 id="login-title" className="text-[clamp(22px,7vw,30px)] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white">
                   Almost there.
                 </h2>
@@ -569,7 +569,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
 
               {!referralOpen && (
                 <button type="button" onClick={() => setReferralOpen(true)}
-                  className="!mt-2 block mx-auto text-center text-xs font-semibold text-gokez-700 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400 dark:hover:text-gokez-300">
+                  className="!mt-2 flex min-h-[44px] w-full items-center justify-center text-center text-xs font-semibold text-gokez-700 transition-colors hover:text-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-500 dark:text-gokez-400 dark:hover:text-gokez-300">
                   Have Referral Code?
                 </button>
               )}
@@ -587,7 +587,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
               <form onSubmit={handleVerifyOtp} className="mt-3 space-y-2">
                 <ErrorNote id="login-error" />
                 <label htmlFor="login-otp" className="sr-only">6-digit verification code</label>
-                <div className="flex items-center justify-center gap-2 sm:gap-3">
+                <div className="mx-auto flex w-full max-w-[21rem] items-center justify-center gap-1.5 sm:max-w-[24rem] sm:gap-3">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <input
                       key={i}
@@ -603,7 +603,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                       onPaste={e => handleOtpPaste(e, i)}
                       autoComplete={i === 0 ? 'one-time-code' : 'off'}
                       aria-invalid={Boolean(error)}
-                      className="h-12 w-12 rounded-xl border bg-white text-center text-xl font-bold text-slate-900 focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 dark:bg-slate-700/60 dark:text-white dark:border-slate-600 sm:h-14 sm:w-14"
+                      className="h-12 min-w-0 flex-1 rounded-xl border bg-white text-center text-lg font-bold text-slate-900 focus:outline-none focus:border-gokez-500 focus:ring-2 focus:ring-gokez-500/20 dark:bg-slate-700/60 dark:text-white dark:border-slate-600 sm:h-14 sm:text-xl"
                       autoFocus={finePointer && i === 0}
                     />
                   ))}
