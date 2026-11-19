@@ -319,8 +319,8 @@ function Modal({ title, onClose, children, footer }: { title: string; onClose: (
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}><div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 shadow-xl dark:bg-slate-800" onClick={event => event.stopPropagation()}><div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h2><button aria-label="Close dialog" title="Close" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-700"><X className="h-5 w-5" /></button></div>{children}{footer && <div className="mt-4 flex justify-end gap-2">{footer}</div>}</div></div>;
 }
 
-function NotificationPreview({ title, body, imageUrl, destinationUrl }: ContentPreview) {
-  return <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900"><div className="rounded-xl bg-white p-3 shadow-sm dark:bg-slate-800">{imageUrl && <img src={imageUrl} alt="" className="mb-3 h-36 w-full rounded-lg object-cover" />}<p className="text-sm font-bold text-gray-900 dark:text-white">{title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-gray-600 dark:text-slate-300">{body}</p><p className="mt-3 text-[11px] text-emerald-700 dark:text-emerald-300">{destinationUrl}</p></div></div>;
+function NotificationPreview({ title, body, imageUrl }: ContentPreview) {
+  return <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900"><div className="rounded-xl bg-white p-3 shadow-sm dark:bg-slate-800">{imageUrl && <img src={imageUrl} alt="" className="mb-3 h-36 w-full rounded-lg object-cover" />}<p className="text-sm font-bold text-gray-900 dark:text-white">{title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-gray-600 dark:text-slate-300">{body}</p></div></div>;
 }
 
 function Metric({ label, value, icon }: { label: string; value: string | number; icon?: boolean }) {
