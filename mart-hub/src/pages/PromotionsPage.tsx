@@ -320,7 +320,7 @@ function Modal({ title, onClose, children, footer }: { title: string; onClose: (
 }
 
 function NotificationPreview({ title, body, imageUrl, destinationUrl }: ContentPreview) {
-  return <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900"><div className="rounded-xl bg-white p-3 shadow-sm dark:bg-slate-800">{imageUrl && <img src={imageUrl} alt="" className="mb-3 h-36 w-full rounded-lg object-cover" />}<p className="text-sm font-bold text-gray-900 dark:text-white">{title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-gray-600 dark:text-slate-300">{body}</p><p className="mt-3 text-[11px] text-emerald-700 dark:text-emerald-300">Opens {destinationUrl}</p></div></div>;
+  return <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-900"><div className="rounded-xl bg-white p-3 shadow-sm dark:bg-slate-800">{imageUrl && <img src={imageUrl} alt="" className="mb-3 h-36 w-full rounded-lg object-cover" />}<p className="text-sm font-bold text-gray-900 dark:text-white">{title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-gray-600 dark:text-slate-300">{body}</p><p className="mt-3 text-[11px] text-emerald-700 dark:text-emerald-300">{destinationUrl}</p></div></div>;
 }
 
 function Metric({ label, value, icon }: { label: string; value: string | number; icon?: boolean }) {
