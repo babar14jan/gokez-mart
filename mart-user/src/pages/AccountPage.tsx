@@ -14,6 +14,7 @@ import PageHeader from '../components/PageHeader';
 import { track } from '../utils/track';
 import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildReferralLink, normalizeReferralCode } from '../utils/referral';
+import { openReferralLogin } from '../utils/referralLogin';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { readTrackingTokens } from '../utils/guestTracking';
 
@@ -383,6 +384,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // phone step (the bar is page chrome, so it cannot reach the flow's step state).
   const [loginBackSignal, setLoginBackSignal] = useState(0);
   const [brandImgError, setBrandImgError] = useState(false);
+  const [logoImgError, setLogoImgError] = useState(false);
   const [bannerImgError, setBannerImgError] = useState(false);
 
   const leaveAsGuest = () => {
@@ -446,17 +448,27 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div className="login-brand-hero relative z-10 w-full shrink-0 text-center">
-            <div className="login-brand-header flex h-14 items-center justify-between gap-2 pl-3 pr-4 sm:pl-4 sm:pr-5">
-              {brandImgError ? (
-                <span className="ml-[10px] text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
-              ) : (
-                <img
-                  src="/mart_brand_new.webp"
-                  alt="Gokez Mart"
-                  className="ml-1 h-[56px] w-auto max-w-[45%] object-contain"
-                  onError={() => setBrandImgError(true)}
-                />
-              )}
+            <div className="login-brand-header flex h-[74px] items-center justify-between gap-2 pl-5 pr-4 sm:pl-6 sm:pr-5">
+              <div className="flex min-w-0 items-center gap-0">
+                {!logoImgError && (
+                  <img
+                    src="/gokez_mart_logo-removebg.png"
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                    onError={() => setLogoImgError(true)}
+                  />
+                )}
+                {brandImgError ? (
+                  <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
+                ) : (
+                  <img
+                    src="/mart_brand_new.webp"
+                    alt="Gokez Mart"
+                    className="h-[74px] w-auto max-w-[45%] object-contain"
+                    onError={() => setBrandImgError(true)}
+                  />
+                )}
+              </div>
               <button
                 type="button"
                 onClick={leaveAsGuest}
@@ -465,7 +477,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <div className="login-brand-banner-wrap mt-1 flex h-[88px] w-full items-center justify-center overflow-hidden px-3 sm:h-[110px]">
+            <div className="login-brand-banner-wrap mt-[29px] flex h-[88px] w-full items-center justify-center overflow-hidden px-3 sm:h-[110px]">
               {bannerImgError ? (
                 <div className="flex h-full w-full items-center justify-center text-3xl" role="img" aria-label="Fresh vegetables">
                   <span>🥦🥕🍅</span>
@@ -553,31 +565,59 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         </div>
         )}
 
-        {isLoggedIn && (
-          <section className="rounded-[18px] border border-gokez-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-gokez-800 dark:bg-slate-800">
+        {!isLoggedIn && (
+          <section
+            role="button"
+            aria-label="Refer and Earn - log in"
+            tabIndex={0}
+            onClick={() => openReferralLogin('/account')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openReferralLogin('/account');
+              }
+            }}
+            className="cursor-pointer rounded-[18px] border border-gokez-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] transition-colors hover:border-gokez-300 dark:border-gokez-800 dark:bg-slate-800 dark:hover:border-gokez-700"
+          >
             <div className="flex items-stretch gap-3">
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
                 <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1">
-                  <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer & Earn</p>
-                  <span className="rounded-full bg-amber-400 px-2 py-0.5 font-mono text-xs font-bold text-black dark:bg-amber-300 dark:text-black">
-                    Code: {normalizeReferralCode(referralData?.code) || '—'}
+                <p className="text-[15px] font-bold leading-snug text-ink dark:text-white">Refer &amp; Earn</p>
+                <p className="mt-1 text-xs font-medium text-gray-500 dark:text-slate-400 sm:text-sm">
+                  Log in to get your referral code and start earning rewards.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {isLoggedIn && (
+          <section className="rounded-[18px] border border-gokez-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-gokez-800 dark:bg-slate-800">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gokez-50 dark:bg-gokez-900/30 min-[360px]:flex">
+                <Gift className="h-5 w-5 text-gokez-700 dark:text-gokez-400" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="truncate text-[15px] font-bold leading-snug text-ink dark:text-white">Refer &amp; Earn</p>
+                  <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 font-mono text-xs font-bold text-black dark:bg-amber-300 dark:text-black">
+                    {normalizeReferralCode(referralData?.code) || '—'}
                   </span>
                 </div>
-                <p className="mt-1 text-xs font-medium text-ink dark:text-white sm:text-sm">
+                <p className="mt-1 truncate text-xs font-medium text-ink dark:text-white sm:text-sm">
                   Total referral balance:
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                     {formatReferralRupees((referralData?.stats?.available ?? 0) + (referralData?.stats?.pending ?? 0))}
                   </span>
                 </p>
               </div>
-              <div className="flex w-20 flex-shrink-0 flex-col items-stretch justify-between gap-1 py-0.5">
+              <div className="flex w-16 flex-shrink-0 flex-col items-stretch gap-1 sm:w-20">
                 <button
                   type="button"
                   onClick={() => void handleShareReferral()}
-                  className="-translate-y-1 flex min-h-9 items-center justify-center gap-0.5 rounded-xl bg-gray-900 px-1 text-sm font-extrabold text-white transition-colors hover:bg-black dark:bg-gokez-700 dark:hover:bg-gokez-800 sm:text-base"
+                  className="flex min-h-8 items-center justify-center gap-0.5 rounded-xl bg-gray-900 px-1 text-sm font-extrabold text-white transition-colors hover:bg-black dark:bg-gokez-700 dark:hover:bg-gokez-800 sm:min-h-9 sm:px-2 sm:text-base"
                 >
                   <Share className="h-4 w-4" aria-hidden="true" /> Share
                   <span className="sr-only">{buildReferralLink(normalizeReferralCode(referralData?.code), window.location.origin)}</span>
@@ -585,7 +625,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                 <button
                   type="button"
                   onClick={() => navigate('/referrals')}
-                  className="translate-y-1 text-center text-[11px] font-bold leading-none text-gray-500 transition-colors hover:text-gray-700 dark:text-slate-300 dark:hover:text-slate-100 sm:text-xs"
+                  className="whitespace-nowrap text-center text-[11px] font-bold leading-none text-gray-500 transition-colors hover:text-gray-700 dark:text-slate-300 dark:hover:text-slate-100 sm:text-xs"
                 >
                   View details
                 </button>

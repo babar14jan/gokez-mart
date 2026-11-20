@@ -232,6 +232,25 @@ describe('referral integration points', () => {
       "navigate('/referrals')",
     ]);
     assert.ok(!source('src/pages/AccountPage.tsx').includes('<ReferEarnSheet'), 'the referral flow should open a subpage, not a sheet');
+  });
+
+  test('guests see referral entry points that lead into login', () => {
+    assertIncludes('src/components/ReferralBanner.tsx', [
+      "import { openReferralLogin } from '../utils/referralLogin'",
+      "openReferralLogin('/')",
+      "isLoggedIn ? buttonLabel : 'Log in to share'",
+    ]);
+    assertIncludes('src/pages/AccountPage.tsx', [
+      "import { openReferralLogin } from '../utils/referralLogin'",
+      "onClick={() => openReferralLogin('/account')}",
+      'Log in to get your referral code and start earning rewards.',
+    ]);
+    assert.ok(
+      !source('src/components/ReferralBanner.tsx').includes("rule === 'logged_in' && !isLoggedIn"),
+      'the hub logged_in rule must not hide Refer & Earn from guests',
+    );
+    assertIncludes('src/pages/AccountPage.tsx', ['aria-label="Refer and Earn - log in"']);
+    assertIncludes('src/components/GokezMarkIcon.tsx', ['fill="#FFD400"']);
     assertIncludes('src/pages/ReferralPage.tsx', [
       'How it works',
       'Your referral benefit',
