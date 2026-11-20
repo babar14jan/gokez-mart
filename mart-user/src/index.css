@@ -172,7 +172,7 @@ html, body { overscroll-behavior-y: none; }
   }
 
   /* Safe area belongs to the hero, not to a margin on the logo row: the row
-     itself stays exactly 74px on every device, so the logo and Skip button land
+     itself stays exactly 96px on every device, so the logo and Skip button land
      in the same place relative to the notch / status bar. */
   .login-brand-hero {
     padding-top: calc(35px + env(safe-area-inset-top, 0px));

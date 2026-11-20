@@ -396,6 +396,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     const { guestReturnPath } = useLoginFlowStore.getState();
     useLoginFlowStore.getState().clear();
     useLoginFlowStore.getState().setGuestReturnPath(null);
+    useLoginFlowStore.getState().setPostLoginPath(null);
     closeLogin();
     navigate(guestReturnPath || '/account');
   };
@@ -448,26 +449,29 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div className="login-brand-hero relative z-10 w-full shrink-0 text-center">
-            <div className="login-brand-header flex h-[74px] items-center justify-between gap-2 pl-5 pr-4 sm:pl-6 sm:pr-5">
-              <div className="flex min-w-0 items-center gap-0">
-                {!logoImgError && (
-                  <img
-                    src="/gokez_mart_logo-removebg.png"
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                    onError={() => setLogoImgError(true)}
-                  />
-                )}
-                {brandImgError ? (
-                  <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
-                ) : (
-                  <img
-                    src="/mart_brand_new.webp"
-                    alt="Gokez Mart"
-                    className="h-[74px] w-auto max-w-[45%] object-contain"
-                    onError={() => setBrandImgError(true)}
-                  />
-                )}
+            <div className="login-brand-header flex h-[96px] items-center justify-between gap-2 pl-[13px] pr-4 sm:pl-[17px] sm:pr-5">
+              <div className="relative bottom-[17px] flex min-w-0 flex-col items-center">
+                <div className="flex items-end justify-center gap-0">
+                  {!logoImgError && (
+                    <img
+                      src="/gokez_mart_logo-header.png"
+                      alt=""
+                      className="h-12 w-12 flex-shrink-0 object-contain"
+                      onError={() => setLogoImgError(true)}
+                    />
+                  )}
+                  {brandImgError ? (
+                    <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
+                  ) : (
+                    <img
+                      src="/mart_brand_new.webp"
+                      alt="Gokez Mart"
+                      className="relative top-[10px] h-[74px] w-auto max-w-[45%] object-contain"
+                      onError={() => setBrandImgError(true)}
+                    />
+                  )}
+                </div>
+                <p className="mt-[2px] w-full truncate text-center text-[11px] font-bold leading-none tracking-tight text-black">Shop Local. Support Local.</p>
               </div>
               <button
                 type="button"

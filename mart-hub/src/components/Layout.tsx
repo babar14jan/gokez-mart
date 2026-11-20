@@ -10,6 +10,7 @@ import {
   TrendingUp, RotateCcw, Gift,
 } from 'lucide-react';
 import { useAuthStore, isKnownRole } from '../store/authStore';
+import GokezHubMarkIcon from './GokezHubMarkIcon';
 import { storesApi, authApi, inventoryApi } from '../services/api';
 import { useHeaderAction } from '../store/headerActionStore';
 import { useZoneSelectionStore } from '../store/zoneSelectionStore';
@@ -211,7 +212,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         if (!items.length) return null;
         return (
           <div key={section} className={collapsed ? 'mb-2' : 'mb-4'}>
-            {!collapsed && <p className="px-4 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500">{section}</p>}
+            {!collapsed && <p className="px-2 pb-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500">{section}</p>}
             <div className="space-y-0.5">
               {items.map(item => {
                 const active = pathname === item.href;
@@ -225,7 +226,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <item.icon className={`flex-shrink-0 ${collapsed ? 'w-8 h-8' : 'w-5 h-5'}`} />
                     {collapsed
                       ? <span className={`text-xs font-semibold text-center leading-tight ${active ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</span>
-                      : <span className="truncate">{item.label}</span>
+                      : <span className="truncate text-center">{item.label}</span>
                     }
                   </NavLink>
                 );
@@ -246,13 +247,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Desktop sidebar ── */}
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
         {/* Logo + slogan */}
-        <div className={`flex flex-col items-start justify-center border-b border-gray-100 dark:border-slate-800 flex-shrink-0 px-4 bg-[#0f172a] dark:bg-[#18191a] ${collapsed ? 'py-5' : 'py-4'}`}>
-          <picture>
-            <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
-            <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" width="384" height="256" className="h-11 w-48 object-contain object-left" />
-          </picture>
+        <div className={`flex flex-col items-center justify-center border-b border-gray-100 dark:border-slate-800 flex-shrink-0 px-4 bg-[#0f172a] dark:bg-[#18191a] ${collapsed ? 'py-5' : 'py-4'}`}>
+          <div className={`flex translate-x-5 justify-center ${collapsed ? 'flex-col items-center gap-1' : 'items-end gap-2'}`}>
+            <img
+              src="/gokez_hub_logo-header.png"
+              alt="Gokez Hub"
+              width="417"
+              height="426"
+              className={`${collapsed ? 'h-8 w-8' : 'h-10 w-10'} flex-shrink-0 object-contain`}
+            />
+            <picture>
+              <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
+              <img
+                src="/mart_hub_brand_logo.png"
+                alt="Gokez Hub brand"
+                width="1477"
+                height="1001"
+                className={`${collapsed ? 'h-7 w-20 object-center' : 'h-10 w-36 object-left'} object-contain`}
+              />
+            </picture>
+          </div>
           {!collapsed && (
-            <p className="text-[8px] font-bold uppercase text-white tracking-wide leading-tight -mt-1.5 whitespace-nowrap">
+            <p className="text-center text-[8px] font-bold uppercase text-white tracking-wide leading-tight mt-[2px] whitespace-nowrap">
               Your Store <span className="align-middle">&bull;</span> Now Online
             </p>
           )}
@@ -449,7 +465,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   active ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'
                 }`}>
                 {active && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-emerald-500 rounded-full" />}
-                <Icon className="w-6 h-6" />
+                {label === 'Home' ? (
+                  <GokezHubMarkIcon className="w-6 h-6" filled={active} />
+                ) : (
+                  <Icon className="w-6 h-6" />
+                )}
                 <span className={`whitespace-nowrap text-[12px] font-semibold ${active ? 'font-bold text-emerald-800 dark:text-emerald-300' : ''}`}>{label}</span>
               </button>
             );

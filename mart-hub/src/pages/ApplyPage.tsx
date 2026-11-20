@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle, ArrowRight, Loader2, Phone, MapPin, User, MessageSquare, Store } from 'lucide-react';
 import { api } from '../services/api';
+import HubLogoImage from '../components/HubLogoImage';
 
 const inp = 'w-full px-4 py-3 border border-gray-200 dark:border-slate-600 rounded-xl text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-slate-700 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-600 transition-all';
 
@@ -67,7 +68,7 @@ export default function ApplyPage() {
       {/* Header */}
       <div className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-8 w-auto object-contain" />
+          <HubLogoImage className="h-8 w-auto object-contain" />
           <a href="/login"
             className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors">
             ← Back to Login
