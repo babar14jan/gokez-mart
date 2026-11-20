@@ -8,3 +8,6 @@ android/.idea/
 # Keystore — never commit
 *.keystore
 *.jks
+
+# TypeScript incremental build info
+*.tsbuildinfo

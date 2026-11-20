@@ -6,6 +6,7 @@ import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
 import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription, isPushSupported } from '../services/push';
+import { clearNativePushAssociation, hasNativePushToken, isNativePush, requestNativePushPermission } from '../services/nativePush';
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import LoginFlow, { type Step } from '../components/LoginFlow';
@@ -57,9 +58,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const locationBusy = useZoneStore(s => s.locating);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState(
-    isPushSupported() ? getNotificationPermission() : 'unsupported',
+    isNativePush() ? (hasNativePushToken() ? 'granted' : 'default') : isPushSupported() ? getNotificationPermission() : 'unsupported',
   );
-  const [notificationSubscribed, setNotificationSubscribed] = useState(false);
+  const [notificationSubscribed, setNotificationSubscribed] = useState(hasNativePushToken());
   const [notificationsBusy, setNotificationsBusy] = useState(false);
   const [notificationNotice, setNotificationNotice] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
@@ -201,7 +202,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
 
   useEffect(() => {
     const refreshNotificationPermission = () => setNotificationPermission(
-      isPushSupported() ? getNotificationPermission() : 'unsupported',
+      isNativePush() ? (hasNativePushToken() ? 'granted' : 'default') : isPushSupported() ? getNotificationPermission() : 'unsupported',
     );
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') refreshNotificationPermission();
@@ -216,20 +217,25 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   }, []);
 
   useEffect(() => {
+    if (isNativePush()) {
+      setNotificationSubscribed(hasNativePushToken());
+    } else {
+      setNotificationSubscribed(false);
+    }
     if (!isLoggedIn) {
       try {
         setMarketingConsent(localStorage.getItem(GUEST_MARKETING_CONSENT_KEY) === 'true');
       } catch {
         setMarketingConsent(false);
       }
-      // Guests now use the same real push subscription as members, so derive the
-      // toggle from the browser's actual subscription rather than a localStorage
-      // flag (which could show "On" with nothing registered, or vice versa).
-      hasActivePushSubscription().then(setNotificationSubscribed).catch(() => setNotificationSubscribed(false));
+      if (!isNativePush()) {
+        hasActivePushSubscription().then(setNotificationSubscribed).catch(() => setNotificationSubscribed(false));
+      }
       return;
     }
 
     authApi.getMarketingConsent().then(response => setMarketingConsent(response.data.data.granted)).catch(() => {});
+    if (isNativePush()) return;
     try {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.ready
@@ -261,7 +267,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         setLocationNotice('No nearby area detected — pick one from the dropdown. You can order to any available area.');
         break;
       case 'denied':
-        setLocationNotice('Location is blocked in your browser settings.');
+        setLocationNotice('Location is blocked in your settings.');
         break;
       case 'unavailable':
         setLocationNotice('Could not get your location. You can still pick an area from the dropdown.');
@@ -283,6 +289,26 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     if (notificationsBusy) return;
     setNotificationsBusy(true);
     setNotificationNotice('');
+
+    if (isNativePush()) {
+      try {
+        if (notificationSubscribed) {
+          await clearNativePushAssociation();
+          setNotificationSubscribed(false);
+          setNotificationNotice('Order updates turned off.');
+        } else {
+          const granted = await requestNativePushPermission();
+          setNotificationPermission(granted ? 'granted' : 'denied');
+          setNotificationSubscribed(granted && hasNativePushToken());
+          setNotificationNotice(granted ? 'Order updates enabled.' : 'Notifications are blocked. Enable them in your device settings.');
+        }
+      } catch {
+        setNotificationNotice('Could not update notifications. Please try again.');
+      } finally {
+        setNotificationsBusy(false);
+      }
+      return;
+    }
 
     const subscribeWithRetry = async () => {
       // First attempt can fail while a freshly registered worker is settling or

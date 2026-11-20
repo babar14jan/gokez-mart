@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
 import { authApi } from '../services/api';
 import { isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
+import { hasNativePushToken, isNativePush, requestNativePushPermission, syncNativePushAssociation } from '../services/nativePush';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 
 const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -14,20 +15,31 @@ export default function PushOptInPrompt() {
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    if (!isPushSupported()) return;
-    if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+    if (isNativePush()) {
+      if (hasNativePushToken()) return;
+    } else {
+      if (!isPushSupported()) return;
+      if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+    }
     const last = Number(localStorage.getItem(PROMPT_KEY) || 0);
     if (last && Date.now() - last < COOLDOWN_MS) return;
     const timer = window.setTimeout(() => setOpen(true), 4000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [isLoggedIn]);
 
   const accept = async () => {
     setBusy(true);
     try {
-      const permission = await requestNotificationPermission();
-      if (permission === 'granted') {
-        await subscribeToPush();
+      let granted = false;
+      if (isNativePush()) {
+        granted = await requestNativePushPermission();
+        if (granted) await syncNativePushAssociation();
+      } else {
+        const permission = await requestNotificationPermission();
+        granted = permission === 'granted';
+        if (granted) await subscribeToPush();
+      }
+      if (granted) {
         try { await authApi.updateMarketingConsent(true); } catch { /* best effort */ }
       }
     } finally {
