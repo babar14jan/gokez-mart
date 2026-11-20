@@ -485,7 +485,7 @@ Completed in the working tree:
 - Brand tokens: Gokez green 50–950, warm cream canvas, ink, saffron, card shadows and type tokens.
 - Shared primitives: `Button`, `SectionHeading`, `Badge`, `ProductCardSkeleton`.
 - Header: brand-green shell, clearer delivery-area label, consistent desktop icons and active states.
-- Mobile nav: correct `/fresh-veg.webp` asset, brand active state and clearer tap targets.
+- Mobile nav: correct `/fresh_icon.webp` asset, brand active state and clearer tap targets.
 - Home: warmer search field, category grid wired to the selected category, shared section headings and branded loading skeletons.
 - Home modules: banner/category CTAs now call the app category selector instead of dispatching an unhandled event.
 - Buy Again: the existing recent-order component is now mounted on Home with brand styling.

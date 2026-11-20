@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
-import { Home, LayoutGrid, Package, User } from 'lucide-react';
+import { LayoutGrid, Package, User } from 'lucide-react';
+import GokezMarkIcon from './GokezMarkIcon';
 
 type NavView = 'home' | 'categories' | 'orders' | 'account';
 
@@ -15,7 +16,7 @@ interface BottomNavProps {
 }
 
 const tabs = [
-  { id: 'home',       label: 'Home',       Icon: Home },
+  { id: 'home',       label: 'Home' },
   { id: 'categories', label: 'Categories', Icon: LayoutGrid },
   { id: 'orders',     label: 'Orders',     Icon: Package },
   { id: 'account',    label: 'Account',    Icon: User },
@@ -26,8 +27,10 @@ export default function BottomNav({ active, onChange, onOpenSearch, freshActive 
   return (
     <nav className="mobile-bottom-nav relative z-40 border-t border-gray-200 bg-[#f7f8fa] dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto flex h-16 max-w-lg items-center justify-between px-5 pb-2">
-        {tabs.map(({ id, label, Icon }, index) => {
+        {tabs.map((tab, index) => {
+          const { id, label } = tab;
           const isActive = active === id;
+          const Icon = 'Icon' in tab ? tab.Icon : null;
           return (
             <Fragment key={id}>
               {index === 2 && (
@@ -49,7 +52,11 @@ export default function BottomNav({ active, onChange, onOpenSearch, freshActive 
                   isActive ? 'text-gokez-700 dark:text-gokez-300' : 'text-gray-500 hover:text-gokez-700 dark:text-slate-400 dark:hover:text-gokez-300'
                 }`}
               >
-                <Icon className="h-6 w-6" fill={id === 'account' && isActive ? 'currentColor' : 'none'} strokeWidth={isActive ? 2.4 : 2} />
+                {Icon ? (
+                  <Icon className="h-6 w-6" fill={id === 'account' && isActive ? 'currentColor' : 'none'} strokeWidth={isActive ? 2.4 : 2} />
+                ) : (
+                  <GokezMarkIcon className="h-6 w-6" filled={isActive} />
+                )}
                 <span className={`whitespace-nowrap text-[12px] font-semibold ${isActive ? 'font-bold' : ''}`}>
                   {label}
                 </span>

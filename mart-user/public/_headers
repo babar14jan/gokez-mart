@@ -65,6 +65,18 @@
   Content-Type: image/png
   Cache-Control: public, max-age=86400
 
+# Canonical customer logo. Used by the launch splash and JSON-LD, so it is a
+# stable path that must be able to change on deploy.
+/gokez_mart_logo.webp
+  Content-Type: image/webp
+  Cache-Control: public, max-age=86400
+
+# Transparent mark: favicon source, browser tab and in-page headers on brand
+# green. Favicon files are generated from it, so the URL stays stable.
+/gokez_mart_logo-removebg.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+
 /icons/*
   Content-Type: image/png
   Cache-Control: public, max-age=86400

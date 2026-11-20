@@ -19,9 +19,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = join(ROOT, 'public');
 const OUT = join(PUBLIC, 'splash');
 
-const BG = '#18191a';
-const LOGO = join(PUBLIC, 'mart_hub_brand_logo.png');
-const LOGO_WIDTH_RATIO = 0.5;
+const BG = '#ffffff';
+const LOGO = join(PUBLIC, 'gokez_hub_logo.png');
+const LOGO_WIDTH_RATIO = 0.42;
 
 // [pixelWidth, pixelHeight, pointWidth, pointHeight, devicePixelRatio]
 // pointWidth/pointHeight/dpr are what the media queries in index.html must match.

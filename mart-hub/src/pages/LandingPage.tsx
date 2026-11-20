@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight, ShoppingBag, MapPin, TrendingUp, Users, Zap, BarChart3, Menu, X } from 'lucide-react';
 import { getActiveStoreId } from '../utils/store';
+import HubLogoImage from '../components/HubLogoImage';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3004/api/v1';
 
@@ -72,7 +73,7 @@ export default function LandingPage() {
       }`}>
         <nav className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 relative">
-            <a href="/hub"><img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-10 w-auto object-contain" /></a>
+            <a href="/hub"><HubLogoImage className="h-10 w-auto object-contain" /></a>
 
             {/* Desktop nav — centered */}
             <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
@@ -108,7 +109,7 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <div className="absolute top-0 right-0 h-full w-72 bg-white shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
-              <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-8 w-auto object-contain" />
+              <HubLogoImage className="h-8 w-auto object-contain" />
               <button onClick={() => setMobileOpen(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="flex flex-col gap-1 p-4">
@@ -222,7 +223,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-slate-100 py-8 bg-slate-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-7 w-auto object-contain" />
+          <HubLogoImage className="h-7 w-auto object-contain" />
           <p className="text-xs text-slate-400 text-center">
             Built for local stores. Powered by <span className="font-semibold text-slate-400">Gokez Technologies Pvt. Ltd.</span>
           </p>

@@ -7,6 +7,7 @@ import InstallPrompt from './components/InstallPrompt';
 import PushOptInPrompt from './components/PushOptInPrompt';
 import NetworkStatus from './components/NetworkStatus';
 import { registerServiceWorker } from './services/push';
+import { isNativeAndroid } from './services/nativeApp';
 import { hideSplash } from './utils/splash';
 
 // The static block in index.html exists only for crawlers that do not run
@@ -41,4 +42,4 @@ window.setTimeout(hideSplash, 6000);
 // After the first render on purpose: a throw in service-worker registration
 // would otherwise leave the document empty, with no boundary mounted yet to
 // catch it, which is the white screen the boundary exists to prevent.
-registerServiceWorker();
+if (!isNativeAndroid()) registerServiceWorker();

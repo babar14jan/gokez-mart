@@ -35,10 +35,10 @@ const SHELL_URLS = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  // The launch splash artwork. It is on screen in the very first paint, so
-  // it is precached with the shell: an offline cold start then shows the
+  // The canonical logo drives the launch splash on first paint, so it is
+  // precached with the shell: an offline cold start then shows the
   // same branded splash as an online one.
-  '/mart_splash.webp',
+  '/gokez_mart_logo.webp',
   // The offline / server-down screens render these while the network is down,
   // so they must already be cached to display.
   '/offline.webp',
