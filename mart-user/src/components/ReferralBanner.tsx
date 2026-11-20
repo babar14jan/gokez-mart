@@ -3,6 +3,7 @@ import { Share } from 'lucide-react';
 import { referralApi, type HomeSection } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { buildReferralLink, normalizeReferralCode } from '../utils/referral';
+import { openReferralLogin } from '../utils/referralLogin';
 
 interface Props {
   section: HomeSection;
@@ -34,6 +35,10 @@ export default function ReferralBanner({ section }: Props) {
   const shareLink = buildReferralLink(code, window.location.origin);
 
   const handleShare = async () => {
+    if (!isLoggedIn) {
+      openReferralLogin('/');
+      return;
+    }
     if (!shareLink) return;
     try {
       const nav = navigator as any;
@@ -54,10 +59,7 @@ export default function ReferralBanner({ section }: Props) {
   };
 
   const rule = section.visibilityRule || 'always';
-  if (rule === 'logged_in' && !isLoggedIn) return null;
   if (rule === 'guests' && isLoggedIn) return null;
-
-  if (!code && !isLoggedIn) return null;
 
   return (
     <section className="w-full">
@@ -83,14 +85,14 @@ export default function ReferralBanner({ section }: Props) {
             {subtitle && <p className="mt-0.5 text-xs text-white/90 drop-shadow sm:text-sm">{subtitle}</p>}
             {notice && <p className="mt-1 text-[11px] font-medium text-white/90 drop-shadow">{notice}</p>}
           </div>
-          {code && (
+          {(code || !isLoggedIn) && (
             <button
               type="button"
               onClick={handleShare}
               className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow transition-colors ${cfg.buttonColor === 'banner' ? 'bg-gokez-700 text-white hover:bg-gokez-800' : 'bg-white text-gokez-800 hover:bg-cream-50'}`}
             >
               <Share className="h-3.5 w-3.5" aria-hidden="true" />
-              {buttonLabel}
+              {isLoggedIn ? buttonLabel : 'Log in to share'}
             </button>
           )}
         </div>

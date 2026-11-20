@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { MartZone } from '../services/api';
 import { storeApi } from '../services/api';
 import { getUserLocation, findMatchingZone } from '../services/geofence';
+import { ensureLocationPermission } from '../services/nativeApp';
 
 // Offline fallback that mirrors the DB-seeded Shapoorji store:
 //   - name / lat / lng / radiusKm match migration 005_delivery_zones.sql
@@ -54,7 +55,7 @@ interface ZoneState {
   chooseZone: (zone: MartZone) => void;
   setAutoDetect: (enabled: boolean) => void;
   setLocating: (locating: boolean) => void;
-  detectAndApply: () => Promise<ZoneAction>;
+  detectAndApply: (options?: { prompt?: boolean }) => Promise<ZoneAction>;
 }
 
 export const useZoneStore = create<ZoneState>()(
@@ -72,11 +73,18 @@ export const useZoneStore = create<ZoneState>()(
       chooseZone: zone => set({ selectedZone: zone, zoneSelected: true }),
       setAutoDetect: enabled => set({ autoDetect: enabled }),
       setLocating: locating => set({ locating }),
-      detectAndApply: async () => {
+      detectAndApply: async (options) => {
         const { locating, selectedZone } = get();
         if (locating) return { status: 'busy', zone: selectedZone };
         set({ locating: true });
         try {
+          if (options?.prompt !== false) {
+            const allowed = await ensureLocationPermission();
+            if (!allowed) {
+              set({ autoDetect: false });
+              return { status: 'denied', zone: selectedZone };
+            }
+          }
           const location = await getUserLocation();
           const current = get().selectedZone;
           if (location.status === 'denied') {

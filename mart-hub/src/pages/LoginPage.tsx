@@ -4,6 +4,7 @@ import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { subscribeAdminToPush } from '../services/push';
+import HubLogoImage from '../components/HubLogoImage';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -47,7 +48,7 @@ export default function LoginPage() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200/80 dark:border-slate-700/80 shadow-sm">
         <div className="mx-auto flex min-h-[3.5rem] max-w-5xl items-center justify-between gap-3 px-4 pt-[env(safe-area-inset-top)] sm:px-6">
-          <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-10 w-auto object-contain" />
+          <HubLogoImage className="h-10 w-auto object-contain" />
           <a href="/hub" className="text-xs font-semibold text-gray-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
             ← Home
           </a>
@@ -60,7 +61,7 @@ export default function LoginPage() {
 
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <img src="/mart_hub_brand_logo.png" alt="Gokez Hub" className="h-16 sm:h-20 w-auto object-contain" />
+            <HubLogoImage className="h-16 sm:h-20 w-auto object-contain" />
             <p className="text-xs font-bold uppercase text-gray-900 dark:text-white tracking-tight leading-tight -mt-1.5 text-center">
               Your Store <span className="text-sm align-middle">&bull;</span> Now Online
             </p>

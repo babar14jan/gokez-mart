@@ -2,8 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Favicons. All generated from the single canonical source
-         public/mart_logo_new.png (see the note in favicon.ico generation).
+    <!-- Favicons. All generated from public/gokez_mart_logo-removebg.png so the
+         browser tab shows the mark without the grey square of the canonical
+         gokez_mart_logo.webp.
          /favicon.ico is listed first and is a real multi-size 16/32/48 ICO, so
          the conventional browser request for /favicon.ico returns an image
          instead of falling through to the SPA shell. -->
@@ -14,8 +15,8 @@
     <!-- iOS launch images. Without these an installed PWA flashes a blank white
          frame while it boots; these paint the branded splash immediately and work
          offline because iOS caches them natively at install time. Regenerate with
-         scripts/gen-ios-splash.mjs when the logo or brand colour changes, and keep
-         this list in sync with that script's DEVICES table.
+          scripts/gen-ios-splash.mjs when the logo or brand colour changes, and keep
+          this list in sync with that script's DEVICES table.
          The build id is added to the file names at build time (write-version.mjs),
          so every deploy has a URL the OS cache cannot already hold and a new
          splash actually reaches an installed PWA. -->
@@ -38,10 +39,6 @@
     <link rel="apple-touch-startup-image" href="/splash/apple-splash-1536-2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="preload" as="image" href="/mart_brand_new.webp" type="image/webp" />
-    <!-- Splash artwork. It is on screen in the very first paint, so it is
-         preloaded the same way the splash logo is: fetching it later would
-         show an empty gap in the middle of the splash. -->
-    <link rel="preload" as="image" href="/mart_splash.webp" type="image/webp" />
     <!-- Bottom nav's centre "Vegetables" button. This is the only image the app
          shell renders on first paint, and it lives in public/ (not a Vite-hashed
          bundle asset), so nothing else kicks off its download until React mounts
@@ -81,10 +78,9 @@
     <meta property="og:title" content="Gokez Mart – Shop Local. Support Local." />
     <meta property="og:description" content="Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores." />
     <meta property="og:url" content="https://mart.gokez.com/" />
-    <!-- Social card: 1000x1000 JPEG recompressed from mart_logo_new.png (679 KB -> 62 KB).
-         The logo artwork itself is untouched. JPEG is used because WebP is not
-         reliably supported by social scrapers. -->
-    <meta property="og:image" content="https://mart.gokez.com/mart_og.jpg" />
+    <!-- Social card: 1000x1000 JPEG generated from the canonical customer logo.
+         JPEG is used because WebP is not reliably supported by social scrapers. -->
+    <meta property="og:image" content="https://mart.gokez.com/gokez_mart_og.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1000" />
     <meta property="og:image:height" content="1000" />
@@ -95,7 +91,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Gokez Mart – Shop Local. Support Local." />
     <meta name="twitter:description" content="Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores." />
-    <meta name="twitter:image" content="https://mart.gokez.com/mart_og.jpg" />
+    <meta name="twitter:image" content="https://mart.gokez.com/gokez_mart_og.jpg" />
     <meta name="twitter:image:alt" content="Gokez Mart" />
 
         <!-- Gokez Mart is a commerce platform, not a claim about a single physical
@@ -122,7 +118,7 @@
           "name": "Gokez Mart",
           "alternateName": ["Gokez Mart", "Gokezmart"],
           "url": "https://mart.gokez.com/",
-          "logo": "https://mart.gokez.com/mart_logo_new.png",
+          "logo": "https://mart.gokez.com/gokez_mart_logo.webp",
           "description": "Gokez Mart is an online marketplace for ordering everyday essentials from nearby stores.",
           "parentOrganization": { "@id": "https://gokez.com/#organization" },
           "brand": {

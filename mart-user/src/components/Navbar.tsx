@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, ChevronDown, Check, Home, ShoppingCart, LayoutGrid, Package, User, Search, Loader2, LocateFixed } from 'lucide-react';
+import { ChevronDown, Check, Home, ShoppingCart, LayoutGrid, Package, User, Search, Loader2, LocateFixed } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useZoneStore, type ZoneAction } from '../store/zoneStore';
 import AccountGreeting from './AccountGreeting';
@@ -71,14 +71,19 @@ const navItems = [
         setZoneOpen(true);
       }
     };
+    const zoneLogo = (
+      <img
+        src="/gokez_mart_logo-removebg.png"
+        alt=""
+        className={`h-[26px] w-[26px] flex-shrink-0 object-contain ${locationBusy ? 'animate-pulse' : ''}`}
+      />
+    );
     // Only show dropdown if more than 1 zone
     if (zones.length <= 1) {
       if (!selectedZone) return null;
       return (
         <button type="button" onClick={triggerMyLocation} className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
-          {locationBusy
-            ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
-            : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
+          {zoneLogo}
           <div className="min-w-0 text-left">
             <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
             <p className="truncate text-[13px] font-bold text-white leading-tight">
@@ -92,9 +97,7 @@ const navItems = [
     <div className="relative">
       <button onClick={() => setZoneOpen(o => !o)}
         className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
-        {locationBusy
-          ? <Loader2 className="h-5 w-5 text-saffron-300 flex-shrink-0 animate-spin" />
-          : <MapPin className="h-5 w-5 text-saffron-300 flex-shrink-0" />}
+        {zoneLogo}
         <div className="min-w-0 text-left">
           <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
           <p className="truncate text-[13px] font-bold text-white leading-tight">

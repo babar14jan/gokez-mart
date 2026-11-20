@@ -48,6 +48,8 @@ import { detectPlatform } from './utils/install';
 import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 import { REFERRAL_LINK_CODE_KEY, referralCodeFromSearch } from './utils/referral';
+import { configureNativeChrome, hasNativeLocationPermission, isNativeAndroid, setNativeStatusBar, watchNativeBackButton } from './services/nativeApp';
+import { clearNativePushAssociation, consumePendingPushRoute, isNativePush, startNativePush, syncNativePushAssociation } from './services/nativePush';
 
 type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'referral' | 'fresh';
 
@@ -247,9 +249,24 @@ export default function App() {
     track('session_start', { channel: getFunnelChannel() });
   }, []);
 
+  useEffect(() => {
+    configureNativeChrome().catch(() => {});
+    startNativePush().catch(() => {});
+  }, []);
+
   const [pendingCheckout, setPendingCheckout] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()?.pendingCheckout));
 
   const { isLoggedIn } = useCustomerAuthStore();
+  const wasLoggedInRef = useRef(isLoggedIn);
+  useEffect(() => {
+    if (!isNativePush()) return;
+    if (isLoggedIn) {
+      syncNativePushAssociation().catch(() => {});
+    } else if (wasLoggedInRef.current) {
+      clearNativePushAssociation().catch(() => {});
+    }
+    wasLoggedInRef.current = isLoggedIn;
+  }, [isLoggedIn]);
 
   // Guest "Hi Guest" login on the Account tab: opened from the header or the
   // page's "Continue Login" card (both read the shared store), and closed the
@@ -624,17 +641,20 @@ export default function App() {
     const effectiveDark = isDark && !loginActive;
     document.documentElement.classList.toggle('dark', effectiveDark);
     const meta = document.querySelector('meta[name="theme-color"]');
+    const mobile = detectPlatform() === 'ios' || detectPlatform() === 'android';
+    const themeColor = loginPageActive
+      ? '#e8f6ec'
+      : loginActive
+        ? '#ffffff'
+        : effectiveDark
+          ? '#18191a'
+          : mobile
+            ? '#087a43'
+            : '#ffffff';
     // Set this on every run: the splash is removed outside React, so waiting for
     // it here left Android Chrome stuck on the darker launch colour after boot.
-    if (meta) {
-      if (loginPageActive) {
-        meta.setAttribute('content', '#e8f6ec');
-      } else if (loginActive) {
-        meta.setAttribute('content', '#ffffff');
-      } else {
-        meta.setAttribute('content', effectiveDark ? '#18191a' : (detectPlatform() === 'ios' || detectPlatform() === 'android') ? '#087a43' : '#ffffff');
-      }
-    }
+    if (meta) meta.setAttribute('content', themeColor);
+    setNativeStatusBar(themeColor, themeColor === '#ffffff' || themeColor === '#e8f6ec' || (!effectiveDark && !mobile)).catch(() => {});
   }, [isDark, loginActive, loginPageActive]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
@@ -680,6 +700,47 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
+  useEffect(() => {
+    const route = consumePendingPushRoute();
+    if (!route) return;
+    window.history.pushState({}, '', route);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let remove: (() => void) | null = null;
+    watchNativeBackButton(() => {
+      if (checkoutActive) { setCheckoutActive(false); return true; }
+      if (catalogSearchOpen) { setCatalogSearchOpen(false); return true; }
+      if (successData) { setSuccessData(null); return true; }
+      if (permissionPrompt) { setPermissionPrompt(null); return true; }
+      if (installGuideOpen) { setInstallGuideOpen(false); return true; }
+      if (showLoginModal) {
+        useLoginFlowStore.getState().clear();
+        setShowLoginModal(false);
+        return true;
+      }
+      if (accountLoginOpen && !isLoggedIn) {
+        useAccountLoginStore.getState().closeLogin();
+        return true;
+      }
+      const path = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (path !== '/' && window.history.length > 1) {
+        window.history.back();
+        return true;
+      }
+      return false;
+    }).then(fn => {
+      if (disposed) fn();
+      else remove = fn;
+    }).catch(() => {});
+    return () => {
+      disposed = true;
+      remove?.();
+    };
+  }, [checkoutActive, catalogSearchOpen, successData, permissionPrompt, installGuideOpen, showLoginModal, accountLoginOpen, isLoggedIn]);
+
   // Delivery areas: load once, keep a saved zone if it still exists (never
   // silently reset a deliberate choice), and — only on a first visit — quietly
   // prefill the zone from GPS if permission is already granted. Detecting here
@@ -713,10 +774,14 @@ export default function App() {
         });
         if (hasZoneSelected || cancelled) return;
         const { autoDetect } = useZoneStore.getState();
-        if (!autoDetect || !navigator.permissions) return;
-        const result = await navigator.permissions.query({ name: 'geolocation' });
-        if (result.state !== 'granted' || cancelled) return;
-        await useZoneStore.getState().detectAndApply();
+        if (!autoDetect) return;
+        if (!(await hasNativeLocationPermission())) return;
+        if (!isNativeAndroid()) {
+          if (!navigator.permissions) return;
+          const result = await navigator.permissions.query({ name: 'geolocation' });
+          if (result.state !== 'granted' || cancelled) return;
+        }
+        await useZoneStore.getState().detectAndApply({ prompt: false });
       } catch {
         // Swallow — a zones outage must not block the default catalog.
       }

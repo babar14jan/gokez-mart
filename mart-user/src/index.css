@@ -172,16 +172,16 @@ html, body { overscroll-behavior-y: none; }
   }
 
   /* Safe area belongs to the hero, not to a margin on the logo row: the row
-     itself stays exactly 56px on every device, so the logo and Skip button land
+     itself stays exactly 96px on every device, so the logo and Skip button land
      in the same place relative to the notch / status bar. */
   .login-brand-hero {
-    padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
+    padding-top: calc(35px + env(safe-area-inset-top, 0px));
   }
 
   /* Short landscape phones: keep the hero compact without moving its children. */
   @media (max-height: 520px) and (orientation: landscape) {
     .login-page-view .login-brand-hero { padding-top: 0.5rem; }
-    .login-page-view .login-brand-banner-wrap { height: 40px; }
+    .login-page-view .login-brand-banner-wrap { height: 40px; margin-top: 4px; }
     .login-page-view .login-brand-banner { max-height: 40px; }
   }
 

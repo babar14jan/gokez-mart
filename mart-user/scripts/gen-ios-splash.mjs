@@ -2,9 +2,10 @@
 // public/splash/. iOS shows these instead of a blank white frame while an
 // installed PWA boots, so a cold launch is branded rather than white.
 //
-// The launch image is the original splash artwork (mart_splash.webp), which
-// already carries its green surround, logo and copy. It fills each device
-// canvas directly so no additional visual margins are introduced.
+// The launch image is built from the canonical customer logo
+// (gokez_mart_logo.webp), centred on the brand-green splash colour. Every device
+// canvas gets the same treatment, so the logo stays legible on phones and
+// tablets alike.
 //
 // Requires ImageMagick (`magick`) on PATH. Re-run it whenever the splash
 // artwork or splash colour changes, then keep the
@@ -21,7 +22,8 @@
 // customer who removed and reinstalled the app.
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,7 +31,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = join(ROOT, 'public');
 const OUT = join(PUBLIC, 'splash');
 
-const SPLASH = join(PUBLIC, 'mart_splash.webp');
+const LOGO = join(PUBLIC, 'gokez_mart_logo.webp');
+const BACKGROUND = '#087A43';
+
+const scratch = join(tmpdir(), 'gokez-mart-splash-logo.png');
 
 // [pixelWidth, pixelHeight, pointWidth, pointHeight, devicePixelRatio]
 // pointWidth/pointHeight/dpr are what the media queries in index.html must match.
@@ -59,17 +64,29 @@ function magick(args) {
 
 mkdirSync(OUT, { recursive: true });
 
-// The original artwork fills the canvas without any added frame. Cover scaling
-// preserves the intended artwork scale across the iPhone and iPad aspect ratios.
+// Cut the white canvas off the logo once, then composite the transparent mark
+// onto the brand-green splash colour for each device.
+magick([
+  LOGO,
+  '-fuzz', '4%',
+  '-transparent', '#FDFDFD',
+  '+repage',
+  `PNG32:${scratch}`,
+]);
+
 for (const [w, h, ptW, ptH, dpr] of DEVICES) {
+  const logoSize = Math.round(Math.min(w, h) * 0.46);
   magick([
-    SPLASH,
-    '-resize', `${w}x${h}^`,
+    '-size', `${w}x${h}`, `xc:${BACKGROUND}`,
+    '(', scratch, '-resize', `${logoSize}x${logoSize}`, ')',
     '-gravity', 'center',
-    '-extent', `${w}x${h}`,
+    '-composite',
     '-strip',
-    `PNG8:${join(OUT, `apple-splash-${w}-${h}.png`)}`,
+    '-depth', '8',
+    join(OUT, `apple-splash-${w}-${h}.png`),
   ]);
 }
+
+rmSync(scratch, { force: true });
 
 console.log(`[ios-splash] wrote ${DEVICES.length} launch images to public/splash/`);
