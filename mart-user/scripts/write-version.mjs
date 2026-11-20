@@ -119,3 +119,28 @@ if (existsSync(splashDir)) {
     console.log(`[version] versioned ${renamed} iOS launch images`);
   }
 }
+
+// Installed PWAs cache their home-screen icon by URL at install time. Replacing
+// the PNG on the server under the same stable path does not update that icon;
+// the customer keeps seeing the old artwork until they uninstall and reinstall.
+// Appending the build id as a query string gives every deploy a URL the OS cache
+// cannot already hold, so a new icon reaches an already-installed PWA. The same
+// id on the manifest link itself forces browsers that pin manifests to re-read
+// it, which is what makes them notice the changed icon URLs.
+const manifestPath = join(dist, 'manifest.json');
+if (existsSync(manifestPath)) {
+  const manifest = readFileSync(manifestPath, 'utf8')
+    .replace(/\/icons\/(icon-[^"?]+\.png)/g, `/icons/$1?v=${buildId}`);
+  writeFileSync(manifestPath, manifest);
+  console.log('[version] versioned PWA icon URLs in manifest.json');
+}
+
+const shellIndexPath = join(dist, 'index.html');
+if (existsSync(shellIndexPath)) {
+  let shell = readFileSync(shellIndexPath, 'utf8');
+  shell = shell
+    .replace(/(href="\/manifest\.json)"/g, `$1?v=${buildId}"`)
+    .replace(/(href="\/icons\/icon-180\.png)"/g, `$1?v=${buildId}"`);
+  writeFileSync(shellIndexPath, shell);
+  console.log('[version] versioned manifest and apple-touch-icon links');
+}
