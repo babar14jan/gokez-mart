@@ -38,6 +38,8 @@ const SHELL_URLS = [
   '/icons/mart-logo-96.png',
   '/icons/mart-logo-192.png',
   '/icons/mart-logo-512.png',
+  '/icons/gokez_mart_nav.webp',
+  '/icons/gokez_mart_nav.png',
   // The canonical logo drives the launch splash on first paint, so it is
   // precached with the shell: an offline cold start then shows the
   // same branded splash as an online one.
