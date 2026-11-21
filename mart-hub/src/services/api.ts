@@ -706,6 +706,47 @@ export const carouselApi = {
   },
 };
 
+export interface StorageImageReference {
+  table: string;
+  column: string;
+  rowId: string;
+  path?: string;
+  value?: unknown;
+  label?: string;
+}
+
+export interface StorageImageFile {
+  id: string;
+  folder: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  thumbnailUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  referenced: boolean;
+  references: StorageImageReference[];
+}
+
+export interface StorageImageListData {
+  items: StorageImageFile[];
+  total: number;
+  folders: string[];
+  referencedTotal: number;
+  unreferencedTotal: number;
+}
+
+export const storageApi = {
+  list: (params: { group: 'referenced' | 'unreferenced'; folder?: string; search?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
+    api.get<{ success: boolean; data: StorageImageListData }>('/admin/storage/images', { params, fresh: opts?.fresh }),
+  get: (id: string, opts?: FetchOpts) =>
+    api.get<{ success: boolean; data: { file: StorageImageFile; references: StorageImageReference[] } }>(`/admin/storage/images/${id}`, { fresh: opts?.fresh }),
+  delete: (id: string, payload: { dryRun: boolean; detach: boolean }) =>
+    api.post(`/admin/storage/images/${id}/delete`, payload),
+};
+
 // Homepage sections are per-store, so every call carries the active store id.
 export const homeSectionsApi = {
   getAll: (storeId: string) => api.get("/admin/home-sections", { params: { storeId } }),

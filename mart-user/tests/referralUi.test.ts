@@ -238,7 +238,7 @@ describe('referral integration points', () => {
     assertIncludes('src/components/ReferralBanner.tsx', [
       "import { openReferralLogin } from '../utils/referralLogin'",
       "openReferralLogin('/')",
-      "isLoggedIn ? buttonLabel : 'Log in to share'",
+      "isLoggedIn ? buttonLabel : 'Login to share'",
     ]);
     assertIncludes('src/pages/AccountPage.tsx', [
       "import { openReferralLogin } from '../utils/referralLogin'",
@@ -279,6 +279,21 @@ describe('referral integration points', () => {
       'role="alert"',
       'role="status"',
     ]);
+  });
+
+  test('referral banner stays compact on narrow screens', () => {
+    assertIncludes('src/components/ReferralBanner.tsx', [
+      'gap-2 pl-3 pr-2 sm:gap-3 sm:px-6',
+      'min-w-0 flex-1',
+      'truncate text-sm font-bold',
+      'mt-0.5 truncate text-xs',
+      'whitespace-nowrap rounded-md px-2 py-1 text-[10px]',
+      'hidden h-3 w-3 min-[360px]:block sm:h-3.5 sm:w-3.5',
+    ]);
+    assert.ok(
+      !source('src/components/ReferralBanner.tsx').includes('Code: {code}'),
+      'the home banner shows the bare referral code',
+    );
   });
 
   test('checkout selects the next referral credit locally until the order is placed', () => {
