@@ -1,7 +1,7 @@
 {
   "name": "mart-user",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "scripts": {
     "dev": "vite --port 5177",
@@ -12,6 +12,7 @@
     "apk:debug": "npm run cap:build && cd android && ./gradlew assembleDebug",
     "seo:check": "node scripts/seo-check.mjs",
     "gen:ios-splash": "node scripts/gen-ios-splash.mjs",
+    "gen:app-icons": "node scripts/gen-app-icons.mjs",
     "preview": "vite preview --port 5177",
     "seo:check:full": "node --import tsx scripts/seo-check.mjs",
     "test": "node --import tsx --test tests/*.test.ts"

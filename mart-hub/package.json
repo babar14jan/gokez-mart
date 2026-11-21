@@ -1,12 +1,13 @@
 {
   "name": "mart-hub",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "scripts": {
     "dev": "vite --port 5178",
     "build": "tsc && vite build && node scripts/write-version.mjs",
     "gen:ios-splash": "node scripts/gen-ios-splash.mjs",
+    "gen:app-icons": "node scripts/gen-app-icons.mjs",
     "preview": "vite preview --port 5178"
   },
   "dependencies": {
