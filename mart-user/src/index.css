@@ -290,10 +290,10 @@ html, body { overscroll-behavior-y: none; }
     decorative strip pins it to the nav colour (neutral canvas / dark) instead of the
      launched green splash. `display:none` except on iOS, so Android, which
      already paints its bars from theme-color, and desktop never render it.
-     pointer-events:none keeps it from eating taps yet Safari still samples it;
-     aria-hidden in the markup.
-     Do NOT hide it with opacity/visibility/z-index: Safari rejects those and
-     falls back to the body colour — that is why the guard is `display` only. */
+      pointer-events:none keeps it from eating taps yet Safari still samples it;
+      aria-hidden in the markup.
+      Do NOT hide it with opacity/visibility: Safari rejects those and falls back
+      to the body colour — that is why the guard is `display` only. */
   .app-tint-bottom {
     display: none;
     position: fixed;
@@ -337,7 +337,7 @@ html, body { overscroll-behavior-y: none; }
     left: 0;
     right: 0;
     top: 0;
-    z-index: 45;
+    z-index: 39;
     height: 12px;
     pointer-events: none;
     background-color: #087a43;
