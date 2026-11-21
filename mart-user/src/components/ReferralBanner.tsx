@@ -72,27 +72,27 @@ export default function ReferralBanner({ section }: Props) {
         ) : (
           <div className="absolute inset-0 bg-gradient-to-r from-gokez-700 to-gokez-500" />
         )}
-        <div className="absolute inset-0 flex items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-bold text-white drop-shadow sm:text-base">{title}</p>
+        <div className="absolute inset-0 flex items-center justify-between gap-2 pl-3 pr-2 sm:gap-3 sm:px-6">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-bold text-white drop-shadow sm:text-base">{title}</p>
               {code && (
-                <span className="rounded-full bg-amber-400 px-2.5 py-0.5 font-mono text-xs font-bold text-black">
-                  Code: {code}
+                <span className="shrink-0 rounded-full bg-amber-400 px-2.5 py-0.5 font-mono text-xs font-bold text-black">
+                  {code}
                 </span>
               )}
             </div>
-            {subtitle && <p className="mt-0.5 text-xs text-white/90 drop-shadow sm:text-sm">{subtitle}</p>}
-            {notice && <p className="mt-1 text-[11px] font-medium text-white/90 drop-shadow">{notice}</p>}
+            {subtitle && <p className="mt-0.5 truncate text-xs text-white/90 drop-shadow sm:text-sm">{subtitle}</p>}
+            {notice && <p className="mt-1 truncate text-[11px] font-medium text-white/90 drop-shadow">{notice}</p>}
           </div>
           {(code || !isLoggedIn) && (
             <button
               type="button"
               onClick={handleShare}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow transition-colors ${cfg.buttonColor === 'banner' ? 'bg-gokez-700 text-white hover:bg-gokez-800' : 'bg-white text-gokez-800 hover:bg-cream-50'}`}
+              className={`inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-bold shadow transition-colors sm:gap-1 sm:rounded-lg sm:px-3 sm:py-1.5 sm:text-xs ${cfg.buttonColor === 'banner' ? 'bg-gokez-700 text-white hover:bg-gokez-800' : 'bg-white text-gokez-800 hover:bg-cream-50'}`}
             >
-              <Share className="h-3.5 w-3.5" aria-hidden="true" />
-              {isLoggedIn ? buttonLabel : 'Log in to share'}
+              <Share className="hidden h-3 w-3 min-[360px]:block sm:h-3.5 sm:w-3.5" aria-hidden="true" />
+              {isLoggedIn ? buttonLabel : 'Login to share'}
             </button>
           )}
         </div>

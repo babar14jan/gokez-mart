@@ -231,6 +231,9 @@ router.post('/admin/home-sections/reorder',    authenticate, requireRole('super_
 // ── Admin upload ──────────────────────────────────────────────────────────────
 router.post('/admin/upload/photo',     authenticate, upload.single('photo'), ctrl.adminUploadPhoto);
 router.post('/admin/storage/clean',    authenticate, requireSuperAdmin, ctrl.adminCleanStorage);
+router.get('/admin/storage/images',    authenticate, requireSuperAdmin, ctrl.adminListStorageImages);
+router.get('/admin/storage/images/:id', authenticate, requireSuperAdmin, ctrl.adminGetStorageImage);
+router.post('/admin/storage/images/:id/delete', authenticate, requireSuperAdmin, ctrl.adminDeleteStorageImage);
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
 router.get('/admin/inventory',                          authenticate, ctrl.adminGetInventory);
