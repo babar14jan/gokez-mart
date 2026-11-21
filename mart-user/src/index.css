@@ -131,10 +131,10 @@ html, body { overscroll-behavior-y: none; }
 
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
-  /* Keyboard geometry published by useKeyboardInset(): --kb is the visible
-     height lost at the bottom and --vv-top is any iOS visual-viewport pan.
-     Defaults keep opt-in rules at a plain full-height page. */
-  :root { --kb: 0px; --vv-top: 0px; }
+  /* Viewport geometry published by useKeyboardInset(): --kb is the visible
+     height lost at the bottom, --vv-top is the keyboard pan and --chrome-top is
+     the toolbar offset. Defaults keep opt-in rules at a plain full-height page. */
+  :root { --kb: 0px; --vv-top: 0px; --vv-bottom: 0px; --chrome-top: 0px; }
 
   /* Full-height page shell for pages rendered inside .app-scroll and inside the
      full-screen fixed overlays (checkout, order details, legal pages).
@@ -250,6 +250,7 @@ html, body { overscroll-behavior-y: none; }
      full-screen surface that owns bottom chrome (e.g. the checkout overlay). */
   .app-shell,
   .app-viewport-overlay {
+    top: var(--chrome-top, 0px);
     bottom: calc(var(--vv-bottom, 0px) - env(safe-area-inset-bottom, 0px));
   }
 
@@ -265,6 +266,7 @@ html, body { overscroll-behavior-y: none; }
      the tab/Android geometry is untouched. */
   .installed-pwa .app-shell,
   .installed-pwa .app-viewport-overlay {
+    top: 0;
     bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
   }
 
@@ -290,10 +292,10 @@ html, body { overscroll-behavior-y: none; }
     decorative strip pins it to the nav colour (neutral canvas / dark) instead of the
      launched green splash. `display:none` except on iOS, so Android, which
      already paints its bars from theme-color, and desktop never render it.
-     pointer-events:none keeps it from eating taps yet Safari still samples it;
-     aria-hidden in the markup.
-     Do NOT hide it with opacity/visibility/z-index: Safari rejects those and
-     falls back to the body colour — that is why the guard is `display` only. */
+      pointer-events:none keeps it from eating taps yet Safari still samples it;
+      aria-hidden in the markup.
+      Do NOT hide it with opacity/visibility: Safari rejects those and falls back
+      to the body colour — that is why the guard is `display` only. */
   .app-tint-bottom {
     display: none;
     position: fixed;
@@ -336,8 +338,8 @@ html, body { overscroll-behavior-y: none; }
     position: fixed;
     left: 0;
     right: 0;
-    top: 0;
-    z-index: 45;
+    top: var(--chrome-top, 0px);
+    z-index: 39;
     height: 12px;
     pointer-events: none;
     background-color: #087a43;
@@ -352,6 +354,10 @@ html, body { overscroll-behavior-y: none; }
   .app-shell.login-active .app-tint-top,
   .app-shell.login-active .app-tint-bottom {
     background-color: #e8f6ec;
+  }
+
+  .kb-open .app-tint-top {
+    top: var(--vv-top, 0px);
   }
 
   /* No bottom nav on the login page: let the branded surface own the whole

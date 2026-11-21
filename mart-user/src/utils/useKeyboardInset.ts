@@ -29,8 +29,9 @@ function isTextField(el: Element | null): boolean {
  *   2. `--kb` and `.kb-open` — how much of the layout viewport the keyboard is
  *      covering, from the VisualViewport API. `.kb-open` is what the keyboard
  *      CSS in index.css keys off. `--vv-top` carries the visual viewport's pan
- *      offset so the login shell can move with the visible area instead of
- *      letting iOS pan the whole fixed frame while revealing the focused field.
+ *      offset while the keyboard is up; `--chrome-top` carries the same offset
+ *      while it is down, so the shell follows iOS Safari's expanding toolbar
+ *      instead of leaving the header/search row under it.
  *
  * Why both are needed:
  *
@@ -107,6 +108,7 @@ export function useKeyboardInset(): void {
         const root = document.documentElement;
         root.style.setProperty('--kb', `${open ? Math.round(covered) : 0}px`);
         root.style.setProperty('--vv-top', `${open ? Math.round(vv.offsetTop) : 0}px`);
+        root.style.setProperty('--chrome-top', `${open ? 0 : Math.round(vv.offsetTop)}px`);
         // --vv-bottom: how far the LAYOUT viewport bottom sits below the VISIBLE
         // bottom. The fixed `.app-shell` is `inset: 0`, i.e. sized to the layout
         // viewport, so in an iOS Safari tab it ends behind the bottom toolbar and
@@ -133,6 +135,7 @@ export function useKeyboardInset(): void {
       vv.removeEventListener('scroll', update);
       document.documentElement.style.removeProperty('--kb');
       document.documentElement.style.removeProperty('--vv-top');
+      document.documentElement.style.removeProperty('--chrome-top');
       document.documentElement.style.removeProperty('--vv-bottom');
       document.documentElement.classList.remove('kb-open');
     };
