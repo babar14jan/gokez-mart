@@ -135,7 +135,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
         }}
         placeholder="Search any product, all categories"
         aria-label="Search any product, all categories"
-        className="w-full rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-9 text-base leading-5 text-gray-900 shadow-sm placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-white/70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
+        className="w-full rounded-xl border border-gokez-400 bg-white py-2.5 pl-10 pr-9 text-base leading-5 text-gray-900 shadow-sm placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gokez-400/50 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
       />
       {search && (
         <button type="button" onClick={() => setSearch('')} aria-label="Clear search"
@@ -152,7 +152,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
           and the Fresh page, so it is full-bleed and no scrollbar can overlap
           it. */}
       {bandSlot && createPortal(
-        <div className="bg-gokez-700 dark:bg-[#18191a]">
+        <div className="bg-[#ADFBBD]">
           <div className="band-row mx-auto w-full max-w-6xl page-x pb-1">
             {searchField}
           </div>

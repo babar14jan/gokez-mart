@@ -1,27 +1,26 @@
+import { useState } from 'react';
+import { Home } from 'lucide-react';
+
 interface GokezMarkIconProps {
   className?: string;
   filled?: boolean;
 }
 
-const bagOutline = 'M9.45 1.66 L8.63 2.26 L7.64 3.41 L7.03 4.84 L6.87 6.43 L5.88 6.49 L4.95 6.82 L4.24 7.42 L3.85 8.02 L1.05 19.05 L1.05 20.37 L1.55 21.57 L2.43 22.51 L3.63 23.00 L20.26 23.00 L21.41 22.56 L22.18 21.85 L22.56 21.24 L22.84 20.48 L22.89 19.32 L20.15 8.30 L19.87 7.69 L19.27 7.03 L18.61 6.65 L17.02 6.43 L16.91 5.06 L16.31 3.47 L15.87 2.81 L15.10 2.04 L14.44 1.60 L12.91 1.05 L11.42 1.00 L10.44 1.22ZM8.79 5.28 L9.23 4.13 L10.16 3.14 L11.53 2.59 L12.41 2.59 L13.73 3.14 L14.66 4.13 L15.10 5.28 L15.15 6.38 L15.04 6.49 L8.85 6.49 L8.74 6.38Z';
-
-const bagFilled = 'M9.45 1.66 L8.63 2.26 L7.64 3.41 L7.03 4.84 L6.87 6.43 L5.88 6.49 L4.95 6.82 L4.24 7.42 L3.85 8.02 L1.05 19.05 L1.05 20.37 L1.55 21.57 L2.43 22.51 L3.63 23.00 L20.26 23.00 L21.41 22.56 L22.18 21.85 L22.56 21.24 L22.84 20.48 L22.89 19.32 L20.15 8.30 L19.87 7.69 L19.27 7.03 L18.61 6.65 L17.02 6.43 L16.91 5.06 L16.31 3.47 L15.87 2.81 L15.10 2.04 L14.44 1.60 L12.91 1.05 L11.42 1.00 L10.44 1.22ZM11.48 7.64 L13.01 7.69 L14.55 8.13 L16.14 9.12 L17.02 10.05 L17.18 10.44 L17.18 10.88 L16.80 11.48 L16.36 11.70 L15.87 11.70 L15.48 11.53 L14.55 10.66 L13.62 10.11 L12.58 9.83 L11.48 9.83 L9.94 10.33 L9.28 10.77 L8.57 11.53 L8.13 12.30 L7.86 13.29 L7.86 13.95 L8.13 14.88 L8.79 15.87 L11.48 18.45 L12.14 18.56 L12.52 18.34 L14.77 16.03 L15.54 14.94 L11.15 14.88 L10.66 14.50 L10.44 14.00 L10.55 13.34 L10.93 12.91 L11.31 12.74 L17.35 12.74 L18.06 13.23 L18.28 13.78 L18.23 14.50 L17.95 15.37 L16.97 17.02 L13.12 20.86 L12.52 21.35 L11.75 21.46 L11.20 21.24 L7.03 17.24 L5.94 15.43 L5.61 14.06 L5.66 12.85 L6.05 11.53 L7.31 9.67 L8.24 8.85 L9.28 8.24 L10.33 7.86ZM8.79 5.28 L9.23 4.13 L10.16 3.14 L11.53 2.59 L12.41 2.59 L13.73 3.14 L14.66 4.13 L15.10 5.28 L15.15 6.38 L15.04 6.49 L8.85 6.49 L8.74 6.38Z';
-
-const yellowG = 'M11.64 7.69 L10.33 7.91 L9.06 8.41 L7.91 9.17 L7.03 10.05 L6.49 10.82 L5.99 11.86 L5.72 12.85 L5.66 13.95 L6.10 15.65 L7.14 17.29 L11.20 21.19 L12.08 21.41 L12.69 21.19 L16.58 17.40 L17.79 15.59 L18.12 14.72 L18.23 13.84 L18.01 13.23 L17.35 12.80 L11.15 12.85 L10.71 13.18 L10.49 13.73 L10.60 14.33 L11.04 14.77 L11.37 14.88 L15.54 14.88 L15.59 15.04 L14.28 16.64 L12.19 18.61 L11.48 18.50 L10.27 17.40 L8.46 15.54 L7.97 14.66 L7.80 14.00 L7.80 13.23 L8.08 12.30 L8.63 11.37 L9.34 10.66 L10.88 9.89 L12.63 9.78 L14.17 10.33 L15.43 11.42 L15.87 11.64 L16.36 11.64 L16.69 11.48 L17.13 10.82 L17.07 10.27 L16.69 9.72 L15.10 8.46 L13.29 7.80Z';
-
 export default function GokezMarkIcon({ className = '', filled = false }: GokezMarkIconProps) {
+  const [failed, setFailed] = useState(false);
+  const iconClass = `${className} ${filled ? 'opacity-100' : 'opacity-75'}`;
+
+  if (failed) return <Home className={iconClass} />;
+
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
-      <path
-        d={filled ? bagFilled : bagOutline}
-        className={filled ? 'fill-current' : 'fill-gray-500 dark:fill-slate-400'}
-        fillRule="evenodd"
-        clipRule="evenodd"
-        stroke={filled ? 'none' : 'currentColor'}
-        strokeWidth={filled ? 0 : 1.7}
-        strokeLinejoin="round"
-      />
-      <path d={yellowG} fill="#FFD400" />
-    </svg>
+    <img
+      src="/icons/gokez_mart_nav.webp"
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      decoding="async"
+      className={iconClass}
+      onError={() => setFailed(true)}
+    />
   );
 }

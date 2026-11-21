@@ -2,10 +2,10 @@
 // public/splash/. iOS shows these instead of a blank white frame while an
 // installed PWA boots, so a cold launch is branded rather than white.
 //
-// The launch image is built from the canonical customer logo
-// (gokez_mart_logo.webp), centred on the brand-green splash colour. Every device
-// canvas gets the same treatment, so the logo stays legible on phones and
-// tablets alike.
+// The launch image is built from the canonical transparent customer logo
+// (gokez_mart_logo_source.png), centred on the light background sampled from
+// the customer app icon (gokez_mart_logo.jpg). Every device canvas gets the same
+// treatment, so the logo stays legible on phones and tablets alike.
 //
 // Requires ImageMagick (`magick`) on PATH. Re-run it whenever the splash
 // artwork or splash colour changes, then keep the
@@ -22,8 +22,7 @@
 // customer who removed and reinstalled the app.
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,10 +30,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = join(ROOT, 'public');
 const OUT = join(PUBLIC, 'splash');
 
-const LOGO = join(PUBLIC, 'gokez_mart_logo.webp');
-const BACKGROUND = '#087A43';
-
-const scratch = join(tmpdir(), 'gokez-mart-splash-logo.png');
+const LOGO = join(PUBLIC, 'gokez_mart_logo_source.png');
+const SOURCE = join(PUBLIC, 'gokez_mart_logo.jpg');
 
 // [pixelWidth, pixelHeight, pointWidth, pointHeight, devicePixelRatio]
 // pointWidth/pointHeight/dpr are what the media queries in index.html must match.
@@ -62,31 +59,28 @@ function magick(args) {
   return execFileSync('magick', args, { stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-mkdirSync(OUT, { recursive: true });
+function sourceBackground() {
+  const pixel = magick([SOURCE, '-format', '%[pixel:p{5,5}]', 'info:']).toString().trim();
+  const rgb = pixel.match(/(\d+),\s*(\d+),\s*(\d+)/);
+  if (!rgb) throw new Error(`could not read background colour from ${SOURCE}`);
+  return `#${rgb.slice(1).map(value => Number(value).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
 
-// Cut the white canvas off the logo once, then composite the transparent mark
-// onto the brand-green splash colour for each device.
-magick([
-  LOGO,
-  '-fuzz', '4%',
-  '-transparent', '#FDFDFD',
-  '+repage',
-  `PNG32:${scratch}`,
-]);
+const BACKGROUND = sourceBackground();
+
+mkdirSync(OUT, { recursive: true });
 
 for (const [w, h, ptW, ptH, dpr] of DEVICES) {
   const logoSize = Math.round(Math.min(w, h) * 0.46);
   magick([
     '-size', `${w}x${h}`, `xc:${BACKGROUND}`,
-    '(', scratch, '-resize', `${logoSize}x${logoSize}`, ')',
+    '(', LOGO, '-resize', `${logoSize}x${logoSize}`, ')',
     '-gravity', 'center',
     '-composite',
     '-strip',
-    '-depth', '8',
-    join(OUT, `apple-splash-${w}-${h}.png`),
+    '-colors', '256',
+    `PNG8:${join(OUT, `apple-splash-${w}-${h}.png`)}`,
   ]);
 }
-
-rmSync(scratch, { force: true });
 
 console.log(`[ios-splash] wrote ${DEVICES.length} launch images to public/splash/`);

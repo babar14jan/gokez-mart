@@ -250,7 +250,15 @@ describe('referral integration points', () => {
       'the hub logged_in rule must not hide Refer & Earn from guests',
     );
     assertIncludes('src/pages/AccountPage.tsx', ['aria-label="Refer and Earn - log in"']);
-    assertIncludes('src/components/GokezMarkIcon.tsx', ['fill="#FFD400"']);
+    assertIncludes('src/components/BottomNav.tsx', [
+      "import GokezMarkIcon from './GokezMarkIcon'",
+      '<GokezMarkIcon className="h-6 w-6" filled={isActive} />',
+    ]);
+    assertIncludes('src/components/GokezMarkIcon.tsx', [
+      'src="/icons/gokez_mart_nav.webp"',
+      "filled ? 'opacity-100' : 'opacity-75'",
+      'return <Home className={iconClass} />',
+    ]);
     assertIncludes('src/pages/ReferralPage.tsx', [
       'How it works',
       'Your referral benefit',

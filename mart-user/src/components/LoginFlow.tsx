@@ -423,11 +423,11 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             </>
           ) : step === 'profile' ? (
             // Capturing the name is mandatory for a new customer, so this is a
-            // self-contained full-page sheet with its own green app bar (no back
+            // self-contained full-page sheet with its own splash-coloured app bar (no back
             // button and no guest exit). It renders above whatever hosted the
             // flow, so the account page and the checkout overlay behave the same.
             <div className="login-brand-bg fixed inset-0 z-[60] flex flex-col dark:bg-slate-900">
-              <div className="relative shrink-0 bg-gradient-to-r from-[#087a43] to-[#087a43] pt-[env(safe-area-inset-top)] dark:from-[#18191a] dark:to-[#18191a]">
+              <div className="relative shrink-0 bg-[#ADFBBD] pt-[env(safe-area-inset-top)]">
                 <div className="h-14" />
               </div>
 

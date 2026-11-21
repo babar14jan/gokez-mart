@@ -2,9 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Favicons. All generated from public/gokez_mart_logo-removebg.png so the
-         browser tab shows the mark without the grey square of the canonical
-         gokez_mart_logo.webp.
+    <!-- Favicons. All generated from public/gokez_mart_logo_source.png so the
+         browser tab shows the transparent mark on its own.
          /favicon.ico is listed first and is a real multi-size 16/32/48 ICO, so
          the conventional browser request for /favicon.ico returns an image
          instead of falling through to the SPA shell. -->
@@ -53,8 +52,8 @@
          the browser scrolls a fixed-height page around the caret. iOS Safari
          ignores this directive, which is why --kb exists as well. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#087a43" />
-    <meta name="msapplication-navbutton-color" content="#087a43" />
+    <meta name="theme-color" content="#ADFBBD" />
+    <meta name="msapplication-navbutton-color" content="#ADFBBD" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Gokez Mart" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -207,7 +206,7 @@
         || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
       if (mobileUA) {
         var themeMeta = document.querySelector('meta[name="theme-color"]');
-        if (themeMeta) themeMeta.setAttribute('content', '#087a43');
+        if (themeMeta) themeMeta.setAttribute('content', '#ADFBBD');
       }
       window.__splashStart = Date.now();
       // Last-resort fallback: the splash is shown in every context now
