@@ -10,7 +10,7 @@ export function isNativeAndroid(): boolean {
 export async function configureNativeChrome(): Promise<void> {
   if (!isNativeAndroid()) return;
   try { await StatusBar.setOverlaysWebView({ overlay: false }); } catch {}
-  try { await StatusBar.setBackgroundColor({ color: '#087A43' }); } catch {}
+  try { await StatusBar.setBackgroundColor({ color: '#ADFBBD' }); } catch {}
   try { await StatusBar.setStyle({ style: Style.Light }); } catch {}
 }
 

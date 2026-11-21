@@ -73,7 +73,7 @@
 
 # Transparent mark: favicon source, browser tab and in-page headers on brand
 # green. Favicon files are generated from it, so the URL stays stable.
-/gokez_mart_logo-removebg.png
+/gokez_mart_logo_removebg.png
   Content-Type: image/png
   Cache-Control: public, max-age=86400
 

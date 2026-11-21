@@ -8,6 +8,7 @@
     "build": "tsc && vite build && node scripts/write-version.mjs",
     "gen:ios-splash": "node scripts/gen-ios-splash.mjs",
     "gen:app-icons": "node scripts/gen-app-icons.mjs",
+    "gen:brand-assets": "node scripts/gen-brand-assets.mjs",
     "preview": "vite preview --port 5178"
   },
   "dependencies": {

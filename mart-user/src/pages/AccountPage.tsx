@@ -449,14 +449,14 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div className="login-brand-hero relative z-10 w-full shrink-0 text-center">
-            <div className="login-brand-header flex h-[96px] items-center justify-between gap-2 pl-[13px] pr-4 sm:pl-[17px] sm:pr-5">
-              <div className="relative bottom-[17px] flex min-w-0 flex-col items-center">
+            <div className="login-brand-header relative flex h-[96px] items-center justify-center px-3 sm:px-5">
+              <div className="flex min-w-0 flex-col items-center">
                 <div className="flex items-end justify-center gap-0">
                   {!logoImgError && (
                     <img
                       src="/gokez_mart_logo-header.png"
                       alt=""
-                      className="h-12 w-12 flex-shrink-0 object-contain"
+                      className="h-[38px] w-[38px] flex-shrink-0 object-contain"
                       onError={() => setLogoImgError(true)}
                     />
                   )}
@@ -466,22 +466,22 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                     <img
                       src="/mart_brand_new.webp"
                       alt="Gokez Mart"
-                      className="relative top-[10px] h-[74px] w-auto max-w-[45%] object-contain"
+                      className="relative top-[9px] h-[68px] w-auto max-w-[45%] object-contain"
                       onError={() => setBrandImgError(true)}
                     />
                   )}
                 </div>
-                <p className="mt-[2px] w-full truncate text-center text-[11px] font-bold leading-none tracking-tight text-black">Shop Local. Support Local.</p>
+                <p className="mt-[2px] w-full truncate text-center text-[10px] font-bold leading-none tracking-tight text-black">Shop Local. Support Local.</p>
               </div>
               <button
                 type="button"
                 onClick={leaveAsGuest}
-                className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-white px-4 text-sm font-bold text-gray-900 shadow-md ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600"
+                className="absolute -top-2 right-3 inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-bold text-gray-900 shadow-md ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600 sm:-top-1 sm:right-5 sm:min-h-10 sm:px-4 sm:text-sm"
               >
                 Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <div className="login-brand-banner-wrap mt-[29px] flex h-[88px] w-full items-center justify-center overflow-hidden px-3 sm:h-[110px]">
+            <div className="login-brand-banner-wrap mt-1 flex h-[88px] w-full items-center justify-center overflow-hidden px-3 sm:h-[110px]">
               {bannerImgError ? (
                 <div className="flex h-full w-full items-center justify-center text-3xl" role="img" aria-label="Fresh vegetables">
                   <span>🥦🥕🍅</span>

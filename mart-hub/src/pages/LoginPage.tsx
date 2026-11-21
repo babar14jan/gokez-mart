@@ -60,9 +60,19 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
 
           {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <HubLogoImage className="h-16 sm:h-20 w-auto object-contain" />
-            <p className="text-xs font-bold uppercase text-gray-900 dark:text-white tracking-tight leading-tight -mt-1.5 text-center">
+          <div className="mb-8 flex flex-col items-center">
+            <div className="flex items-end justify-center gap-1.5">
+              <HubLogoImage className="h-9 sm:h-10 w-auto object-contain" />
+              <picture className="leading-none align-bottom translate-y-1">
+                <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
+                <img
+                  src="/mart_hub_brand_logo.png"
+                  alt="Gokez Hub brand"
+                  className="h-9 sm:h-10 w-auto object-contain"
+                />
+              </picture>
+            </div>
+            <p className="mt-3 text-xs font-bold uppercase text-gray-900 dark:text-white tracking-tight leading-tight text-center">
               Your Store <span className="text-sm align-middle">&bull;</span> Now Online
             </p>
           </div>

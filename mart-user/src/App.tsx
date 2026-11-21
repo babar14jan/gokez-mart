@@ -643,18 +643,18 @@ export default function App() {
     const meta = document.querySelector('meta[name="theme-color"]');
     const mobile = detectPlatform() === 'ios' || detectPlatform() === 'android';
     const themeColor = loginPageActive
-      ? '#e8f6ec'
+      ? '#ADFBBD'
       : loginActive
-        ? '#ffffff'
+        ? '#ADFBBD'
         : effectiveDark
           ? '#18191a'
           : mobile
-            ? '#087a43'
+            ? '#ADFBBD'
             : '#ffffff';
     // Set this on every run: the splash is removed outside React, so waiting for
     // it here left Android Chrome stuck on the darker launch colour after boot.
     if (meta) meta.setAttribute('content', themeColor);
-    setNativeStatusBar(themeColor, themeColor === '#ffffff' || themeColor === '#e8f6ec' || (!effectiveDark && !mobile)).catch(() => {});
+    setNativeStatusBar(themeColor, themeColor === '#ADFBBD' || themeColor === '#ffffff' || (!effectiveDark && !mobile)).catch(() => {});
   }, [isDark, loginActive, loginPageActive]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
@@ -1443,6 +1443,7 @@ export default function App() {
           onSearchOpen={() => openCatalogSearch()}
           searchPrompt={searchPrompt}
           deliveryHidden={chromeHidden}
+          cartActive={checkoutActive}
         />
       )}
 

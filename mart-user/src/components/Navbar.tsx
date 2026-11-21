@@ -20,6 +20,7 @@ interface NavbarProps {
    * row flips in the same commit as the rest of the chrome.
    */
   deliveryHidden?: boolean;
+  cartActive?: boolean;
 }
 
 interface ZoneDropdownProps {
@@ -65,11 +66,14 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
   };
 
   const zoneLogo = (
-    <img
-      src="/gokez_mart_logo-removebg.png"
-      alt=""
-      className={`h-[26px] w-[26px] flex-shrink-0 object-contain ${locationBusy ? 'animate-pulse' : ''}`}
-    />
+    <picture className="inline-block leading-none align-bottom">
+      <source srcSet="/gokez_mart_logo_removebg.webp" type="image/webp" />
+      <img
+        src="/gokez_mart_logo_removebg.png"
+        alt=""
+        className={`h-[26px] w-[26px] flex-shrink-0 object-contain ${locationBusy ? 'animate-pulse' : ''}`}
+      />
+    </picture>
   );
 
   return (
@@ -79,8 +83,8 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
           <button type="button" onClick={triggerMyLocation} className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
             {zoneLogo}
             <div className="min-w-0 text-left">
-              <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
-              <p className="truncate text-[13px] font-bold text-white leading-tight">
+              <p className="text-[10px] font-semibold tracking-wide text-gokez-900/70 leading-none">Delivery Area</p>
+              <p className="truncate text-[13px] font-bold text-gokez-900 leading-tight">
                 {selectedZone.name}
               </p>
             </div>
@@ -92,12 +96,12 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
             className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
             {zoneLogo}
             <div className="min-w-0 text-left">
-              <p className="text-[10px] font-semibold tracking-wide text-white/70 leading-none">Delivery Area</p>
-              <p className="truncate text-[13px] font-bold text-white leading-tight">
+              <p className="text-[10px] font-semibold tracking-wide text-gokez-900/70 leading-none">Delivery Area</p>
+              <p className="truncate text-[13px] font-bold text-gokez-900 leading-tight">
                 {selectedZone ? selectedZone.name : 'Select area'}
               </p>
             </div>
-            <ChevronDown className={`w-3 h-3 self-end mb-0.5 text-white/80 flex-shrink-0 transition-transform ${zoneOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3 h-3 self-end mb-0.5 text-gokez-900/70 flex-shrink-0 transition-transform ${zoneOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {zoneOpen && (
@@ -155,7 +159,7 @@ const navItems = [
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
-export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, onSearchOpen, searchPrompt, deliveryHidden = false }: NavbarProps) {
+export default function Navbar({ onUseMyLocation, activeView, onNavChange, onCheckout, onSearchOpen, searchPrompt, deliveryHidden = false, cartActive = false }: NavbarProps) {
   const totalItems = useCartStore(s => s.totalItems());
 
   return (
@@ -164,7 +168,7 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
         never scrolls with the page. `relative z-40` (not sticky) — it is a
         flex child of the frame now, and the z-index keeps it above in-page
         sticky content (search rows, cards) that pin at top-0 of the scroller. */}
-    <header className={`relative z-40 border-b border-white/10 bg-gokez-700 pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-800 dark:bg-[#18191a] ${deliveryHidden ? 'band-collapsed' : ''}`}>
+    <header className={`relative z-40 border-b border-[#7bd69a] bg-[#ADFBBD] pt-[env(safe-area-inset-top)] shadow-sm ${deliveryHidden ? 'band-collapsed' : ''}`}>
 
       {/* Row 1 — 44px (2.75rem), the same app-bar height as PageHeader and the
           Profile header so every header matches.
@@ -198,8 +202,8 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
                 const isActive = activeView === id;
                 return (
                   <button key={id} onClick={() => onNavChange(id)} aria-label={label}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4 ${
-                      isActive ? 'bg-white text-gokez-800 shadow-sm' : 'text-white/80 hover:bg-white/10 hover:text-white'
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50 lg:px-4 ${
+                      isActive ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:bg-white/35 hover:text-gokez-950'
                     }`}>
                     <Icon className="w-4 h-4" />
                     <span className="hidden lg:inline">{label}</span>
@@ -208,7 +212,9 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
               })}
               {/* Cart in center */}
               <button onClick={onCheckout} aria-label="Cart"
-                className="relative ml-1 flex items-center gap-1.5 rounded-full bg-gokez-700 px-3 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-gokez-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 lg:px-4">
+                className={`relative ml-1 flex items-center gap-1.5 rounded-full px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50 lg:px-4 ${
+                  cartActive ? 'bg-gokez-700 font-bold text-white shadow-sm' : 'font-semibold text-gokez-900/75 hover:bg-white/35 hover:text-gokez-950'
+                }`}>
                 <ShoppingCart className="w-4 h-4" />
                 <span className="hidden lg:inline">Cart</span>
                 {totalItems > 0 && (
@@ -238,7 +244,7 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
         <div className="band-row sm:hidden page-x pb-1">
           <button type="button" onClick={onSearchOpen} className="relative block w-full text-left">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-white" />
-            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-3 text-base leading-5 text-gray-700 shadow-sm transition-colors hover:bg-cream-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
+            <span className="block w-full overflow-hidden whitespace-nowrap rounded-xl border border-gokez-400 bg-white py-2.5 pl-10 pr-3 text-base leading-5 text-gray-700 shadow-sm transition-colors hover:bg-cream-50 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"><span key={searchPrompt} className="search-prompt-text">{searchPrompt}</span></span>
           </button>
         </div>
       )}

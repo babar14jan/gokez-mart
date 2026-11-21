@@ -164,7 +164,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
-    const themeColor = isDark ? '#18191a' : '#FFC400';
+    const themeColor = isDark ? '#18191a' : '#FEB503';
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta: Element) => {
       const m = meta as HTMLMetaElement;
       m.content = themeColor;
