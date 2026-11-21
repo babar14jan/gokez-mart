@@ -69,7 +69,7 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
 
   const zoneLogo = logoFailed ? (
     <Home
-      className={`h-[26px] w-[26px] flex-shrink-0 text-gokez-700 ${locationBusy ? 'animate-pulse' : ''}`}
+      className={`h-[26px] w-[26px] flex-shrink-0 text-gokez-700 dark:text-gokez-400 ${locationBusy ? 'animate-pulse' : ''}`}
       aria-hidden="true"
     />
   ) : (
@@ -91,8 +91,8 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
           <button type="button" onClick={triggerMyLocation} className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
             {zoneLogo}
             <div className="min-w-0 text-left">
-              <p className="text-[10px] font-semibold tracking-wide text-gokez-900/70 leading-none">Delivery Area</p>
-              <p className="truncate text-[13px] font-bold text-gokez-900 leading-tight">
+              <p className="text-[10px] font-semibold tracking-wide text-gokez-900/70 leading-none dark:text-slate-300">Delivery Area</p>
+              <p className="truncate text-[13px] font-bold text-gokez-900 leading-tight dark:text-white">
                 {selectedZone.name}
               </p>
             </div>
@@ -104,12 +104,12 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
             className="flex min-w-0 items-center gap-1 hover:opacity-80 transition-opacity">
             {zoneLogo}
             <div className="min-w-0 text-left">
-              <p className="text-[10px] font-semibold tracking-wide text-gokez-900/70 leading-none">Delivery Area</p>
-              <p className="truncate text-[13px] font-bold text-gokez-900 leading-tight">
+              <p className="text-[10px] font-semibold tracking-wide text-gokez-900/70 leading-none dark:text-slate-300">Delivery Area</p>
+              <p className="truncate text-[13px] font-bold text-gokez-900 leading-tight dark:text-white">
                 {selectedZone ? selectedZone.name : 'Select area'}
               </p>
             </div>
-            <ChevronDown className={`w-3 h-3 self-end mb-0.5 text-gokez-900/70 flex-shrink-0 transition-transform ${zoneOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3 h-3 self-end mb-0.5 text-gokez-900/70 flex-shrink-0 transition-transform dark:text-slate-300 ${zoneOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {zoneOpen && (
@@ -176,7 +176,7 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
         never scrolls with the page. `relative z-40` (not sticky) — it is a
         flex child of the frame now, and the z-index keeps it above in-page
         sticky content (search rows, cards) that pin at top-0 of the scroller. */}
-    <header className={`relative z-40 border-b border-[#7bd69a] bg-[#ADFBBD] pt-[env(safe-area-inset-top)] shadow-sm ${deliveryHidden ? 'band-collapsed' : ''}`}>
+    <header className={`relative z-40 border-b border-[#7bd69a] bg-[#ADFBBD] pt-[env(safe-area-inset-top)] shadow-sm dark:border-slate-700 dark:bg-[#18191a] ${deliveryHidden ? 'band-collapsed' : ''}`}>
 
       {/* Row 1 — 44px (2.75rem), the same app-bar height as PageHeader and the
           Profile header so every header matches.
@@ -211,7 +211,7 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
                 return (
                   <button key={id} onClick={() => onNavChange(id)} aria-label={label}
                     className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50 lg:px-4 ${
-                      isActive ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:bg-white/35 hover:text-gokez-950'
+                      isActive ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:bg-white/35 hover:text-gokez-950 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
                     }`}>
                     <Icon className="w-4 h-4" />
                     <span className="hidden lg:inline">{label}</span>
@@ -221,7 +221,7 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
               {/* Cart in center */}
               <button onClick={onCheckout} aria-label="Cart"
                 className={`relative ml-1 flex items-center gap-1.5 rounded-full px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50 lg:px-4 ${
-                  cartActive ? 'bg-gokez-700 font-bold text-white shadow-sm' : 'font-semibold text-gokez-900/75 hover:bg-white/35 hover:text-gokez-950'
+                  cartActive ? 'bg-gokez-700 font-bold text-white shadow-sm' : 'font-semibold text-gokez-900/75 hover:bg-white/35 hover:text-gokez-950 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
                 }`}>
                 <ShoppingCart className="w-4 h-4" />
                 <span className="hidden lg:inline">Cart</span>

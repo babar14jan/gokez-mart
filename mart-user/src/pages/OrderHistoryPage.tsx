@@ -657,13 +657,13 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
   // sticky fallback in embed mode. Deep green active pill on the light band, muted dark
   // resting pills, so the row reads as the same surface as Home's search row.
   const tabsRow = (
-    <div className="flex h-[42px] gap-1 rounded-xl bg-gokez-900/5 p-1">
+    <div className="flex h-[42px] gap-1 rounded-xl bg-gokez-900/5 p-1 dark:bg-slate-800">
       <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('current'); }}
-        className={`flex h-full flex-1 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${showTab === 'current' ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:text-gokez-950'}`}>
+        className={`flex h-full flex-1 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${showTab === 'current' ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:text-gokez-950 dark:text-slate-300 dark:hover:text-white'}`}>
         Current
       </button>
       <button type="button" onClick={() => { tabChoiceMade.current = true; setActiveTab('past'); }}
-        className={`flex h-full flex-1 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${showTab === 'past' ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:text-gokez-950'}`}>
+        className={`flex h-full flex-1 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${showTab === 'past' ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:text-gokez-950 dark:text-slate-300 dark:hover:text-white'}`}>
         History
       </button>
     </div>
@@ -671,7 +671,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
 
   const bandTabs = bandSlot
     ? createPortal(
-        <div className="bg-[#ADFBBD]">
+        <div className="bg-[#ADFBBD] dark:bg-[#18191a]">
           <div className="band-row mx-auto w-full max-w-lg page-x pb-1">{tabsRow}</div>
         </div>,
         bandSlot,
@@ -679,7 +679,7 @@ export default function OrderHistoryPage({ onBack: _onBack, whatsappNumber, next
     : null;
 
   const inlineTabs = !bandSlot ? (
-    <div className="sticky top-0 z-30 band-row app-bleed-x bg-[#ADFBBD] px-4 pb-1 sm:px-6 lg:px-8">
+    <div className="sticky top-0 z-30 band-row app-bleed-x bg-[#ADFBBD] dark:bg-[#18191a] px-4 pb-1 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-lg">{tabsRow}</div>
     </div>
   ) : null;

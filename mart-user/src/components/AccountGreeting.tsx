@@ -162,32 +162,32 @@ export default function AccountGreeting() {
       {isLoggedIn ? (
         <button type="button" onClick={openProfile} aria-label="Open profile"
           className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-90">
-          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-gokez-900/10 bg-white/40">
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-gokez-900/10 bg-white/40 dark:border-slate-600 dark:bg-slate-800">
             {photoUrl
               ? <img src={photoUrl} alt="" className="h-full w-full object-cover" />
-              : <span className="text-xs font-bold text-gokez-900">{initials}</span>}
+              : <span className="text-xs font-bold text-gokez-900 dark:text-white">{initials}</span>}
           </span>
-          <span className="min-w-0 max-w-[10rem] truncate text-sm font-bold leading-tight text-gokez-900">Hi, {firstName}</span>
+          <span className="min-w-0 max-w-[10rem] truncate text-sm font-bold leading-tight text-gokez-900 dark:text-white">Hi, {firstName}</span>
         </button>
       ) : (
         <button type="button" onClick={openProfile} aria-label="Open profile"
           className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-90">
-          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gokez-900/10 bg-white/40">
-            <User className="h-3.5 w-3.5 text-gokez-900" />
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gokez-900/10 bg-white/40 dark:border-slate-600 dark:bg-slate-800">
+            <User className="h-3.5 w-3.5 text-gokez-900 dark:text-slate-200" />
           </span>
-          <span className="min-w-0 max-w-[10rem] truncate text-sm font-bold leading-tight text-gokez-900">Hi Guest</span>
+          <span className="min-w-0 max-w-[10rem] truncate text-sm font-bold leading-tight text-gokez-900 dark:text-white">Hi Guest</span>
         </button>
       )}
 
       {open && createPortal(
         <div className="fixed inset-0 z-[80] flex flex-col bg-[#f7f8fa] font-sans dark:bg-slate-900">
-          <header className="bg-[#ADFBBD] pt-[env(safe-area-inset-top)]">
+          <header className="bg-[#ADFBBD] pt-[env(safe-area-inset-top)] dark:bg-[#18191a]">
             <div className="flex min-h-[44px] items-center gap-1 px-2">
               <button type="button" onClick={closeProfile} aria-label="Back"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10">
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700">
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <h1 className="text-base font-bold text-gokez-950">Profile</h1>
+              <h1 className="text-base font-bold text-gokez-950 dark:text-white">Profile</h1>
             </div>
           </header>
 

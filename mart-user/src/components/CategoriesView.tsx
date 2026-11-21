@@ -152,7 +152,7 @@ export default function CategoriesView({ categories, products, initialCategoryId
           and the Fresh page, so it is full-bleed and no scrollbar can overlap
           it. */}
       {bandSlot && createPortal(
-        <div className="bg-[#ADFBBD]">
+        <div className="bg-[#ADFBBD] dark:bg-[#18191a]">
           <div className="band-row mx-auto w-full max-w-6xl page-x pb-1">
             {searchField}
           </div>

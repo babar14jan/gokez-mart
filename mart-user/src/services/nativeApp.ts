@@ -9,15 +9,16 @@ export function isNativeAndroid(): boolean {
 
 export async function configureNativeChrome(): Promise<void> {
   if (!isNativeAndroid()) return;
+  const dark = document.documentElement.classList.contains('dark');
   try { await StatusBar.setOverlaysWebView({ overlay: false }); } catch {}
-  try { await StatusBar.setBackgroundColor({ color: '#ADFBBD' }); } catch {}
-  try { await StatusBar.setStyle({ style: Style.Light }); } catch {}
+  try { await StatusBar.setBackgroundColor({ color: dark ? '#18191a' : '#ADFBBD' }); } catch {}
+  try { await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }); } catch {}
 }
 
-export async function setNativeStatusBar(color: string, darkText: boolean): Promise<void> {
+export async function setNativeStatusBar(color: string, lightIcons: boolean): Promise<void> {
   if (!isNativeAndroid()) return;
   try { await StatusBar.setBackgroundColor({ color }); } catch {}
-  try { await StatusBar.setStyle({ style: darkText ? Style.Light : Style.Dark }); } catch {}
+  try { await StatusBar.setStyle({ style: lightIcons ? Style.Dark : Style.Light }); } catch {}
 }
 
 export async function hasNativeLocationPermission(): Promise<boolean> {
