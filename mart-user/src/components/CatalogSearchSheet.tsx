@@ -344,7 +344,7 @@ export default function CatalogSearchSheet({
               it stays put while the delivery row collapses. The category chips
               stay here: a pinned white row directly under the band. */}
           {inline && freshMode && bandSlot && createPortal(
-            <div className="bg-gokez-700 dark:bg-[#18191a]">
+            <div className="bg-[#ADFBBD]">
               <div className="band-row mx-auto w-full max-w-6xl page-x pb-1">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-white" />
@@ -358,7 +358,7 @@ export default function CatalogSearchSheet({
                     onKeyDown={handleSearchKeyDown}
                     placeholder=""
                     aria-label={placeholder}
-                    className="w-full rounded-xl border border-white/70 bg-white py-2.5 pl-10 pr-9 text-base leading-5 text-gray-900 shadow-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/70 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
+                    className="w-full rounded-xl border border-gokez-400 bg-white py-2.5 pl-10 pr-9 text-base leading-5 text-gray-900 shadow-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gokez-400/50 dark:bg-slate-700 dark:text-white dark:placeholder:text-slate-300"
                   />
                   {!search && (
                     <span className="pointer-events-none absolute left-10 top-1/2 -translate-y-1/2 text-base text-gray-700 dark:text-slate-300">

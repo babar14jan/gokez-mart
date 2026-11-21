@@ -73,7 +73,17 @@ export default function LandingPage() {
       }`}>
         <nav className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 relative">
-            <a href="/hub"><HubLogoImage className="h-10 w-auto object-contain" /></a>
+            <a href="/hub" className="flex items-end gap-1.5">
+              <HubLogoImage className="h-10 w-auto object-contain" />
+              <picture className="leading-none align-bottom translate-y-1">
+                <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
+                <img
+                  src="/mart_hub_brand_logo.png"
+                  alt="Gokez Hub brand"
+                  className="h-10 w-auto object-contain"
+                />
+              </picture>
+            </a>
 
             {/* Desktop nav — centered */}
             <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
@@ -109,7 +119,17 @@ export default function LandingPage() {
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <div className="absolute top-0 right-0 h-full w-72 bg-white shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
-              <HubLogoImage className="h-8 w-auto object-contain" />
+              <a href="/hub" onClick={() => setMobileOpen(false)} className="flex items-end gap-1.5">
+                <HubLogoImage className="h-8 w-auto object-contain" />
+                <picture className="leading-none align-bottom translate-y-1">
+                  <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
+                  <img
+                    src="/mart_hub_brand_logo.png"
+                    alt="Gokez Hub brand"
+                    className="h-8 w-auto object-contain"
+                  />
+                </picture>
+              </a>
               <button onClick={() => setMobileOpen(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="flex flex-col gap-1 p-4">

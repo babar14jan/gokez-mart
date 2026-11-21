@@ -18,9 +18,21 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = join(ROOT, 'public');
 const OUT = join(PUBLIC, 'splash');
+const APP_ICON = join(PUBLIC, 'hub_app_icon.jpg');
 
-const BG = '#ffffff';
-const LOGO = join(PUBLIC, 'gokez_hub_logo.png');
+function sourceBackground() {
+  const pixel = execFileSync(
+    'magick',
+    [APP_ICON, '-format', '%[pixel:p{5,5}]', 'info:'],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  ).toString().trim();
+  const rgb = pixel.match(/(\d+),\s*(\d+),\s*(\d+)/);
+  if (!rgb) throw new Error(`could not read background colour from ${APP_ICON}`);
+  return `#${rgb.slice(1).map(value => Number(value).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
+
+const BG = sourceBackground();
+const LOGO = join(PUBLIC, 'gokez_hub_logo_removebg.png');
 const LOGO_WIDTH_RATIO = 0.42;
 
 // [pixelWidth, pixelHeight, pointWidth, pointHeight, devicePixelRatio]
@@ -54,10 +66,9 @@ for (const [w, h] of DEVICES) {
     '-size', `${w}x${h}`, `xc:${BG}`,
     '(', LOGO, '-resize', `${logoW}x`, ')',
     '-gravity', 'center', '-composite',
-    // Flat colour + a small logo: an 8-bit palette (dithered) keeps full-size
-    // launch images in the tens of KB instead of hundreds, with no visible
-    // banding on the solid brand background.
-    '-strip', '-dither', 'FloydSteinberg', '-colors', '256',
+    // Flat colour + a small logo: an 8-bit palette keeps full-size launch images
+    // in the tens of KB instead of hundreds, and avoids shifting the brand colour.
+    '-strip', '-colors', '256',
     `PNG8:${file}`,
   ]);
 }

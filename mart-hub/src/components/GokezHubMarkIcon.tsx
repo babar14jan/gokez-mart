@@ -8,7 +8,7 @@ interface GokezHubMarkIconProps {
 
 export default function GokezHubMarkIcon({ className = '', filled = false }: GokezHubMarkIconProps) {
   const [failed, setFailed] = useState(false);
-  const iconClass = `${className} ${filled ? 'opacity-100' : 'opacity-60'}`;
+  const iconClass = `${className} ${filled ? 'opacity-100' : 'opacity-75'}`;
 
   if (failed) return <Home className={iconClass} />;
 

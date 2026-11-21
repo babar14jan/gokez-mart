@@ -247,8 +247,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Desktop sidebar ── */}
       <aside className={`hidden lg:flex fixed inset-y-0 left-0 z-50 flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ${collapsed ? 'w-[90px]' : 'w-[200px]'}`}>
         {/* Logo + slogan */}
-        <div className={`flex flex-col items-center justify-center border-b border-gray-100 dark:border-slate-800 flex-shrink-0 px-4 bg-[#0f172a] dark:bg-[#18191a] ${collapsed ? 'py-5' : 'py-4'}`}>
-          <div className={`flex translate-x-5 justify-center ${collapsed ? 'flex-col items-center gap-1' : 'items-end gap-2'}`}>
+        <div className={`flex flex-col items-center justify-center border-b border-gray-100 dark:border-slate-800 flex-shrink-0 bg-[#0f172a] dark:bg-[#18191a] ${collapsed ? 'px-0 py-5' : 'px-4 py-4'}`}>
+          <div className="flex items-end justify-center gap-1">
             <img
               src="/gokez_hub_logo-header.png"
               alt="Gokez Hub"
@@ -256,14 +256,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               height="426"
               className={`${collapsed ? 'h-8 w-8' : 'h-10 w-10'} flex-shrink-0 object-contain`}
             />
-            <picture>
+            <picture className="leading-none align-bottom translate-y-1">
               <source srcSet="/mart_hub_brand_logo.webp" type="image/webp" />
               <img
                 src="/mart_hub_brand_logo.png"
                 alt="Gokez Hub brand"
                 width="1477"
                 height="1001"
-                className={`${collapsed ? 'h-7 w-20 object-center' : 'h-10 w-36 object-left'} object-contain`}
+                className={`${collapsed ? 'h-8' : 'h-10'} w-auto object-contain`}
               />
             </picture>
           </div>
@@ -303,7 +303,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className={`min-h-screen transition-all duration-300 ${collapsed ? 'lg:pl-[90px]' : 'lg:pl-[200px]'}`}>
 
         {/* Sticky header */}
-        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#FFC400] to-[#FFF6B5] dark:bg-none dark:bg-[#18191a] dark:border-b dark:border-slate-800 shadow-sm">
+        <header className="sticky top-0 z-30 pt-[env(safe-area-inset-top)] bg-gradient-to-b from-[#FEB503] to-[#FFF6B5] dark:bg-none dark:bg-[#18191a] dark:border-b dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 gap-4">
             {/* Mobile header left — brand + context. The brand mark mirrors the
                 login screen's header (logo left, home right) so the shell

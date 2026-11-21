@@ -35,6 +35,9 @@ const SHELL_URLS = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/hub-logo-96.png',
+  '/icons/hub-logo-192.png',
+  '/icons/hub-logo-512.png',
   // The offline / server-unreachable screens render these while the network is
   // down, so they must already be cached to display.
   '/offline.webp',
@@ -227,9 +230,9 @@ self.addEventListener('push', (e) => {
   e.waitUntil(
     self.registration.showNotification(payload.title || 'Order update', {
       body: payload.body || '',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-96.png',
-      image: '/icons/icon-512.png',
+      icon: '/icons/hub-logo-192.png',
+      badge: '/icons/hub-logo-96.png',
+      image: '/icons/hub-logo-512.png',
       data: { url: payload.url || '/' },
       vibrate: [200, 100, 200],
       silent: false,

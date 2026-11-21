@@ -28,7 +28,7 @@ interface PageHeaderProps {
   children?: ReactNode;
 }
 
-// Single source of truth for the green app bar. Every page/sheet header renders
+// Single source of truth for the splash-coloured app bar. Every page/sheet header renders
 // through this so the colour, height and back-button stay identical everywhere.
 //
 // NOTE: every Tailwind class below is a full static string. Tailwind's JIT only
@@ -56,15 +56,15 @@ export default function PageHeader({
       ? 'min-h-[calc(64px_+_env(safe-area-inset-top))] gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]'
       : 'min-h-[calc(2.75rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
   const gradientClass =
-    gradient === 'r' ? 'bg-gradient-to-r from-[#087a43] to-[#087a43]' : 'bg-gradient-to-b from-[#087a43] to-[#087a43]';
-  const darkClass = darkTo === '#14532d' ? 'dark:from-[#18191a] dark:to-[#14532d]' : 'dark:from-[#18191a] dark:to-[#18191a]';
+    gradient === 'r' ? 'bg-[#ADFBBD]' : 'bg-[#ADFBBD]';
+  const darkClass = darkTo === '#14532d' ? 'dark:bg-[#ADFBBD]' : 'dark:bg-[#ADFBBD]';
 
   const backClass =
     backStyle === 'square'
       ? backSize === 'sm'
-        ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
-        : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
-      : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
+        ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50'
+        : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50'
+      : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50';
 
   return (
     <div className={`${positionClass} flex shrink-0 items-center ${sizeClass} ${gradientClass} ${darkClass}`}>
@@ -75,12 +75,12 @@ export default function PageHeader({
         />
       </button>
 
-      {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/15">{icon}</span>}
+      {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5">{icon}</span>}
 
       {title && (
         <div className="min-w-0 flex-1">
-          <h1 className="min-w-0 truncate text-base font-bold text-white">{title}</h1>
-          {subtitle && <p className="truncate text-xs text-white/80">{subtitle}</p>}
+          <h1 className="min-w-0 truncate text-base font-bold text-gokez-950">{title}</h1>
+          {subtitle && <p className="truncate text-xs text-gokez-900/75">{subtitle}</p>}
         </div>
       )}
 

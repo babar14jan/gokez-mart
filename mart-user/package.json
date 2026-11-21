@@ -12,7 +12,9 @@
     "apk:debug": "npm run cap:build && cd android && ./gradlew assembleDebug",
     "seo:check": "node scripts/seo-check.mjs",
     "gen:ios-splash": "node scripts/gen-ios-splash.mjs",
+    "gen:native-splash": "node scripts/gen-native-splash.mjs",
     "gen:app-icons": "node scripts/gen-app-icons.mjs",
+    "gen:brand-assets": "node scripts/gen-brand-assets.mjs",
     "preview": "vite preview --port 5177",
     "seo:check:full": "node --import tsx scripts/seo-check.mjs",
     "test": "node --import tsx --test tests/*.test.ts"

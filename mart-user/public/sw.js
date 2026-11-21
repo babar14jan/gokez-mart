@@ -35,6 +35,9 @@ const SHELL_URLS = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/mart-logo-96.png',
+  '/icons/mart-logo-192.png',
+  '/icons/mart-logo-512.png',
   // The canonical logo drives the launch splash on first paint, so it is
   // precached with the shell: an offline cold start then shows the
   // same branded splash as an online one.
@@ -229,9 +232,9 @@ self.addEventListener('push', (e) => {
   e.waitUntil(
     self.registration.showNotification(payload.title || 'Order update', {
       body: payload.body || '',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-96.png',
-      image: '/icons/icon-512.png',
+      icon: '/icons/mart-logo-192.png',
+      badge: '/icons/mart-logo-96.png',
+      image: '/icons/mart-logo-512.png',
       data: { url: payload.url || '/' },
       vibrate: [200, 100, 200],
       tag: payload.tag || 'gokez-mart',

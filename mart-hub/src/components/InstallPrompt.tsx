@@ -108,7 +108,7 @@ export default function InstallPrompt() {
       <div className="fixed bottom-24 left-3 right-3 z-50">
         <div className="bg-slate-900 text-white rounded-2xl shadow-2xl p-4">
           <div className="flex items-start gap-3">
-            <img src="/icons/icon-96.png" alt="Gokez Hub" className="w-12 h-12 rounded-xl flex-shrink-0" />
+            <img src="/icons/hub-logo-96.png" alt="Gokez Hub" className="w-12 h-12 rounded-xl flex-shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-bold leading-tight">Install Gokez Hub</p>
               <p className="text-xs text-slate-400 mt-0.5">Installs like a real app — icon on your home screen, opens in its own window. No app store needed.</p>
@@ -137,7 +137,7 @@ export default function InstallPrompt() {
           <div className="bg-white dark:bg-slate-800 w-full rounded-t-3xl shadow-2xl p-6 pb-8">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <img src="/icons/icon-96.png" alt="Gokez Hub" className="w-10 h-10 rounded-xl" />
+                <img src="/icons/hub-logo-96.png" alt="Gokez Hub" className="w-10 h-10 rounded-xl" />
                 <div>
                   <p id="ios-install-title" className="text-sm font-bold text-gray-900 dark:text-white">Add Gokez Hub to Home Screen</p>
                   <p className="text-xs text-gray-500 dark:text-slate-400">3 quick steps</p>
@@ -199,7 +199,7 @@ export default function InstallPrompt() {
     return (
       <div className="fixed bottom-24 left-3 right-3 z-50">
         <div className="bg-slate-900 text-white rounded-2xl shadow-2xl p-4 flex items-center gap-3">
-          <img src="/icons/icon-96.png" alt="Gokez Hub" className="w-12 h-12 rounded-xl flex-shrink-0" />
+          <img src="/icons/hub-logo-96.png" alt="Gokez Hub" className="w-12 h-12 rounded-xl flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold leading-tight">Add Gokez Hub to Home Screen</p>
             <p className="text-xs text-slate-400 mt-0.5">Opens like an app, straight from your home screen.</p>
