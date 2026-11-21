@@ -255,9 +255,15 @@ describe('referral integration points', () => {
       '<GokezMarkIcon className="h-6 w-6" filled={isActive} />',
     ]);
     assertIncludes('src/components/GokezMarkIcon.tsx', [
-      'src="/icons/gokez_mart_nav.webp"',
+      "'/icons/gokez_mart_nav.webp'",
+      "'/icons/gokez_mart_nav.png'",
       "filled ? 'opacity-100' : 'opacity-75'",
       'return <Home className={iconClass} />',
+    ]);
+    assertIncludes('src/components/Navbar.tsx', [
+      "'/icons/gokez_mart_nav.webp'",
+      "'/icons/gokez_mart_nav.png'",
+      'setLogoFailed(true)',
     ]);
     assertIncludes('src/pages/ReferralPage.tsx', [
       'How it works',

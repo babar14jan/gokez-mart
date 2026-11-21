@@ -37,6 +37,10 @@ function webp(w, h, name) {
   magick([...fit(w, h), '-quality', '82', `WEBP:${name}`]);
 }
 
+function png8(w, h, name) {
+  magick([...fit(w, h), '-define', 'png:compression-level=9', `PNG8:${name}`]);
+}
+
 try {
   png(400, 400, FALLBACK);
   renameSync(FALLBACK, join(PUBLIC, 'gokez_mart_logo_removebg.png'));
@@ -48,6 +52,7 @@ webp(400, 400, join(PUBLIC, 'gokez_mart_logo_removebg.webp'));
 webp(400, 400, join(PUBLIC, 'gokez_mart_logo.webp'));
 png(127, 128, join(PUBLIC, 'gokez_mart_logo-header.png'));
 webp(63, 64, join(ICONS, 'gokez_mart_nav.webp'));
+png8(63, 64, join(ICONS, 'gokez_mart_nav.png'));
 
 png(16, 16, join(PUBLIC, 'favicon-16.png'));
 png(32, 32, join(PUBLIC, 'favicon-32.png'));
