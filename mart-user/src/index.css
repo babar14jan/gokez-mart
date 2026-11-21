@@ -131,11 +131,10 @@ html, body { overscroll-behavior-y: none; }
 
 .safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
-  /* Height of the on-screen keyboard over the layout viewport, published by
-     useKeyboardInset(). Not consumed by the shell any more (the fixed frame
-     keeps a stable height; .kb-open drives the keyboard-specific rules); kept
-     as a 0 default so opt-in rules degrade to a plain full-height page. */
-  :root { --kb: 0px; }
+  /* Keyboard geometry published by useKeyboardInset(): --kb is the visible
+     height lost at the bottom and --vv-top is any iOS visual-viewport pan.
+     Defaults keep opt-in rules at a plain full-height page. */
+  :root { --kb: 0px; --vv-top: 0px; }
 
   /* Full-height page shell for pages rendered inside .app-scroll and inside the
      full-screen fixed overlays (checkout, order details, legal pages).
@@ -269,6 +268,11 @@ html, body { overscroll-behavior-y: none; }
     bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
   }
 
+  .kb-open .app-shell.login-active {
+    top: var(--vv-top, 0px);
+    bottom: calc(var(--kb, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
   /* NOTE: the frame's bottom is the toolbar's top (tab) / the physical bottom
      (PWA) — i.e. the nav overlay lands flush against the iOS chrome with no
      gap and no overlap. Do NOT subtract from `bottom` to "push the nav down":
@@ -336,7 +340,7 @@ html, body { overscroll-behavior-y: none; }
     z-index: 45;
     height: 12px;
     pointer-events: none;
-    background-color: #e8f6ec;
+    background-color: #087a43;
   }
 
   @supports (-webkit-touch-callout: none) {
@@ -345,6 +349,7 @@ html, body { overscroll-behavior-y: none; }
     }
   }
 
+  .app-shell.login-active .app-tint-top,
   .app-shell.login-active .app-tint-bottom {
     background-color: #e8f6ec;
   }

@@ -1370,7 +1370,7 @@ export default function App() {
       onTouchCancel={cancelPullGesture}
       overlay={
         <>
-      {loginPageActive && <div className="app-tint-top" aria-hidden="true" />}
+      <div className="app-tint-top" aria-hidden="true" />
       {showLoginModal && <LoginModal pendingCheckout={pendingCheckout} onNavigateLegal={(path) => {
         // Reading Terms/Privacy leaves the login behind: close the overlay so the
         // page is not hidden under it, but keep the in-progress OTP flow so

@@ -28,11 +28,9 @@ function isTextField(el: Element | null): boolean {
  *
  *   2. `--kb` and `.kb-open` — how much of the layout viewport the keyboard is
  *      covering, from the VisualViewport API. `.kb-open` is what the keyboard
- *      CSS in index.css keys off. `--kb` is still published as a px value, but
- *      the fixed `.app-shell` / `.page-shell` no longer consume it: a fixed
- *      frame must keep a stable height while the keyboard animates, and the
- *      browser's own scroll-into-view handles the focused field. Treat `--kb`
- *      as available for future opt-in rules, not as a shell input.
+ *      CSS in index.css keys off. `--vv-top` carries the visual viewport's pan
+ *      offset so the login shell can move with the visible area instead of
+ *      letting iOS pan the whole fixed frame while revealing the focused field.
  *
  * Why both are needed:
  *
@@ -103,10 +101,12 @@ export function useKeyboardInset(): void {
         // offsetTop matters on iOS: when the caret is scrolled near the bottom
         // Safari pans the visual viewport, and without subtracting that the
         // inset over-reports and the shell collapses too far.
-        const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-        open = open ? covered > CLOSE_AT : covered > OPEN_AT;
+        const keyboard = Math.max(0, window.innerHeight - vv.height);
+        const covered = Math.max(0, keyboard - vv.offsetTop);
+        open = open ? keyboard > CLOSE_AT : keyboard > OPEN_AT;
         const root = document.documentElement;
         root.style.setProperty('--kb', `${open ? Math.round(covered) : 0}px`);
+        root.style.setProperty('--vv-top', `${open ? Math.round(vv.offsetTop) : 0}px`);
         // --vv-bottom: how far the LAYOUT viewport bottom sits below the VISIBLE
         // bottom. The fixed `.app-shell` is `inset: 0`, i.e. sized to the layout
         // viewport, so in an iOS Safari tab it ends behind the bottom toolbar and
@@ -132,6 +132,7 @@ export function useKeyboardInset(): void {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
       document.documentElement.style.removeProperty('--kb');
+      document.documentElement.style.removeProperty('--vv-top');
       document.documentElement.style.removeProperty('--vv-bottom');
       document.documentElement.classList.remove('kb-open');
     };
