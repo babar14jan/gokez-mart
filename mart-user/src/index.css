@@ -194,6 +194,12 @@ html, body { overscroll-behavior-y: none; }
     background-size: cover;
   }
 
+  .dark .login-brand-bg,
+  .dark .login-page-view.login-brand-bg {
+    background-color: #18191a;
+    background-image: none;
+  }
+
   /* On the login page the green sweep is pinned to the bottom of the scroller
      instead of being centred in a 100vh box, so it lands in the same place on a
      short Android and a tall iPhone and never looks stretched. */
@@ -345,6 +351,10 @@ html, body { overscroll-behavior-y: none; }
     background-color: #ADFBBD;
   }
 
+  .dark .app-tint-top {
+    background-color: #18191a;
+  }
+
   @supports (-webkit-touch-callout: none) {
     .app-tint-top {
       display: block;
@@ -354,6 +364,11 @@ html, body { overscroll-behavior-y: none; }
   .app-shell.login-active .app-tint-top,
   .app-shell.login-active .app-tint-bottom {
     background-color: #ADFBBD;
+  }
+
+  .dark .app-shell.login-active .app-tint-top,
+  .dark .app-shell.login-active .app-tint-bottom {
+    background-color: #18191a;
   }
 
   .kb-open .app-tint-top {

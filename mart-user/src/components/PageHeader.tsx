@@ -57,14 +57,14 @@ export default function PageHeader({
       : 'min-h-[calc(2.75rem+env(safe-area-inset-top))] gap-1 px-2 pt-[env(safe-area-inset-top)]';
   const gradientClass =
     gradient === 'r' ? 'bg-[#ADFBBD]' : 'bg-[#ADFBBD]';
-  const darkClass = darkTo === '#14532d' ? 'dark:bg-[#ADFBBD]' : 'dark:bg-[#ADFBBD]';
+  const darkClass = darkTo === '#14532d' ? 'dark:bg-[#18191a]' : 'dark:bg-[#18191a]';
 
   const backClass =
     backStyle === 'square'
       ? backSize === 'sm'
-        ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50'
-        : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50'
-      : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50';
+        ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50'
+        : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50'
+      : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gokez-900/5 text-gokez-900 transition-colors hover:bg-gokez-900/10 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50';
 
   return (
     <div className={`${positionClass} flex shrink-0 items-center ${sizeClass} ${gradientClass} ${darkClass}`}>
@@ -75,12 +75,12 @@ export default function PageHeader({
         />
       </button>
 
-      {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5">{icon}</span>}
+      {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gokez-900/5 dark:bg-slate-800">{icon}</span>}
 
       {title && (
         <div className="min-w-0 flex-1">
-          <h1 className="min-w-0 truncate text-base font-bold text-gokez-950">{title}</h1>
-          {subtitle && <p className="truncate text-xs text-gokez-900/75">{subtitle}</p>}
+          <h1 className="min-w-0 truncate text-base font-bold text-gokez-950 dark:text-white">{title}</h1>
+          {subtitle && <p className="truncate text-xs text-gokez-900/75 dark:text-slate-300">{subtitle}</p>}
         </div>
       )}
 

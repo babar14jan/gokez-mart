@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useThemeStore } from '../store/themeStore';
 import {
-  Home, Package, Image as ImageIcon,
+  Home, Package, Image as ImageIcon, GalleryHorizontal,
   Users, Shield, Boxes, UserPlus,
   ChevronLeft, ChevronRight, Sparkles, BarChart3,
   Menu as MenuIcon, User, KeyRound, LogOut, Moon, Sun, MessageSquare, CreditCard, LayoutGrid, Smartphone,
@@ -46,6 +46,7 @@ export const NAV_ALL: NavItem[] = [
   { label: 'Installs',           href: '/install-analytics',   icon: Smartphone,      roles: ['super_admin'], section: 'Administration' },
   { label: 'Categories',         href: '/categories',          icon: LayoutGrid,      roles: ['super_admin', 'store_owner'], section: 'Administration' },
   { label: 'Carousel',           href: '/carousel',            icon: ImageIcon,       roles: ['super_admin'], section: 'Administration' },
+  { label: 'Image Manager',      href: '/image-manager',       icon: GalleryHorizontal, roles: ['super_admin'], section: 'Administration' },
   { label: 'Promotions',         href: '/promotions',          icon: Megaphone,       roles: ['super_admin'], section: 'Administration' },
   { label: 'Home Page',          href: '/home-sections',       icon: LayoutTemplate,  roles: ['super_admin', 'store_owner'], section: 'Administration' },
   { label: 'Stores',             href: '/stores',              icon: Store,           roles: ['super_admin', 'store_owner'], section: 'Administration' },
@@ -191,6 +192,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     '/campaigns': 'Campaigns',
     '/promotions': 'Promotions',
     '/carousel': 'Carousel Manager',
+    '/image-manager': 'Image Manager',
     '/home-sections': 'Home Page',
       '/delivery': 'My Deliveries',
     '/customer-leads': 'Leads',
@@ -310,7 +312,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 keeps its identity after launch instead of only while the
                 login page is visible. */}
             <div className="lg:hidden flex items-center gap-2 min-w-0">
-              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/home-sections', '/referrals'].includes(pathname) ? (
+              {['/change-password', '/analytics', '/customers', '/customer-leads', '/suggestions', '/install-analytics', '/subscriptions', '/categories', '/stores', '/zones', '/users', '/compliance', '/profile', '/store-applications', '/catalog', '/delivery', '/daily-sales', '/top-selling', '/feedback', '/campaigns', '/carousel', '/image-manager', '/home-sections', '/referrals'].includes(pathname) ? (
                 <div className="flex items-center gap-1 min-w-0">
                   <button onClick={() => navigate(-1)}
                     className="p-2 -ml-1 rounded-xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex-shrink-0">

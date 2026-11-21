@@ -344,7 +344,7 @@ export default function CatalogSearchSheet({
               it stays put while the delivery row collapses. The category chips
               stay here: a pinned white row directly under the band. */}
           {inline && freshMode && bandSlot && createPortal(
-            <div className="bg-[#ADFBBD]">
+            <div className="bg-[#ADFBBD] dark:bg-[#18191a]">
               <div className="band-row mx-auto w-full max-w-6xl page-x pb-1">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 stroke-[2.5] text-gray-900 dark:text-white" />

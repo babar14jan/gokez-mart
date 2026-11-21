@@ -41,6 +41,7 @@ const InventoryPage = lazyWithRetry(() => import('./pages/InventoryPage'));
 const FeedbackPage = lazyWithRetry(() => import('./pages/FeedbackPage'));
 const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
 const CarouselPage = lazyWithRetry(() => import('./pages/CarouselPage'));
+const ImageManagerPage = lazyWithRetry(() => import('./pages/ImageManagerPage'));
 const HomeSectionsPage = lazyWithRetry(() => import('./pages/HomeSectionsPage'));
 const DailySalesPage = lazyWithRetry(() => import('./pages/DailySalesPage'));
 const TopSellingProductsPage = lazyWithRetry(() => import('./pages/TopSellingProductsPage'));
@@ -91,7 +92,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 // role; it used to be listed here while the database still rejected it, which
 // made every one of these entries unreachable.
 const ROLE_ROUTES: Record<string, string[]> = {
-  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/top-selling', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/home-sections', '/referrals', '/profile', '/change-password', '/more'],
+  super_admin:     ['/', '/orders', '/products', '/inventory', '/categories', '/customers', '/customer-leads', '/suggestions', '/analytics', '/daily-sales', '/top-selling', '/install-analytics', '/stores', '/zones', '/subscriptions', '/store-applications', '/catalog', '/users', '/compliance', '/feedback', '/campaigns', '/promotions', '/restore-order', '/carousel', '/image-manager', '/home-sections', '/referrals', '/profile', '/change-password', '/more'],
   store_owner:     ['/', '/orders', '/products', '/inventory', '/categories', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/campaigns', '/home-sections', '/profile', '/change-password', '/more'],
   store_manager:   ['/', '/orders', '/products', '/inventory', '/analytics', '/daily-sales', '/top-selling', '/catalog', '/stores', '/feedback', '/profile', '/change-password', '/more'],
   delivery_staff:  ['/', '/orders', '/delivery', '/profile', '/change-password', '/more'],
@@ -213,6 +214,7 @@ export default function App() {
         <Route path="/promotions"        element={<ProtectedRoute path="/promotions"><PromotionsPage /></ProtectedRoute>} />
         <Route path="/restore-order"     element={<ProtectedRoute path="/restore-order"><RestoreOrderPage /></ProtectedRoute>} />
         <Route path="/carousel"          element={<ProtectedRoute path="/carousel"><CarouselPage /></ProtectedRoute>} />
+        <Route path="/image-manager"     element={<ProtectedRoute path="/image-manager"><ImageManagerPage /></ProtectedRoute>} />
         <Route path="/home-sections"     element={<ProtectedRoute path="/home-sections"><HomeSectionsPage /></ProtectedRoute>} />
         <Route path="/referrals"        element={<ProtectedRoute path="/referrals"><ReferralPage /></ProtectedRoute>} />
         <Route path="/referral-overview" element={<Navigate to="/referrals?tab=overview" replace />} />

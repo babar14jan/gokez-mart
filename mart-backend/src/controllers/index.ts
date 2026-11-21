@@ -44,6 +44,7 @@ import { badRequest, forbidden } from '../utils/apiError';
 import { isValidCustomerPhone, normalizeCustomerPhone } from '../utils/customerPhone';
 import { REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR, hasDiscountStack } from '../utils/referralLogic';
 import { ReferralService } from '../services/referral.service';
+import { ImageManagerService, ImageReferenceConflictError, ImageStorageDeleteError } from '../services/imageManager.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const SHAPOORJI_ID = '00000000-0000-0000-0000-000000000001';
@@ -4244,7 +4245,96 @@ export const adminCleanStorage = asyncHandler(async (req: AdminRequest, res: Res
   });
 });
 
+function imageQueryValue(req: AdminRequest, key: string): string {
+  const value = req.query[key];
+  return typeof value === 'string' ? value : '';
+}
 
+export const adminListStorageImages = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (req.admin?.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Super admin access required' });
+    return;
+  }
+  const data = await ImageManagerService.listImages({
+    group: imageQueryValue(req, 'group'),
+    folder: imageQueryValue(req, 'folder'),
+    search: imageQueryValue(req, 'search'),
+    limit: Number(imageQueryValue(req, 'limit')) || undefined,
+    offset: Number(imageQueryValue(req, 'offset')) || undefined,
+  });
+  res.json({ success: true, data });
+});
+
+export const adminGetStorageImage = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (req.admin?.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Super admin access required' });
+    return;
+  }
+  const result = await ImageManagerService.getImage(req.params.id);
+  if (!result) {
+    res.status(404).json({ success: false, error: 'Image not found' });
+    return;
+  }
+  res.json({ success: true, data: result });
+});
+
+export const adminDeleteStorageImage = asyncHandler(async (req: AdminRequest, res: Response) => {
+  if (req.admin?.role !== 'super_admin') {
+    res.status(403).json({ success: false, error: 'Super admin access required' });
+    return;
+  }
+  const dryRun = req.body?.dryRun !== false;
+  const detach = req.body?.detach === true;
+  try {
+    const result = await ImageManagerService.deleteImage(req.params.id, { dryRun, detach });
+    if (!result) {
+      res.status(404).json({ success: false, error: 'Image not found' });
+      return;
+    }
+    if (!dryRun) {
+      ComplianceService.logAudit({
+        adminId: req.admin!.id,
+        username: req.admin!.username,
+        role: req.admin!.role,
+        action: 'storage_image_deleted',
+        entityType: 'storage_image',
+        entityId: req.params.id,
+        detail: `${result.file.originalName || result.file.filename}: ${result.references.length} reference(s) cleared, ${result.deletedIds.length} storage file(s) deleted (detach ${detach})`,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+    }
+    res.json({ success: true, data: result });
+  } catch (error) {
+    if (error instanceof ImageReferenceConflictError) {
+      res.status(409).json({ success: false, error: 'File is still referenced', references: error.references });
+      return;
+    }
+    if (error instanceof ImageStorageDeleteError) {
+      ComplianceService.logAudit({
+        adminId: req.admin!.id,
+        username: req.admin!.username,
+        role: req.admin!.role,
+        action: 'storage_image_delete_failed',
+        entityType: 'storage_image',
+        entityId: req.params.id,
+        detail: `Database references cleared; storage deletion failed for ${error.failedIds.join(', ')} after deleting ${error.deletedIds.join(', ') || 'none'}`,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        status: 'failed',
+      });
+      res.status(502).json({
+        success: false,
+        error: error.message,
+        referencesCleared: true,
+        deletedIds: error.deletedIds,
+        failedIds: error.failedIds,
+      });
+      return;
+    }
+    throw error;
+  }
+});
 
 export const adminGetInventoryMovements = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = await resolveManagedStoreId(req);
