@@ -7,6 +7,7 @@ interface GokezMarkIconProps {
 }
 
 export default function GokezMarkIcon({ className = '', filled = false }: GokezMarkIconProps) {
+  const [source, setSource] = useState<'webp' | 'png'>('webp');
   const [failed, setFailed] = useState(false);
   const iconClass = `${className} ${filled ? 'opacity-100' : 'opacity-75'}`;
 
@@ -14,13 +15,16 @@ export default function GokezMarkIcon({ className = '', filled = false }: GokezM
 
   return (
     <img
-      src="/icons/gokez_mart_nav.webp"
+      src={source === 'webp' ? '/icons/gokez_mart_nav.webp' : '/icons/gokez_mart_nav.png'}
       alt=""
       aria-hidden="true"
       draggable={false}
       decoding="async"
       className={iconClass}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (source === 'webp') setSource('png');
+        else setFailed(true);
+      }}
     />
   );
 }

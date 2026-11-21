@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share, Moon, Sun, X, Sparkles, Info, Gift } from 'lucide-react';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share, Moon, Sun, X, Sparkles, Info, Gift, Home } from 'lucide-react';
 import { authApi, referralApi, suggestionApi, type ReferralMeData } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
@@ -452,7 +452,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             <div className="login-brand-header relative flex h-[96px] items-center justify-center px-3 sm:px-5">
               <div className="flex min-w-0 flex-col items-center">
                 <div className="flex items-end justify-center gap-0">
-                  {!logoImgError && (
+                  {logoImgError ? (
+                    <Home className="h-[38px] w-[38px] flex-shrink-0 text-[#087A43] dark:text-green-400" aria-hidden="true" />
+                  ) : (
                     <img
                       src="/gokez_mart_logo-header.png"
                       alt=""

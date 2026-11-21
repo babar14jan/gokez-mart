@@ -33,6 +33,8 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
   const locationBusy = useZoneStore(s => s.locating);
   const [zoneOpen, setZoneOpen] = useState(false);
   const [pendingZone, setPendingZone] = useState<(typeof zones)[number] | null>(null);
+  const [logoSource, setLogoSource] = useState<'webp' | 'png'>('webp');
+  const [logoFailed, setLogoFailed] = useState(false);
   const totalItems = useCartStore(s => s.totalItems());
   const clearCart = useCartStore(s => s.clearCart);
 
@@ -65,15 +67,21 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
     }
   };
 
-  const zoneLogo = (
-    <picture className="inline-block leading-none align-bottom">
-      <source srcSet="/gokez_mart_logo_removebg.webp" type="image/webp" />
-      <img
-        src="/gokez_mart_logo_removebg.png"
-        alt=""
-        className={`h-[26px] w-[26px] flex-shrink-0 object-contain ${locationBusy ? 'animate-pulse' : ''}`}
-      />
-    </picture>
+  const zoneLogo = logoFailed ? (
+    <Home
+      className={`h-[26px] w-[26px] flex-shrink-0 text-gokez-700 ${locationBusy ? 'animate-pulse' : ''}`}
+      aria-hidden="true"
+    />
+  ) : (
+    <img
+      src={logoSource === 'webp' ? '/icons/gokez_mart_nav.webp' : '/icons/gokez_mart_nav.png'}
+      alt=""
+      className={`h-[26px] w-[26px] flex-shrink-0 object-contain ${locationBusy ? 'animate-pulse' : ''}`}
+      onError={() => {
+        if (logoSource === 'webp') setLogoSource('png');
+        else setLogoFailed(true);
+      }}
+    />
   );
 
   return (
