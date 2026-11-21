@@ -111,6 +111,19 @@ if (JSON.stringify(locs) !== JSON.stringify(expected)) {
   fail(`public/sitemap.xml URL set is wrong.\n      expected: ${expected.join(', ')}\n      actual:   ${locs.join(', ')}`);
 } else ok(`sitemap.xml declares exactly the ${expected.length} public URLs`);
 
+const imageLocs = [...sitemap.matchAll(/<image:loc>([^<]+)<\/image:loc>/g)].map(m => m[1]);
+const expectedImages = [`${ORIGIN}/gokez_mart_logo_removebg.png`];
+if (!sitemap.includes('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"')) {
+  fail('public/sitemap.xml must declare the Google image sitemap namespace');
+}
+if (JSON.stringify(imageLocs) !== JSON.stringify(expectedImages)) {
+  fail(`public/sitemap.xml image set is wrong.\n      expected: ${expectedImages.join(', ')}\n      actual:   ${imageLocs.join(', ')}`);
+} else ok(`sitemap.xml declares the current ${expectedImages.length} mart logo image`);
+for (const imageLoc of imageLocs) {
+  const imagePath = imageLoc.replace(`${ORIGIN}/`, '');
+  if (!exists(join(PUBLIC, imagePath))) fail(`sitemap image ${imageLoc} does not exist in public/`);
+}
+
 const PRIVATE = ['cart', 'checkout', 'account', 'orders', 'admin', 'api', 'dashboard',
   'notification-settings', 'delete-account', 'hub', 'login', 'store', 'profile'];
 for (const loc of locs) {

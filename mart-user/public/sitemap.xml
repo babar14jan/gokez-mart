@@ -19,11 +19,16 @@
 
   Do not add the hub, admin or API URLs here.
 -->
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://mart.gokez.com/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://mart.gokez.com/gokez_mart_logo_removebg.png</image:loc>
+      <image:title>Gokez Mart logo</image:title>
+    </image:image>
   </url>
   <url>
     <loc>https://mart.gokez.com/about/</loc>
