@@ -38,8 +38,9 @@ describe('Image Manager hub surface', () => {
 
     for (const helper of [
       '<FilterBar', '<SearchField', '<ClearButton', 'useDebounced(', 'filterClass',
-      '<Pagination', '<DetailDrawer', '<FieldRow', '<EmptyState', '<PanelHeader',
+      '<Pagination', '<DetailDrawer', '<FieldRow', '<EmptyState',
     ]) assert.ok(page.includes(helper), `missing ${helper}`);
+    assert.ok(!page.includes('<PanelHeader'), 'the layout header should not be duplicated inside the page');
 
     assert.ok(page.includes('storageApi.list({'));
     assert.ok(page.includes('{ fresh: true }'));

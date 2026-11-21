@@ -6,7 +6,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import SmartImage from '../components/SmartImage';
 import { useToast, ToastContainer } from '../hooks/useToast';
 import {
-  ClearButton, DetailDrawer, EmptyState, FieldRow, FilterBar, Pagination, PanelHeader,
+  ClearButton, DetailDrawer, EmptyState, FieldRow, FilterBar, Pagination,
   SearchField, filterClass, fmtDate, useDebounced,
 } from '../components/referralUi';
 
@@ -152,7 +152,6 @@ export default function ImageManagerPage() {
 
   return (
     <div className="space-y-4">
-      <PanelHeader title="Image Manager" subtitle="Inspect stored images, their database references and reclaim unused files." />
       <div role="tablist" aria-label="Storage image groups" className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-800">
         {GROUPS.map(tab => (
           <button
