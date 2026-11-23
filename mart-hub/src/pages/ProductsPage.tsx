@@ -3,9 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Trash2, Loader2, X, Package,
   Percent, GripVertical, Check, ArrowUp, ArrowDown,
-  Camera, BookOpen, Search, ChevronDown, ChevronLeft, ChevronRight,
+  Camera, BookOpen, Search, ChevronDown, ChevronLeft, ChevronRight, Info,
 } from 'lucide-react';
-import { productsApi, categoriesApi, inventoryApi, catalogApi } from '../services/api';
+import { productsApi, categoriesApi, inventoryApi, catalogApi, zonesApi, settingsApi } from '../services/api';
 import {
   combineProductOrders, getDiscountedPrice, getProductStatus, getStockState,
   CUSTOMER_ORDER_MODES, type CustomerOrderMode, type ProductStatusFilter,
@@ -18,6 +18,20 @@ import SmartImage from '../components/SmartImage';
 import { useToast, ToastContainer } from '../hooks/useToast';
 import { useHeaderAction } from '../store/headerActionStore';
 import PageSkeleton from '../components/PageSkeleton';
+
+const CUSTOMER_DISPLAY_MODES_KEY = 'product_customer_display_modes';
+const CUSTOMER_MODE_IDS = new Set<CustomerOrderMode>(CUSTOMER_ORDER_MODES.map(mode => mode.id));
+
+function normalizeCustomerModes(value: unknown): CustomerOrderMode[] {
+  const modes = Array.isArray(value)
+    ? value.filter((id): id is CustomerOrderMode => typeof id === 'string' && CUSTOMER_MODE_IDS.has(id as CustomerOrderMode))
+    : [];
+  return modes.length > 0 ? [...new Set(modes)] : ['all'];
+}
+
+function describeCustomerModes(modes: CustomerOrderMode[]): string {
+  return modes.map(id => CUSTOMER_ORDER_MODES.find(mode => mode.id === id)?.label || id).join(' → ') || 'Manual';
+}
 
 function formatStock(qty: number, unit: string): string {
   if (unit === 'kg' && qty < 1 && qty > 0) return `${Math.round(qty * 1000)} g`;
@@ -48,10 +62,26 @@ interface Category {
   id: string; name: string; icon: string; sortOrder: number; productCount: number;
 }
 
+interface ZoneScope {
+  id: string;
+  name: string;
+  storeId: string;
+  primaryStoreId: string | null;
+  primaryStoreName?: string;
+  primaryStore?: { id: string; name: string } | null;
+  stores?: Array<{ id: string; name: string; isPrimary?: boolean }>;
+}
+
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
 const PAGE_SIZE = 30;
 const UNITS = ['kg', 'g', 'pcs', 'dozen', 'litre', 'ml', 'bunch', 'packet'];
 const STOCK_UNITS = ['kg', 'litre', 'pcs', 'bunch', 'packet'];
+const CUSTOMER_ORDER_HINTS: Record<CustomerOrderMode, string> = {
+  all: 'Fallback order',
+  top15: 'First 15 products',
+  top15_discounted: 'Biggest deals first',
+  below30: 'Low-price picks',
+};
 const parseSearchAliases = (value: string) => value.split(',').map(alias => alias.trim()).filter(Boolean);
 
 interface OptionRow {
@@ -138,7 +168,7 @@ function stockStatus(p: Product): 'untracked' | 'out' | 'low' | 'ok' {
 }
 
 export default function ProductsPage() {
-  const { role } = useAuthStore();
+  const { role, storeId: adminStoreId, canAccessDailySales } = useAuthStore();
   // Zone selection is shared with the header dropdown (Layout) through
   // zoneSelectionStore — it is deliberately not kept in the URL, so raw store
   // ids stay out of the address bar. Falls back to the active store until the
@@ -150,6 +180,7 @@ export default function ProductsPage() {
   const initialCategory = searchParams.get('category') || 'all';
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [zones, setZones] = useState<ZoneScope[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -178,6 +209,8 @@ export default function ProductsPage() {
   const [filterCategory, setFilterCategory] = useState<string>(initialCategory);
   const [pendingArrange, setPendingArrange] = useState(() => searchParams.get('arrange') === '1');
   const [displayModes, setDisplayModes] = useState<CustomerOrderMode[]>(['all']);
+  const [savedDisplayModes, setSavedDisplayModes] = useState<CustomerOrderMode[]>(['all']);
+  const [manageCustomerViewOpen, setManageCustomerViewOpen] = useState(false);
   const [statuses, setStatuses] = useState<ProductStatusFilter[]>(['available']);
   const [page, setPage] = useState(0);
 
@@ -188,8 +221,6 @@ export default function ProductsPage() {
   const [savingDisplayOrder, setSavingDisplayOrder] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState<Product | null>(null);
-  const dragItem = useRef<number | null>(null);
-  const dragOver = useRef<number | null>(null);
   const didInitStoreReset = useRef(false);
 
   // Restock
@@ -205,6 +236,16 @@ export default function ProductsPage() {
   // Last restock for edit modal
 
   const storeId = selectedStoreId;
+  const canManageProductSettings = role === 'super_admin' || canAccessDailySales === true;
+  const activeZone = useMemo(() => zones.find(zone =>
+    zone.primaryStoreId === storeId
+    || zone.stores?.some(store => store.id === storeId)
+    || zone.storeId === storeId
+  ) || zones.find(zone => zone.primaryStoreId === adminStoreId) || null, [zones, storeId, adminStoreId]);
+  const zoneLabel = activeZone?.name || 'No zone assigned';
+  const headStoreLabel = activeZone?.primaryStore?.name || activeZone?.primaryStoreName
+    || (activeZone?.primaryStoreId === storeId ? 'This store' : 'Head store');
+  const customerViewSettingsStoreId = activeZone?.primaryStoreId || storeId;
   const { clearHeaderAction } = useHeaderAction();
   const { toasts, show: showToast } = useToast();
 
@@ -221,6 +262,7 @@ export default function ProductsPage() {
   const [catalogConflicts, setCatalogConflicts] = useState<Array<{ productId: string; storeId: string; storeName: string }>>([]);
 
   const openCatalogBrowser = async (mode: 'single' | 'bulk') => {
+    if (!canManageProductSettings) return;
     setCatalogBrowserMode(mode);
     setCatalogSearch(''); setCatalogCat('all'); setCatalogSelected(new Set());
     setShowCatalogBrowser(true);
@@ -245,7 +287,7 @@ export default function ProductsPage() {
   };
 
   const handleBulkAddFromCatalog = async () => {
-    if (catalogSelected.size === 0) return;
+    if (!canManageProductSettings || catalogSelected.size === 0) return;
     setBulkAdding(true);
     try {
       const res = await catalogApi.bulkAddToStore([...catalogSelected], storeId);
@@ -285,6 +327,30 @@ export default function ProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
+  useEffect(() => {
+    zonesApi.getAll().then(r => setZones(r.data.data || [])).catch(() => setZones([]));
+  }, [role]);
+
+  useEffect(() => {
+    let active = true;
+    settingsApi.getAll(customerViewSettingsStoreId, { fresh: true }).then(res => {
+      if (!active) return;
+      const raw = (res.data.data || []).find((setting: { key: string }) => setting.key === CUSTOMER_DISPLAY_MODES_KEY)?.value;
+      let parsed: unknown = null;
+      if (raw) {
+        try { parsed = JSON.parse(raw); } catch { parsed = null; }
+      }
+      const modes = normalizeCustomerModes(parsed);
+      setSavedDisplayModes(modes);
+      setDisplayModes(modes);
+    }).catch(() => {
+      if (!active) return;
+      setSavedDisplayModes(['all']);
+      setDisplayModes(['all']);
+    });
+    return () => { active = false; };
+  }, [customerViewSettingsStoreId]);
+
   const load = async (fresh = false) => {
     const [p, c, s] = await Promise.all([
       productsApi.getAll(storeId, { fresh }),
@@ -317,7 +383,6 @@ export default function ProductsPage() {
     setEditing(null);
     setSearchQuery('');
     setFilterCategory('all');
-    setDisplayModes(['all']);
     setStatuses(['available']);
     setPage(0);
     setLoading(true);
@@ -344,9 +409,12 @@ export default function ProductsPage() {
 
   useEffect(() => { setPage(0); }, [searchQuery, filterCategory, statuses, displayModes, selectedStoreId]);
 
-  const canReorder = displayModes.length === 1 && displayModes[0] === 'all'
+  const displayModesDirty = displayModes.length !== savedDisplayModes.length
+    || displayModes.some((mode, index) => mode !== savedDisplayModes[index]);
+  const canReorder = canManageProductSettings && displayModes.length === 1 && displayModes[0] === 'all'
     && filterCategory !== '__uncat__' && statuses.length === 1 && statuses[0] === 'available';
-  const canSaveDisplayOrder = displayModes.length > 0 && filterCategory !== '__uncat__'
+  const canSaveDisplayOrder = canManageProductSettings && displayModesDirty && displayModes.length > 0
+    && filterCategory !== '__uncat__'
     && statuses.length === 1 && statuses[0] === 'available'
     && searchQuery.trim() === '' && !reorderMode;
 
@@ -384,7 +452,7 @@ export default function ProductsPage() {
   const resetBrowse = () => {
     setSearchQuery('');
     setFilterCategory('all');
-    setDisplayModes(['all']);
+    setDisplayModes([...savedDisplayModes]);
     setStatuses(['available']);
     setPage(0);
   };
@@ -393,20 +461,22 @@ export default function ProductsPage() {
     || statuses.length !== 1 || statuses[0] !== 'available' || searchQuery.trim() !== '';
 
   const enterReorderMode = () => {
+    if (!canManageProductSettings) return;
     setReorderList([...displayProducts].sort((a, b) => a.sortOrder - b.sortOrder));
     setReorderMode(true);
+    setManageCustomerViewOpen(true);
   };
-  const handleDragStart = (i: number) => { dragItem.current = i; };
-  const handleDragEnter = (i: number) => { dragOver.current = i; };
-  const handleDragEnd = () => {
-    if (dragItem.current === null || dragOver.current === null) return;
-    const updated = [...reorderList];
-    const [moved] = updated.splice(dragItem.current, 1);
-    updated.splice(dragOver.current, 0, moved);
-    dragItem.current = null; dragOver.current = null;
-    setReorderList(updated);
+  const moveReorderItem = (index: number, delta: number) => {
+    setReorderList(current => {
+      const target = index + delta;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   };
   const saveReorder = async () => {
+    if (!canManageProductSettings) return;
     setSavingOrder(true);
     try {
       await Promise.all(reorderList.map((p, i) => productsApi.update(p.id, { sortOrder: i, storeId })));
@@ -426,8 +496,16 @@ export default function ProductsPage() {
       const inactive = scope
         .filter(product => getProductStatus(product) !== 'available' && !orderedIds.has(product.id))
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-      await Promise.all([...ordered, ...inactive].map((product, index) =>
-        productsApi.update(product.id, { sortOrder: index, storeId })));
+      const orderedProducts = [...ordered, ...inactive];
+      await Promise.all([
+        ...orderedProducts.map((product, index) =>
+          productsApi.update(product.id, { sortOrder: index, storeId })),
+        settingsApi.update(
+          { [CUSTOMER_DISPLAY_MODES_KEY]: JSON.stringify(displayModes) },
+          customerViewSettingsStoreId,
+        ),
+      ]);
+      setSavedDisplayModes([...displayModes]);
       await load();
       const scopeName = filterCategory === 'all'
         ? 'all products'
@@ -456,6 +534,7 @@ export default function ProductsPage() {
   }, []);
 
   const openEdit = (p: Product) => {
+    if (!canManageProductSettings) return;
     if (p.isBundle) {
       void openComboEdit(p);
       return;
@@ -483,6 +562,7 @@ export default function ProductsPage() {
   };
 
   const handleSave = async () => {
+    if (!canManageProductSettings) return;
     const validOptions = form.weightOptions.filter(option =>
       isOptionPriceValid(option) && isOptionQtyValid(option) && option.unit.trim()
     );
@@ -530,6 +610,7 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canManageProductSettings) return;
     try {
       await productsApi.delete(id, storeId);
       setConfirmDeleteId(null);
@@ -548,6 +629,7 @@ export default function ProductsPage() {
     product.isCatalog && !product.isBundle && product.availabilityStatus === 'available'
   );
   const openCombo = () => {
+    if (!canManageProductSettings) return;
     setEditingCombo(null);
     setComboName('');
     setComboLocalName('');
@@ -561,6 +643,7 @@ export default function ProductsPage() {
     setShowComboModal(true);
   };
   const openComboEdit = async (combo: Product) => {
+    if (!canManageProductSettings) return;
     try {
       const response = await productsApi.getBundleComponents(combo.id, storeId);
       const components = response.data.data || [];
@@ -584,6 +667,7 @@ export default function ProductsPage() {
     }
   };
   const saveCombo = async () => {
+    if (!canManageProductSettings) return;
     if (!comboName.trim() || !comboCategoryId || !(parseFloat(comboPrice) >= 0) || !comboUnit.trim() || comboComponents.length < 2 || comboComponents.some(component => !component.productId || !(parseFloat(component.quantity) > 0) || !component.unit)) return;
     setComboSaving(true);
     try {
@@ -612,6 +696,7 @@ export default function ProductsPage() {
   };
 
   const setAvailability = async (p: Product, status: 'available' | 'out_of_stock' | 'hidden') => {
+    if (!canManageProductSettings) return;
     await productsApi.update(p.id, { availabilityStatus: status, storeId } as any); await load();
   };
 
@@ -643,15 +728,14 @@ export default function ProductsPage() {
 
     return (
       <div
-        onClick={() => { if (!reorderMode) openEdit(p); }}
-        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 transition-colors ${reorderMode ? 'cursor-grab active:cursor-grabbing' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer'}`}
-        draggable={reorderMode}
-        onDragStart={() => handleDragStart(index)}
-        onDragEnter={() => handleDragEnter(index)}
-        onDragEnd={handleDragEnd}
-        onDragOver={e => e.preventDefault()}
+        onClick={() => { if (!reorderMode && canManageProductSettings) openEdit(p); }}
+        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 transition-colors ${reorderMode ? 'select-none' : canManageProductSettings ? 'hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer' : ''}`}
       >
-        {reorderMode && <GripVertical className="w-5 h-5 text-gray-300 flex-shrink-0" />}
+        {reorderMode && (
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-500 text-[10px] font-bold text-white">
+            {index + 1}
+          </span>
+        )}
 
         <SmartImage
           src={p.photoUrl}
@@ -703,11 +787,27 @@ export default function ProductsPage() {
         {!reorderMode && (
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <select value={cur} onChange={e => { e.stopPropagation(); setAvailability(p, e.target.value as any); }} onClick={e => e.stopPropagation()}
-              className={`text-[11px] sm:text-xs border rounded-lg px-1 sm:px-1.5 py-1 focus:outline-none cursor-pointer font-semibold ${availColor}`}>
+              disabled={!canManageProductSettings}
+              className={`text-[11px] sm:text-xs border rounded-lg px-1 sm:px-1.5 py-1 focus:outline-none font-semibold disabled:opacity-60 disabled:cursor-not-allowed ${canManageProductSettings ? 'cursor-pointer' : ''} ${availColor}`}>
               <option value="available">✅ On</option>
               <option value="out_of_stock">⚠️ Out</option>
               <option value="hidden">👁 Hide</option>
             </select>
+          </div>
+        )}
+
+        {reorderMode && (
+          <div className="flex shrink-0 items-center gap-1">
+            <button type="button" onClick={() => moveReorderItem(index, -1)} disabled={index === 0}
+              aria-label={`Move ${p.name} up`} title="Move up"
+              className="rounded-lg border border-gray-200 p-1.5 text-gray-600 hover:border-emerald-300 hover:text-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed dark:border-slate-600 dark:text-slate-300">
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => moveReorderItem(index, 1)} disabled={index === reorderList.length - 1}
+              aria-label={`Move ${p.name} down`} title="Move down"
+              className="rounded-lg border border-gray-200 p-1.5 text-gray-600 hover:border-emerald-300 hover:text-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed dark:border-slate-600 dark:text-slate-300">
+              <ArrowDown className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>
@@ -735,6 +835,12 @@ export default function ProductsPage() {
           </button>
         )}
       </div>
+
+      {!canManageProductSettings && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+          Only the zone head store owner/manager or a super admin can change product settings. You can browse this list, but editing is locked.
+        </div>
+      )}
 
       <div className="page-card flex flex-wrap items-center gap-2 p-3">
         <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Show</span>
@@ -774,97 +880,145 @@ export default function ProductsPage() {
         ))}
       </div>
 
-      <div className="page-card p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Customer display order</span>
-          {CUSTOMER_ORDER_MODES.map(mode => {
-            const selected = displayModes.includes(mode.id);
-            return (
-              <button key={mode.id} onClick={() => toggleDisplayMode(mode.id)}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  selected
-                    ? 'bg-emerald-500 border-emerald-500 text-white'
-                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:border-emerald-300'
-                }`}>
-                <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${selected ? 'border-white bg-white text-emerald-600' : 'border-gray-300 dark:border-slate-600'}`}>
-                  {selected && <Check className="h-2.5 w-2.5" />}
-                </span>
-                {mode.label}
-              </button>
-            );
-          })}
-          <div className="flex-1" />
-          <button onClick={saveDisplayOrder} disabled={!canSaveDisplayOrder || savingDisplayOrder}
-            title={!canSaveDisplayOrder ? 'Select active products, clear search, then save' : 'Save this order for customer category and Fresh pages'}
-            className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-            {savingDisplayOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            Save order
-          </button>
-        </div>
-        {displayModes.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Priority</span>
-            {displayModes.map((id, index) => (
-              <span key={id} className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-300">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] text-white">{index + 1}</span>
-                {CUSTOMER_ORDER_MODES.find(mode => mode.id === id)?.label}
-                <button type="button" onClick={() => moveDisplayMode(index, -1)} disabled={index === 0} className="disabled:opacity-30"><ArrowUp className="w-3 h-3" /></button>
-                <button type="button" onClick={() => moveDisplayMode(index, 1)} disabled={index === displayModes.length - 1} className="disabled:opacity-30"><ArrowDown className="w-3 h-3" /></button>
+      <div className="flex flex-wrap items-center gap-2">
+        {canManageProductSettings && (
+          <button type="button" onClick={() => {
+            if (manageCustomerViewOpen) setManageCustomerViewOpen(false);
+            else { setDisplayModes([...savedDisplayModes]); setManageCustomerViewOpen(true); }
+          }}
+            aria-expanded={manageCustomerViewOpen} aria-controls="manage-customer-view"
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-gray-600 dark:text-slate-300 hover:border-emerald-300 transition-colors">
+            <GripVertical className="w-3.5 h-3.5" />
+            Customer view
+            {displayModes.length > 1 && (
+              <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                {displayModes.length} modes
               </span>
-            ))}
-          </div>
-        )}
-        <p className="mt-2 text-[11px] text-gray-400">Earlier modes win products that appear in more than one list. Manual is this store&apos;s fallback tail: products left over keep their manual order even when Manual is not picked. Zone catalogs may prefer the head store listing because customer zone results are de-duplicated against it.</p>
-      </div>
-
-      <div className="flex items-center gap-2">
-        {/* Reorder */}
-        {!reorderMode ? (
-          <button onClick={enterReorderMode} disabled={!canReorder}
-            title={!canReorder ? 'Use manual order with active products to reorder' : filterCategory === 'all' ? 'Reorder all products' : 'Reorder products in this category'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-            <GripVertical className="w-3.5 h-3.5" /> Reorder
+            )}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${manageCustomerViewOpen ? 'rotate-180' : ''}`} />
           </button>
-        ) : (
-          /* Desktop reorder buttons — hidden on mobile, shown via sticky bar below */
-          <div className="hidden sm:flex items-center gap-2">
-            <button onClick={cancelReorder}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-800 hover:bg-gray-50 transition-all">
-              <X className="w-3.5 h-3.5" /> Cancel
-            </button>
-            <button onClick={saveReorder} disabled={savingOrder}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all">
-              {savingOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Save Order
-            </button>
-          </div>
         )}
 
         <div className="flex-1" />
 
-        {/* Bulk Add from Catalog — desktop only */}
-        <button onClick={() => openCatalogBrowser('bulk')}
-          className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 text-xs font-semibold rounded-xl transition-colors">
+        <button onClick={() => openCatalogBrowser('bulk')} disabled={!canManageProductSettings}
+          className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold rounded-xl transition-colors">
           <BookOpen className="w-3.5 h-3.5" /> Bulk from Catalog
         </button>
-
-        <button onClick={openCombo}
-          className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 text-xs font-semibold rounded-xl transition-colors">
+        <button onClick={openCombo} disabled={!canManageProductSettings}
+          className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold rounded-xl transition-colors">
           <Plus className="w-3.5 h-3.5" /> Combo
         </button>
-
-
-      </div>
-
-      <div className="lg:hidden flex items-center justify-end gap-2">
-        <button onClick={() => openCatalogBrowser('bulk')}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 transition-colors">
+        <button onClick={() => openCatalogBrowser('bulk')} disabled={!canManageProductSettings}
+          className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
           <BookOpen className="w-3.5 h-3.5" /> Bulk Upload
         </button>
-        <button onClick={openCombo}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 transition-colors">
+        <button onClick={openCombo} disabled={!canManageProductSettings}
+          className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
           <Plus className="w-3.5 h-3.5" /> Combo
         </button>
       </div>
+
+      {manageCustomerViewOpen && canManageProductSettings && (
+        <div id="manage-customer-view" className="page-card overflow-hidden">
+          <div className="flex flex-col gap-3 border-b border-gray-100 p-3 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white">Customer display order</h2>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">{zoneLabel}</span>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">Head store: {headStoreLabel} · Last saved: {describeCustomerModes(savedDisplayModes)}</p>
+              <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">This order is used by customer category and Fresh pages.</p>
+            </div>
+            <button onClick={saveDisplayOrder} disabled={!canSaveDisplayOrder || savingDisplayOrder}
+              title={!displayModesDirty ? 'All customer view changes are saved' : !canSaveDisplayOrder ? 'Select active products, clear search, then save' : 'Save this order for customer category and Fresh pages'}
+              className={`flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition-colors sm:w-auto ${displayModesDirty ? 'bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 opacity-70 cursor-not-allowed'}`}>
+              {savingDisplayOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              {displayModesDirty ? 'Save order' : 'Saved'}
+            </button>
+          </div>
+
+          <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Display modes</p>
+                <span className="text-[10px] font-semibold text-gray-400">{displayModes.length} of {CUSTOMER_ORDER_MODES.length} selected</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {CUSTOMER_ORDER_MODES.map(mode => {
+                  const selected = displayModes.includes(mode.id);
+                  return (
+                    <button key={mode.id} onClick={() => toggleDisplayMode(mode.id)} disabled={!canManageProductSettings}
+                      className={`flex items-start gap-2 rounded-xl border p-2.5 text-left transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                        selected
+                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                          : 'border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800 hover:border-emerald-300'
+                      }`}>
+                      <span className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${selected ? 'border-emerald-600 bg-emerald-500 text-white' : 'border-gray-300 dark:border-slate-600'}`}>
+                        {selected && <Check className="h-2.5 w-2.5" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className={`block truncate text-xs font-semibold ${selected ? 'text-emerald-800 dark:text-emerald-200' : 'text-gray-700 dark:text-slate-200'}`}>{mode.label}</span>
+                        <span className="mt-0.5 block text-[10px] text-gray-500 dark:text-slate-400">{CUSTOMER_ORDER_HINTS[mode.id]}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-2.5 dark:border-slate-700 dark:bg-slate-900/40">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Priority</p>
+                <span className="text-[10px] font-semibold text-gray-400">{displayModes.length} active</span>
+              </div>
+              {displayModes.length > 0 ? (
+                <ol className="space-y-1.5">
+                  {displayModes.map((id, index) => (
+                    <li key={id} className="flex items-center gap-1.5 rounded-lg border border-gray-100 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">{index + 1}</span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-gray-700 dark:text-slate-200">
+                        {CUSTOMER_ORDER_MODES.find(mode => mode.id === id)?.label}
+                      </span>
+                      <button type="button" onClick={() => moveDisplayMode(index, -1)} disabled={index === 0 || !canManageProductSettings} className="rounded p-0.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-700"><ArrowUp className="w-3 h-3" /></button>
+                      <button type="button" onClick={() => moveDisplayMode(index, 1)} disabled={index === displayModes.length - 1 || !canManageProductSettings} className="rounded p-0.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-slate-700"><ArrowDown className="w-3 h-3" /></button>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="rounded-lg border border-dashed border-gray-200 p-3 text-center text-[11px] text-gray-400 dark:border-slate-700">Pick at least one mode.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-gray-100 p-3 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <p className="text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
+                Earlier modes win products that appear in more than one list. Manual is the fallback tail, and zone catalogs use this head-store order for products shared across stores. In Reorder mode, use the arrows on each row.
+              </p>
+            </div>
+            {!reorderMode ? (
+              <button onClick={enterReorderMode} disabled={!canReorder}
+                title={!canReorder ? 'Use manual order with active products to reorder' : filterCategory === 'all' ? 'Reorder all products' : 'Reorder products in this category'}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 sm:w-auto">
+                <GripVertical className="w-3.5 h-3.5" /> Reorder
+              </button>
+            ) : (
+              <div className="flex w-full gap-2 sm:w-auto">
+                <button onClick={cancelReorder}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 sm:flex-none">
+                  <X className="w-3.5 h-3.5" /> Cancel
+                </button>
+                <button onClick={saveReorder} disabled={savingOrder || !canManageProductSettings}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50 sm:flex-none">
+                  {savingOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Save Order
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {filterActive && (
         <div className="flex items-center gap-2">
@@ -921,24 +1075,6 @@ export default function ProductsPage() {
       )}
 
       <ToastContainer toasts={toasts} />
-
-      {/* Mobile sticky reorder bar — floats above the bottom nav (80px + the
-          iPhone home-indicator safe area) instead of under it. */}
-      {reorderMode && (
-        <div className="sm:hidden fixed left-0 right-0 z-50 px-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px)+0.5rem)]">
-          <div className="flex gap-2 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 p-2">
-            <button onClick={cancelReorder}
-              className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-700 transition-all">
-              <X className="w-3.5 h-3.5" /> Cancel
-            </button>
-            <button onClick={saveReorder} disabled={savingOrder}
-              className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition-all">
-              {savingOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              {savingOrder ? 'Saving...' : 'Save Order'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Double-confirm delete (modal) */}
       {confirmDeleteProduct && (
