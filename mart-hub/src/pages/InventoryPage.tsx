@@ -43,6 +43,13 @@ interface LogEntry {
 
 const roundMoney = (n: number) => Math.round(n * 100) / 100;
 
+interface TodayReduction {
+  reason: string;
+  value: number;
+  quantity: number;
+  count: number;
+}
+
 interface ValuationSummary {
   storeId: string;
   snapshotDate: string;
@@ -54,20 +61,39 @@ interface ValuationSummary {
   costedItems: number;
   snapshotItems: number;
   yesterdayEstimated: boolean;
+  todayAddedValue: number;
+  todayAddedCount: number;
+  todayReducedValue: number;
+  todayReducedCount: number;
+  todayReductions: TodayReduction[];
   generatedAt: string;
 }
 
 const EMPTY_VALUATION: ValuationSummary = {
   storeId: '', snapshotDate: '', todayValue: 0, yesterdayValue: 0,
   changeValue: 0, changePercent: null, trackedItems: 0, costedItems: 0,
-  snapshotItems: 0, yesterdayEstimated: false, generatedAt: '',
+  snapshotItems: 0, yesterdayEstimated: false,
+  todayAddedValue: 0, todayAddedCount: 0, todayReducedValue: 0, todayReducedCount: 0,
+  todayReductions: [], generatedAt: '',
 };
 
 function mergeValuation(summaries: ValuationSummary[]): ValuationSummary {
   if (summaries.length === 0) return EMPTY_VALUATION;
   const todayValue = summaries.reduce((sum, item) => sum + item.todayValue, 0);
   const yesterdayValue = summaries.reduce((sum, item) => sum + item.yesterdayValue, 0);
+  const todayAddedValue = summaries.reduce((sum, item) => sum + (item.todayAddedValue || 0), 0);
+  const todayReducedValue = summaries.reduce((sum, item) => sum + (item.todayReducedValue || 0), 0);
   const changeValue = roundMoney(todayValue - yesterdayValue);
+  const reductions = new Map<string, TodayReduction>();
+  for (const summary of summaries) {
+    for (const row of summary.todayReductions || []) {
+      const current = reductions.get(row.reason) || { reason: row.reason, value: 0, quantity: 0, count: 0 };
+      current.value += row.value || 0;
+      current.quantity += row.quantity || 0;
+      current.count += row.count || 0;
+      reductions.set(row.reason, current);
+    }
+  }
   return {
     ...EMPTY_VALUATION,
     todayValue: roundMoney(todayValue),
@@ -80,6 +106,13 @@ function mergeValuation(summaries: ValuationSummary[]): ValuationSummary {
     costedItems: summaries.reduce((sum, item) => sum + item.costedItems, 0),
     snapshotItems: summaries.reduce((sum, item) => sum + item.snapshotItems, 0),
     yesterdayEstimated: summaries.some(item => item.yesterdayEstimated),
+    todayAddedValue: roundMoney(todayAddedValue),
+    todayAddedCount: summaries.reduce((sum, item) => sum + (item.todayAddedCount || 0), 0),
+    todayReducedValue: roundMoney(todayReducedValue),
+    todayReducedCount: summaries.reduce((sum, item) => sum + (item.todayReducedCount || 0), 0),
+    todayReductions: [...reductions.values()]
+      .map(row => ({ ...row, value: roundMoney(row.value), quantity: roundMoney(row.quantity) }))
+      .sort((a, b) => b.value - a.value || a.reason.localeCompare(b.reason)),
     generatedAt: (() => {
       const times = summaries.map(item => item.generatedAt).sort();
       return times[times.length - 1] || '';
@@ -88,6 +121,13 @@ function mergeValuation(summaries: ValuationSummary[]): ValuationSummary {
 }
 
 const formatMoney = (value: number) => `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+const REDUCTION_LABELS: Record<string, string> = {
+  damage: 'Damage', spoiled: 'Spoiled', expired: 'Expired', lost: 'Lost',
+  missing: 'Missing', consumption: 'Consumption', quality_rejection: 'Quality check', other: 'Other',
+};
+const reductionLabel = (reason: string) => REDUCTION_LABELS[reason]
+  || reason.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 
 function formatStock(qty: number, unit: string): string {
   if (unit === 'kg' && qty < 1 && qty > 0) return `${Math.round(qty * 1000)} g`;
@@ -322,6 +362,13 @@ export default function InventoryPage() {
     } finally { setMovementsLoading(false); }
   };
 
+  const openLedgerWithReason = (reason: string) => {
+    setActiveTab('ledger');
+    setLedgerDateFilter('today');
+    setMovementSearch(reason);
+    loadMovements();
+  };
+
   const openHistory = async (item: InventoryItem) => {
     setHistoryItem(item);
     setHistoryLoading(true);
@@ -467,15 +514,20 @@ export default function InventoryPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-        <KpiCard label="Stock value today" value={valuationLoading ? '—' : formatMoney(valuation.todayValue)}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <KpiCard label="Stock value now" value={valuationLoading ? '—' : formatMoney(valuation.todayValue)}
           sub={`${valuation.trackedItems} tracked items in scope`} icon={<Wallet className="w-4 h-4 text-white" />} gradient="from-emerald-400 to-green-600" wrap />
-        <KpiCard label="Yesterday closing value" value={valuationLoading ? '—' : formatMoney(valuation.yesterdayValue)}
-          sub={valuation.snapshotItems === 0 ? 'No snapshot yet'
-            : valuation.yesterdayEstimated ? 'Estimated from movement ledger' : `${valuation.snapshotItems} snapshotted items`}
-          icon={<CalendarClock className="w-4 h-4 text-white" />} gradient="from-sky-400 to-blue-600" wrap />
+        <KpiCard label="Added today" value={valuationLoading ? '—' : formatMoney(valuation.todayAddedValue)}
+          sub={`${valuation.todayAddedCount} inward movements today`} icon={<Plus className="w-4 h-4 text-white" />} gradient="from-emerald-400 to-teal-600" wrap />
+        <KpiCard label="Reduced today"
+          value={valuationLoading ? '—' : formatMoney(valuation.todayReducedValue)}
+          sub={valuationLoading ? 'Loading...'
+            : (valuation.todayReductions || [])[0]
+              ? `${reductionLabel(valuation.todayReductions[0].reason)} ${formatMoney(valuation.todayReductions[0].value)}`
+              : 'No wastage or adjustments today'}
+          icon={<ArrowDownCircle className="w-4 h-4 text-white" />} gradient="from-rose-400 to-red-600" wrap />
         <KpiCard label="Costed stock lines" value={valuationLoading ? '—' : `${valuation.costedItems}/${valuation.trackedItems}`}
-          sub="items have a unit cost" icon={<Layers className="w-4 h-4 text-white" />} gradient="from-amber-400 to-orange-600" wrap />
+          sub={`${valuation.trackedItems - valuation.costedItems} uncosted items`} icon={<Layers className="w-4 h-4 text-white" />} gradient="from-amber-400 to-orange-600" wrap />
         <KpiCard label="Change vs yesterday"
           value={valuationLoading || valuation.changePercent === null ? '—'
             : `${valuation.changeValue >= 0 ? '+' : '-'}${Math.abs(valuation.changePercent).toFixed(1)}%`}
@@ -483,7 +535,40 @@ export default function InventoryPage() {
             : `${valuation.changeValue >= 0 ? '+' : '-'}${formatMoney(Math.abs(valuation.changeValue))}`}
           icon={valuation.changeValue >= 0 ? <TrendingUp className="w-4 h-4 text-white" /> : <TrendingDown className="w-4 h-4 text-white" />}
           gradient={valuation.changeValue >= 0 ? 'from-emerald-400 to-green-600' : 'from-rose-400 to-red-600'} wrap />
+        <KpiCard label="Yesterday closing value" value={valuationLoading ? '—' : formatMoney(valuation.yesterdayValue)}
+          sub={valuation.snapshotItems === 0 ? 'No snapshot yet'
+            : valuation.yesterdayEstimated ? 'Estimated from movement ledger' : `${valuation.snapshotItems} snapshotted items`}
+          icon={<CalendarClock className="w-4 h-4 text-white" />} gradient="from-sky-400 to-blue-600" wrap />
       </div>
+
+      {!valuationLoading && (valuation.todayReductions?.length || 0) > 0 && (
+        <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/20">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+            <p className="text-xs font-bold text-rose-900 dark:text-rose-200">Today&apos;s reductions by reason</p>
+            <span className="text-[11px] text-rose-700/80 dark:text-rose-300/80">Tap a reason to open the ledger</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {valuation.todayReductions.map(row => {
+              const share = valuation.todayReducedValue > 0 ? (row.value / valuation.todayReducedValue) * 100 : 0;
+              return (
+                <button key={row.reason} type="button" onClick={() => openLedgerWithReason(row.reason)}
+                  className="min-w-0 rounded-lg border border-rose-100 bg-white p-2 text-left transition-colors hover:border-rose-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rose-700">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs font-semibold text-gray-900 dark:text-white">{reductionLabel(row.reason)}</span>
+                    <span className="whitespace-nowrap text-xs font-bold text-rose-700 dark:text-rose-300">{formatMoney(row.value)}</span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">
+                    {parseFloat(row.quantity.toFixed(2))} units · {row.count} {row.count === 1 ? 'entry' : 'entries'}
+                  </p>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-rose-100 dark:bg-slate-700">
+                    <div className="h-full rounded-full bg-rose-500" style={{ width: `${share}%` }} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Compact filter pills + KPIs */}
       <div className="inline-flex shrink-0 flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40">
