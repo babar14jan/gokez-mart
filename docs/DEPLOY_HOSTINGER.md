@@ -195,8 +195,6 @@ instances cannot apply the same migration twice.
 ## 10. Rollback
 
 - DNS: repoint `api.mart` back to Render and restart Render.
-- Code/config: set `IMAGE_STORAGE_DRIVER=supabase` and restart the API to revert
-  new uploads to Supabase. Existing Hostinger URLs stay readable.
 - Database: unchanged throughout; no rollback needed.
 
 ## Related files
