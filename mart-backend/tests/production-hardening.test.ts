@@ -34,4 +34,34 @@ describe('production hardening', () => {
     assert.equal(adminLimits.length, 2, 'admin login needs both IP and username/IP budgets');
     assert.match(appSource, /Too many OTP requests from this network/);
   });
+
+  test('product writes are limited to zone head owners/managers and super admins', () => {
+    const controllers = read('mart-backend/src/controllers/index.ts');
+    const page = read('mart-hub/src/pages/ProductsPage.tsx');
+    assert.match(controllers, /async function assertCanManageProductSettings/);
+    assert.match(controllers, /canAccessDailySales\(req\.admin!\)/);
+    for (const name of ['adminCreateProduct', 'adminUpdateProduct', 'adminDeleteProduct', 'adminBulkAddFromCatalog']) {
+      const start = controllers.indexOf(`export const ${name}`);
+      const next = controllers.indexOf('export const ', start + 1);
+      const section = controllers.slice(start, next === -1 ? undefined : next);
+      assert.match(section, /await assertCanManageProductSettings\(req\)/, `${name} must check zone-head access`);
+    }
+    assert.match(page, /canManageProductSettings/);
+    assert.match(page, /Only the zone head/);
+  });
+
+  test('customer display modes are saved and restored from head-store settings', () => {
+    const controllers = read('mart-backend/src/controllers/index.ts');
+    const page = read('mart-hub/src/pages/ProductsPage.tsx');
+    assert.match(controllers, /product_customer_display_modes/);
+    const start = controllers.indexOf('export const adminUpdateSettings');
+    const next = controllers.indexOf('export const ', start + 1);
+    const section = controllers.slice(start, next === -1 ? undefined : next);
+    assert.match(section, /await assertCanManageProductSettings\(req\)/);
+    assert.match(section, /CUSTOMER_DISPLAY_MODE_IDS/);
+    assert.match(page, /savedDisplayModes/);
+    assert.match(page, /displayModesDirty/);
+    assert.match(page, /Last saved:/);
+    assert.match(page, /'Saved'/);
+  });
 });
