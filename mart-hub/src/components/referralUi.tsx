@@ -95,18 +95,18 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function KpiCard({ label, value, sub, icon, gradient }: {
-  label: string; value: string | number; sub?: string; icon: ReactNode; gradient: string;
+export function KpiCard({ label, value, sub, icon, gradient, wrap = false }: {
+  label: string; value: string | number; sub?: string; icon: ReactNode; gradient: string; wrap?: boolean;
 }) {
   return (
-    <div className="kpi-card h-full cursor-default">
-      <div className="flex items-center gap-3 w-full min-w-0">
-        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0`}>{icon}</div>
-        <p className="text-xl font-bold text-gray-900 dark:text-white leading-none truncate">{value}</p>
+    <div className={`kpi-card h-full cursor-default ${wrap ? 'min-w-0 p-3 sm:p-4' : ''}`}>
+      <div className={`flex w-full min-w-0 ${wrap ? 'items-start gap-2 sm:gap-3' : 'items-center gap-3'}`}>
+        <div className={`${wrap ? 'w-7 h-7 sm:w-8 sm:h-8' : 'w-8 h-8'} rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center flex-shrink-0`}>{icon}</div>
+        <p className={`font-bold text-gray-900 dark:text-white ${wrap ? 'text-[15px] sm:text-xl leading-snug break-words' : 'text-xl leading-none truncate'}`}>{value}</p>
       </div>
       <div className="min-w-0 w-full">
-        <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 truncate">{label}</p>
-        {sub && <p className="text-xs font-semibold text-gray-500 dark:text-slate-400 mt-1 truncate">{sub}</p>}
+        <p className={`text-xs font-semibold text-gray-600 dark:text-slate-300 ${wrap ? 'leading-snug break-words' : 'truncate'}`}>{label}</p>
+        {sub && <p className={`text-xs font-semibold text-gray-500 dark:text-slate-400 ${wrap ? 'mt-0.5 sm:mt-1 leading-snug break-words' : 'mt-1 truncate'}`}>{sub}</p>}
       </div>
     </div>
   );
