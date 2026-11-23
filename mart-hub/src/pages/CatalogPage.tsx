@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload, FileSpreadsheet, Download } from 'lucide-react';
+import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
 import { categoriesApi, catalogApi, productsApi } from '../services/api';
 import * as XLSX from 'xlsx';
 import CategoryIcon from '../components/CategoryIcon';
@@ -162,13 +162,13 @@ export default function CatalogPage() {
         : !categoryId
           ? 'Category not found'
           : validateProductFields({ ...row, categoryId }, true);
-    return { ...row, categoryId, error: error || undefined };
+    return { ...row, categoryId, error: error || undefined, status: error ? 'error' : 'pending' };
   };
 
-  const recomputeBulkItem = (item: BulkUploadItem): BulkUploadItem => ({
-    ...item,
-    error: validateProductFields(item) || undefined,
-  });
+  const recomputeBulkItem = (item: BulkUploadItem): BulkUploadItem => {
+    const error = validateProductFields(item) || undefined;
+    return { ...item, error, status: error ? 'error' : 'pending' };
+  };
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
@@ -772,6 +772,11 @@ export default function CatalogPage() {
                     <div className="flex-shrink-0 w-6 text-center">
                       {item.status === 'done' && <span className="text-emerald-500 text-sm">✓</span>}
                       {item.status === 'error' && <span className="text-red-500 text-sm">✗</span>}
+                      {item.status === 'error' && !bulkUploading && (
+                        <button title="Retry" onClick={() => setBulkItems(prev => prev.map((bi, i) => i === idx ? recomputeBulkItem(bi) : bi))}>
+                          <RotateCcw className="w-4 h-4 text-gray-400 hover:text-indigo-500" />
+                        </button>
+                      )}
                       {item.status === 'uploading' && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
                       {item.status === 'pending' && !bulkUploading && (
                         <button onClick={() => setBulkItems(prev => prev.filter((_, i) => i !== idx))}>
@@ -786,7 +791,7 @@ export default function CatalogPage() {
             </div>
 
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0 flex gap-3">
-              {bulkItems.some(i => i.status === 'done') && !bulkUploading ? (
+              {bulkItems.length > 0 && bulkItems.every(i => i.status === 'done') && !bulkUploading ? (
                 <button onClick={() => { setShowBulkUpload(false); setBulkItems([]); setBulkProgress(0); }}
                   className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 transition-colors">
                   Done
@@ -915,6 +920,11 @@ export default function CatalogPage() {
                       <td className="py-2 text-center">
                         {row.status === 'done' && <span className="text-emerald-500">✓</span>}
                         {row.status === 'error' && <span className="text-red-500">✗</span>}
+                        {row.status === 'error' && !excelUploading && (
+                          <button title="Retry" onClick={() => setExcelRows(prev => prev.map((r, i) => i === idx ? recomputeRowError(r) : r))}>
+                            <RotateCcw className="w-4 h-4 text-gray-400 hover:text-indigo-500" />
+                          </button>
+                        )}
                         {row.status === 'uploading' && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
                         {row.status === 'pending' && !excelUploading && (
                           <button onClick={() => setExcelRows(prev => prev.filter((_, i) => i !== idx))}>
@@ -932,7 +942,7 @@ export default function CatalogPage() {
             </div>
 
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0 flex gap-3">
-              {excelRows.some(i => i.status === 'done') && !excelUploading ? (
+              {excelRows.length > 0 && excelRows.every(i => i.status === 'done') && !excelUploading ? (
                 <button onClick={() => { setShowExcelUpload(false); setExcelRows([]); setExcelProgress(0); }}
                   className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 transition-colors">
                   Done

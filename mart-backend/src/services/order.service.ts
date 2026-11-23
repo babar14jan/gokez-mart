@@ -61,6 +61,9 @@ export interface OrderItem {
    *  trusted from the client. */
   mrp?: number;
   quantity: number;
+  clientPrice?: number;
+  priceChanged?: boolean;
+  available?: boolean;
 }
 
 export interface CreateOrderDto {
@@ -220,11 +223,14 @@ const ORDER_LIST_PROJECTION = `SELECT o.id, o.store_id as "storeId", o.order_num
 // (scheduled slot / delivery / terminal event), and `startIndex` keeps
 // placeholder numbering correct when the caller has already bound earlier
 // parameters in the same statement.
+export const normalizeAnalyticsStoreIds = (storeId?: string | string[] | null) =>
+  Array.isArray(storeId) ? storeId.filter(Boolean) : storeId ? [storeId] : [];
+
 export function buildOrderWindow(
   range: string,
   from?: string,
   to?: string,
-  storeId?: string | null,
+  storeId?: string | string[] | null,
   opts?: { column?: string; startIndex?: number; dateBasis?: 'created' | 'browse' },
 ): { where: string; clause: string; params: unknown[] } {
   const column = opts?.dateBasis === 'browse'
@@ -248,9 +254,10 @@ export function buildOrderWindow(
     clauses.push(`${column} >= (date_trunc('month', (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 month') AT TIME ZONE 'Asia/Kolkata')`);
     clauses.push(`${column} < (date_trunc('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
   }
-  if (storeId) {
-    clauses.push(`o.store_id = ${at()}`);
-    params.push(storeId);
+  const storeIds = normalizeAnalyticsStoreIds(storeId);
+  if (storeIds.length) {
+    clauses.push(`o.store_id = ANY(${at()}::text[])`);
+    params.push(storeIds);
   }
   const clause = clauses.join(' AND ');
   return { where: clause ? `WHERE ${clause}` : '', clause, params };
@@ -444,6 +451,10 @@ export class OrderService {
         const effectivePrice = discountPercent > 0
           ? Math.round(basePrice * (1 - discountPercent / 100))
           : basePrice;
+        const clientPrice = Number(item.price);
+        const priceChanged = Number.isFinite(clientPrice) && Math.abs(clientPrice - effectivePrice) > 0.005;
+        const available = !enforceInventoryAvailability
+          || (catalogItem.isAvailable && catalogItem.availabilityStatus === 'available');
         if (catalogItem.isBundle) {
           const components = await client.query(
             `SELECT bc.component_product_id as "productId", p.name,
@@ -476,6 +487,9 @@ export class OrderService {
           price: effectivePrice,
           mrp: basePrice,
           quantity: item.quantity,
+          clientPrice: Number.isFinite(clientPrice) ? clientPrice : undefined,
+          priceChanged,
+          available,
         });
       }
       // Quantity-level availability/shortage handling. Overselling is allowed
@@ -485,22 +499,22 @@ export class OrderService {
         for (const item of resolvedItems) {
           const sourceStoreId = item.sourceStoreId || data.storeId;
           const stockRows = await client.query(
-            `SELECT sp.stock_quantity::float, sp.stock_unit
+            `SELECT CASE WHEN sp.stock_quantity IS NULL THEN NULL ELSE GREATEST(0, sp.stock_quantity::float - COALESCE(sp.reserved_stock::float, 0)) END AS "availableStock", sp.stock_unit
                FROM mart_store_products sp
               WHERE sp.product_id = $1 AND sp.store_id = $2
               FOR UPDATE OF sp`,
             [item.productId, sourceStoreId]
           );
           const stockRow = stockRows.rows[0];
-          if (stockRow && stockRow.stock_quantity !== null && stockRow.stock_unit) {
+          if (stockRow && stockRow.availableStock !== null && stockRow.stock_unit) {
             const { deductionPerQty, baseUnit } = parseSellingUnit(item.unit);
             if (baseUnit === stockRow.stock_unit) {
               const requested = deductionPerQty * item.quantity;
-              if (stockRow.stock_quantity < requested) {
+              if (stockRow.availableStock < requested) {
                 if (enforceInventoryAvailability) {
                   throw badRequest(`Insufficient stock for ${item.productName}`);
                 }
-                console.warn(`[inventory] shortage for ${item.productName}: requested ${requested}, available ${stockRow.stock_quantity}`);
+                console.warn(`[inventory] shortage for ${item.productName}: requested ${requested}, available ${stockRow.availableStock}`);
               }
             }
           }
@@ -509,22 +523,22 @@ export class OrderService {
           if (components?.length) {
             for (const component of components) {
               const componentRows = await client.query(
-                `SELECT sp.stock_quantity::float, sp.stock_unit
+                `SELECT CASE WHEN sp.stock_quantity IS NULL THEN NULL ELSE GREATEST(0, sp.stock_quantity::float - COALESCE(sp.reserved_stock::float, 0)) END AS "availableStock", sp.stock_unit
                    FROM mart_store_products sp
                   WHERE sp.product_id = $1 AND sp.store_id = $2
                   FOR UPDATE OF sp`,
                 [component.productId, sourceStoreId]
               );
               const componentStock = componentRows.rows[0];
-              if (componentStock && componentStock.stock_quantity !== null && componentStock.stock_unit) {
+              if (componentStock && componentStock.availableStock !== null && componentStock.stock_unit) {
                 const { deductionPerQty, baseUnit } = parseSellingUnit(component.unit);
                 if (baseUnit === componentStock.stock_unit) {
                   const requested = deductionPerQty * component.quantity * item.quantity;
-                  if (componentStock.stock_quantity < requested) {
+                  if (componentStock.availableStock < requested) {
                     if (enforceInventoryAvailability) {
                       throw badRequest(`Insufficient stock for ${component.name}`);
                     }
-                    console.warn(`[inventory] shortage for ${component.name}: requested ${requested}, available ${componentStock.stock_quantity}`);
+                    console.warn(`[inventory] shortage for ${component.name}: requested ${requested}, available ${componentStock.availableStock}`);
                   }
                 }
               }
@@ -869,12 +883,24 @@ export class OrderService {
       }
 
       if (settings.inventory_tracking === 'true') {
-        await InventoryService.reserveForOrder(orderId, data.storeId, resolvedItems.map(item => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          sellingUnit: item.unit,
-          storeId: item.sourceStoreId,
-        })), client);
+        const reservationItems = resolvedItems.flatMap(item => {
+          const components = bundleComponentsByProduct.get(item.productId);
+          if (components?.length) {
+            return components.map(component => ({
+              productId: component.productId,
+              quantity: item.quantity * component.quantity,
+              sellingUnit: component.unit,
+              storeId: item.sourceStoreId,
+            }));
+          }
+          return [{
+            productId: item.productId,
+            quantity: item.quantity,
+            sellingUnit: item.unit,
+            storeId: item.sourceStoreId,
+          }];
+        });
+        await InventoryService.reserveForOrder(orderId, data.storeId, reservationItems, client);
       }
 
       return {
@@ -889,6 +915,19 @@ export class OrderService {
         itemSavings,
         freeDeliverySaving,
         total,
+        items: resolvedItems.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          unit: item.unit,
+          price: item.price,
+          mrp: item.mrp ?? item.price,
+          clientPrice: item.clientPrice,
+          priceChanged: item.priceChanged,
+          available: item.available,
+          quantity: item.quantity,
+          lineTotal: Math.round(item.price * item.quantity * 100) / 100,
+        })),
+        inventoryEnforced: enforceInventoryAvailability,
         scheduledLabel: data.scheduledLabel || null,
         whatsappMessage: this.buildWhatsAppMessage({
           orderNumber, guestName: data.guestName,
@@ -990,7 +1029,7 @@ export class OrderService {
   // Every money/count figure is derived live from the order rows in the window —
   // nothing is read from materialised counters (mart_customers.order_count /
   // total_spent) that could drift when an order is cancelled or backfilled.
-   static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | null, opts?: { dateBasis?: 'created' | 'browse' }) {
+    static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, opts?: { dateBasis?: 'created' | 'browse' }) {
      const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId, { dateBasis: opts?.dateBasis });
      // Today's snapshot must not be polluted by scheduled orders that belong
      // to a future delivery slot — they are handled in the scheduled queue.
@@ -1053,7 +1092,7 @@ export class OrderService {
     range: string,
     from: string | undefined,
     to: string | undefined,
-    storeId: string | null,
+    storeId: string | string[] | null,
     limit: number,
     offset: number,
     anchor: string,
@@ -1106,15 +1145,16 @@ export class OrderService {
       ),
     ]);
 
+    const weeklyStoreIds = normalizeAnalyticsStoreIds(storeId);
     const weeklyParams: unknown[] = [anchor];
-    if (storeId) weeklyParams.push(storeId);
+    if (weeklyStoreIds.length) weeklyParams.push(weeklyStoreIds);
     const weeklyRows = await query<{ weeksAgo: number; value: number }>(
       `SELECT FLOOR(((($1::date) - ((${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date))) / 7.0)::int AS "weeksAgo",
               COUNT(*)::int AS value
        FROM mart_orders o
        WHERE (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date > (($1::date) - 56)
          AND (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date <= ($1::date)
-         ${storeId ? `AND o.store_id = $${weeklyParams.length}` : ''}
+         ${weeklyStoreIds.length ? `AND o.store_id = ANY($${weeklyParams.length}::text[])` : ''}
        GROUP BY 1`,
       weeklyParams
     );
@@ -1159,13 +1199,15 @@ export class OrderService {
   // Customer card figures for the Analytics Customers tab. Spend remains based
   // on delivered orders, while a customer becomes returning as soon as they
   // place a later non-terminal order after a delivery under the same mobile.
-   static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | null, topCount = 10, opts?: { dateBasis?: 'created' | 'browse' }) {
-     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId, { dateBasis: opts?.dateBasis });
+    static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, topCount = 10, opts?: { dateBasis?: 'created' | 'browse' }) {
+      const storeIds = normalizeAnalyticsStoreIds(storeId);
+      const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeIds, { dateBasis: opts?.dateBasis });
      const where = range === 'today'
        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
        : baseWhere;
     const phoneIdentity = `NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '')`;
-    const storeScope = storeId ? `AND o.store_id = $${params.length}` : '';
+    const storeScope = storeIds.length ? `AND o.store_id = ANY($${params.length + 1}::text[])` : '';
+    const lifecycleParams = storeIds.length ? [...params, storeIds] : params;
     const aggSql = `SELECT
          ${phoneIdentity} AS ckey,
          MAX(COALESCE(cu.name, o.guest_name)) AS name,
@@ -1204,7 +1246,7 @@ export class OrderService {
     const [totals, top] = await Promise.all([
           query<{ total: number; new_customers: number; repeat_customers: number; delivered_orders: number }>(
         lifecycleSql,
-        params
+        lifecycleParams
       ),
       query<{ ckey: string; name: string | null; phone: string | null; order_count: number; total_spent: string | number }>(
         `WITH agg AS (${aggSql})
@@ -1775,6 +1817,8 @@ export class OrderService {
     removedQuantity: number,
   ) {
     const storeId = item.storeId || order.storeId;
+    const settings = await SettingsService.getPublic(storeId);
+    const autoOutOfStock = settings.inventory_tracking === 'true' && settings.auto_out_of_stock === 'on_zero';
     const components = await client.query(
       `SELECT bc.component_product_id as "productId", bc.unit,
               bc.quantity_per_bundle::float as "quantityPerBundle"
@@ -1802,7 +1846,7 @@ export class OrderService {
 
       const { deductionPerQty, baseUnit } = parseSellingUnit(line.unit);
       const stock = await client.query(
-        `SELECT stock_quantity::float, stock_unit, availability_status
+        `SELECT stock_quantity::float, stock_unit, availability_status, is_available
            FROM mart_store_products
           WHERE product_id = $1 AND store_id = $2
           FOR UPDATE`,
@@ -1816,16 +1860,19 @@ export class OrderService {
       if (restoreQuantity <= 0) continue;
 
       const newQuantity = Number((row.stock_quantity + restoreQuantity).toFixed(3));
-      const newStatus = row.availability_status === 'out_of_stock' && newQuantity > 0
-        ? 'available'
-        : row.availability_status;
+      let newStatus = row.availability_status;
+      let newIsAvailable = row.is_available;
+      if (autoOutOfStock && row.availability_status === 'out_of_stock' && newQuantity > 0) {
+        newStatus = 'available';
+        newIsAvailable = true;
+      }
 
       await client.query(
         `UPDATE mart_store_products
             SET stock_quantity = $1, availability_status = $2,
                 is_available = $3, updated_at = NOW()
           WHERE product_id = $4 AND store_id = $5`,
-        [newQuantity, newStatus, newStatus === 'available', line.productId, storeId]
+        [newQuantity, newStatus, newIsAvailable, line.productId, storeId]
       );
       await client.query(
         `INSERT INTO mart_inventory_log
@@ -1979,6 +2026,11 @@ export class OrderService {
           // the non-blocking behavior of updateStatus().
           console.error(`[inventory] deduction skipped for delivered order ${id}:`, err);
         }
+        try {
+          await InventoryService.consumeForOrder(id, client);
+        } catch (err) {
+          console.error(`[inventory] reservation consume skipped for delivered order ${id}:`, err);
+        }
         // Reward release shares this transaction with the Delivered write.
         // Non-fatal data conditions (no referral, below minimum, cap, inactive
         // campaign) are no-ops inside the service; real failures roll everything
@@ -1988,6 +2040,11 @@ export class OrderService {
       if (['cancelled', 'failed_delivery', 'terminated'].includes(status)) {
         await this.reverseCampaignRedemption(id, status, client);
         await ReferralService.releaseCreditForOrder(id, client);
+        try {
+          await InventoryService.releaseForOrder(id, client);
+        } catch (err) {
+          console.error(`[inventory] reservation release skipped for ${status} order ${id}:`, err);
+        }
       }
       if (status === 'cancelled' && existing.customerId) {
         await client.query(

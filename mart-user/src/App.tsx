@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject, type TouchEvent as ReactTouchEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, CheckCircle, BellRing, RefreshCw, CalendarClock, X } from 'lucide-react';
-import { isApiConfigured, storeApi } from './services/api';
+import { API_URL, isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
@@ -154,6 +154,7 @@ const DEFAULT_SETTINGS: PublicSettings = {
   delivery_area: 'Kolkata', store_open: 'true',
   estimated_delivery: '30-45 mins', cod_enabled: 'true',
   upi_enabled: 'true', phonepay_enabled: 'false',
+  inventory_tracking: 'false', auto_out_of_stock: 'on_zero',
   phonepay_qr_url: '', upi_phone: '', upi_id: '', whatsapp_number: '',
   support_name: '', support_phone: '', store_closed_message: '', store_closed_greeting: '',
   store_closed_from: '', store_closed_until: '',
@@ -495,9 +496,18 @@ export default function App() {
     // what clears the banner after a silent refresh/reconnect recovers from a
     // failed cold load.
     setCatalogError(null);
+    return {
+      products: prodRes.data.data || [],
+      settings: settingsRes.data.data || DEFAULT_SETTINGS,
+    };
   }, []);
 
-  const refreshCatalog = useCallback(async (storeId?: string, zoneId?: string, opts?: { force?: boolean }) => {
+  const reconcileCartWithCatalog = useCallback((products: Product[], settings: PublicSettings) => {
+    const enforceOutOfStock = settings.inventory_tracking === 'true' && settings.auto_out_of_stock === 'on_zero';
+    useCartStore.getState().reconcileWithCatalog(products, enforceOutOfStock);
+  }, []);
+
+  const refreshCatalog = useCallback(async (storeId?: string, zoneId?: string, opts?: { force?: boolean; reconcileCart?: boolean }) => {
     const refreshGeneration = ++catalogRefreshGenerationRef.current;
     const isStale = () => refreshGeneration !== catalogRefreshGenerationRef.current
       || activeCatalogSelectionRef.current.storeId !== storeId
@@ -517,10 +527,41 @@ export default function App() {
       // real refresh rather than leaving the catalogue stuck.
       stamp = null;
     }
-    await fetchCatalogBundle(storeId, zoneId, true, isStale);
+    const bundle = await fetchCatalogBundle(storeId, zoneId, true, isStale);
     if (isStale()) return;
     catalogStampRef.current = stamp;
-  }, [fetchCatalogBundle]);
+    if (opts?.reconcileCart && bundle) reconcileCartWithCatalog(bundle.products, bundle.settings);
+  }, [fetchCatalogBundle, reconcileCartWithCatalog]);
+
+  const revalidateCart = useCallback(async () => {
+    try {
+      const [productsRes, settingsRes] = await Promise.all([
+        storeApi.getProducts(undefined, activeStoreId, { fresh: true }, selectedZone?.id),
+        storeApi.getSettings(activeStoreId, { fresh: true }, selectedZone?.id),
+      ]);
+      reconcileCartWithCatalog(productsRes.data.data || [], settingsRes.data.data || DEFAULT_SETTINGS);
+    } catch {}
+  }, [activeStoreId, selectedZone?.id, reconcileCartWithCatalog]);
+
+  useEffect(() => {
+    if (!checkoutActive) return;
+    void revalidateCart();
+  }, [checkoutActive, revalidateCart]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+    const params = new URLSearchParams({ storeId: activeStoreId });
+    if (selectedZone?.id) params.set('zoneId', selectedZone.id);
+    const source = new EventSource(`${API_URL}/catalog/events?${params.toString()}`);
+    const onCatalogChange = () => {
+      void refreshCatalog(activeStoreId, selectedZone?.id, { force: true, reconcileCart: checkoutActive });
+    };
+    source.addEventListener('catalog', onCatalogChange);
+    return () => {
+      source.removeEventListener('catalog', onCatalogChange);
+      source.close();
+    };
+  }, [activeStoreId, selectedZone?.id, checkoutActive, refreshCatalog]);
 
   // Keeps .page-shell equal to the visible height; see the hook for why one
   // mechanism covers both iOS and Android.

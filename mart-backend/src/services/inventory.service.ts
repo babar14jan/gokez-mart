@@ -1,4 +1,5 @@
 import { query, transaction } from '../database/db';
+import { SettingsService } from './settings.service';
 import { badRequest, forbidden, notFound, conflict } from '../utils/apiError';
 import { parseSellingUnit } from '../utils/unitConversion';
 
@@ -11,6 +12,19 @@ const roundMoney = (value: number) => Math.round((Number(value) + Number.EPSILON
 const REDUCTION_REASONS = ['damage', 'spoiled', 'expired', 'lost', 'missing', 'consumption', 'quality_rejection', 'other'];
 
 export class InventoryService {
+
+  private static autoAvailability(currentStatus: string, currentAvailable: boolean, newQty: number, autoOutOfStock: boolean) {
+    if (!autoOutOfStock || currentStatus === 'hidden') {
+      return { status: currentStatus, available: currentAvailable };
+    }
+    if (newQty <= 0) {
+      return { status: 'out_of_stock', available: false };
+    }
+    if (currentStatus === 'out_of_stock') {
+      return { status: 'available', available: true };
+    }
+    return { status: currentStatus, available: currentAvailable };
+  }
 
   static async getStoreInventory(storeId: string) {
     const result = await query(
@@ -92,8 +106,9 @@ export class InventoryService {
       stock_quantity: number | null;
       stock_unit: string | null;
       availability_status: string;
+      is_available: boolean;
     }> } = await client.query(
-      `SELECT stock_quantity::float, stock_unit, availability_status
+      `SELECT stock_quantity::float, stock_unit, availability_status, is_available
        FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
       [productId, storeId]
     );
@@ -103,22 +118,18 @@ export class InventoryService {
     if (isNaN(qty) || !isFinite(qty)) throw badRequest('Invalid quantity');
     const effectiveStockUnit = stockUnit || cur.rows[0].stock_unit || 'kg';
     const newQty = Math.max(0, current + qty);
-    const isReduction = qty < 0;
-
-    // Flip status based on direction
-    let newStatus = cur.rows[0].availability_status;
-    if (!isReduction && newStatus === 'out_of_stock' && newQty > 0) {
-      newStatus = 'available'; // restocked — bring back online
-    } else if (isReduction && newQty <= 0) {
-      newStatus = 'out_of_stock'; // reduced to zero — mark out of stock
-    }
+    const settings = await SettingsService.getPublic(storeId);
+    const autoOutOfStock = settings.inventory_tracking === 'true' && settings.auto_out_of_stock === 'on_zero';
+    const autoState = this.autoAvailability(cur.rows[0].availability_status, cur.rows[0].is_available, newQty, autoOutOfStock);
+    const newStatus = autoState.status;
+    const newIsAvailable = autoState.available;
 
     await client.query(
       `UPDATE mart_store_products
        SET stock_quantity = $1, stock_unit = $2, availability_status = $3,
            is_available = $4, updated_at = NOW()
        WHERE product_id = $5 AND store_id = $6`,
-      [newQty, effectiveStockUnit, newStatus, newStatus === 'available', productId, storeId]
+      [newQty, effectiveStockUnit, newStatus, newIsAvailable, productId, storeId]
     );
 
     await client.query(
@@ -171,10 +182,11 @@ export class InventoryService {
         stock_unit: string | null;
         low_stock_threshold: number | null;
         availability_status: string;
+        is_available: boolean;
         name: string;
       }> } = await client.query(
         `SELECT sp.stock_quantity::float, sp.stock_unit, sp.low_stock_threshold::float, sp.availability_status,
-                p.name
+                sp.is_available, p.name
          FROM mart_store_products sp
          JOIN mart_products p ON p.id = sp.product_id
          WHERE sp.product_id = $1 AND sp.store_id = $2 FOR UPDATE OF sp`,
@@ -194,9 +206,11 @@ export class InventoryService {
       const deduction = deductionPerQty * item.quantity;
       const newQty = Math.max(0, row.stock_quantity - deduction);
       const threshold = row.low_stock_threshold ?? lowStockThreshold;
-      const wentOutOfStock = autoOutOfStock && newQty <= 0;
+      const autoState = this.autoAvailability(row.availability_status, row.is_available, newQty, autoOutOfStock);
+      const wentOutOfStock = autoState.status === 'out_of_stock';
       const isLow = newQty > 0 && newQty <= threshold;
-      const newStatus = wentOutOfStock ? 'out_of_stock' : row.availability_status;
+      const newStatus = autoState.status;
+      const newIsAvailable = autoState.available;
 
       const batches = (await client.query(
         `SELECT id, quantity_remaining::float, unit_cost::float
@@ -236,7 +250,7 @@ export class InventoryService {
         `UPDATE mart_store_products
          SET stock_quantity = $1, availability_status = $2, is_available = $3, updated_at = NOW()
          WHERE product_id = $4 AND store_id = $5`,
-        [newQty, newStatus, newStatus === 'available', item.productId, lineStoreId]
+         [newQty, newStatus, newIsAvailable, item.productId, lineStoreId]
       );
 
       await client.query(
@@ -355,17 +369,24 @@ export class InventoryService {
       if (prior.rows.length) return { productId, storeId, duplicate: true };
     }
     const cur = await client.query(
-      `SELECT stock_quantity::float FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
+      `SELECT stock_quantity::float, availability_status, is_available
+         FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
       [productId, storeId]
     );
     const previous = cur.rows[0]?.stock_quantity ?? null;
     const diff = qty - (previous ?? 0);
+    const currentStatus = cur.rows[0]?.availability_status ?? 'available';
+    const settings = await SettingsService.getPublic(storeId);
+    const autoOutOfStock = settings.inventory_tracking === 'true' && settings.auto_out_of_stock === 'on_zero';
+    const autoState = this.autoAvailability(currentStatus, cur.rows[0]?.is_available ?? true, qty, autoOutOfStock);
+    const nextStatus = autoState.status;
+    const nextAvailable = autoState.available;
 
     await client.query(
       `UPDATE mart_store_products
-       SET stock_quantity = $1, stock_unit = $2, updated_at = NOW()
-       WHERE product_id = $3 AND store_id = $4`,
-      [qty, stockUnit, productId, storeId]
+       SET stock_quantity = $1, stock_unit = $2, availability_status = $3, is_available = $4, updated_at = NOW()
+       WHERE product_id = $5 AND store_id = $6`,
+      [qty, stockUnit, nextStatus, nextAvailable, productId, storeId]
     );
 
     await client.query(
@@ -478,7 +499,7 @@ export class InventoryService {
         if (prior.rows.length) return { productId, storeId, duplicate: true };
       }
       const cur = (await client.query(
-        `SELECT stock_quantity::float, stock_unit, availability_status
+        `SELECT stock_quantity::float, stock_unit, availability_status, is_available
            FROM mart_store_products WHERE product_id = $1 AND store_id = $2 FOR UPDATE`,
         [productId, storeId]
       )).rows[0];
@@ -508,12 +529,16 @@ export class InventoryService {
       const newQty = Math.max(0, current + qty);
       const movementType = ['damage','spoiled','expired','lost','missing'].includes(reason) ? 'damage' : 'adjustment';
       const logNote = note ? `${reason}: ${note}` : reason;
-      const newStatus = newQty <= 0 ? 'out_of_stock' : cur.availability_status;
+      const settings = await SettingsService.getPublic(storeId);
+      const autoOutOfStock = settings.inventory_tracking === 'true' && settings.auto_out_of_stock === 'on_zero';
+      const autoState = this.autoAvailability(cur.availability_status, cur.is_available, newQty, autoOutOfStock);
+      const newStatus = autoState.status;
+      const newIsAvailable = autoState.available;
       await client.query(
         `UPDATE mart_store_products
             SET stock_quantity = $1, availability_status = $2, is_available = $3, updated_at = NOW()
           WHERE product_id = $4 AND store_id = $5`,
-        [newQty, newStatus, newStatus === 'available', productId, storeId]
+        [newQty, newStatus, newIsAvailable, productId, storeId]
       );
       await client.query(
         `INSERT INTO mart_inventory_log (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)

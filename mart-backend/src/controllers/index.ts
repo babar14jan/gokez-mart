@@ -35,6 +35,7 @@ import { FunnelCartService } from '../services/funnelCart.service';
 import { InstallAnalyticsService } from '../services/installAnalytics.service';
 import { DailySalesService } from '../services/dailySales.service';
 import { CatalogService } from '../services/catalog.service';
+import { subscribeToCatalog } from '../services/catalogEventBus';
 import { RecommendationService } from '../services/recommendation.service';
 import { evaluateStoreOpen, parseIstLocalDateTime, type StoreOpenState } from '../utils/storeHours';
 import { trackStream } from '../utils/sse';
@@ -407,9 +408,7 @@ export const getPublicSettings = asyncHandler(async (req: Request, res: Response
  * the next boundary instant (closing when open, opening when closed) are folded
  * in too; otherwise the stamp would sit still across an opening-hours edge.
  */
-export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) => {
-  const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
-  const zoneId = req.query.zoneId as string | undefined;
+async function buildCatalogStamp(storeId: string, zoneId?: string): Promise<string> {
   const zone = zoneId ? await ZoneService.findById(zoneId) : null;
   const [dbStamp, settings, store] = await Promise.all([
     zone
@@ -418,11 +417,6 @@ export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) 
     SettingsService.getPublic(zone?.primaryStoreId ?? storeId),
     StoreService.findById(storeId),
   ]);
-  // The scheduled closure has to be part of this, not just the weekly hours:
-  // a store that schedules a closure, or reaches the end of one, has changed
-  // its open state without anything in the database being touched, so without
-  // it here the storefront would never refetch and the banner would never
-  // appear or disappear.
   let openState: StoreOpenState | null = null;
   if (zone) {
     openState = await ZoneService.getOpenState(zone.id);
@@ -432,8 +426,72 @@ export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) 
     openState = evaluateStoreOpen(store?.openingHours, settings.store_open, new Date(), closure);
   }
   const boundary = openState.isOpen ? openState.closesAt : openState.nextOpenAt;
+  return `${dbStamp}:${zoneId ? 'z' : 's'}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}:${openState.closedUntilLabel ?? '-'}`;
+}
+
+export const getCatalogStamp = asyncHandler(async (req: Request, res: Response) => {
+  const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
+  const zoneId = req.query.zoneId as string | undefined;
+  const stamp = await buildCatalogStamp(storeId, zoneId);
   res.set('Cache-Control', 'no-store');
-  res.json({ success: true, data: { stamp: `${dbStamp}:${zoneId ? 'z' : 's'}:${openState.isOpen ? 'o' : 'c'}:${boundary ?? '-'}:${openState.closedUntilLabel ?? '-'}` } });
+  res.json({ success: true, data: { stamp } });
+});
+
+export const catalogStream = asyncHandler(async (req: Request, res: Response) => {
+  const storeId = (req.query.storeId as string) || SHAPOORJI_ID;
+  const zoneId = req.query.zoneId as string | undefined;
+  const [store, zone] = await Promise.all([
+    StoreService.findById(storeId).catch(() => null),
+    zoneId ? ZoneService.findById(zoneId).catch(() => null) : Promise.resolve(null),
+  ]);
+  if (!store || (zoneId && !zone)) {
+    res.status(400).json({ success: false, error: 'Invalid catalog stream scope' });
+    return;
+  }
+
+  const initialStamp = await buildCatalogStamp(storeId, zoneId).catch(() => '');
+  let closed = false;
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = subscribeToCatalog({ storeId, zoneId }, event => {
+      if (closed) return;
+      try {
+        res.write(`event: catalog\ndata: ${JSON.stringify(event)}\n\n`);
+      } catch {}
+    }, scope => buildCatalogStamp(scope.storeId, scope.zoneId));
+  } catch {
+    res.status(429).json({ success: false, error: 'Too many catalog streams' });
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+  try {
+    res.write(`event: ready\ndata: ${JSON.stringify({ stamp: initialStamp })}\n\n`);
+  } catch {}
+
+  let heartbeat: NodeJS.Timeout;
+  const untrack = trackStream(res);
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+    untrack();
+  };
+  heartbeat = setInterval(() => {
+    if (closed) return;
+    try {
+      res.write(': keepalive\n\n');
+    } catch {}
+  }, 25000);
+  res.on('close', close);
+  req.on('close', close);
 });
 
 export const reverseGeocode = asyncHandler(async (req: Request, res: Response) => {
@@ -1378,12 +1436,12 @@ export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, r
   // resolveStoreId keeps this scoped like every other admin route: non-super
   // admins are pinned to their own store regardless of the query param, and
   // super admins may target a store explicitly (defaulting to Shapoorji).
-  const storeId = resolveStoreId(req);
+  const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
   const summary = await OrderService.getSummary(
     allowed ? (range as string) : 'all',
     typeof from === 'string' ? from : undefined,
     typeof to === 'string' ? to : undefined,
-    storeId,
+    storeIds,
     { dateBasis: dateBasis === 'browse' ? 'browse' : 'created' }
   );
   res.json({ success: true, data: summary });
@@ -1399,12 +1457,12 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
     res.status(400).json({ success: false, error: 'Custom range requires from and to dates' });
     return;
   }
-  const storeId = resolveStoreId(req);
+  const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
   const data = await OrderService.getCustomerAggregates(
     allowed ? (range as string) : 'all',
     typeof from === 'string' ? from : undefined,
     typeof to === 'string' ? to : undefined,
-    storeId,
+    storeIds,
     top && !Number.isNaN(parseInt(top as string)) ? Math.min(parseInt(top as string), 100) : 10,
     { dateBasis: dateBasis === 'browse' ? 'browse' : 'created' }
   );
@@ -1473,7 +1531,8 @@ export const adminGetOrderInsights = asyncHandler(async (req: AdminRequest, res:
   }
   const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 50, 1), 100);
   const offset = Math.max(Number.parseInt(String(req.query.offset), 10) || 0, 0);
-  const result = await OrderService.getOrderInsights(range, from, to, resolveStoreId(req), limit, offset, anchor);
+  const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
+  const result = await OrderService.getOrderInsights(range, from, to, storeIds, limit, offset, anchor);
   res.json({ success: true, ...result });
 });
 
@@ -1482,7 +1541,11 @@ export const adminGetProductLeaders = asyncHandler(async (req: AdminRequest, res
   if (range === 'custom' && !isValidReportDateRange(from, to)) {
     res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
   }
-  const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
+  const storeId = resolveStoreId(req);
+  if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
+    throw forbidden('Product leader stats are available to head store managers and owners only');
+  }
+  const storeIds = await getAnalyticsStoreIds(storeId);
   const categoryParam = typeof req.query.category === 'string' ? req.query.category.trim() : '';
   const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 20, 1), 100);
   const data = await OrderService.getTopSellingProducts(
@@ -2341,12 +2404,15 @@ export const adminGetCustomerFunnel = asyncHandler(async (req: AdminRequest, res
 });
 
 function isValidReportDateRange(from: string | undefined, to: string | undefined): boolean {
-  const isValidDate = (value: string | undefined) => {
-    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parseReportInput = (value: string | undefined) => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
     const parsed = new Date(`${value}T00:00:00.000Z`);
-    return Number.isFinite(parsed.valueOf()) && parsed.toISOString().startsWith(value);
+    return Number.isFinite(parsed.valueOf()) && parsed.toISOString().startsWith(value) ? parsed : null;
   };
-  return isValidDate(from) && isValidDate(to) && from! <= to!;
+  const start = parseReportInput(from);
+  const end = parseReportInput(to);
+  if (!start || !end || start.valueOf() > end.valueOf()) return false;
+  return (end.valueOf() - start.valueOf()) / 86400000 <= 366;
 }
 
 function csvCell(value: string | null | undefined): string {

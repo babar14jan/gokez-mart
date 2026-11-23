@@ -31,6 +31,7 @@ router.get('/products',            ctrl.getProducts);        // ?storeId=
 router.get('/products/:id',        ctrl.getProduct);         // ?storeId=
 router.get('/settings/public',     ctrl.getPublicSettings);  // ?storeId=
 router.get('/catalog/stamp',       ctrl.getCatalogStamp);    // ?storeId=
+router.get('/catalog/events',      ctrl.catalogStream);       // ?storeId=&zoneId=
 router.post('/geocode/reverse',    ctrl.reverseGeocode);
 router.post('/orders',             authenticateCustomerIfPresent, ctrl.placeOrder);
 router.post('/guest-details',      ctrl.saveGuestDetails);

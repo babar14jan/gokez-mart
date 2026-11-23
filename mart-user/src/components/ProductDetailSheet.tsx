@@ -4,6 +4,7 @@ import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { trackOnce } from '../utils/track';
 import { recordRecentlyViewed } from '../utils/recentlyViewed';
+import { getLinePricing } from '../utils/productPricing';
 import CartQuantityControl from './CartQuantityControl';
 import SmartImage from './SmartImage';
 
@@ -44,17 +45,9 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
   const qty = cartItem?.quantity || 0;
   const isOutOfStock = product.availabilityStatus === 'out_of_stock' || !product.isAvailable;
 
-  const selectedBasePrice = selectedWeightOption.price;
   const isPrimaryOption = selectedWeightOption.label === product.unit;
-  const selectedDiscount = isPrimaryOption
-    ? (selectedWeightOption.discountPercent ?? product.discountPercent ?? 0)
-    : (selectedWeightOption.discountPercent ?? 0);
-  const discountedPrice = selectedDiscount > 0
-    ? Math.round(selectedBasePrice * (1 - selectedDiscount / 100))
-    : selectedBasePrice;
-  const savings = selectedDiscount > 0
-    ? Math.round(selectedBasePrice - discountedPrice)
-    : 0;
+  const { price: discountedPrice, mrp: selectedBasePrice, discountPercent: selectedDiscount } = getLinePricing(product, selectedWeightLabel);
+  const savings = Math.max(0, selectedBasePrice - discountedPrice);
   const approxWeight = selectedWeightOption.approxWeight || (isPrimaryOption ? product.approxWeight : null);
 
   const photos = product.photoVariants?.length
@@ -207,10 +200,7 @@ export default function ProductDetailSheet({ product, onClose }: ProductDetailSh
                   <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-slate-400">Choose a size</p>
                   <div className="grid grid-cols-2 gap-2">
                     {weightOptions.map((option, index) => {
-                      const optionDiscount = option.label === product.unit
-                        ? (option.discountPercent ?? product.discountPercent ?? 0)
-                        : (option.discountPercent ?? 0);
-                      const optionPrice = optionDiscount > 0 ? Math.round(option.price * (1 - optionDiscount / 100)) : option.price;
+                      const optionPrice = getLinePricing(product, option.label).price;
                       const optionApprox = option.approxWeight || (option.label === product.unit ? product.approxWeight : null);
                       const isSelected = selectedWeightLabel === option.label;
                       return (

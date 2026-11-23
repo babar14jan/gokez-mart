@@ -24,6 +24,9 @@ const reportParams = (range: DateRange, customFrom: string, customTo: string) =>
   to: range === 'yesterday' ? getYesterdayStr() : (customTo || undefined),
 });
 
+const hasValidCustomRange = (range: DateRange, customFrom: string, customTo: string) =>
+  range !== 'custom' || (Boolean(customFrom) && Boolean(customTo) && customFrom <= customTo);
+
 const PAGE_SIZE = 50;
 
 const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
@@ -166,6 +169,10 @@ function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; ra
   const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
     const yesterday = getYesterdayStr();
+    if (!hasValidCustomRange(p.range, p.customFrom, p.customTo)) {
+      setSummary(EMPTY_SUMMARY);
+      return;
+    }
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
@@ -295,6 +302,11 @@ function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFr
     setInsightsError('');
     setInsights({ daily: [], weekly: [] });
     setPagination({ total: 0, hasMore: false });
+    if (!hasValidCustomRange(range, customFrom, customTo)) {
+      setInsightsError('Choose a valid custom date range.');
+      setInsightsLoading(false);
+      return () => { cancelled = true; };
+    }
     ordersApi.getInsights({ ...reportParams(range, customFrom, customTo), limit: PAGE_SIZE, offset: page * PAGE_SIZE }, { fresh: true })
       .then(r => {
         if (cancelled) return;
@@ -314,6 +326,10 @@ function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFr
   const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
     const yesterday = getYesterdayStr();
+    if (!hasValidCustomRange(p.range, p.customFrom, p.customTo)) {
+      setSummary(EMPTY_SUMMARY);
+      return;
+    }
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
@@ -335,9 +351,10 @@ function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFr
   const thisWeek = weekBars.length ? weekBars[weekBars.length - 1].value : 0;
   const growth = prevWeek === 0 ? null : Math.round(((thisWeek - prevWeek) / prevWeek) * 100);
 
-  const showLabel = (i: number) => insights.daily.length <= 7 || i % Math.ceil(insights.daily.length / 7) === 0;
+  const chartDaily = useMemo(() => [...insights.daily].reverse(), [insights.daily]);
+  const showLabel = (i: number) => chartDaily.length <= 7 || i % Math.ceil(chartDaily.length / 7) === 0;
 
-  const dailyOrders = insights.daily.map((row, index) => {
+  const dailyOrders = chartDaily.map((row, index) => {
     const label = new Date(`${row.date}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
     return {
       label: showLabel(index) ? label : '',
@@ -443,6 +460,11 @@ function ProductsTab({ orders, products, range, customFrom, customTo }: { orders
     setLeadersLoading(true);
     setLeadersError('');
     setLeaders([]);
+    if (!hasValidCustomRange(range, customFrom, customTo)) {
+      setLeadersError('Choose a valid custom date range.');
+      setLeadersLoading(false);
+      return () => { cancelled = true; };
+    }
     topSellingApi.getLeaders({ ...reportParams(range, customFrom, customTo), category: category || undefined, limit: 20 }, { fresh: true })
       .then(r => { if (!cancelled) setLeaders((r.data.data?.products || []) as ProductLeader[]); })
       .catch(() => {

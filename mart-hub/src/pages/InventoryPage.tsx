@@ -409,6 +409,34 @@ export default function InventoryPage() {
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Inventory Movement Ledger</h2>
           <button onClick={() => setActiveTab('stock')} className="text-xs font-semibold text-emerald-600 hover:underline">Back to Stock</button>
         </div>
+        {!valuationLoading && (valuation.todayReductions?.length || 0) > 0 && (
+          <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/20">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+              <p className="text-xs font-bold text-rose-900 dark:text-rose-200">Today&apos;s reductions by reason</p>
+              <span className="text-[11px] text-rose-700/80 dark:text-rose-300/80">Tap a reason to filter the ledger</span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {valuation.todayReductions.map(row => {
+                const share = valuation.todayReducedValue > 0 ? (row.value / valuation.todayReducedValue) * 100 : 0;
+                return (
+                  <button key={row.reason} type="button" onClick={() => openLedgerWithReason(row.reason)}
+                    className="min-w-0 rounded-lg border border-rose-100 bg-white p-2 text-left transition-colors hover:border-rose-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rose-700">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-semibold text-gray-900 dark:text-white">{reductionLabel(row.reason)}</span>
+                      <span className="whitespace-nowrap text-xs font-bold text-rose-700 dark:text-rose-300">{formatMoney(row.value)}</span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">
+                      {parseFloat(row.quantity.toFixed(2))} units · {row.count} {row.count === 1 ? 'entry' : 'entries'}
+                    </p>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-rose-100 dark:bg-slate-700">
+                      <div className="h-full rounded-full bg-rose-500" style={{ width: `${share}%` }} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <input type="text" value={movementSearch} onChange={e => setMovementSearch(e.target.value)}
             placeholder="Search product, reason or source"
@@ -564,35 +592,6 @@ export default function InventoryPage() {
             : valuation.yesterdayEstimated ? 'Estimated from movement ledger' : `${valuation.snapshotItems} snapshotted items`}
           icon={<CalendarClock className="w-4 h-4 text-white" />} gradient="from-sky-400 to-blue-600" wrap />
       </div>
-
-      {!valuationLoading && (valuation.todayReductions?.length || 0) > 0 && (
-        <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3 dark:border-rose-900/40 dark:bg-rose-950/20">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
-            <p className="text-xs font-bold text-rose-900 dark:text-rose-200">Today&apos;s reductions by reason</p>
-            <span className="text-[11px] text-rose-700/80 dark:text-rose-300/80">Tap a reason to open the ledger</span>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {valuation.todayReductions.map(row => {
-              const share = valuation.todayReducedValue > 0 ? (row.value / valuation.todayReducedValue) * 100 : 0;
-              return (
-                <button key={row.reason} type="button" onClick={() => openLedgerWithReason(row.reason)}
-                  className="min-w-0 rounded-lg border border-rose-100 bg-white p-2 text-left transition-colors hover:border-rose-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rose-700">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs font-semibold text-gray-900 dark:text-white">{reductionLabel(row.reason)}</span>
-                    <span className="whitespace-nowrap text-xs font-bold text-rose-700 dark:text-rose-300">{formatMoney(row.value)}</span>
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">
-                    {parseFloat(row.quantity.toFixed(2))} units · {row.count} {row.count === 1 ? 'entry' : 'entries'}
-                  </p>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-rose-100 dark:bg-slate-700">
-                    <div className="h-full rounded-full bg-rose-500" style={{ width: `${share}%` }} />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Compact filter pills + KPIs */}
       <div className="inline-flex shrink-0 flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40">
