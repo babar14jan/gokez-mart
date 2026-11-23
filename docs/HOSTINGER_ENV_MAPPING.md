@@ -15,10 +15,6 @@ runtime context change.
 | `MART_CORS_ORIGIN` | Yes | `https://mart.gokez.com,https://hub.gokez.com` |
 | `MART_PUBLIC_API_URL` | Yes for promotions | `https://api.mart.gokez.com/api/v1` |
 | `MART_CUSTOMER_APP_URL` | Optional | Defaults to first CORS origin |
-| `MART_STORAGE_PUBLIC_BASE_URL` | Removed | No longer read; legacy Supabase public URL is constructed directly |
-| `SUPABASE_URL` | For legacy uploads/rollback | Existing value |
-| `SUPABASE_SERVICE_ROLE_KEY` | For legacy uploads/rollback | Existing value |
-| `SUPABASE_BUCKET` | Removed | No longer read from env; legacy Supabase bucket is fixed to `mart-products` in code |
 | `IMAGE_STORAGE_DRIVER` | Yes | `hostinger` |
 | `HOSTINGER_STORAGE_URL` | Yes | `http://gokez-storage:8080` on the VPS (container-to-container), not `127.0.0.1` |
 | `HOSTINGER_STORAGE_API_KEY` | Yes | Same key as storage service |
