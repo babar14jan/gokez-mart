@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Product } from '../services/api';
+import { getLinePricing } from '../utils/productPricing';
 import { syncFunnelCart, track } from '../utils/track';
 
 export interface CartItem {
@@ -18,6 +19,7 @@ export interface CartItem {
   photoUrl: string | null;
   smallUrl?: string | null;
   thumbnailUrl?: string | null;
+  unavailable?: boolean;
 }
 
 export type AddItemResult = 'added' | 'different_unit';
@@ -29,6 +31,7 @@ interface CartState {
   addItem: (product: Product, unit?: string, price?: number, listPrice?: number) => AddItemResult;
   removeItem: (productId: string, unit: string) => void;
   updateQty: (productId: string, unit: string, qty: number) => void;
+  reconcileWithCatalog: (products: Product[], enforceOutOfStock: boolean) => void;
   clearCart: () => void;
   setAppliedCampaign: (campaign: any | null, discount: number) => void;
   totalItems: () => number;
@@ -60,9 +63,9 @@ export const useCartStore = create<CartState>()(
           const items = state.items.filter(i => !(i.productId === product.id && i.unit !== u));
           const existing = items.find(i => i.productId === product.id && i.unit === u);
           if (existing) {
-            return { items: items.map(i => i.productId === product.id && i.unit === u ? { ...i, quantity: i.quantity + 1 } : i) };
+            return { items: items.map(i => i.productId === product.id && i.unit === u ? { ...i, quantity: i.quantity + 1, unavailable: existing.unavailable ?? false } : i) };
           }
-          return { items: [...items, { productId: product.id, sourceStoreId: product.storeId, categoryId: product.categoryId, productName: product.name, unit: u, price: p, mrp, quantity: 1, photoUrl: product.photoUrl, smallUrl: product.smallUrl || product.photoVariants?.[0]?.smallUrl || null, thumbnailUrl: product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || null }] };
+          return { items: [...items, { productId: product.id, sourceStoreId: product.storeId, categoryId: product.categoryId, productName: product.name, unit: u, price: p, mrp, quantity: 1, unavailable: false, photoUrl: product.photoUrl, smallUrl: product.smallUrl || product.photoVariants?.[0]?.smallUrl || null, thumbnailUrl: product.thumbnailUrl || product.photoVariants?.[0]?.thumbnailUrl || null }] };
         });
         if (isFirstCartInteraction) track('cart_started');
         track('cart_added', { productId: product.id, productName: product.name, unit: u, quantity: 1 });
@@ -86,6 +89,19 @@ export const useCartStore = create<CartState>()(
         syncFunnelCart(get().items);
       },
 
+      reconcileWithCatalog: (products, enforceOutOfStock) => {
+        const byId = new Map(products.map(product => [product.id, product]));
+        set(state => ({
+          items: state.items.map(item => {
+            const product = byId.get(item.productId);
+            if (!product) return { ...item, unavailable: true };
+            const pricing = getLinePricing(product, item.unit);
+            const unavailable = !pricing.unitMatches || (enforceOutOfStock && (product.availabilityStatus === 'out_of_stock' || !product.isAvailable));
+            return { ...item, price: pricing.price, mrp: pricing.mrp, unavailable };
+          }),
+        }));
+      },
+
       clearCart: () => {
         set({ items: [], appliedCampaign: null, campaignDiscount: 0 });
         track('cart_cleared');
@@ -94,11 +110,11 @@ export const useCartStore = create<CartState>()(
 
       setAppliedCampaign: (campaign, discount) => set({ appliedCampaign: campaign, campaignDiscount: discount }),
 
-      totalItems: () => get().items.reduce((s, i) => s + i.quantity, 0),
+      totalItems: () => get().items.filter(i => !i.unavailable).reduce((s, i) => s + i.quantity, 0),
 
-      subtotal: () => get().items.reduce((s, i) => s + i.price * i.quantity, 0),
+      subtotal: () => get().items.filter(i => !i.unavailable).reduce((s, i) => s + i.price * i.quantity, 0),
 
-      itemSavings: () => get().items.reduce((s, i) => s + Math.max(0, (i.mrp ?? i.price) - i.price) * i.quantity, 0),
+      itemSavings: () => get().items.filter(i => !i.unavailable).reduce((s, i) => s + Math.max(0, (i.mrp ?? i.price) - i.price) * i.quantity, 0),
     }),
     { name: 'mart-cart' }
   )

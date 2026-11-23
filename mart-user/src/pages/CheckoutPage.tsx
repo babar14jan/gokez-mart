@@ -498,6 +498,8 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   // sheet only ever opens on its own as a continuation of that dialog.
   const awaitingAddress = useRef(false);
   const { items, updateQty, removeItem, subtotal, clearCart, itemSavings } = useCartStore();
+  const activeItems = useMemo(() => items.filter(i => !i.unavailable), [items]);
+  const unavailableItems = useMemo(() => items.filter(i => i.unavailable), [items]);
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress, updateAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile, setGuestProfile } = useCustomerAuthStore();
 
@@ -703,7 +705,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     const resolvedStoreId = storeId || SHAPOORJI_ZONE.storeId;
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      const cartItems = useCartStore.getState().items.map(i => ({ productId: i.productId }));
+      const cartItems = useCartStore.getState().items.filter(i => !i.unavailable).map(i => ({ productId: i.productId }));
       const resolvedGuestPhone = !isLoggedIn && isValidIndianMobile(guestPhone)
         ? guestPhone.replace(/\D/g, '')
         : undefined;
@@ -725,7 +727,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   }, [items, pinnedSuggestion]);
 
   const visibleSuggestions = useMemo(() => {
-    const cartIds = new Set(items.map(i => i.productId));
+    const cartIds = new Set(activeItems.map(i => i.productId));
     const available = suggestions.filter(product =>
       product.availabilityStatus === 'available'
       && product.isAvailable
@@ -932,7 +934,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const calcDiscount = (campaign: any, cartTotal: number): number => {
     const categoryIds = new Set(campaign.categoryIds || []);
     const eligibleTotal = categoryIds.size > 0
-      ? items.reduce((sum, item) => sum + (categoryIds.has(item.categoryId) ? item.price * item.quantity : 0), 0)
+      ? activeItems.reduce((sum, item) => sum + (categoryIds.has(item.categoryId) ? item.price * item.quantity : 0), 0)
       : cartTotal;
     if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), eligibleTotal);
     if (campaign.discount_type === 'percent') {
@@ -1058,7 +1060,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const minOrder = parseFloat(settings.min_order_amount || '0');
   // Derived straight off the live cart items, so the "To pay" figure recomputes
   // on every +/- and every "You may also like" tap — no chance of a stale total.
-  const sub = useMemo(() => items.reduce((s2, i) => s2 + i.price * i.quantity, 0), [items]);
+  const sub = useMemo(() => activeItems.reduce((s2, i) => s2 + i.price * i.quantity, 0), [activeItems]);
   const campaignMeetsMinimum = !appliedCampaign || Number(appliedCampaign.min_order_amount || 0) <= sub;
   const displayedCampaignDiscount = appliedCampaign && campaignMeetsMinimum
     ? calcDiscount(appliedCampaign, sub)
@@ -1074,7 +1076,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     referralDiscount,
   });
   const payAmount = loading && submittedTotal != null ? submittedTotal : total;
-  const canCheckout = sub >= minOrder && items.length > 0;
+  const canCheckout = sub >= minOrder && activeItems.length > 0;
 
   // Total the customer is saving on this order: item-level price cuts (MRP vs
   // sale price) + the delivery fee waived for crossing the free-delivery
@@ -1184,9 +1186,9 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   // Reaching checkout is a distinct funnel stage, and it is also recorded on
   // the server cart so "started checkout, never ordered" survives a reload.
   useEffect(() => {
-    if (items.length === 0) return;
-    trackOnce('checkout_started', { itemCount: items.length, subtotal: items.reduce((s2, i) => s2 + i.price * i.quantity, 0) });
-    syncFunnelCart(items, { reachedCheckout: true });
+    if (activeItems.length === 0) return;
+    trackOnce('checkout_started', { itemCount: activeItems.length, subtotal: activeItems.reduce((s2, i) => s2 + i.price * i.quantity, 0) });
+    syncFunnelCart(activeItems, { reachedCheckout: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1217,7 +1219,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     // open or while the request is in flight can never make the order differ
     // from what the customer saw. The qty/add controls are also disabled while
     // `loading` so the cart cannot move underneath them.
-    const lockedItems = items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, sourceStoreId: i.sourceStoreId }));
+    const lockedItems = activeItems.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, sourceStoreId: i.sourceStoreId }));
     const lockedSubtotal = sub;
     track('checkout_address_completed', { itemCount: lockedItems.length });
     track('checkout_reviewed', { itemCount: lockedItems.length, subtotal: lockedSubtotal });
@@ -1265,7 +1267,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       const orderData = {
         orderNumber: res.data.data.orderNumber,
         trackingToken: res.data.data.trackingToken,
-        items: items.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, photoUrl: i.photoUrl || null })),
+        items: activeItems.map(i => ({ productId: i.productId, productName: i.productName, unit: i.unit, price: i.price, quantity: i.quantity, photoUrl: i.photoUrl || null })),
         total: res.data.data.total,
         referralDiscount: confirmedReferralDiscount,
         guestAddress: orderAddress,
@@ -1295,9 +1297,9 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
           try {
             // fresh: this runs after the server rejected the order, so the
             // cache may hold the very catalog that caused the rejection.
-            const liveCatalog = await storeApi.getProducts(undefined, storeId, { fresh: true });
+            const liveCatalog = await storeApi.getProducts(undefined, storeId, { fresh: true }, zoneId);
             const liveProductIds = new Set((liveCatalog.data.data || []).map(product => product.id));
-            const staleItems = items.filter(item => !liveProductIds.has(item.productId));
+            const staleItems = activeItems.filter(item => !liveProductIds.has(item.productId));
             if (staleItems.length > 0) {
               staleItems.forEach(item => removeItem(item.productId, item.unit));
               const labels = staleItems.map(item => item.productName).join(', ');
@@ -1440,11 +1442,17 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
 
           {error && <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-2xl">{error}</div>}
 
+          {unavailableItems.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm px-4 py-3 rounded-2xl" role="status">
+              Some items are out of stock
+            </div>
+          )}
+
           {/* ── Items ── */}
           <div className={card}>
             <div className="divide-y divide-gray-50 dark:divide-slate-700">
               {items.map(item => (
-                <div key={`${item.productId}-${item.unit}`} className="flex items-center gap-3 px-4 py-3">
+                <div key={`${item.productId}-${item.unit}`} className={`flex items-center gap-3 px-4 py-3 ${item.unavailable ? 'select-none opacity-50 blur-[0.6px]' : ''}`}>
                   <SmartImage
                     src={item.smallUrl || item.thumbnailUrl || item.photoUrl}
                     alt={item.productName}
@@ -1454,7 +1462,9 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.productName}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">{item.unit} · ₹{item.price}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      {item.unit} · ₹{item.price}{item.unavailable ? ' · Out of stock' : ''}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity - 1)} disabled={loading}
@@ -1463,8 +1473,8 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
                       {item.quantity === 1 ? <Trash2 className="w-3 h-3 text-red-400" /> : <Minus className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />}
                     </button>
                     <span className="text-sm font-bold text-gray-900 dark:text-white w-5 text-center">{item.quantity}</span>
-                    <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity + 1)} disabled={loading}
-                      aria-disabled={loading}
+                    <button type="button" onClick={() => updateQty(item.productId, item.unit, item.quantity + 1)} disabled={loading || item.unavailable}
+                      aria-disabled={loading || item.unavailable}
                       className="w-7 h-7 bg-gokez-700 text-white rounded-lg flex items-center justify-center disabled:opacity-40">
                       <Plus className="w-3.5 h-3.5" strokeWidth={3.5} />
                     </button>
@@ -1841,7 +1851,11 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
           </div>
 
           <div className="px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
-            {!canCheckout && sub < minOrder && (
+            {!canCheckout && activeItems.length === 0 && unavailableItems.length > 0 && (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400 text-center mb-2" role="status">Some items are out of stock. Add other items to continue.</p>
+            )}
+
+            {!canCheckout && sub < minOrder && activeItems.length > 0 && (
               <p className="text-xs font-medium text-red-600 dark:text-red-400 text-center mb-2" role="status">Add ₹{(minOrder - sub).toFixed(0)} more to reach the ₹{minOrder} minimum order.</p>
             )}
 

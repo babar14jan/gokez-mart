@@ -266,6 +266,7 @@ export interface PublicSettings {
   free_delivery_above: string; min_order_amount: string;
   delivery_area: string; store_open: string; estimated_delivery: string;
   cod_enabled: string; upi_enabled: string; phonepay_enabled: string;
+  inventory_tracking: string; auto_out_of_stock: string;
   phonepay_qr_url: string; upi_phone: string; upi_id: string;
   whatsapp_number: string; support_name: string; support_phone: string;
   /** The store's own wording for the closed notice, set in the hub. Empty

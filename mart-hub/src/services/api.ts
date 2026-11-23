@@ -215,11 +215,42 @@ export interface OrderSummary {
 
 export interface FetchOpts { fresh?: boolean }
 
+export interface DailyOrderRow {
+  date: string;
+  total: number;
+  delivered: number;
+  cancelled: number;
+  revenue: number;
+}
+
+export interface WeeklyOrderRow {
+  label: string;
+  value: number;
+  start: string;
+  end: string;
+}
+
+export interface OrderInsights {
+  daily: DailyOrderRow[];
+  weekly: WeeklyOrderRow[];
+}
+
+export interface ProductLeader {
+  id: string;
+  name: string;
+  categoryName: string;
+  orderCount: number;
+  quantitySold: number;
+  revenue: number;
+}
+
 export const ordersApi = {
   getAll: (params?: { storeId?: string; status?: string; deliveryPreference?: string; phone?: string; q?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
     api.get('/admin/orders', { params, fresh: opts?.fresh }),
   getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; dateBasis?: 'created' | 'browse' }, opts?: FetchOpts) =>
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
+  getInsights: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
+    api.get('/admin/analytics/order-insights', { params, fresh: opts?.fresh }),
   updateStatus: (id: string, status: string, failureReason?: string, cancellationReason?: string, deliveryAssigneeId?: string, paymentMethod?: 'cash' | 'upi', forceReadyPickup?: boolean) =>
     api.put(`/admin/orders/${id}/status`, { status, failureReason, cancellationReason, deliveryAssigneeId, paymentMethod, forceReadyPickup }),
   declineCancellationRequest: (id: string) => api.put(`/admin/orders/${id}/cancellation-request/decline`),
@@ -280,6 +311,10 @@ export interface CustomerStats {
   totalOrders: number;
   repeatCustomers: number;
   newCustomers: number;
+  signupCustomers: number;
+  signupWithOrders: number;
+  signupWithoutOrders: number;
+  avgOrderValue: number;
   avgOrders: number;
 }
 
@@ -818,6 +853,8 @@ export const dailySalesApi = {
 };
 
 export const topSellingApi = {
-  get: (range: '5d' | '10d' | '30d' | 'all' | 'custom', storeId?: string, from?: string, to?: string, opts?: FetchOpts) =>
-    api.get('/admin/analytics/top-products', { params: { range, storeId, from, to }, fresh: opts?.fresh }),
+  get: (range: '5d' | '10d' | '30d' | 'all' | 'custom', storeId?: string, from?: string, to?: string, opts?: FetchOpts & { category?: string; limit?: number; offset?: number }) =>
+    api.get('/admin/analytics/top-products', { params: { range, storeId, from, to, category: opts?.category, limit: opts?.limit, offset: opts?.offset }, fresh: opts?.fresh }),
+  getLeaders: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; category?: string; limit?: number }, opts?: FetchOpts) =>
+    api.get('/admin/analytics/product-leaders', { params, fresh: opts?.fresh }),
 };
