@@ -70,7 +70,7 @@ body { background-color: #ffffff; color: #111827; }
 
 @layer components {
   .sidebar-link {
-    @apply flex items-center justify-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-center
+    @apply flex items-center justify-start gap-3 px-3 py-2 rounded-xl text-sm font-medium text-left
            text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800
            transition-all duration-150 mx-1;
   }
