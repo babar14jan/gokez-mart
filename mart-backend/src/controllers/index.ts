@@ -284,6 +284,15 @@ async function assertDailySalesAccess(req: AdminRequest): Promise<void> {
   }
 }
 
+async function assertCanManageProductSettings(req: AdminRequest): Promise<void> {
+  if (!(await canAccessDailySales(req.admin!))) {
+    throw forbidden('Product settings are only available to the zone head owner/manager or super admin');
+  }
+}
+
+const CUSTOMER_DISPLAY_MODES_KEY = 'product_customer_display_modes';
+const CUSTOMER_DISPLAY_MODE_IDS = new Set(['all', 'top15', 'top15_discounted', 'below30']);
+
 // ── Public controllers ────────────────────────────────────────────────────────
 
 export const getCategories = asyncHandler(async (_req: Request, res: Response) => {
@@ -813,6 +822,7 @@ export const adminGetProducts = asyncHandler(async (req: AdminRequest, res: Resp
 });
 
 export const adminCreateProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertCanManageProductSettings(req);
   const isCombo = Array.isArray(req.body.bundleComponents);
   const isHeadComboManager = ['store_owner', 'store_manager'].includes(req.admin!.role)
     && await isHeadStore(req.admin!.storeId);
@@ -844,6 +854,7 @@ export const adminGetProductBundleComponents = asyncHandler(async (req: AdminReq
 });
 
 export const adminUpdateProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertCanManageProductSettings(req);
   const storeId = await resolveManagedStoreId(req);
   const isSuperAdmin = req.admin!.role === 'super_admin';
   const existing = await ProductService.findById(req.params.id, storeId);
@@ -879,6 +890,7 @@ export const adminUpdateProduct = asyncHandler(async (req: AdminRequest, res: Re
 });
 
 export const adminDeleteProduct = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertCanManageProductSettings(req);
   const storeId = await resolveManagedStoreId(req);
   await ProductService.removeFromStore(req.params.id, storeId);
   res.json({ success: true, message: 'Product removed from store' });
@@ -1152,6 +1164,7 @@ export const adminDeleteCatalogProduct = asyncHandler(async (req: AdminRequest, 
 // zone. Conflicting mappings are returned as a 409 so the hub can show a popup instead
 // of silently creating a duplicate.
 export const adminBulkAddFromCatalog = asyncHandler(async (req: AdminRequest, res: Response) => {
+  await assertCanManageProductSettings(req);
   const storeId = await resolveManagedStoreId(req);
   const { productIds } = req.body; // array of catalog product IDs
   if (!Array.isArray(productIds) || productIds.length === 0) {
@@ -2265,6 +2278,20 @@ export const adminGetSettings = asyncHandler(async (req: AdminRequest, res: Resp
 
 export const adminUpdateSettings = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = resolveStoreId(req);
+  if (Object.prototype.hasOwnProperty.call(req.body, CUSTOMER_DISPLAY_MODES_KEY)) {
+    await assertCanManageProductSettings(req);
+    let modes: unknown;
+    try {
+      modes = JSON.parse(req.body[CUSTOMER_DISPLAY_MODES_KEY]);
+    } catch {
+      modes = null;
+    }
+    if (!Array.isArray(modes) || modes.length === 0 || modes.some(mode =>
+      typeof mode !== 'string' || !CUSTOMER_DISPLAY_MODE_IDS.has(mode))) {
+      res.status(400).json({ success: false, error: 'Invalid customer display modes.' });
+      return;
+    }
+  }
   // A manual closure has to say when it lifts, so the customer can be told
   // rather than left with a store that is simply shut.
   //
