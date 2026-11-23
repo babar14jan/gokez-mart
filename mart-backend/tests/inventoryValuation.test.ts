@@ -94,10 +94,15 @@ describe('inventory valuation KPIs', () => {
 
   test('inventory page shows today, yesterday, costed and change KPI cards', () => {
     const page = read('../mart-hub/src/pages/InventoryPage.tsx');
+    const kpi = read('../mart-hub/src/components/referralUi.tsx');
     assert.match(page, /Stock value today/);
     assert.match(page, /Yesterday closing value/);
     assert.match(page, /Costed stock lines/);
     assert.match(page, /Change vs yesterday/);
     assert.match(page, /KpiCard/);
+    assert.match(page, /grid grid-cols-2/);
+    assert.equal((page.match(/wrap \/>/g) || []).length, 4);
+    assert.match(kpi, /wrap\?: boolean/);
+    assert.match(kpi, /break-words/);
   });
 });

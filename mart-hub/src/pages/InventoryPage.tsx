@@ -467,22 +467,22 @@ export default function InventoryPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <KpiCard label="Stock value today" value={valuationLoading ? '—' : formatMoney(valuation.todayValue)}
-          sub={`${valuation.trackedItems} tracked items in scope`} icon={<Wallet className="w-4 h-4 text-white" />} gradient="from-emerald-400 to-green-600" />
+          sub={`${valuation.trackedItems} tracked items in scope`} icon={<Wallet className="w-4 h-4 text-white" />} gradient="from-emerald-400 to-green-600" wrap />
         <KpiCard label="Yesterday closing value" value={valuationLoading ? '—' : formatMoney(valuation.yesterdayValue)}
           sub={valuation.snapshotItems === 0 ? 'No snapshot yet'
             : valuation.yesterdayEstimated ? 'Estimated from movement ledger' : `${valuation.snapshotItems} snapshotted items`}
-          icon={<CalendarClock className="w-4 h-4 text-white" />} gradient="from-sky-400 to-blue-600" />
+          icon={<CalendarClock className="w-4 h-4 text-white" />} gradient="from-sky-400 to-blue-600" wrap />
         <KpiCard label="Costed stock lines" value={valuationLoading ? '—' : `${valuation.costedItems}/${valuation.trackedItems}`}
-          sub="items have a unit cost" icon={<Layers className="w-4 h-4 text-white" />} gradient="from-amber-400 to-orange-600" />
+          sub="items have a unit cost" icon={<Layers className="w-4 h-4 text-white" />} gradient="from-amber-400 to-orange-600" wrap />
         <KpiCard label="Change vs yesterday"
           value={valuationLoading || valuation.changePercent === null ? '—'
             : `${valuation.changeValue >= 0 ? '+' : '-'}${Math.abs(valuation.changePercent).toFixed(1)}%`}
           sub={valuation.changePercent === null ? 'Needs yesterday snapshot'
             : `${valuation.changeValue >= 0 ? '+' : '-'}${formatMoney(Math.abs(valuation.changeValue))}`}
           icon={valuation.changeValue >= 0 ? <TrendingUp className="w-4 h-4 text-white" /> : <TrendingDown className="w-4 h-4 text-white" />}
-          gradient={valuation.changeValue >= 0 ? 'from-emerald-400 to-green-600' : 'from-rose-400 to-red-600'} />
+          gradient={valuation.changeValue >= 0 ? 'from-emerald-400 to-green-600' : 'from-rose-400 to-red-600'} wrap />
       </div>
 
       {/* Compact filter pills + KPIs */}
