@@ -55,6 +55,18 @@ describe('inventory valuation KPIs', () => {
     assert.doesNotMatch(service, /allValue/);
   });
 
+  test('daily movement summary splits receipts from reason-based reductions', () => {
+    const service = read('src/services/inventory.service.ts');
+    assert.match(service, /private static async getTodayMovementSummary/);
+    assert.match(service, /REDUCTION_REASONS = \['damage', 'spoiled', 'expired'/);
+    assert.match(service, /m\.movement_type IN \('restock', 'return_in'\)/);
+    assert.match(service, /m\.reason = ANY\(\$4::text\[\]\)/);
+    assert.match(service, /todayAddedValue/);
+    assert.match(service, /todayReducedValue/);
+    assert.match(service, /todayReductions/);
+    assert.match(service, /unit, reason, remarks, unit_cost, total_cost/);
+  });
+
   test('service backfill estimates every tracked product and only corrects estimated rows', () => {
     const service = read('src/services/inventory.service.ts');
     assert.match(service, /private static async backfillMovementSnapshot/);
@@ -92,16 +104,19 @@ describe('inventory valuation KPIs', () => {
     assert.match(api, /getValuationSummary/);
   });
 
-  test('inventory page shows today, yesterday, costed and change KPI cards', () => {
+  test('inventory page shows current, added, reduced, yesterday, costed and change KPI cards', () => {
     const page = read('../mart-hub/src/pages/InventoryPage.tsx');
     const kpi = read('../mart-hub/src/components/referralUi.tsx');
-    assert.match(page, /Stock value today/);
+    assert.match(page, /Stock value now/);
+    assert.match(page, /Added today/);
+    assert.match(page, /Reduced today/);
+    assert.match(page, /Today&apos;s reductions by reason/);
     assert.match(page, /Yesterday closing value/);
     assert.match(page, /Costed stock lines/);
     assert.match(page, /Change vs yesterday/);
     assert.match(page, /KpiCard/);
     assert.match(page, /grid grid-cols-2/);
-    assert.equal((page.match(/wrap \/>/g) || []).length, 4);
+    assert.equal((page.match(/wrap \/>/g) || []).length, 6);
     assert.match(kpi, /wrap\?: boolean/);
     assert.match(kpi, /break-words/);
   });

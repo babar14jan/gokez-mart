@@ -109,7 +109,7 @@ export default function CategoriesPage() {
         </button>
       </div>
       <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 px-4 py-3">
-        <p className="text-xs text-emerald-800 dark:text-emerald-300">Use Arrange to mix Manual, Top 10, Top 10 discounted and Below ₹30 in priority order. Earlier modes win shared products; the same order appears in category grids and the Fresh page.</p>
+        <p className="text-xs text-emerald-800 dark:text-emerald-300">Use Arrange to mix Manual, Top 15, Top 15 discounted and Below ₹30 in priority order. Earlier modes win shared products; the same order appears in category grids and the Fresh page.</p>
       </div>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         {categories.length === 0 ? (

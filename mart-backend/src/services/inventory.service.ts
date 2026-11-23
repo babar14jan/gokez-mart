@@ -3,7 +3,12 @@ import { badRequest, forbidden, notFound, conflict } from '../utils/apiError';
 import { parseSellingUnit } from '../utils/unitConversion';
 
 const istDateKey = (date = new Date()) => new Date(date.getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const istDayBounds = (dateKey = istDateKey()) => {
+  const end = new Date(`${dateKey}T18:30:00Z`);
+  return { start: new Date(end.getTime() - 24 * 60 * 60 * 1000), end };
+};
 const roundMoney = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+const REDUCTION_REASONS = ['damage', 'spoiled', 'expired', 'lost', 'missing', 'consumption', 'quality_rejection', 'other'];
 
 export class InventoryService {
 
@@ -479,6 +484,27 @@ export class InventoryService {
       )).rows[0];
       if (!cur) throw notFound('That product is no longer available in this store');
       const current = cur.stock_quantity ?? 0;
+      const costRow = (await client.query(
+        `SELECT COALESCE((
+           SELECT b.unit_cost
+             FROM mart_purchase_batches b
+            WHERE b.store_id = $1 AND b.product_id = $2
+              AND b.quantity_remaining > 0 AND b.status <> 'voided'
+            ORDER BY b.received_at DESC, b.id DESC
+            LIMIT 1
+         ), (
+           SELECT m.unit_cost
+             FROM mart_inventory_movements m
+            WHERE m.store_id = $1 AND m.product_id = $2
+              AND m.unit_cost IS NOT NULL AND m.unit_cost > 0
+            ORDER BY m.created_at DESC, m.id DESC
+            LIMIT 1
+         ))::float AS "unitCost"`,
+        [storeId, productId]
+      )).rows[0];
+      const unitCost = Number(costRow?.unitCost || 0) || null;
+      const outQty = qty < 0 ? Math.abs(qty) : 0;
+      const totalCost = unitCost === null ? null : roundMoney(outQty * unitCost);
       const newQty = Math.max(0, current + qty);
       const movementType = ['damage','spoiled','expired','lost','missing'].includes(reason) ? 'damage' : 'adjustment';
       const newStatus = newQty <= 0 ? 'out_of_stock' : cur.availability_status;
@@ -496,10 +522,10 @@ export class InventoryService {
       await client.query(
         `INSERT INTO mart_inventory_movements
            (product_id, store_id, movement_type, quantity_in, quantity_out, previous_balance, new_balance,
-            unit, reason, remarks, created_by, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [productId, storeId, movementType, qty > 0 ? qty : 0, qty < 0 ? Math.abs(qty) : 0,
-         current, newQty, cur.stock_unit, reason, note, createdBy, idempotencyKey || null]
+            unit, reason, remarks, unit_cost, total_cost, created_by, idempotency_key)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        [productId, storeId, movementType, qty > 0 ? qty : 0, outQty,
+         current, newQty, cur.stock_unit, reason, note, unitCost, totalCost, createdBy, idempotencyKey || null]
       );
       await client.query(
         `INSERT INTO mart_stock_adjustments (store_id, product_id, quantity, reason, notes, created_by)
@@ -783,9 +809,91 @@ export class InventoryService {
     });
   }
 
+  private static async getTodayMovementSummary(storeId: string) {
+    const { start, end } = istDayBounds();
+    const costCte = `WITH costs AS (
+            SELECT sp.product_id,
+                   COALESCE(batch.unit_cost, movement.unit_cost, 0) AS unit_cost
+              FROM mart_store_products sp
+              JOIN mart_products p ON p.id = sp.product_id
+              LEFT JOIN LATERAL (
+                SELECT b.unit_cost
+                  FROM mart_purchase_batches b
+                 WHERE b.store_id = sp.store_id AND b.product_id = sp.product_id
+                   AND b.quantity_remaining > 0 AND b.status <> 'voided'
+                 ORDER BY b.received_at DESC, b.id DESC
+                 LIMIT 1
+              ) batch ON true
+              LEFT JOIN LATERAL (
+                SELECT m.unit_cost
+                  FROM mart_inventory_movements m
+                 WHERE m.store_id = sp.store_id AND m.product_id = sp.product_id
+                   AND m.unit_cost IS NOT NULL AND m.unit_cost > 0
+                 ORDER BY m.created_at DESC, m.id DESC
+                 LIMIT 1
+              ) movement ON true
+             WHERE sp.store_id = $1 AND p.is_bundle = false
+           ), valued AS (
+            SELECT m.reason,
+                   m.quantity_in::float AS quantity_in,
+                   m.quantity_out::float AS quantity_out,
+                   COALESCE(
+                     m.total_cost::float,
+                     (CASE WHEN m.quantity_in > 0 THEN m.quantity_in ELSE m.quantity_out END)::float
+                       * COALESCE(m.unit_cost::float, c.unit_cost::float)
+                   ) AS value
+              FROM mart_inventory_movements m
+              LEFT JOIN costs c ON c.product_id = m.product_id
+             WHERE m.store_id = $1
+               AND m.created_at >= $2
+               AND m.created_at < $3
+               AND (
+                 (m.quantity_in > 0 AND m.movement_type IN ('restock', 'return_in'))
+                 OR (m.quantity_out > 0 AND m.reason = ANY($4::text[]))
+               )
+           )`;
+    const params = [storeId, start, end, REDUCTION_REASONS];
+    const [totalsResult, reductionsResult] = await Promise.all([
+      query<{ addedValue: number; addedCount: number; reducedValue: number; reducedCount: number }>(
+        `${costCte}
+           SELECT COALESCE(SUM(CASE WHEN quantity_in > 0 THEN value ELSE 0 END), 0)::float AS "addedValue",
+                  COUNT(*) FILTER (WHERE quantity_in > 0)::int AS "addedCount",
+                  COALESCE(SUM(CASE WHEN quantity_out > 0 THEN value ELSE 0 END), 0)::float AS "reducedValue",
+                  COUNT(*) FILTER (WHERE quantity_out > 0)::int AS "reducedCount"
+             FROM valued`,
+        params
+      ),
+      query<{ reason: string; value: number; quantity: number; count: number }>(
+        `${costCte}
+           SELECT reason,
+                  COALESCE(SUM(value), 0)::float AS value,
+                  COALESCE(SUM(quantity_out), 0)::float AS quantity,
+                  COUNT(*)::int AS count
+             FROM valued
+            WHERE quantity_out > 0
+            GROUP BY reason
+            ORDER BY value DESC, reason`,
+        params
+      ),
+    ]);
+    const totals = totalsResult.rows[0] || { addedValue: 0, addedCount: 0, reducedValue: 0, reducedCount: 0 };
+    return {
+      todayAddedValue: roundMoney(totals.addedValue),
+      todayAddedCount: totals.addedCount,
+      todayReducedValue: roundMoney(totals.reducedValue),
+      todayReducedCount: totals.reducedCount,
+      todayReductions: reductionsResult.rows.map(row => ({
+        reason: row.reason,
+        value: roundMoney(row.value),
+        quantity: roundMoney(row.quantity),
+        count: row.count,
+      })),
+    };
+  }
+
   static async getValuationSummary(storeId: string) {
     const snapshotDate = istDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
-    const [liveResult, snapshotResult] = await Promise.all([
+    const [liveResult, snapshotResult, movementSummary] = await Promise.all([
       query<{
         trackedItems: number; costedItems: number; todayValue: number;
       }>(
@@ -833,6 +941,7 @@ export class InventoryService {
           WHERE store_id = $1 AND snapshot_date = $2::date`,
         [storeId, snapshotDate]
       ),
+      this.getTodayMovementSummary(storeId),
     ]);
 
     const live = liveResult.rows[0] || { trackedItems: 0, costedItems: 0, todayValue: 0 };
@@ -851,6 +960,7 @@ export class InventoryService {
       costedItems: live.costedItems,
       snapshotItems: snapshot.snapshotItems,
       yesterdayEstimated: snapshot.estimatedItems > 0,
+      ...movementSummary,
       generatedAt: new Date().toISOString(),
     };
   }

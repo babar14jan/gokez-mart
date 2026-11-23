@@ -19,3 +19,14 @@ export function matchScore(product: Product, query: string): number {
   if (aliases.some(alias => alias.includes(query))) return 6;
   return 7;
 }
+
+export function sortProductsForCustomer(products: Product[]): Product[] {
+  return [...products].sort((a, b) => {
+    const aOutOfStock = a.availabilityStatus === 'out_of_stock' || !a.isAvailable ? 1 : 0;
+    const bOutOfStock = b.availabilityStatus === 'out_of_stock' || !b.isAvailable ? 1 : 0;
+    if (aOutOfStock !== bOutOfStock) return aOutOfStock - bOutOfStock;
+    const aSortOrder = Number.isFinite(a.sortOrder) ? a.sortOrder as number : 0;
+    const bSortOrder = Number.isFinite(b.sortOrder) ? b.sortOrder as number : 0;
+    return aSortOrder - bSortOrder || a.name.localeCompare(b.name);
+  });
+}

@@ -18,25 +18,25 @@ export interface BrowseProduct {
 }
 
 export type ProductStatusFilter = 'available' | 'hidden' | 'out_of_stock';
-export type ProductPreset = 'all' | 'top10' | 'top10_discounted' | 'below30' | 'low_stock' | 'hidden' | 'out_of_stock';
+export type ProductPreset = 'all' | 'top15' | 'top15_discounted' | 'below30' | 'low_stock' | 'hidden' | 'out_of_stock';
 export type ProductBrowseSort = 'manual' | 'discount' | 'price_asc' | 'price_desc' | 'newest' | 'stock' | 'az';
 
 export const PRODUCT_PRESETS: Array<{ id: ProductPreset; label: string; defaultSort: ProductBrowseSort }> = [
   { id: 'all', label: 'All', defaultSort: 'manual' },
-  { id: 'top10', label: 'Top 10', defaultSort: 'manual' },
-  { id: 'top10_discounted', label: 'Top 10 discounted', defaultSort: 'discount' },
+  { id: 'top15', label: 'Top 15', defaultSort: 'manual' },
+  { id: 'top15_discounted', label: 'Top 15 discounted', defaultSort: 'discount' },
   { id: 'below30', label: 'Below ₹30', defaultSort: 'price_asc' },
   { id: 'low_stock', label: 'Low stock', defaultSort: 'stock' },
   { id: 'hidden', label: 'Hidden', defaultSort: 'manual' },
   { id: 'out_of_stock', label: 'Out of stock', defaultSort: 'manual' },
 ];
 
-export type CustomerOrderMode = Extract<ProductPreset, 'all' | 'top10' | 'top10_discounted' | 'below30'>;
+export type CustomerOrderMode = Extract<ProductPreset, 'all' | 'top15' | 'top15_discounted' | 'below30'>;
 
 export const CUSTOMER_ORDER_MODES: Array<{ id: CustomerOrderMode; label: string; sort: ProductBrowseSort; limit?: number }> = [
   { id: 'all', label: 'Manual', sort: 'manual' },
-  { id: 'top10', label: 'Top 10', sort: 'manual', limit: 10 },
-  { id: 'top10_discounted', label: 'Top 10 discounted', sort: 'discount', limit: 10 },
+  { id: 'top15', label: 'Top 15', sort: 'manual', limit: 15 },
+  { id: 'top15_discounted', label: 'Top 15 discounted', sort: 'discount', limit: 15 },
   { id: 'below30', label: 'Below ₹30', sort: 'price_asc' },
 ];
 
@@ -113,7 +113,7 @@ export function browseProducts<T extends BrowseProduct>(products: T[], options: 
     if (preset === 'hidden' || preset === 'out_of_stock') {
       if (getProductStatus(product) !== preset) return false;
     } else if (!statusSet.has(getProductStatus(product))) return false;
-    if (preset === 'top10_discounted' && (product.discountPercent || 0) <= 0) return false;
+    if (preset === 'top15_discounted' && (product.discountPercent || 0) <= 0) return false;
     if (preset === 'below30' && getDiscountedPrice(product) >= 30) return false;
     if (preset === 'low_stock' && getStockState(product) !== 'low') return false;
     if (typeof options.minDiscount === 'number' && (product.discountPercent || 0) < options.minDiscount) return false;
