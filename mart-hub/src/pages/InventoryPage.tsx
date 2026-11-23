@@ -13,6 +13,22 @@ import { KpiCard } from '../components/referralUi';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
 
+type InlineEdit = {
+  qty: string; action: '' | 'add' | 'remove' | 'set'; unit: string;
+  reason: string; note: string; cost: string; totalCost: string;
+};
+
+interface StockDraft {
+  productId: string;
+  productName: string;
+  localName: string | null;
+  storeId: string;
+  storeName?: string;
+  stockUnit: string;
+  edit: InlineEdit;
+  savedAt: string;
+}
+
 interface InventoryItem {
   productId: string;
   name: string;
@@ -159,6 +175,27 @@ const cardActivity = (reason: string | null | undefined, note: string | null | u
   return { label: adjusted.label, note: adjusted.note };
 };
 
+const isValidStockEdit = (edit?: InlineEdit) => {
+  if (!edit || !edit.action) return false;
+  if (edit.action === 'set') return true;
+  const qty = Number(edit.qty);
+  return Boolean(edit.qty) && Number.isFinite(qty) && qty !== 0;
+};
+
+const editSummary = (edit: InlineEdit, defaultUnit: string) => {
+  const unit = edit.unit || defaultUnit;
+  const qty = edit.action === 'set' ? '0' : edit.qty;
+  if (edit.action === 'add') {
+    return `Add ${qty} ${unit}${edit.cost ? ` · ₹${edit.cost}/unit` : ''}${edit.note ? ` · ${edit.note}` : ''}`;
+  }
+  if (edit.action === 'remove') {
+    const reason = formatReason(edit.reason || 'manual_correction') || 'Remove';
+    return `Remove ${qty} ${unit} · ${reason}${edit.note ? ` · ${edit.note}` : ''}`;
+  }
+  if (edit.action === 'set') return `Set to 0 ${unit}${edit.note ? ` · ${edit.note}` : ''}`;
+  return 'No action selected';
+};
+
 const movementLabel = (type?: string | null) => {
   if (!type) return '';
   if (type === 'adjustment' || type === 'damage' || type === 'reconciliation') return 'Adjustment';
@@ -201,9 +238,14 @@ export default function InventoryPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem('inventory_selected_ids') || '[]')); } catch { return new Set(); }
   });
-  const [inlineEdits, setInlineEdits] = useState<Record<string, { qty: string; action: '' | 'add' | 'remove' | 'set'; unit: string; reason: string; note: string; cost: string; totalCost: string }>>(() => {
+  const [inlineEdits, setInlineEdits] = useState<Record<string, InlineEdit>>(() => {
     try { return JSON.parse(sessionStorage.getItem('inventory_inline_edits') || '{}'); } catch { return {}; }
   });
+  const [drafts, setDrafts] = useState<Record<string, StockDraft>>(() => {
+    try { return JSON.parse(sessionStorage.getItem('inventory_draft_updates') || '{}'); } catch { return {}; }
+  });
+  const [focusedProductId, setFocusedProductId] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [inlineSaving, setInlineSaving] = useState(false);
 
   // History drawer
@@ -224,15 +266,19 @@ export default function InventoryPage() {
     try { sessionStorage.setItem('inventory_inline_edits', JSON.stringify(inlineEdits)); } catch {}
   }, [inlineEdits]);
 
+  useEffect(() => {
+    try { sessionStorage.setItem('inventory_draft_updates', JSON.stringify(drafts)); } catch {}
+  }, [drafts]);
+
   const skipFilterResetRef = useRef(true);
 
   useEffect(() => {
+    setFocusedProductId(null);
     if (skipFilterResetRef.current) {
       skipFilterResetRef.current = false;
       return;
     }
     setSelectedIds(new Set());
-    setInlineEdits({});
   }, [statusFilter, categoryFilter, searchQuery]);
 
   const { role } = useAuthStore();
@@ -357,6 +403,7 @@ export default function InventoryPage() {
   const sorted = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     let list = items.filter(item => !item.isBundle).filter(item => {
+      if (item.productId === focusedProductId) return true;
       const matchesQuery = !query
         || item.name.toLowerCase().includes(query)
         || (item.localName || '').toLowerCase().includes(query)
@@ -373,7 +420,7 @@ export default function InventoryPage() {
     if (sortBy === 'name') return sortedList.sort((a, b) => a.name.localeCompare(b.name));
     if (sortBy === 'stock_asc') return sortedList.sort((a, b) => (a.stockQuantity ?? Number.MAX_SAFE_INTEGER) - (b.stockQuantity ?? Number.MAX_SAFE_INTEGER));
     if (sortBy === 'stock_desc') return sortedList.sort((a, b) => (b.stockQuantity ?? -1) - (a.stockQuantity ?? -1));
-    return sortedList;  }, [items, sortBy, searchQuery, statusFilter, categoryFilter]);
+    return sortedList;  }, [items, sortBy, searchQuery, statusFilter, categoryFilter, focusedProductId]);
 
   const visibleIds = sorted.map(item => item.productId);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
@@ -413,6 +460,9 @@ export default function InventoryPage() {
       setHistory(res.data.data || []);
     } finally { setHistoryLoading(false); }
   };
+
+  const draftList = useMemo(() => Object.values(drafts).sort((a, b) => b.savedAt.localeCompare(a.savedAt)), [drafts]);
+  const draftCount = draftList.length;
 
   if (activeTab === 'ledger') {
     return (
@@ -502,44 +552,74 @@ export default function InventoryPage() {
   }
 
 
-  const dirtyInlineCount = Object.keys(inlineEdits).filter(id => {
-    if (!selectedIds.has(id)) return false;
-    const e = inlineEdits[id];
-    if (!e) return false;
-    if (!e.action) return false;
-    if (e.action === 'set') return true;
-    return Boolean(e.qty) && Number(e.qty) !== 0;
-  }).length;
+  const saveDraft = (item: InventoryItem) => {
+    const edit = inlineEdits[item.productId];
+    if (!isValidStockEdit(edit)) return;
+    setDrafts(prev => ({
+      ...prev,
+      [item.productId]: {
+        productId: item.productId,
+        productName: item.name,
+        localName: item.localName,
+        storeId: item.storeId || (selectedStoreId !== 'all' ? selectedStoreId : getActiveStoreId()),
+        storeName: item.storeName,
+        stockUnit: item.stockUnit || edit.unit || 'kg',
+        edit: { ...edit },
+        savedAt: new Date().toISOString(),
+      },
+    }));
+    setInlineEdits(prev => { const next = { ...prev }; delete next[item.productId]; return next; });
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(item.productId); return next; });
+    if (focusedProductId === item.productId) setFocusedProductId(null);
+  };
 
-  const saveInlineEdits = async () => {
-    const entries = Object.entries(inlineEdits).filter(([id, e]) => selectedIds.has(id) && (e.action === 'add' || e.action === 'remove' || e.action === 'set') && (e.action === 'set' || (e.qty && Number(e.qty) !== 0)));
-    if (entries.length === 0) return;
+  const editDraft = (draft: StockDraft) => {
+    setInlineEdits(prev => ({ ...prev, [draft.productId]: { ...draft.edit } }));
+    setSelectedIds(prev => new Set(prev).add(draft.productId));
+    setDrafts(prev => { const next = { ...prev }; delete next[draft.productId]; return next; });
+    if (selectedStoreId !== 'all' && draft.storeId && draft.storeId !== selectedStoreId) setZoneInventoryStore(draft.storeId);
+    setFocusedProductId(draft.productId);
+  };
+
+  const removeDraft = (productId: string) => {
+    setDrafts(prev => { const next = { ...prev }; delete next[productId]; return next; });
+    if (focusedProductId === productId) setFocusedProductId(null);
+  };
+
+  const discardAllDrafts = () => {
+    setDrafts({});
+    setInlineEdits({});
+    setSelectedIds(new Set());
+    setFocusedProductId(null);
+    setReviewOpen(false);
+  };
+
+  const confirmSaveAll = async () => {
+    const updates = draftList.map(draft => ({ productId: draft.productId, storeId: draft.storeId, edit: draft.edit }));
+    if (updates.length === 0) { setReviewOpen(false); return; }
     setInlineSaving(true);
     try {
-      for (const [productId, e] of entries) {
-        const item = items.find(i => i.productId === productId);
-        const storeId = (selectedStoreId && selectedStoreId !== 'all') ? selectedStoreId : (item?.storeId || selectedStoreId);
+      for (const { productId, storeId, edit } of updates) {
         const key = crypto.randomUUID();
-        if (e.action === 'add') {
-          await inventoryApi.restock(productId, Number(e.qty), e.note, storeId, e.unit || 'kg', key, e.cost ? Number(e.cost) : undefined);
-        } else if (e.action === 'remove') {
-          await inventoryApi.adjustStock(productId, -Math.abs(Number(e.qty)), e.reason, e.note, storeId, key);
+        if (edit.action === 'add') {
+          await inventoryApi.restock(productId, Number(edit.qty), edit.note, storeId, edit.unit || 'kg', key, edit.cost ? Number(edit.cost) : undefined);
+        } else if (edit.action === 'remove') {
+          await inventoryApi.adjustStock(productId, -Math.abs(Number(edit.qty)), edit.reason, edit.note, storeId, key);
         } else {
-          await inventoryApi.setStock(productId, Number(e.qty), storeId, key, e.unit || 'kg');
+          await inventoryApi.setStock(productId, Number(edit.qty), storeId, key, edit.unit || 'kg');
         }
       }
+      setDrafts({});
       setInlineEdits({});
+      setSelectedIds(new Set());
+      setFocusedProductId(null);
+      setReviewOpen(false);
       await load();
     } catch (e: any) {
-      alert(e?.response?.data?.error || 'Inline update failed');
+      alert(e?.response?.data?.error || 'Draft update failed');
     } finally {
       setInlineSaving(false);
     }
-  };
-
-  const discardInlineEdits = () => {
-    setInlineEdits({});
-    setSelectedIds(new Set());
   };
 
   if (loading) return <PageSkeleton />;
@@ -562,7 +642,7 @@ export default function InventoryPage() {
   );
 
   return (
-    <div className={`space-y-4 ${dirtyInlineCount > 0 ? 'pb-24' : ''}`}>
+    <div className="space-y-4">
 
       {/* Zone-head store picker — a head store owner manages the stock of
           every store tagged into its active zone. Other roles see no picker. */}
@@ -575,6 +655,26 @@ export default function InventoryPage() {
               {enablingTracking ? 'Enabling...' : 'Enable'}
             </button>
           )}
+        </div>
+      )}
+
+      {draftCount > 0 && (
+        <div className="sticky top-[calc(4rem+env(safe-area-inset-top,0px))] z-20 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-300 bg-white/95 px-3 py-2 shadow-lg backdrop-blur dark:border-emerald-700 dark:bg-slate-800/95">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-gray-900 dark:text-white">{draftCount} draft update{draftCount === 1 ? '' : 's'} ready</p>
+            <p className="text-[11px] text-gray-500 dark:text-slate-400">Review and confirm to apply them to stock.</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={discardAllDrafts}
+              className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700">
+              Discard all
+            </button>
+            <button type="button" disabled={inlineSaving} onClick={() => setReviewOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50">
+              {inlineSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Save all
+            </button>
+          </div>
         </div>
       )}
 
@@ -650,6 +750,37 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
+      {draftCount > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-2 dark:border-amber-800 dark:bg-amber-900/20">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">Draft updates</p>
+            <span className="text-[10px] text-amber-700/80 dark:text-amber-300/80">Not saved yet</span>
+          </div>
+          <div className="space-y-1.5">
+            {draftList.map(draft => (
+              <div key={draft.productId} className="flex items-center gap-2 rounded-lg border border-amber-100 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-gray-900 dark:text-white">
+                    {draft.productName}{draft.localName ? ` (${draft.localName})` : ''}
+                  </p>
+                  <p className="truncate text-[11px] text-gray-500 dark:text-slate-400">
+                    {editSummary(draft.edit, draft.stockUnit)}{draft.storeName ? ` · ${draft.storeName}` : ''}
+                  </p>
+                </div>
+                <button type="button" onClick={() => editDraft(draft)}
+                  className="shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-600 hover:border-emerald-400 hover:text-emerald-600 dark:border-slate-600 dark:text-slate-300">
+                  Edit
+                </button>
+                <button type="button" onClick={() => removeDraft(draft.productId)} aria-label={`Remove draft for ${draft.productName}`}
+                  className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -826,6 +957,10 @@ export default function InventoryPage() {
                               className="col-span-2 w-full rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800 dark:text-white sm:col-span-1 sm:w-28" />
                           )}
                           {isDirty && <span className="text-[10px] font-bold text-amber-600">●</span>}
+                          <button type="button" disabled={!isValidStockEdit(inlineEdit)} onClick={() => saveDraft(item)}
+                            className="rounded-lg bg-emerald-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40">
+                            Save draft
+                          </button>
                         </div>
                     )}
                 </div>
@@ -894,15 +1029,43 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* Floating save bar for inline edits */}
-      {dirtyInlineCount > 0 && (
-        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px)+0.5rem)] left-11 right-11 z-50 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-2.5 shadow-lg dark:border-amber-700 dark:bg-amber-900/30 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:justify-start sm:bottom-24">
-          <span className="text-xs font-semibold text-amber-800 dark:text-amber-200">{dirtyInlineCount} unsaved change{dirtyInlineCount === 1 ? '' : 's'}</span>
-          <button onClick={discardInlineEdits} className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700">Discard all</button>
-          <button disabled={inlineSaving} onClick={saveInlineEdits}
-            className="rounded-full bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-600 disabled:opacity-50">
-            {inlineSaving ? 'Saving...' : 'Save all'}
-          </button>
+      {reviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm"
+          onClick={() => { if (!inlineSaving) setReviewOpen(false); }}>
+          <div className="bg-white dark:bg-slate-800 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-slate-700">
+              <div>
+                <p className="text-sm font-bold text-gray-900 dark:text-white">Review all updates</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">{draftCount} draft update{draftCount === 1 ? '' : 's'} will be saved.</p>
+              </div>
+              <button type="button" disabled={inlineSaving} onClick={() => setReviewOpen(false)} className="p-1.5 rounded-xl hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-slate-700">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {draftList.map(draft => (
+                <div key={draft.productId} className="rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-700/50">
+                  <p className="text-xs font-semibold text-gray-900 dark:text-white">
+                    {draft.productName}{draft.localName ? ` (${draft.localName})` : ''}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-gray-600 dark:text-slate-300">{editSummary(draft.edit, draft.stockUnit)}</p>
+                  {draft.storeName && <p className="mt-0.5 text-[10px] text-gray-500 dark:text-slate-400">{draft.storeName}</p>}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3 dark:border-slate-700">
+              <button type="button" disabled={inlineSaving} onClick={() => setReviewOpen(false)}
+                className="rounded-full border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
+                Back
+              </button>
+              <button type="button" disabled={inlineSaving} onClick={confirmSaveAll}
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50">
+                {inlineSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {inlineSaving ? 'Saving...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
