@@ -2,7 +2,9 @@
 
 ## Overview
 
-New storage driver `hostinger` added behind feature flag `IMAGE_STORAGE_DRIVER`. Default remains `supabase` (no production change). Set `IMAGE_STORAGE_DRIVER=hostinger` in mart-backend env to route new uploads to the Hostinger storage service.
+The `hostinger` storage driver is the only supported driver (`IMAGE_STORAGE_DRIVER` defaults to `hostinger` in `mart-backend/src/config/index.ts`). On the Hostinger VPS, `HOSTINGER_STORAGE_URL` must be the container-to-container address `http://gokez-storage:8080`, not the public `https://images.gokez.com` URL.
+
+The Image Manager lists files indexed by the storage service only. Legacy image URLs still stored in the database are not listed; re-upload those images through the Hub to make them appear.
 
 ## Components
 
@@ -20,16 +22,16 @@ New storage driver `hostinger` added behind feature flag `IMAGE_STORAGE_DRIVER`.
 4. Configure nginx using `storage-service/nginx/images.conf`; obtain TLS cert for `images.gokez.com`.
 5. Verify `curl https://images.gokez.com/api/v1/health`.
 
-## Switching drivers (testing)
+## Backend configuration
 
 Set in mart-backend env:
 ```
 IMAGE_STORAGE_DRIVER=hostinger
-HOSTINGER_STORAGE_URL=https://images.gokez.com
+HOSTINGER_STORAGE_URL=http://gokez-storage:8080
 HOSTINGER_STORAGE_API_KEY=<key>
 HOSTINGER_STORAGE_PROJECT_ID=gokez-mart
 ```
-Restart backend. New uploads go to Hostinger; existing Supabase URLs remain untouched.
+Use the public `https://images.gokez.com` URL only when calling from outside the VPS (for example from Render). Restart backend. New uploads go to Hostinger.
 
 ## Mart-hub folder mapping
 
@@ -55,5 +57,4 @@ Restart backend. New uploads go to Hostinger; existing Supabase URLs remain unto
 - [ ] Oversized file rejected (400).
 - [ ] Non-image file rejected (400).
 - [ ] Admin auth on mart-backend still required for uploads.
-- [ ] Existing Supabase image URLs still render.
-- [ ] Feature flag rollback: set `IMAGE_STORAGE_DRIVER=supabase`, restart, uploads resume to Supabase.
+- [ ] Image Manager lists uploaded files and thumbnails render from `https://images.gokez.com`.
