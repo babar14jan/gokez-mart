@@ -147,6 +147,18 @@ const logAdjustment = (reason: string, note: string | null) => {
   return { label: 'Adjustment', note: text };
 };
 
+const cardActivity = (reason: string | null | undefined, note: string | null | undefined, changeQty: number) => {
+  if ((note || '').toLowerCase().startsWith('stock set manually')) return { label: 'Set', note: '' };
+  if (changeQty > 0) return { label: 'Add', note: note || '' };
+  if (changeQty < 0) {
+    const adjusted = logAdjustment(reason || 'manual_correction', note || null);
+    const detail = adjusted.note || (adjusted.label !== 'Adjustment' ? adjusted.label.replace('Adjustment · ', '') : '');
+    return { label: 'Remove', note: detail };
+  }
+  const adjusted = logAdjustment(reason || '', note || null);
+  return { label: adjusted.label, note: adjusted.note };
+};
+
 const movementLabel = (type?: string | null) => {
   if (!type) return '';
   if (type === 'adjustment' || type === 'damage' || type === 'reconciliation') return 'Adjustment';
@@ -722,10 +734,10 @@ export default function InventoryPage() {
                     {item.recentRestocks?.length ? (
                       <div className="mt-1 space-y-0.5">
                         {item.recentRestocks.slice(0, 2).map((r, i) => {
-                          const { label, note } = logAdjustment(r.reason || '', r.note || null);
+                          const { label, note } = cardActivity(r.reason, r.note, r.changeQty);
                           return (
                             <p key={i} className="text-[10px] text-gray-500 dark:text-slate-400">
-                              {label}: {r.changeQty > 0 ? '+' : ''}{r.changeQty} · {new Date(r.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })} · {r.createdBy || r.createdByUsername || 'System'}{note ? ` · ${note}` : ''}
+                              {label}: {r.changeQty > 0 ? '+' : ''}{r.changeQty} · {new Date(r.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })} · {r.createdBy || r.createdByUsername || 'User'}{note ? ` · ${note}` : ''}
                             </p>
                           );
                         })}

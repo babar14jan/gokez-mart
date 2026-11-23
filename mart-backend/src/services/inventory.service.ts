@@ -63,9 +63,11 @@ export class InventoryService {
                   SELECT l.change_qty, l.reason, l.note, l.created_at, a.name, a.username
                     FROM mart_inventory_log l
                    LEFT JOIN mart_admins a ON a.id = l.created_by
-                   WHERE l.product_id = sp.product_id AND l.store_id = sp.store_id
-                   ORDER BY l.created_at DESC
-                   LIMIT 2
+                    WHERE l.product_id = sp.product_id AND l.store_id = sp.store_id
+                      AND l.created_by IS NOT NULL
+                      AND l.reason <> 'order_deducted'
+                    ORDER BY l.created_at DESC
+                    LIMIT 2
                 ) l
               ), '[]'::json) as "recentRestocks"
        FROM mart_store_products sp
