@@ -256,7 +256,7 @@ export function buildOrderWindow(
   }
   const storeIds = normalizeAnalyticsStoreIds(storeId);
   if (storeIds.length) {
-    clauses.push(`o.store_id = ANY(${at()}::text[])`);
+    clauses.push(`o.store_id = ANY(${at()}::uuid[])`);
     params.push(storeIds);
   }
   const clause = clauses.join(' AND ');
@@ -1154,7 +1154,7 @@ export class OrderService {
        FROM mart_orders o
        WHERE (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date > (($1::date) - 56)
          AND (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date <= ($1::date)
-         ${weeklyStoreIds.length ? `AND o.store_id = ANY($${weeklyParams.length}::text[])` : ''}
+         ${weeklyStoreIds.length ? `AND o.store_id = ANY($${weeklyParams.length}::uuid[])` : ''}
        GROUP BY 1`,
       weeklyParams
     );
@@ -1206,7 +1206,7 @@ export class OrderService {
        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
        : baseWhere;
     const phoneIdentity = `NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '')`;
-    const storeScope = storeIds.length ? `AND o.store_id = ANY($${params.length + 1}::text[])` : '';
+    const storeScope = storeIds.length ? `AND o.store_id = ANY($${params.length + 1}::uuid[])` : '';
     const lifecycleParams = storeIds.length ? [...params, storeIds] : params;
     const aggSql = `SELECT
          ${phoneIdentity} AS ckey,

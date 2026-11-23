@@ -1482,7 +1482,7 @@ async function getAnalyticsStoreIds(storeId: string): Promise<string[]> {
       WHERE z.primary_store_id = $1 AND z.is_active = true`,
     [storeId]
   );
-  return zoneRows.rows.length ? zoneRows.rows.map(r => r.storeId) : [storeId];
+  return Array.from(new Set([storeId, ...zoneRows.rows.map(r => r.storeId)]));
 }
 
 export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
