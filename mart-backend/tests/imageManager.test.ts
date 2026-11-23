@@ -136,6 +136,12 @@ describe('image manager reference registry', () => {
     assert.doesNotMatch(campaignBlock, /name: 'image_url'/);
   });
 
+  test('uses the current home sections label column', () => {
+    const homeSectionsBlock = serviceSource.match(/table: 'mart_home_sections',[\s\S]*?labelColumns: \[[^\]]*\]/)![0];
+    assert.match(homeSectionsBlock, /'kind'/);
+    assert.doesNotMatch(homeSectionsBlock, /'section_key'/);
+  });
+
   test('matches URLs, folder paths, thumbnails and storage ids through a reverse index', () => {
     assert.match(helperSource, /function normalizeImageValue/);
     assert.match(helperSource, /function filenameAliases/);

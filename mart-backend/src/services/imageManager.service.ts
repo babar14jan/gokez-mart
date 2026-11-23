@@ -145,7 +145,7 @@ export const IMAGE_REFERENCE_SOURCES: ReferenceSource[] = [
     table: 'mart_home_sections',
     primaryKey: 'id',
     columns: [{ name: 'config', kind: 'json' }],
-    labelColumns: ['title', 'section_key'],
+    labelColumns: ['title', 'kind'],
   },
   {
     table: 'mart_settings',
