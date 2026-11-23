@@ -1,25 +1,33 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { TrendingUp, ShoppingBag, CreditCard, Wallet, Smartphone, CheckCircle, XCircle, Package, Tag, Calendar } from 'lucide-react';
-import { ordersApi, productsApi, type OrderSummary, type SummaryRange } from '../services/api';
+import { ordersApi, productsApi, topSellingApi, type OrderInsights, type OrderSummary, type ProductLeader, type SummaryRange } from '../services/api';
 import { orderBrowseDate } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
-import { DateRangeChips } from '../components/DateRangeFilter';
+import { DateRangeChips, istDay } from '../components/DateRangeFilter';
 
 type Tab = 'revenue' | 'orders' | 'products';
 type DateRange = 'today' | 'yesterday' | 'all' | 'custom';
-
-const toDateStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const mapDateRange = (r: DateRange): SummaryRange =>
   r === 'today' ? 'today' : r === 'all' ? 'all' : 'custom';
 
 function getYesterdayStr() {
-  const d = new Date(); d.setDate(d.getDate() - 1);
-  return toDateStr(d);
+  return istDay(-1);
 }
+
+const reportParams = (range: DateRange, customFrom: string, customTo: string) => ({
+  storeId: getActiveStoreId(),
+  range: mapDateRange(range),
+  from: range === 'yesterday' ? getYesterdayStr() : (customFrom || undefined),
+  to: range === 'yesterday' ? getYesterdayStr() : (customTo || undefined),
+});
+
+const hasValidCustomRange = (range: DateRange, customFrom: string, customTo: string) =>
+  range !== 'custom' || (Boolean(customFrom) && Boolean(customTo) && customFrom <= customTo);
+
+const PAGE_SIZE = 50;
 
 const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
 
@@ -161,6 +169,10 @@ function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; ra
   const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
     const yesterday = getYesterdayStr();
+    if (!hasValidCustomRange(p.range, p.customFrom, p.customTo)) {
+      setSummary(EMPTY_SUMMARY);
+      return;
+    }
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
@@ -271,13 +283,53 @@ function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; ra
 
 
 // ── Orders Tab ────────────────────────────────────────────────────────────────
-function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; range: DateRange; customFrom: string; customTo: string }) {
+function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFrom: string; customTo: string }) {
   const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
+  const [insights, setInsights] = useState<OrderInsights>({ daily: [], weekly: [] });
+  const [pagination, setPagination] = useState({ total: 0, hasMore: false });
+  const [page, setPage] = useState(0);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState('');
+  const [insightsRefresh, setInsightsRefresh] = useState(0);
   const paramsRef = useLatestParams(range, customFrom, customTo);
+  const refreshInsights = useCallback(() => setInsightsRefresh(value => value + 1), []);
+
+  useEffect(() => { setPage(0); }, [range, customFrom, customTo]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setInsightsLoading(true);
+    setInsightsError('');
+    setInsights({ daily: [], weekly: [] });
+    setPagination({ total: 0, hasMore: false });
+    if (!hasValidCustomRange(range, customFrom, customTo)) {
+      setInsightsError('Choose a valid custom date range.');
+      setInsightsLoading(false);
+      return () => { cancelled = true; };
+    }
+    ordersApi.getInsights({ ...reportParams(range, customFrom, customTo), limit: PAGE_SIZE, offset: page * PAGE_SIZE }, { fresh: true })
+      .then(r => {
+        if (cancelled) return;
+        setInsights(r.data.data || { daily: [], weekly: [] });
+        setPagination(r.data.pagination || { total: 0, hasMore: false });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInsights({ daily: [], weekly: [] });
+        setPagination({ total: 0, hasMore: false });
+        setInsightsError('Could not load daily orders.');
+      })
+      .finally(() => { if (!cancelled) setInsightsLoading(false); });
+    return () => { cancelled = true; };
+  }, [range, customFrom, customTo, page, insightsRefresh]);
 
   const loadSummary = useCallback((fresh = false) => {
     const p = paramsRef.current;
     const yesterday = getYesterdayStr();
+    if (!hasValidCustomRange(p.range, p.customFrom, p.customTo)) {
+      setSummary(EMPTY_SUMMARY);
+      return;
+    }
     ordersApi.getSummary({
       storeId: getActiveStoreId(),
       range: mapDateRange(p.range),
@@ -290,41 +342,28 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
   useLivePoll(loadSummary);
+  useLivePoll(refreshInsights);
 
-  const filtered = useMemo(() => filterByDate(orders, range, customFrom, customTo), [orders, range, customFrom, customTo]);
   const completionRate = summary.placed ? Math.round((summary.delivered / summary.placed) * 100) : 0;
 
-  const now = new Date();
-  const thisWeek = orders.filter(o => orderBrowseDate(o) >= new Date(now.getTime() - 7 * 86400000)).length;
-  const lastWeek = orders.filter(o => { const d = orderBrowseDate(o); return d >= new Date(now.getTime() - 14 * 86400000) && d < new Date(now.getTime() - 7 * 86400000); }).length;
-  const twoWeeksAgo = orders.filter(o => { const d = orderBrowseDate(o); return d >= new Date(now.getTime() - 21 * 86400000) && d < new Date(now.getTime() - 14 * 86400000); }).length;
-  const growth = lastWeek === 0 ? null : Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
+  const weekBars = insights.weekly;
+  const prevWeek = weekBars.length > 1 ? weekBars[weekBars.length - 2].value : 0;
+  const thisWeek = weekBars.length ? weekBars[weekBars.length - 1].value : 0;
+  const growth = prevWeek === 0 ? null : Math.round(((thisWeek - prevWeek) / prevWeek) * 100);
 
-  const days = useMemo(() => getDays(range, customFrom, customTo), [range, customFrom, customTo]);
-  const showLabel = (i: number) => days.length <= 7 || i % Math.ceil(days.length / 7) === 0;
+  const chartDaily = useMemo(() => [...insights.daily].reverse(), [insights.daily]);
+  const showLabel = (i: number) => chartDaily.length <= 7 || i % Math.ceil(chartDaily.length / 7) === 0;
 
-  const dailyOrders = days.map(d => ({
-    label: showLabel(days.indexOf(d)) ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '',
-    fullLabel: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-    value: filtered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString()).length,
-  }));
-
-  const weekBars = [
-    { label: '2w ago', value: twoWeeksAgo },
-    { label: 'Last wk', value: lastWeek },
-    { label: 'This wk', value: thisWeek },
-  ];
-
-  const dailyTable = days.map(d => {
-    const dayOrders = filtered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString());
+  const dailyOrders = chartDaily.map((row, index) => {
+    const label = new Date(`${row.date}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
     return {
-      date: d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }),
-      total: dayOrders.length,
-      delivered: dayOrders.filter(o => o.status === 'delivered').length,
-      cancelled: dayOrders.filter(o => o.status === 'cancelled').length,
-      revenue: dayOrders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0),
+      label: showLabel(index) ? label : '',
+      fullLabel: label,
+      value: row.total,
     };
-  }).filter(r => r.total > 0).reverse();
+  });
+
+  const dailyTable = insights.daily;
 
   return (
     <div className="space-y-6">
@@ -349,9 +388,9 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
               </span>
             )}
           </div>
-          <BarChart data={weekBars} color="bg-blue-500" />
+          {weekBars.every(w => w.value === 0) ? <p className="text-xs text-gray-500 text-center py-8">No orders in the last 8 weeks</p> : <BarChart data={weekBars} color="bg-blue-500" />}
           <div className="grid grid-cols-3 gap-2 mt-4">
-            {[{ label: '2 weeks ago', value: twoWeeksAgo }, { label: 'Last week', value: lastWeek }, { label: 'This week', value: thisWeek }].map(w => (
+            {weekBars.slice(-3).map(w => (
               <div key={w.label} className="text-center bg-gray-50 dark:bg-slate-700 rounded-xl p-2">
                 <p className="text-base font-bold text-gray-900 dark:text-white">{w.value}</p>
                 <p className="text-[10px] text-gray-500 dark:text-slate-400">{w.label}</p>
@@ -361,21 +400,40 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
         </div>
       </div>
 
-      {dailyTable.length > 0 && (
+      {(dailyTable.length > 0 || insightsError) && (
         <div className="page-card">
-          <div className="page-card-header"><p className="page-card-title">Orders by Day</p></div>
+          <div className="page-card-header">
+            <p className="page-card-title">Orders by Day</p>
+            {insightsLoading && <span className="text-[10px] text-gray-500">Updating…</span>}
+          </div>
+          {insightsError && <p className="px-4 py-2 text-xs text-red-600" role="alert">{insightsError}</p>}
           <div className="hidden sm:grid grid-cols-5 gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700 border-b border-gray-100 dark:border-slate-600 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
             <div>Date</div><div className="text-center">Total</div><div className="text-center">Delivered</div><div className="text-center">Cancelled</div><div className="text-right">Revenue</div>
           </div>
-          {dailyTable.slice(0, 14).map((r, i) => (
-            <div key={i} className="grid grid-cols-2 sm:grid-cols-5 gap-3 px-4 py-2.5 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs items-center">
-              <div className="font-medium text-gray-900 dark:text-white">{r.date}</div>
+          {dailyTable.map(r => (
+            <div key={r.date} className="grid grid-cols-2 sm:grid-cols-5 gap-3 px-4 py-2.5 border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 text-xs items-center">
+              <div className="font-medium text-gray-900 dark:text-white">{new Date(`${r.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}</div>
               <div className="text-right sm:text-center font-semibold text-gray-900 dark:text-white">{r.total}</div>
               <div className="hidden sm:block text-center text-emerald-600 font-semibold">{r.delivered}</div>
               <div className="hidden sm:block text-center text-red-500">{r.cancelled}</div>
               <div className="hidden sm:block text-right font-bold text-gray-900 dark:text-white">₹{r.revenue.toFixed(0)}</div>
             </div>
           ))}
+          <div className="flex items-center justify-between gap-2 px-4 py-2.5">
+            <p className="text-[11px] text-gray-500 dark:text-slate-400">
+              {pagination.total === 0 ? '0' : page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, pagination.total)} of {pagination.total} days
+            </p>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={page === 0 || insightsLoading} onClick={() => setPage(p => p - 1)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                Previous
+              </button>
+              <button type="button" disabled={!pagination.hasMore || insightsLoading} onClick={() => setPage(p => p + 1)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -385,6 +443,40 @@ function OrdersTab({ orders, range, customFrom, customTo }: { orders: any[]; ran
 
 // ── Products Tab ──────────────────────────────────────────────────────────────
 function ProductsTab({ orders, products, range, customFrom, customTo }: { orders: any[]; products: any[]; range: DateRange; customFrom: string; customTo: string }) {
+  const [category, setCategory] = useState('');
+  const [leaders, setLeaders] = useState<ProductLeader[]>([]);
+  const [leadersLoading, setLeadersLoading] = useState(false);
+  const [leadersError, setLeadersError] = useState('');
+  const [leadersRefresh, setLeadersRefresh] = useState(0);
+  const refreshLeaders = useCallback(() => setLeadersRefresh(value => value + 1), []);
+
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p: any) => p.categoryName).filter(Boolean))).sort(),
+    [products],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setLeadersLoading(true);
+    setLeadersError('');
+    setLeaders([]);
+    if (!hasValidCustomRange(range, customFrom, customTo)) {
+      setLeadersError('Choose a valid custom date range.');
+      setLeadersLoading(false);
+      return () => { cancelled = true; };
+    }
+    topSellingApi.getLeaders({ ...reportParams(range, customFrom, customTo), category: category || undefined, limit: 20 }, { fresh: true })
+      .then(r => { if (!cancelled) setLeaders((r.data.data?.products || []) as ProductLeader[]); })
+      .catch(() => {
+        if (cancelled) return;
+        setLeaders([]);
+        setLeadersError('Could not load top products.');
+      })
+      .finally(() => { if (!cancelled) setLeadersLoading(false); });
+    return () => { cancelled = true; };
+  }, [range, customFrom, customTo, category, leadersRefresh]);
+
+  useLivePoll(refreshLeaders);
 
   // Units and revenue count only successfully delivered orders, so the figures
   // reflect products actually sold rather than baskets cancelled after checkout.
@@ -392,16 +484,6 @@ function ProductsTab({ orders, products, range, customFrom, customTo }: { orders
     () => filterByDate(orders, range, customFrom, customTo).filter(o => o.status === 'delivered'),
     [orders, range, customFrom, customTo],
   );
-
-  const productCount: Record<string, { name: string; units: number; revenue: number }> = {};
-  for (const order of scoped) {
-    for (const item of (order.items || [])) {
-      if (!productCount[item.productName]) productCount[item.productName] = { name: item.productName, units: 0, revenue: 0 };
-      productCount[item.productName].units += item.quantity;
-      productCount[item.productName].revenue += item.total;
-    }
-  }
-  const topProducts = Object.values(productCount).sort((a, b) => b.units - a.units).slice(0, 5);
 
   const catCount: Record<string, number> = {};
   for (const order of scoped) {
@@ -418,17 +500,25 @@ function ProductsTab({ orders, products, range, customFrom, customTo }: { orders
     <div className="space-y-6">
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="page-card">
-          <div className="page-card-header">
-            <div className="flex items-center gap-2"><Package className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Top Products by Units Sold</p></div>
+          <div className="page-card-header flex-wrap gap-2">
+            <div className="flex items-center gap-2"><Package className="w-4 h-4 text-gray-500 dark:text-slate-400" /><p className="page-card-title">Top 20 Products by Units Sold</p></div>
+            <select value={category} onChange={e => setCategory(e.target.value)}
+              aria-label="Filter products by category"
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <option value="">All categories</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
-          {topProducts.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No delivered orders yet</p> : (
+          {leadersError && <p className="px-4 py-2 text-xs text-red-600" role="alert">{leadersError}</p>}
+          {leadersLoading && <p className="px-4 py-1 text-[10px] text-gray-500">Updating…</p>}
+          {leaders.length === 0 ? <p className="text-xs text-gray-500 text-center py-8">No delivered orders yet</p> : (
             <div>
-              {topProducts.map((p, i) => (
-                <div key={p.name} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
+              {leaders.map((p, i) => (
+                <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
                   <span className="text-xs font-bold text-gray-500 w-5">#{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{p.name}</p>
-                    <p className="text-[10px] text-gray-500 dark:text-slate-400">{p.units} units sold</p>
+                    <p className="text-[10px] text-gray-500 dark:text-slate-400">{p.quantitySold} units · {p.categoryName}</p>
                   </div>
                   <p className="text-xs font-bold text-gray-900 dark:text-white">₹{p.revenue.toFixed(0)}</p>
                 </div>
@@ -470,8 +560,8 @@ export default function AnalyticsPage() {
   const [data, setData] = useState({ orders: [], products: [] });
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<DateRange>('today');
-  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
-  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+  const [customFrom, setCustomFrom] = useState(istDay());
+  const [customTo, setCustomTo] = useState(istDay());
 
   useEffect(() => {
     Promise.all([
@@ -515,7 +605,7 @@ export default function AnalyticsPage() {
       />
 
       {tab === 'revenue'   && <RevenueTab   orders={data.orders} range={range} customFrom={customFrom} customTo={customTo} />}
-      {tab === 'orders'    && <OrdersTab    orders={data.orders} range={range} customFrom={customFrom} customTo={customTo} />}
+      {tab === 'orders'    && <OrdersTab    range={range} customFrom={customFrom} customTo={customTo} />}
       {tab === 'products'  && <ProductsTab  orders={data.orders} products={data.products} range={range} customFrom={customFrom} customTo={customTo} />}
     </div>
   );

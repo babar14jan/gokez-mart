@@ -3,6 +3,7 @@ import { Leaf } from 'lucide-react';
 import type { Product } from '../services/api';
 import { useCartStore } from '../store/cartStore';
 import { productLabelParts } from '../utils/productLabel';
+import { getDiscountedPrice, getLinePricing } from '../utils/productPricing';
 import ProductDetailSheet from './ProductDetailSheet';
 import CartQuantityControl from './CartQuantityControl';
 import SmartImage from './SmartImage';
@@ -16,16 +17,7 @@ interface ProductCardProps {
   onAdd?: () => void;
 }
 
-export function getDiscountedPrice(product: Product): number {
-  const options = product.weightOptions?.length ? product.weightOptions : null;
-  const primaryOption = options?.find(option => option.label === product.unit) || null;
-  const firstOption = primaryOption || options?.[0] || null;
-  const baseOptionPrice = firstOption ? firstOption.price : product.price;
-  const baseDiscount = firstOption
-    ? (firstOption === primaryOption ? (firstOption.discountPercent ?? product.discountPercent ?? 0) : (firstOption.discountPercent ?? 0))
-    : (product.discountPercent || 0);
-  return baseDiscount > 0 ? Math.round(baseOptionPrice * (1 - baseDiscount / 100)) : baseOptionPrice;
-}
+export { getDiscountedPrice };
 
 export default function ProductCard({ product, disabled = false, onAdd }: ProductCardProps) {
   const { items, addItem, updateQty } = useCartStore();
@@ -57,7 +49,10 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
     if (hasMultipleOptions) {
       if (qty > 0) {
         const entry = productCartItems.find(i => i.quantity > 0);
-        if (entry) addItem(product, entry.unit, entry.price, entry.mrp);
+        if (entry) {
+          const pricing = getLinePricing(product, entry.unit);
+          addItem(product, entry.unit, pricing.price, pricing.mrp);
+        }
         return;
       }
       setShowDetail(true);

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload, FileSpreadsheet, Download } from 'lucide-react';
+import { Package, Plus, Search, Loader2, X, Pencil, Trash2, Camera, Upload, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
 import { categoriesApi, catalogApi, productsApi } from '../services/api';
 import * as XLSX from 'xlsx';
 import CategoryIcon from '../components/CategoryIcon';
@@ -27,7 +27,90 @@ interface CatalogProduct {
 interface Category { id: string; name: string; slug?: string; icon: string; }
 
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
+
+const PRODUCT_COLUMNS = [
+  { key: 'name', label: 'Product Name *' },
+  { key: 'localName', label: 'Local Name' },
+  { key: 'searchAliases', label: 'Search aliases (hidden from customers)' },
+  { key: 'category', label: 'Category' },
+  { key: 'description', label: 'Description' },
+  { key: 'photoPath', label: 'Photo path (optional)' },
+] as const;
+
+const FIELD_LABELS = PRODUCT_COLUMNS.reduce((labels, column) => ({ ...labels, [column.key]: column.label }), {} as Record<(typeof PRODUCT_COLUMNS)[number]['key'], string>);
+
+const TEMPLATE_SAMPLE = ['Fresh Tomatoes', 'Tamatar', 'Tomato, Tamatar', 'Fresh Vegetables', 'Fresh red tomatoes', 'uploads/products/tomato.jpg'];
+
+interface ProductFields {
+  name: string;
+  localName: string;
+  searchAliases: string;
+  description: string;
+  categoryId: string;
+}
+
+interface ProductPhotoData {
+  photoUrl?: string;
+  photos?: string[];
+  photoVariants?: ProductImageVariant[];
+  imageAssetIds?: string[];
+}
+
+type ProductSource =
+  | { kind: 'single'; photos: ProductPhotoData }
+  | { kind: 'image'; file: File }
+  | { kind: 'excel'; photoLocalPath?: string };
+
 const parseSearchAliases = (value: string) => value.split(',').map(alias => alias.trim()).filter(Boolean);
+
+const emptyProductFields = (categoryId = ''): ProductFields => ({
+  name: '', localName: '', searchAliases: '', description: '', categoryId,
+});
+
+const productFieldsFromCatalog = (p: CatalogProduct): ProductFields => ({
+  name: p.name,
+  localName: p.localName || '',
+  searchAliases: p.searchAliases.join(', '),
+  description: p.description || '',
+  categoryId: p.categoryId || '',
+});
+
+const validateProductFields = (fields: ProductFields, requireCategory = false) => {
+  if (!fields.name.trim()) return 'Product Name required';
+  if (requireCategory && !fields.categoryId) return 'Category required';
+  return '';
+};
+
+const buildCatalogPayload = (fields: ProductFields, source: ProductSource) => {
+  const common = {
+    name: fields.name.trim(),
+    localName: fields.localName.trim() || undefined,
+    searchAliases: parseSearchAliases(fields.searchAliases),
+    description: fields.description.trim() || undefined,
+    categoryId: fields.categoryId || undefined,
+  };
+  if (source.kind === 'single') return { ...common, ...source.photos };
+  if (source.kind === 'excel') return { ...common, photoLocalPath: source.photoLocalPath?.trim() || undefined };
+  return common;
+};
+
+const persistCatalogProduct = async (fields: ProductFields, source: ProductSource, editingId?: string) => {
+  if (source.kind === 'image') {
+    const uploadRes = await productsApi.uploadPhoto(source.file, undefined, 'product');
+    const upload = uploadRes.data.data;
+    const photoUrl = upload.url;
+    const payload = {
+      ...buildCatalogPayload(fields, source),
+      photoUrl,
+      photos: [photoUrl],
+      photoVariants: [upload.photoVariants],
+      imageAssetIds: [upload.photoVariants.assetId],
+    };
+    return editingId ? catalogApi.update(editingId, payload) : catalogApi.create(payload);
+  }
+  const payload = buildCatalogPayload(fields, source);
+  return editingId ? catalogApi.update(editingId, payload) : catalogApi.create(payload);
+};
 
 export default function CatalogPage() {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
@@ -49,14 +132,14 @@ export default function CatalogPage() {
   const [storageResult, setStorageResult] = useState<any>(null);
 
   // Bulk image upload state
-  interface BulkUploadItem { file: File; name: string; preview: string; categoryId: string; status: 'pending' | 'uploading' | 'done' | 'error'; }
+  interface BulkUploadItem extends ProductFields { file: File; preview: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; }
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkUploadItem[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
 
   // Excel upload state
-  interface ExcelRow { name: string; localName: string; searchAliases: string; categoryRaw: string; categoryId: string; description: string; photoPath: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; }
+  interface ExcelRow extends ProductFields { categoryRaw: string; photoPath: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string; }
   const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [excelRows, setExcelRows] = useState<ExcelRow[]>([]);
   const [excelUploading, setExcelUploading] = useState(false);
@@ -70,20 +153,27 @@ export default function CatalogPage() {
   };
 
   const recomputeRowError = (row: ExcelRow): ExcelRow => {
-    const name = row.name.trim();
     const rawCat = row.categoryRaw.trim();
     const categoryId = row.categoryId || resolveCategory(rawCat);
-    let error: string | undefined;
-    if (!name) error = 'Name required';
-    else if (!rawCat) error = 'Category required';
-    else if (!categoryId) error = 'Category not found';
-    return { ...row, categoryId, error };
+    const error = !row.name.trim()
+      ? 'Product Name required'
+      : !rawCat && !row.categoryId
+        ? 'Category required'
+        : !categoryId
+          ? 'Category not found'
+          : validateProductFields({ ...row, categoryId }, true);
+    return { ...row, categoryId, error: error || undefined, status: error ? 'error' : 'pending' };
+  };
+
+  const recomputeBulkItem = (item: BulkUploadItem): BulkUploadItem => {
+    const error = validateProductFields(item) || undefined;
+    return { ...item, error, status: error ? 'error' : 'pending' };
   };
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ['Product Name *', 'Local Name', 'Search aliases (hidden from customers)', 'Category', 'Description', 'Photo path (optional)'],
-      ['Fresh Tomatoes', 'Tamatar', 'Tomato, Tamatar', 'Fresh Vegetables', 'Fresh red tomatoes', 'uploads/products/tomato.jpg'],
+      PRODUCT_COLUMNS.map(column => column.label),
+      TEMPLATE_SAMPLE,
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Catalog');
@@ -157,14 +247,7 @@ export default function CatalogPage() {
       if (item.status !== 'pending' || item.error) { done++; setExcelProgress(Math.round((done / excelRows.length) * 100)); continue; }
       setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, status: 'uploading' } : r));
       try {
-        await catalogApi.create({
-          name: item.name.trim(),
-          localName: item.localName || undefined,
-          searchAliases: parseSearchAliases(item.searchAliases),
-          description: item.description || undefined,
-          categoryId: item.categoryId || undefined,
-          photoLocalPath: item.photoPath || undefined,
-        });
+        await persistCatalogProduct(item, { kind: 'excel', photoLocalPath: item.photoPath });
         setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, status: 'done' } : r));
       } catch (e: any) {
         setExcelRows(prev => prev.map((r, i) => i === idx ? { ...r, status: 'error', error: e?.response?.data?.error || 'Failed' } : r));
@@ -179,11 +262,11 @@ export default function CatalogPage() {
   const handleBulkFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
-    const items: BulkUploadItem[] = files.map(file => ({
+    const items: BulkUploadItem[] = files.map(file => recomputeBulkItem({
+      ...emptyProductFields(),
       file,
       name: file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       preview: URL.createObjectURL(file),
-      categoryId: '',
       status: 'pending',
     }));
     setBulkItems(prev => [...prev, ...items]);
@@ -191,7 +274,7 @@ export default function CatalogPage() {
   };
 
   const handleBulkUpload = async () => {
-    const pending = bulkItems.filter(i => i.status === 'pending');
+    const pending = bulkItems.filter(i => i.status === 'pending' && !i.error);
     if (!pending.length) return;
     setBulkUploading(true);
     setBulkProgress(0);
@@ -199,13 +282,10 @@ export default function CatalogPage() {
     for (const item of pending) {
       setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'uploading' } : i));
       try {
-        const uploadRes = await productsApi.uploadPhoto(item.file, undefined, 'product');
-        const upload = uploadRes.data.data;
-        const photoUrl = upload.url;
-        await catalogApi.create({ name: item.name, photoUrl, photos: [photoUrl], photoVariants: [upload.photoVariants], imageAssetIds: [upload.photoVariants.assetId], categoryId: item.categoryId || undefined });
+        await persistCatalogProduct(item, { kind: 'image', file: item.file });
         setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'done' } : i));
-      } catch {
-        setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'error' } : i));
+      } catch (e: any) {
+        setBulkItems(prev => prev.map(i => i.file === item.file ? { ...i, status: 'error', error: e?.response?.data?.error || 'Upload failed' } : i));
       }
       done++;
       setBulkProgress(Math.round((done / pending.length) * 100));
@@ -234,7 +314,7 @@ export default function CatalogPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', localName: '', searchAliases: '', description: '', categoryId: categories[0]?.id || '' });
+    setForm(emptyProductFields(categories[0]?.id || ''));
     setPhotos([]); setPhotoVariants([]); setPrimaryPhoto(null);
     setShowModal(true);
   };
@@ -245,7 +325,7 @@ export default function CatalogPage() {
     setPhotos(initialPhotos);
     setPhotoVariants(p.photoVariants?.length ? p.photoVariants : initialPhotos.map(url => ({ thumbnailUrl: url, largeUrl: url })));
     setPrimaryPhoto(initialPhotos[0] || null);
-    setForm({ name: p.name, localName: p.localName || '', searchAliases: p.searchAliases.join(', '), description: p.description || '', categoryId: p.categoryId || '' });
+    setForm(productFieldsFromCatalog(p));
     setShowModal(true);
   };
 
@@ -284,7 +364,7 @@ export default function CatalogPage() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) return;
+    if (validateProductFields(form)) return;
     setSaving(true);
     try {
       const photosToSave = photos.length ? photos : (editing?.photoUrl ? [editing.photoUrl] : []);
@@ -294,19 +374,15 @@ export default function CatalogPage() {
       const orderedVariants = orderedPhotos.map(url =>
         photoVariants.find(variant => variant.largeUrl === url) || { thumbnailUrl: url, largeUrl: url }
       );
-      const data = {
-        name: form.name.trim(),
-        localName: form.localName || undefined,
-        searchAliases: parseSearchAliases(form.searchAliases),
-        description: form.description || undefined,
-        photoUrl: orderedPhotos[0] || undefined,
-        photos: orderedPhotos,
-        photoVariants: orderedVariants,
-        imageAssetIds: orderedVariants.flatMap(variant => variant.assetId ? [variant.assetId] : []),
-        categoryId: form.categoryId || undefined,
-      };
-      if (editing) await catalogApi.update(editing.id, data);
-      else await catalogApi.create(data);
+      await persistCatalogProduct(form, {
+        kind: 'single',
+        photos: {
+          photoUrl: orderedPhotos[0] || undefined,
+          photos: orderedPhotos,
+          photoVariants: orderedVariants,
+          imageAssetIds: orderedVariants.flatMap(variant => variant.assetId ? [variant.assetId] : []),
+        },
+      }, editing?.id);
       setShowModal(false);
       await load();
     } catch (e: any) {
@@ -326,6 +402,7 @@ export default function CatalogPage() {
   };
 
   const isSuperAdmin = useAuthStore(s => s.isSuperAdmin());
+  const pendingBulkCount = bulkItems.filter(i => i.status === 'pending' && !i.error).length;
 
   const handleCleanStorage = async (dryRun: boolean) => {
     setCleaningStorage(true);
@@ -538,33 +615,33 @@ export default function CatalogPage() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Product Name *</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">{FIELD_LABELS.name}</label>
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inp} placeholder="e.g. Fresh Tomatoes" maxLength={40} autoFocus />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Local Name</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">{FIELD_LABELS.localName}</label>
                 <input type="text" value={form.localName} onChange={e => setForm(f => ({ ...f, localName: e.target.value }))} className={inp} placeholder="e.g. Tamatar, Aloo" maxLength={30} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Search aliases <span className="text-gray-500 font-normal">(hidden from customers)</span></label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">{FIELD_LABELS.searchAliases}</label>
                 <input type="text" value={form.searchAliases} onChange={e => setForm(f => ({ ...f, searchAliases: e.target.value }))} className={inp} placeholder="e.g. Piyaj, Peeyaz, Pyaz" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Category</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">{FIELD_LABELS.category}</label>
                 <select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))} className={inp}>
                   <option value="">Uncategorised</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Description</label>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">{FIELD_LABELS.description}</label>
                 <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   className={`${inp} resize-none`} rows={2} placeholder="Optional" />
               </div>
             </div>
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex gap-3">
               <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 text-sm font-semibold text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.name.trim()}
+              <button onClick={handleSave} disabled={saving || !!validateProductFields(form)}
                 className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {saving ? 'Saving...' : editing ? 'Save Changes' : 'Add to Catalog'}
@@ -603,12 +680,12 @@ export default function CatalogPage() {
       {showBulkUpload && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !bulkUploading && setShowBulkUpload(false)} />
-          <div className="relative bg-white dark:bg-slate-800 w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+          <div className="relative bg-white dark:bg-slate-800 w-full sm:max-w-2xl rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
 
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
               <div>
                 <p className="text-sm font-bold text-gray-900 dark:text-white">Bulk Upload from Images</p>
-                <p className="text-xs text-gray-500 mt-0.5">Filename becomes product name. Edit before saving.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Same fields as Add Product. Filename becomes the product name.</p>
               </div>
               {!bulkUploading && (
                 <button onClick={() => { setShowBulkUpload(false); setBulkItems([]); setBulkProgress(0); }}
@@ -649,47 +726,72 @@ export default function CatalogPage() {
                   <p className="text-sm">Select images to upload</p>
                 </div>
               ) : bulkItems.map((item, idx) => (
-                <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                <div key={idx} className={`p-3 rounded-xl border transition-all ${
                   item.status === 'done' ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/10'
                   : item.status === 'error' ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10'
                   : item.status === 'uploading' ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/10'
                   : 'border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/50'
                 }`}>
-                  <img src={item.preview} alt={item.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <input
-                      type="text"
-                      value={item.name}
-                      disabled={bulkUploading}
-                      maxLength={40}
-                      onChange={e => setBulkItems(prev => prev.map((bi, i) => i === idx ? { ...bi, name: e.target.value } : bi))}
-                      className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60"
-                    />
-                    <select
-                      value={item.categoryId}
-                      disabled={bulkUploading}
-                      onChange={e => setBulkItems(prev => prev.map((bi, i) => i === idx ? { ...bi, categoryId: e.target.value } : bi))}
-                      className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60">
-                      <option value="">No category</option>
-                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                  <div className="flex items-start gap-3">
+                    <img src={item.preview} alt={item.name} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 mb-1">{FIELD_LABELS.name}</label>
+                        <input type="text" value={item.name} disabled={bulkUploading} maxLength={40} placeholder="e.g. Fresh Tomatoes"
+                          onChange={e => setBulkItems(prev => prev.map((bi, i) => i === idx ? recomputeBulkItem({ ...bi, name: e.target.value }) : bi))}
+                          className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 mb-1">{FIELD_LABELS.localName}</label>
+                        <input type="text" value={item.localName} disabled={bulkUploading} maxLength={30} placeholder="e.g. Tamatar"
+                          onChange={e => setBulkItems(prev => prev.map((bi, i) => i === idx ? recomputeBulkItem({ ...bi, localName: e.target.value }) : bi))}
+                          className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 mb-1">{FIELD_LABELS.searchAliases}</label>
+                        <input type="text" value={item.searchAliases} disabled={bulkUploading} placeholder="e.g. Piyaj, Peeyaz"
+                          onChange={e => setBulkItems(prev => prev.map((bi, i) => i === idx ? recomputeBulkItem({ ...bi, searchAliases: e.target.value }) : bi))}
+                          className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 mb-1">{FIELD_LABELS.category}</label>
+                        <select value={item.categoryId} disabled={bulkUploading}
+                          onChange={e => setBulkItems(prev => prev.map((bi, i) => i === idx ? recomputeBulkItem({ ...bi, categoryId: e.target.value }) : bi))}
+                          className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60">
+                          <option value="">No category</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-semibold text-gray-500 dark:text-slate-400 mb-1">{FIELD_LABELS.description}</label>
+                        <textarea value={item.description} disabled={bulkUploading} rows={2} placeholder="Optional"
+                          onChange={e => setBulkItems(prev => prev.map((bi, i) => i === idx ? recomputeBulkItem({ ...bi, description: e.target.value }) : bi))}
+                          className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60 resize-none" />
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 w-6 text-center">
+                      {item.status === 'done' && <span className="text-emerald-500 text-sm">✓</span>}
+                      {item.status === 'error' && <span className="text-red-500 text-sm">✗</span>}
+                      {item.status === 'error' && !bulkUploading && (
+                        <button title="Retry" onClick={() => setBulkItems(prev => prev.map((bi, i) => i === idx ? recomputeBulkItem(bi) : bi))}>
+                          <RotateCcw className="w-4 h-4 text-gray-400 hover:text-indigo-500" />
+                        </button>
+                      )}
+                      {item.status === 'uploading' && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
+                      {item.status === 'pending' && !bulkUploading && (
+                        <button onClick={() => setBulkItems(prev => prev.filter((_, i) => i !== idx))}>
+                          <X className="w-4 h-4 text-gray-300 hover:text-red-400" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-shrink-0 w-6 text-center">
-                    {item.status === 'done' && <span className="text-emerald-500 text-sm">✓</span>}
-                    {item.status === 'error' && <span className="text-red-500 text-sm">✗</span>}
-                    {item.status === 'uploading' && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
-                    {item.status === 'pending' && !bulkUploading && (
-                      <button onClick={() => setBulkItems(prev => prev.filter((_, i) => i !== idx))}>
-                        <X className="w-4 h-4 text-gray-300 hover:text-red-400" />
-                      </button>
-                    )}
-                  </div>
+                  {item.error && <p className="mt-2 text-[10px] text-red-500">{item.error}</p>}
                 </div>
               ))}
             </div>
 
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0 flex gap-3">
-              {bulkItems.some(i => i.status === 'done') && !bulkUploading ? (
+              {bulkItems.length > 0 && bulkItems.every(i => i.status === 'done') && !bulkUploading ? (
                 <button onClick={() => { setShowBulkUpload(false); setBulkItems([]); setBulkProgress(0); }}
                   className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 transition-colors">
                   Done
@@ -701,10 +803,10 @@ export default function CatalogPage() {
                     Cancel
                   </button>
                   <button onClick={handleBulkUpload}
-                    disabled={bulkUploading || bulkItems.filter(i => i.status === 'pending').length === 0}
+                    disabled={bulkUploading || pendingBulkCount === 0}
                     className="flex-1 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-colors">
                     {bulkUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    {bulkUploading ? 'Uploading...' : `Upload ${bulkItems.filter(i => i.status === 'pending').length} product${bulkItems.filter(i => i.status === 'pending').length !== 1 ? 's' : ''}`}
+                    {bulkUploading ? 'Uploading...' : `Upload ${pendingBulkCount} product${pendingBulkCount !== 1 ? 's' : ''}`}
                   </button>
                 </>
               )}
@@ -722,27 +824,21 @@ export default function CatalogPage() {
               <div>
                 <p className="text-sm font-bold text-gray-900 dark:text-white">Bulk Upload from Excel</p>
                 <p className="text-xs text-gray-500 mt-0.5">Name &amp; Category are required. Category accepts name or slug.</p>
-                <p className="text-xs text-gray-400 mt-0.5">Expected columns: Product Name *, Local Name, Search aliases (hidden from customers), Category, Description, Photo path (optional)</p>
+                <p className="text-xs text-gray-400 mt-0.5">Expected columns: {PRODUCT_COLUMNS.map(column => column.label).join(', ')}</p>
                 <div className="mt-2 overflow-x-auto">
                   <table className="text-[10px] border border-gray-200 dark:border-slate-600 rounded-lg overflow-hidden">
                     <thead className="bg-gray-50 dark:bg-slate-700/50 text-gray-500 dark:text-slate-400">
                       <tr>
-                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Product Name *</th>
-                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Local Name</th>
-                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Search aliases (hidden from customers)</th>
-                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Category</th>
-                        <th className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Description</th>
-                        <th className="px-2 py-1">Photo path (optional)</th>
+                        {PRODUCT_COLUMNS.map((column, index) => (
+                          <th key={column.key} className={`px-2 py-1 ${index < PRODUCT_COLUMNS.length - 1 ? 'border-r border-gray-200 dark:border-slate-600' : ''}`}>{column.label}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="text-gray-700 dark:text-slate-300">
                       <tr>
-                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Fresh Tomatoes</td>
-                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Tamatar</td>
-                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Tomato, Tamatar</td>
-                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Fresh Vegetables</td>
-                        <td className="px-2 py-1 border-r border-gray-200 dark:border-slate-600">Fresh red tomatoes</td>
-                        <td className="px-2 py-1">uploads/products/tomato.jpg</td>
+                        {TEMPLATE_SAMPLE.map((value, index) => (
+                          <td key={PRODUCT_COLUMNS[index].key} className={`px-2 py-1 ${index < TEMPLATE_SAMPLE.length - 1 ? 'border-r border-gray-200 dark:border-slate-600' : ''}`}>{value}</td>
+                        ))}
                       </tr>
                     </tbody>
                   </table>
@@ -772,12 +868,9 @@ export default function CatalogPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-left text-gray-500 dark:text-slate-400">
-                    <th className="pb-2 pr-2">Product Name *</th>
-                    <th className="pb-2 pr-2">Local Name</th>
-                    <th className="pb-2 pr-2">Search aliases (hidden from customers)</th>
-                    <th className="pb-2 pr-2">Category *</th>
-                    <th className="pb-2 pr-2">Description</th>
-                    <th className="pb-2 pr-2">Photo path (optional)</th>
+                    {PRODUCT_COLUMNS.map(column => (
+                      <th key={column.key} className="pb-2 pr-2">{column.key === 'category' ? 'Category *' : column.label}</th>
+                    ))}
                     <th className="pb-2"></th>
                   </tr>
                 </thead>
@@ -801,7 +894,12 @@ export default function CatalogPage() {
                       </td>
                       <td className="py-2 pr-2">
                         <select value={row.categoryId} disabled={excelUploading}
-                          onChange={e => setExcelRows(prev => prev.map((r, i) => i === idx ? recomputeRowError({ ...r, categoryId: e.target.value, categoryRaw: categories.find(c => c.id === e.target.value)?.name || r.categoryRaw }) : r))}
+                          onChange={e => setExcelRows(prev => prev.map((r, i) => {
+                            if (i !== idx) return r;
+                            const categoryId = e.target.value;
+                            const categoryRaw = categoryId ? (categories.find(c => c.id === categoryId)?.name || r.categoryRaw) : '';
+                            return recomputeRowError({ ...r, categoryId, categoryRaw });
+                          }))}
                           className="w-full px-2 py-1 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white disabled:opacity-60">
                           <option value="">Select</option>
                           {categories.map(c => <option key={c.id} value={c.id}>{c.name}{c.slug ? ` (${c.slug})` : ''}</option>)}
@@ -822,6 +920,11 @@ export default function CatalogPage() {
                       <td className="py-2 text-center">
                         {row.status === 'done' && <span className="text-emerald-500">✓</span>}
                         {row.status === 'error' && <span className="text-red-500">✗</span>}
+                        {row.status === 'error' && !excelUploading && (
+                          <button title="Retry" onClick={() => setExcelRows(prev => prev.map((r, i) => i === idx ? recomputeRowError(r) : r))}>
+                            <RotateCcw className="w-4 h-4 text-gray-400 hover:text-indigo-500" />
+                          </button>
+                        )}
                         {row.status === 'uploading' && <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />}
                         {row.status === 'pending' && !excelUploading && (
                           <button onClick={() => setExcelRows(prev => prev.filter((_, i) => i !== idx))}>
@@ -839,7 +942,7 @@ export default function CatalogPage() {
             </div>
 
             <div className="px-5 py-4 border-t border-gray-100 dark:border-slate-700 flex-shrink-0 flex gap-3">
-              {excelRows.some(i => i.status === 'done') && !excelUploading ? (
+              {excelRows.length > 0 && excelRows.every(i => i.status === 'done') && !excelUploading ? (
                 <button onClick={() => { setShowExcelUpload(false); setExcelRows([]); setExcelProgress(0); }}
                   className="flex-1 py-2.5 text-sm font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 transition-colors">
                   Done

@@ -62,6 +62,9 @@ export class CatalogService {
         (SELECT COALESCE(max(z.updated_at)::text, '-') FROM mart_zones z WHERE z.id = $1),
         (SELECT count(*) || ':' || COALESCE(max(zs.updated_at)::text, '-') FROM mart_zone_settings zs WHERE zs.zone_id = $1),
         (SELECT count(*) || ':' || COALESCE(max(zs.created_at)::text, '-') FROM mart_zone_stores zs WHERE zs.zone_id = $1),
+        (SELECT count(*) || ':' || COALESCE(max(s.updated_at)::text, '-')
+           FROM mart_settings s
+          WHERE s.store_id = (SELECT z.primary_store_id FROM mart_zones z WHERE z.id = $1)),
         (SELECT count(*) || ':' || COALESCE(max(o.updated_at)::text, '-')
            FROM mart_orders o WHERE o.store_id IN (
              SELECT s.store_id FROM mart_zone_stores s WHERE s.zone_id = $1)
@@ -70,5 +73,9 @@ export class CatalogService {
       [zoneId]
     );
     return result.rows[0]?.stamp ?? '';
+  }
+
+  static async getScopedStamp(storeId: string, zoneId?: string): Promise<string> {
+    return zoneId ? this.getZoneStamp(zoneId) : this.getStamp(storeId);
   }
 }
