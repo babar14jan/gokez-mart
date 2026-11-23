@@ -3,11 +3,13 @@ import {
   Package, Loader2, X,
   AlertTriangle, CheckCircle,
   History, Plus, ArrowDownCircle, Search,
+  Wallet, CalendarClock, Layers, TrendingUp, TrendingDown,
 } from 'lucide-react';
 import { inventoryApi } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import { useZoneSelectionStore } from '../store/zoneSelectionStore';
+import { KpiCard } from '../components/referralUi';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
 
@@ -39,6 +41,53 @@ interface LogEntry {
   stockUnit: string | null;
 }
 
+const roundMoney = (n: number) => Math.round(n * 100) / 100;
+
+interface ValuationSummary {
+  storeId: string;
+  snapshotDate: string;
+  todayValue: number;
+  yesterdayValue: number;
+  changeValue: number;
+  changePercent: number | null;
+  trackedItems: number;
+  costedItems: number;
+  snapshotItems: number;
+  yesterdayEstimated: boolean;
+  generatedAt: string;
+}
+
+const EMPTY_VALUATION: ValuationSummary = {
+  storeId: '', snapshotDate: '', todayValue: 0, yesterdayValue: 0,
+  changeValue: 0, changePercent: null, trackedItems: 0, costedItems: 0,
+  snapshotItems: 0, yesterdayEstimated: false, generatedAt: '',
+};
+
+function mergeValuation(summaries: ValuationSummary[]): ValuationSummary {
+  if (summaries.length === 0) return EMPTY_VALUATION;
+  const todayValue = summaries.reduce((sum, item) => sum + item.todayValue, 0);
+  const yesterdayValue = summaries.reduce((sum, item) => sum + item.yesterdayValue, 0);
+  const changeValue = roundMoney(todayValue - yesterdayValue);
+  return {
+    ...EMPTY_VALUATION,
+    todayValue: roundMoney(todayValue),
+    yesterdayValue: roundMoney(yesterdayValue),
+    changeValue,
+    changePercent: summaries.some(item => item.changePercent === null || item.yesterdayValue <= 0)
+      ? null
+      : roundMoney((changeValue / yesterdayValue) * 100),
+    trackedItems: summaries.reduce((sum, item) => sum + item.trackedItems, 0),
+    costedItems: summaries.reduce((sum, item) => sum + item.costedItems, 0),
+    snapshotItems: summaries.reduce((sum, item) => sum + item.snapshotItems, 0),
+    yesterdayEstimated: summaries.some(item => item.yesterdayEstimated),
+    generatedAt: (() => {
+      const times = summaries.map(item => item.generatedAt).sort();
+      return times[times.length - 1] || '';
+    })(),
+  };
+}
+
+const formatMoney = (value: number) => `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
 function formatStock(qty: number, unit: string): string {
   if (unit === 'kg' && qty < 1 && qty > 0) return `${Math.round(qty * 1000)} g`;
@@ -47,7 +96,6 @@ function formatStock(qty: number, unit: string): string {
 }
 
 const DEFAULT_LOW_THRESHOLD = 5; // used when no threshold is explicitly set
-const roundMoney = (n: number) => Math.round(n * 100) / 100;
 
 function stockStatus(item: InventoryItem): 'untracked' | 'out' | 'low' | 'ok' {
   // If manually marked out_of_stock, treat as out
@@ -62,6 +110,8 @@ function stockStatus(item: InventoryItem): 'untracked' | 'out' | 'low' | 'ok' {
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [valuation, setValuation] = useState<ValuationSummary>(EMPTY_VALUATION);
+  const [valuationLoading, setValuationLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [enablingTracking, setEnablingTracking] = useState(false);
@@ -155,6 +205,7 @@ export default function InventoryPage() {
     // Store switches and the arrival of the manageable-store list can issue
     // overlapping loads; only the newest one may write state.
     const seq = ++loadSeq.current;
+    setValuationLoading(true);
     if (selectedStoreId === 'all') {
       const stores = manageableStores.length ? manageableStores : [];
       const targetStores = stores.length ? stores : [{ id: getActiveStoreId(), name: 'This store', isOwn: true }];
@@ -168,6 +219,16 @@ export default function InventoryPage() {
         const meta = await inventoryApi.getSettings(targetStores.find(s => s.isOwn)?.id || targetStores[0].id);
         setTrackingEnabled(Boolean(meta.data.data?.inventoryTracking));
       } catch { setTrackingEnabled(false); }
+      const summaryResults = await Promise.all(targetStores.map(async store => {
+        try {
+          return (await inventoryApi.getValuationSummary(store.id)).data.data as ValuationSummary | undefined;
+        } catch {
+          return undefined;
+        }
+      }));
+      const summaries = summaryResults.filter((summary): summary is ValuationSummary => Boolean(summary));
+      if (seq === loadSeq.current) setValuation(summaries.length ? mergeValuation(summaries) : EMPTY_VALUATION);
+      if (seq === loadSeq.current) setValuationLoading(false);
       setLoading(false);
       return;
     }
@@ -179,6 +240,15 @@ export default function InventoryPage() {
     if (seq !== loadSeq.current) return;
     setItems([...(inv.data.data || []).map((item: any) => ({ ...item, storeId: selectedStoreId, storeName: manageableStores.find(s => s.id === selectedStoreId)?.name || selectedStore }))]);
     setTrackingEnabled(Boolean(meta.data.data?.inventoryTracking));
+    try {
+      const summary = (await inventoryApi.getValuationSummary(selectedStoreId)).data.data as ValuationSummary;
+      if (seq !== loadSeq.current) return;
+      setValuation(summary);
+    } catch {
+      if (seq !== loadSeq.current) return;
+      setValuation(EMPTY_VALUATION);
+    }
+    setValuationLoading(false);
     setLoading(false);
   };
 
@@ -187,7 +257,7 @@ export default function InventoryPage() {
     const onVisible = () => { if (document.visibilityState === 'visible') load(true); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [selectedStoreId]);
+  }, [selectedStoreId, manageableStores.length]);
 
   const enableInventoryTracking = async () => {
     setEnablingTracking(true);
@@ -396,6 +466,24 @@ export default function InventoryPage() {
           )}
         </div>
       )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Stock value today" value={valuationLoading ? '—' : formatMoney(valuation.todayValue)}
+          sub={`${valuation.trackedItems} tracked items in scope`} icon={<Wallet className="w-4 h-4 text-white" />} gradient="from-emerald-400 to-green-600" />
+        <KpiCard label="Yesterday closing value" value={valuationLoading ? '—' : formatMoney(valuation.yesterdayValue)}
+          sub={valuation.snapshotItems === 0 ? 'No snapshot yet'
+            : valuation.yesterdayEstimated ? 'Estimated from movement ledger' : `${valuation.snapshotItems} snapshotted items`}
+          icon={<CalendarClock className="w-4 h-4 text-white" />} gradient="from-sky-400 to-blue-600" />
+        <KpiCard label="Costed stock lines" value={valuationLoading ? '—' : `${valuation.costedItems}/${valuation.trackedItems}`}
+          sub="items have a unit cost" icon={<Layers className="w-4 h-4 text-white" />} gradient="from-amber-400 to-orange-600" />
+        <KpiCard label="Change vs yesterday"
+          value={valuationLoading || valuation.changePercent === null ? '—'
+            : `${valuation.changeValue >= 0 ? '+' : '-'}${Math.abs(valuation.changePercent).toFixed(1)}%`}
+          sub={valuation.changePercent === null ? 'Needs yesterday snapshot'
+            : `${valuation.changeValue >= 0 ? '+' : '-'}${formatMoney(Math.abs(valuation.changeValue))}`}
+          icon={valuation.changeValue >= 0 ? <TrendingUp className="w-4 h-4 text-white" /> : <TrendingDown className="w-4 h-4 text-white" />}
+          gradient={valuation.changeValue >= 0 ? 'from-emerald-400 to-green-600' : 'from-rose-400 to-red-600'} />
+      </div>
 
       {/* Compact filter pills + KPIs */}
       <div className="inline-flex shrink-0 flex-wrap gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-900/40">

@@ -4450,6 +4450,12 @@ export const adminStocktake = asyncHandler(async (req: AdminRequest, res: Respon
 });
 
 
+export const adminGetInventoryValuationSummary = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const storeId = await resolveManagedStoreId(req);
+  const result = await InventoryService.getValuationSummary(storeId);
+  res.json({ success: true, data: result });
+});
+
 export const adminGetInventoryValuation = asyncHandler(async (req: AdminRequest, res: Response) => {
   const storeId = await resolveManagedStoreId(req);
   const asOf = typeof req.query.asOf === 'string' ? req.query.asOf : new Date().toISOString();

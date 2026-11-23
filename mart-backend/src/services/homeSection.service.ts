@@ -13,7 +13,8 @@ export type SectionKind =
   | 'banner'
   | 'referral_banner'
   | 'category_tiles'
-  | 'fresh';
+  | 'fresh'
+  | 'below_30';
 
 export interface HomeSectionConfig {
   // Category scope (multi-category supported)
@@ -67,10 +68,10 @@ export interface HomeSection {
 }
 
 export const SECTION_KINDS: SectionKind[] = [
-  'manual', 'category', 'combo', 'deals', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'referral_banner', 'category_tiles', 'fresh'
+  'manual', 'category', 'combo', 'deals', 'below_30', 'bestsellers', 'new_arrivals', 'buy_again', 'banner', 'referral_banner', 'category_tiles', 'fresh'
 ];
 // Keep old test name/export for compatibility
-export const HOME_SECTION_KEYS = ['todays_combos', 'fresh_vegetables', 'deals', 'top_picks'];
+export const HOME_SECTION_KEYS = ['todays_combos', 'fresh_vegetables', 'deals', 'top_picks', 'below_30'];
 const KIND_SET = new Set<string>(SECTION_KINDS);
 
 function normalizeKind(k: unknown): unknown {
@@ -295,6 +296,19 @@ async function resolveItems(storeId: string, section: HomeSection): Promise<any[
     const res = await query(`${PRODUCT_RESOLVE_SELECT.replace('WHERE sp.store_id = $1', `WHERE sp.store_id = $1 ${where}`)} ORDER BY sp.discount_percent DESC, sp.sort_order ASC`, params);
     let rows = res.rows.filter((r: any) => !exc.has(r.id));
     if (cfg.limit && rows.length > cfg.limit) rows = rows.slice(0, cfg.limit);
+    return rows;
+  }
+
+  if (section.kind === 'below_30') {
+    const slugs = (cfg.categorySlugs || (cfg.categorySlug ? [cfg.categorySlug] : [])).map((s: string) => String(s).toLowerCase());
+    const params: any[] = [storeId];
+    const discounted = `ROUND(sp.price::numeric * (1 - COALESCE(sp.discount_percent, 0)::numeric / 100.0))`;
+    let where = `AND sp.availability_status = 'available' AND sp.is_available = true AND ${discounted} < 30`;
+    if (slugs.length) { where += ` AND LOWER(c.slug) = ANY($${params.length + 1}::text[])`; params.push(slugs); }
+    const res = await query(`${PRODUCT_RESOLVE_SELECT.replace('WHERE sp.store_id = $1', `WHERE sp.store_id = $1 ${where}`)} ORDER BY ${discounted} ASC, sp.discount_percent DESC, sp.sort_order ASC`, params);
+    let rows = res.rows.filter((r: any) => !exc.has(r.id));
+    const limit = cfg.limit || 30;
+    if (rows.length > limit) rows = rows.slice(0, limit);
     return rows;
   }
 

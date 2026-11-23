@@ -649,6 +649,7 @@ export const inventoryApi = {
     api.post('/admin/inventory/returns/supplier', { productId, quantity, unit, unitCost, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
   stocktake: (items: Array<{ productId: string; countedQuantity: number; unit: string }>, note?: string, storeId?: string, idempotencyKey?: string) =>
     api.post('/admin/inventory/stocktake', { items, note }, { params: storeId ? { storeId } : {}, headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} }),
+  getValuationSummary: (storeId?: string) => api.get('/admin/inventory/valuation-summary', { params: storeId ? { storeId } : {} }),
   getValuation: (storeId?: string, asOf?: string) => api.get('/admin/inventory/valuation', { params: { ...(storeId ? { storeId } : {}), ...(asOf ? { asOf } : {}) } }),
   getProfitability: (from?: string, to?: string, storeId?: string) => api.get('/admin/inventory/profitability', { params: { ...(from ? { from } : {}), ...(to ? { to } : {}), ...(storeId ? { storeId } : {}) } }),
 };

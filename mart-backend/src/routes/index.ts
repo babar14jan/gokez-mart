@@ -250,6 +250,7 @@ router.post('/admin/inventory/transfers',              authenticate, ctrl.adminC
 router.post('/admin/inventory/transfers/:id/receive',  authenticate, ctrl.adminReceiveTransfer);
 router.get('/admin/inventory/transfers',               authenticate, ctrl.adminListTransfers);
 router.get('/admin/inventory/movements',              authenticate, ctrl.adminGetInventoryMovements);
+router.get('/admin/inventory/valuation-summary',      authenticate, ctrl.adminGetInventoryValuationSummary);
 router.get('/admin/inventory/valuation',              authenticate, ctrl.adminGetInventoryValuation);
 router.get('/admin/inventory/profitability',          authenticate, ctrl.adminGetInventoryProfitability);
 router.put('/admin/inventory/:productId/stock',         authenticate, ctrl.adminSetProductStock);

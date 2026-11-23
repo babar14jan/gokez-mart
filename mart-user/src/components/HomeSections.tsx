@@ -1,5 +1,5 @@
 import type { Category, HomeSection, Product } from '../services/api';
-import ProductCard from './ProductCard';
+import ProductCard, { getDiscountedPrice } from './ProductCard';
 import Button from './ui/Button';
 import SectionHeading from './ui/SectionHeading';
 import ReferralBanner from './ReferralBanner';
@@ -62,6 +62,10 @@ export function resolveSectionItems(
       list = list
         .filter(p => ((p as any).discountPercent || 0) > 0)
         .sort((a, b) => ((b as any).discountPercent || 0) - ((a as any).discountPercent || 0));
+    } else if (kind === 'below_30') {
+      list = list
+        .filter(p => (p as any).availabilityStatus === 'available' && (p as any).isAvailable !== false && getDiscountedPrice(p) < 30)
+        .sort((a, b) => getDiscountedPrice(a) - getDiscountedPrice(b));
     } else if (kind === 'category') {
       if ((cfg.productIds || []).length) {
         const byId = new Map(list.map(p => [(p as any).id, p]));

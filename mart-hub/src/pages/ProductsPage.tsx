@@ -1,10 +1,15 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Trash2, Loader2, X, Package,
-  Percent, GripVertical, Check,
-  Camera, ChevronDown, SlidersHorizontal, ArrowUpDown, BookOpen, Search,
+  Percent, GripVertical, Check, ArrowUp, ArrowDown,
+  Camera, BookOpen, Search, ChevronDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { productsApi, categoriesApi, inventoryApi, catalogApi } from '../services/api';
+import {
+  combineProductOrders, getDiscountedPrice, getProductStatus, getStockState,
+  CUSTOMER_ORDER_MODES, type CustomerOrderMode, type ProductStatusFilter,
+} from '../utils/productBrowse';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import { useZoneSelectionStore } from '../store/zoneSelectionStore';
@@ -43,10 +48,8 @@ interface Category {
   id: string; name: string; icon: string; sortOrder: number; productCount: number;
 }
 
-type SortMode = 'manual' | 'discount' | 'stock' | 'az';
-type FilterStatus = 'all' | 'available' | 'out_of_stock' | 'low_stock' | 'hidden';
-
 const inp = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder:text-gray-400';
+const PAGE_SIZE = 30;
 const UNITS = ['kg', 'g', 'pcs', 'dozen', 'litre', 'ml', 'bunch', 'packet'];
 const STOCK_UNITS = ['kg', 'litre', 'pcs', 'bunch', 'packet'];
 const parseSearchAliases = (value: string) => value.split(',').map(alias => alias.trim()).filter(Boolean);
@@ -131,10 +134,7 @@ const productOptionRows = (product: Product): OptionRow[] => {
 };
 
 function stockStatus(p: Product): 'untracked' | 'out' | 'low' | 'ok' {
-  if (p.stockQuantity === null) return 'untracked';
-  if (p.stockQuantity <= 0) return 'out';
-  if (p.lowStockThreshold !== null && p.stockQuantity <= p.lowStockThreshold) return 'low';
-  return 'ok';
+  return getStockState(p);
 }
 
 export default function ProductsPage() {
@@ -146,6 +146,8 @@ export default function ProductsPage() {
   const zoneProductsStore = useZoneSelectionStore(s => s.productsStore);
   const setZoneProductsStore = useZoneSelectionStore(s => s.setProductsStore);
   const selectedStoreId = zoneProductsStore || getActiveStoreId();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialCategory = searchParams.get('category') || 'all';
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,24 +174,23 @@ export default function ProductsPage() {
     availabilityStatus: 'available' as 'available' | 'out_of_stock' | 'hidden',
   });
 
-  // Filter + Sort (replaces tabs + sortModes)
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
-  const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [sortMode, setSortMode] = useState<SortMode>(
-    () => (localStorage.getItem('hub_products_sort') as SortMode) || 'manual'
-  );
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string>(initialCategory);
+  const [pendingArrange, setPendingArrange] = useState(() => searchParams.get('arrange') === '1');
+  const [displayModes, setDisplayModes] = useState<CustomerOrderMode[]>(['all']);
+  const [statuses, setStatuses] = useState<ProductStatusFilter[]>(['available']);
+  const [page, setPage] = useState(0);
 
   // Reorder
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderList, setReorderList] = useState<Product[]>([]);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [savingDisplayOrder, setSavingDisplayOrder] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState<Product | null>(null);
   const dragItem = useRef<number | null>(null);
   const dragOver = useRef<number | null>(null);
+  const didInitStoreReset = useRef(false);
 
   // Restock
   const [restocking, setRestocking] = useState<Product | null>(null);
@@ -306,49 +307,90 @@ export default function ProductsPage() {
   // The store can now be switched from the header zone dropdown, so keep the
   // page in a clean state whenever the selection changes.
   useEffect(() => {
+    if (!didInitStoreReset.current) {
+      didInitStoreReset.current = true;
+      return;
+    }
     setShowModal(false);
     setShowComboModal(false);
     setReorderMode(false);
     setEditing(null);
     setSearchQuery('');
+    setFilterCategory('all');
+    setDisplayModes(['all']);
+    setStatuses(['available']);
+    setPage(0);
     setLoading(true);
   }, [selectedStoreId]);
 
-  // ── Filtered + sorted product list ───────────────────────────────────────
-  const displayProducts = useMemo(() => {
-    let list = [...products];
-
-    // Search filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(p => p.productCode.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || (p.localName || '').toLowerCase().includes(q)
-        || (p.searchAliases ?? []).some(alias => alias.toLowerCase().includes(q)));
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: products.length, __uncat__: 0 };
+    for (const product of products) {
+      if (product.categoryId) counts[product.categoryId] = (counts[product.categoryId] || 0) + 1;
+      else counts.__uncat__ += 1;
     }
+    return counts;
+  }, [products]);
 
-    // Category filter
-    if (filterCategory !== 'all') {
-      if (filterCategory === '__uncat__') list = list.filter(p => !p.categoryId);
-      else list = list.filter(p => p.categoryId === filterCategory);
-    }
+  const displayProducts = useMemo(() => combineProductOrders(products, displayModes, {
+    query: searchQuery,
+    categoryId: filterCategory,
+    statuses,
+  }), [products, displayModes, searchQuery, filterCategory, statuses]);
 
-    // Status filter
-    if (filterStatus === 'available')   list = list.filter(p => p.availabilityStatus === 'available');
-    if (filterStatus === 'out_of_stock') list = list.filter(p => p.availabilityStatus === 'out_of_stock');
-    if (filterStatus === 'hidden')      list = list.filter(p => p.availabilityStatus === 'hidden');
-    if (filterStatus === 'low_stock')   list = list.filter(p => stockStatus(p) === 'low');
+  const pageCount = Math.max(1, Math.ceil(displayProducts.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pagedProducts = displayProducts.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
-    // Sort
-    if (sortMode === 'discount') return list.sort((a, b) => b.discountPercent - a.discountPercent);
-    if (sortMode === 'az')       return list.sort((a, b) => a.name.localeCompare(b.name));
-    if (sortMode === 'stock') {
-      const order = { out: 0, low: 1, ok: 2, untracked: 3 };
-      return list.sort((a, b) => order[stockStatus(a)] - order[stockStatus(b)]);
-    }
-    return list.sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [products, searchQuery, filterStatus, filterCategory, sortMode]);
+  useEffect(() => { setPage(0); }, [searchQuery, filterCategory, statuses, displayModes, selectedStoreId]);
 
-  // ── Reorder ───────────────────────────────────────────────────────────────
-  const canReorder = filterStatus === 'all' && filterCategory === 'all' && sortMode === 'manual';
+  const canReorder = displayModes.length === 1 && displayModes[0] === 'all'
+    && filterCategory !== '__uncat__' && statuses.length === 1 && statuses[0] === 'available';
+  const canSaveDisplayOrder = displayModes.length > 0 && filterCategory !== '__uncat__'
+    && statuses.length === 1 && statuses[0] === 'available'
+    && searchQuery.trim() === '' && !reorderMode;
+
+  const toggleStatus = (status: ProductStatusFilter) => {
+    setStatuses(current => {
+      if (current.includes(status)) return current.length === 1 ? current : current.filter(item => item !== status);
+      return [...current, status];
+    });
+  };
+
+  const toggleDisplayMode = (id: CustomerOrderMode) => {
+    setDisplayModes(current => {
+      if (current.includes(id)) return current.filter(mode => mode !== id);
+      if (id === 'all') return [...current, id];
+      const allIndex = current.indexOf('all');
+      if (allIndex === -1) return [...current, id];
+      const next = [...current];
+      next.splice(allIndex, 0, id);
+      return next;
+    });
+    setPage(0);
+    setReorderMode(false);
+  };
+
+  const moveDisplayMode = (index: number, delta: number) => {
+    setDisplayModes(current => {
+      const next = [...current];
+      const target = index + delta;
+      if (target < 0 || target >= next.length) return current;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const resetBrowse = () => {
+    setSearchQuery('');
+    setFilterCategory('all');
+    setDisplayModes(['all']);
+    setStatuses(['available']);
+    setPage(0);
+  };
+
+  const filterActive = filterCategory !== 'all' || displayModes.length !== 1 || displayModes[0] !== 'all'
+    || statuses.length !== 1 || statuses[0] !== 'available' || searchQuery.trim() !== '';
 
   const enterReorderMode = () => {
     setReorderList([...displayProducts].sort((a, b) => a.sortOrder - b.sortOrder));
@@ -371,23 +413,41 @@ export default function ProductsPage() {
       await load(); setReorderMode(false);
     } finally { setSavingOrder(false); }
   };
+
+  const saveDisplayOrder = async () => {
+    if (!canSaveDisplayOrder) return;
+    setSavingDisplayOrder(true);
+    try {
+      const scope = products.filter(product =>
+        filterCategory === 'all' || product.categoryId === filterCategory);
+      const active = scope.filter(product => getProductStatus(product) === 'available');
+      const ordered = combineProductOrders(active, displayModes, { statuses: ['available'] });
+      const orderedIds = new Set(ordered.map(product => product.id));
+      const inactive = scope
+        .filter(product => getProductStatus(product) !== 'available' && !orderedIds.has(product.id))
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      await Promise.all([...ordered, ...inactive].map((product, index) =>
+        productsApi.update(product.id, { sortOrder: index, storeId })));
+      await load();
+      const scopeName = filterCategory === 'all'
+        ? 'all products'
+        : categories.find(category => category.id === filterCategory)?.name || 'this category';
+      const modeLabel = displayModes
+        .map(id => CUSTOMER_ORDER_MODES.find(mode => mode.id === id)?.label)
+        .filter(Boolean)
+        .join(' → ');
+      showToast(`Saved ${modeLabel} order for ${scopeName}`);
+    } finally { setSavingDisplayOrder(false); }
+  };
+
   const cancelReorder = () => { setReorderMode(false); setReorderList([]); };
 
-  // ── Filter/sort labels ────────────────────────────────────────────────────
-  const filterStatusLabels: Record<FilterStatus, string> = {
-    all: 'All Products', available: 'Available', out_of_stock: 'Out of Stock',
-    low_stock: 'Low Stock', hidden: 'Hidden',
-  };
-  const sortLabels: Record<SortMode, string> = {
-    manual: 'Sort', discount: 'By Discount',
-    stock: 'Low Stock First', az: 'A → Z',
-  };
-  const activeCategoryLabel = filterCategory === 'all' ? 'All Categories'
-    : filterCategory === '__uncat__' ? 'Uncategorised'
-    : categories.find(c => c.id === filterCategory)?.name || 'All Categories';
-
-  const filterActive = filterStatus !== 'all' || filterCategory !== 'all';
-  const sortActive = sortMode !== 'manual';
+  useEffect(() => {
+    if (!pendingArrange || loading) return;
+    if (canReorder && displayProducts.length > 0) enterReorderMode();
+    setPendingArrange(false);
+    setSearchParams(new URLSearchParams(), { replace: true });
+  }, [pendingArrange, loading, canReorder, displayProducts.length]);
 
   // ── Product CRUD ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -611,7 +671,7 @@ export default function ProductsPage() {
           {p.localName && <p className="text-xs text-gray-500 dark:text-slate-400 break-words">{p.localName}</p>}
           {p.description && <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-slate-400 line-clamp-1">{p.description}</p>}
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-            <span className="text-xs text-gray-500 dark:text-slate-400">{p.discountPercent > 0 ? (<><span className="line-through opacity-60">₹{p.price}</span>{' '}₹{Math.round(p.price * (1 - p.discountPercent / 100))}</>) : `₹${p.price}`} / {p.unit}</span>
+            {(() => { const price = getDiscountedPrice(p); return <span className="text-xs text-gray-500 dark:text-slate-400">{price < p.price ? (<><span className="line-through opacity-60">₹{p.price}</span>{' '}₹{price}</>) : `₹${price}`} / {p.unit}</span>; })()}
             {p.discountPercent > 0 && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 px-1.5 py-0.5 rounded-full">
                 <Percent className="w-2.5 h-2.5" />{p.discountPercent}% off
@@ -655,7 +715,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="space-y-4" onClick={() => { setShowFilterMenu(false); setShowSortMenu(false); }}>
+    <div className="space-y-4">
 
       {/* The zone-head store picker lives in the app header now, next to the
            page title — same place as the Inventory picker. */}
@@ -676,91 +736,92 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* Header: Filter | Sort | Reorder | + Product (desktop) */}
+      <div className="page-card flex flex-wrap items-center gap-2 p-3">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Show</span>
+        {([
+          ['available', 'Active'],
+          ['hidden', 'Hidden'],
+          ['out_of_stock', 'Out of stock'],
+        ] as Array<[ProductStatusFilter, string]>).map(([status, label]) => (
+          <button key={status} onClick={() => toggleStatus(status)}
+            className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+              statuses.includes(status)
+                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400'
+            }`}>
+            <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${statuses.includes(status) ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-gray-300 dark:border-slate-600'}`}>
+              {statuses.includes(status) && <Check className="h-2.5 w-2.5" />}
+            </span>
+            {label}
+          </button>
+        ))}
+        {filterActive && (
+          <button onClick={resetBrowse} className="ml-auto text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">Clear</button>
+        )}
+      </div>
+
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {[{ id: 'all', name: 'All' }, ...categories, { id: '__uncat__', name: 'Uncategorised' }].map(category => (
+          <button key={category.id} onClick={() => setFilterCategory(category.id)}
+            className={`whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              filterCategory === category.id
+                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:border-indigo-300'
+            }`}>
+            {category.name}
+            <span className="ml-1.5 text-[10px] font-medium opacity-60">{categoryCounts[category.id] || 0}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="page-card p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Customer display order</span>
+          {CUSTOMER_ORDER_MODES.map(mode => {
+            const selected = displayModes.includes(mode.id);
+            return (
+              <button key={mode.id} onClick={() => toggleDisplayMode(mode.id)}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  selected
+                    ? 'bg-emerald-500 border-emerald-500 text-white'
+                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:border-emerald-300'
+                }`}>
+                <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${selected ? 'border-white bg-white text-emerald-600' : 'border-gray-300 dark:border-slate-600'}`}>
+                  {selected && <Check className="h-2.5 w-2.5" />}
+                </span>
+                {mode.label}
+              </button>
+            );
+          })}
+          <div className="flex-1" />
+          <button onClick={saveDisplayOrder} disabled={!canSaveDisplayOrder || savingDisplayOrder}
+            title={!canSaveDisplayOrder ? 'Select active products, clear search, then save' : 'Save this order for customer category and Fresh pages'}
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            {savingDisplayOrder ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            Save order
+          </button>
+        </div>
+        {displayModes.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Priority</span>
+            {displayModes.map((id, index) => (
+              <span key={id} className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-300">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] text-white">{index + 1}</span>
+                {CUSTOMER_ORDER_MODES.find(mode => mode.id === id)?.label}
+                <button type="button" onClick={() => moveDisplayMode(index, -1)} disabled={index === 0} className="disabled:opacity-30"><ArrowUp className="w-3 h-3" /></button>
+                <button type="button" onClick={() => moveDisplayMode(index, 1)} disabled={index === displayModes.length - 1} className="disabled:opacity-30"><ArrowDown className="w-3 h-3" /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-[11px] text-gray-400">Earlier modes win products that appear in more than one list. Manual is this store&apos;s fallback tail: products left over keep their manual order even when Manual is not picked. Zone catalogs may prefer the head store listing because customer zone results are de-duplicated against it.</p>
+      </div>
+
       <div className="flex items-center gap-2">
-
-        {/* Filter dropdown */}
-        <div className="relative" onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => { setShowFilterMenu(v => !v); setShowSortMenu(false); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              filterActive
-                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-400'
-                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-indigo-300'
-            }`}>
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            {filterActive
-              ? (filterStatus !== 'all' ? filterStatusLabels[filterStatus] : activeCategoryLabel)
-              : 'Filter'}
-            <ChevronDown className="w-3 h-3" />
-          </button>
-
-          {showFilterMenu && (
-            <div className="absolute left-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-30 overflow-hidden">
-              {/* Status section */}
-              <div className="px-3 pt-3 pb-1">
-                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Status</p>
-                {(['all', 'available', 'out_of_stock', 'low_stock', 'hidden'] as FilterStatus[]).map(s => (
-                  <button key={s} onClick={() => { setFilterStatus(s); setShowFilterMenu(false); }}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      filterStatus === s ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                    }`}>
-                    {filterStatusLabels[s]}
-                    {filterStatus === s && <Check className="w-3 h-3" />}
-                  </button>
-                ))}
-              </div>
-              {/* Category section */}
-              <div className="px-3 pt-2 pb-3 border-t border-gray-100 dark:border-slate-700 mt-1">
-                <p className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Category</p>
-                {[{ id: 'all', name: 'All Categories' }, ...categories, { id: '__uncat__', name: 'Uncategorised' }].map(c => (
-                  <button key={c.id} onClick={() => { setFilterCategory(c.id); setShowFilterMenu(false); }}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      filterCategory === c.id ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                    }`}>
-                    {c.name}
-                    {filterCategory === c.id && <Check className="w-3 h-3" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sort dropdown */}
-        <div className="relative" onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => { setShowSortMenu(v => !v); setShowFilterMenu(false); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              sortActive
-                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
-                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-emerald-300'
-            }`}>
-            <ArrowUpDown className="w-3.5 h-3.5" />
-            {sortLabels[sortMode]}
-            <ChevronDown className="w-3 h-3" />
-          </button>
-
-          {showSortMenu && (
-            <div className="absolute left-0 top-full mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-30 overflow-hidden p-2">
-              {(['manual', 'discount', 'stock', 'az'] as SortMode[]).map(m => (
-                (!inventoryEnabled && m === 'stock') ? null :
-                <button key={m} onClick={() => { setSortMode(m); localStorage.setItem('hub_products_sort', m); setShowSortMenu(false); }}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    sortMode === m ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                  }`}>
-                  {sortLabels[m]}
-                  {sortMode === m && <Check className="w-3 h-3" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Reorder */}
         {!reorderMode ? (
           <button onClick={enterReorderMode} disabled={!canReorder}
-            title={!canReorder ? 'Clear filters and use Reorder to reorder' : ''}
+            title={!canReorder ? 'Use manual order with active products to reorder' : filterCategory === 'all' ? 'Reorder all products' : 'Reorder products in this category'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
             <GripVertical className="w-3.5 h-3.5" /> Reorder
           </button>
@@ -805,20 +866,15 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      {/* Active filter summary */}
       {filterActive && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 dark:text-slate-400">
             {displayProducts.length} product{displayProducts.length !== 1 ? 's' : ''} shown
           </span>
-          <button onClick={() => { setFilterStatus('all'); setFilterCategory('all'); }}
-            className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
-            Clear filters
-          </button>
+          <button onClick={resetBrowse} className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">Clear filters</button>
         </div>
       )}
 
-      {/* Product list */}
       <div className={`page-card ${reorderMode ? 'pb-24 sm:pb-0' : ''}`}>
         {products.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
@@ -836,7 +892,24 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-slate-700">
-            {displayProducts.map((p, i) => <ProductRow key={p.id} p={p} index={i} />)}
+            {pagedProducts.map((p, i) => <ProductRow key={p.id} p={p} index={i} />)}
+          </div>
+        )}
+        {!reorderMode && displayProducts.length > 0 && (
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 dark:border-slate-700">
+            <span className="text-[11px] text-gray-500 dark:text-slate-400">
+              {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, displayProducts.length)} of {displayProducts.length.toLocaleString('en-IN')}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage === 0}
+                className="rounded-lg border border-gray-200 p-1.5 text-gray-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))} disabled={safePage >= pageCount - 1}
+                className="rounded-lg border border-gray-200 p-1.5 text-gray-600 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>

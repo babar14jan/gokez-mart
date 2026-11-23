@@ -16,6 +16,17 @@ interface ProductCardProps {
   onAdd?: () => void;
 }
 
+export function getDiscountedPrice(product: Product): number {
+  const options = product.weightOptions?.length ? product.weightOptions : null;
+  const primaryOption = options?.find(option => option.label === product.unit) || null;
+  const firstOption = primaryOption || options?.[0] || null;
+  const baseOptionPrice = firstOption ? firstOption.price : product.price;
+  const baseDiscount = firstOption
+    ? (firstOption === primaryOption ? (firstOption.discountPercent ?? product.discountPercent ?? 0) : (firstOption.discountPercent ?? 0))
+    : (product.discountPercent || 0);
+  return baseDiscount > 0 ? Math.round(baseOptionPrice * (1 - baseDiscount / 100)) : baseOptionPrice;
+}
+
 export default function ProductCard({ product, disabled = false, onAdd }: ProductCardProps) {
   const { items, addItem, updateQty } = useCartStore();
   const [showDetail, setShowDetail] = useState(false);
@@ -31,12 +42,10 @@ export default function ProductCard({ product, disabled = false, onAdd }: Produc
   const primaryOption = options?.find(option => option.label === product.unit) || null;
   const firstOption = primaryOption || options?.[0] || null;
   const baseOptionPrice = firstOption ? firstOption.price : product.price;
+  const discountedPrice = getDiscountedPrice(product);
   const baseDiscount = firstOption
     ? (firstOption === primaryOption ? (firstOption.discountPercent ?? product.discountPercent ?? 0) : (firstOption.discountPercent ?? 0))
     : (product.discountPercent || 0);
-  const discountedPrice = baseDiscount > 0
-    ? Math.round(baseOptionPrice * (1 - baseDiscount / 100))
-    : baseOptionPrice;
   const savings = baseDiscount > 0 ? Math.round(baseOptionPrice - discountedPrice) : 0;
   const productCartItems = items.filter(i => i.productId === product.id && (!optionLabels || i.unit === product.unit || optionLabels.includes(i.unit)));
   const qty = productCartItems.reduce((sum, i) => sum + i.quantity, 0);

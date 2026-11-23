@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, X, Loader2, Tag, Upload } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Pencil, Trash2, X, Loader2, Tag, Upload, GripVertical } from 'lucide-react';
 import { categoriesApi, productsApi } from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast, ToastContainer } from '../hooks/useToast';
@@ -21,6 +22,7 @@ function CategoryIcon({ icon }: { icon: string }) {
 }
 
 export default function CategoriesPage() {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState<Category[]>([]);
   const { toasts, show: showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -106,6 +108,9 @@ export default function CategoriesPage() {
           <Plus className="w-4 h-4" /> Add Category
         </button>
       </div>
+      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40 px-4 py-3">
+        <p className="text-xs text-emerald-800 dark:text-emerald-300">Use Arrange to mix Manual, Top 10, Top 10 discounted and Below ₹30 in priority order. Earlier modes win shared products; the same order appears in category grids and the Fresh page.</p>
+      </div>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm overflow-hidden">
         {categories.length === 0 ? (
           <div className="text-center py-16 text-gray-500 dark:text-slate-400"><Tag className="w-10 h-10 mx-auto mb-3 opacity-30" /><p className="text-sm">No categories yet.</p></div>
@@ -121,6 +126,8 @@ export default function CategoriesPage() {
                   <p className="text-xs text-gray-500 dark:text-slate-400">{c.productCount} products · {c.productPrefix} · /{c.slug}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <button onClick={() => navigate(`/products?category=${encodeURIComponent(c.id)}&arrange=1`)} title="Arrange product order"
+                    className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"><GripVertical className="w-4 h-4" /></button>
                   <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"><Pencil className="w-4 h-4" /></button>
                   <button onClick={() => setConfirmDeleteId(c.id)} className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
                 </div>
