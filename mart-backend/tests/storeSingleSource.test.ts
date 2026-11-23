@@ -41,4 +41,20 @@ describe('Store name/address have a single source of truth', () => {
     assert.match(src, /name: form\.name\.trim\(\)/);
     assert.doesNotMatch(src, /estimatedDelivery/);
   });
+
+  test('analytics store scope keeps the selected store alongside zone members', () => {
+    const src = read('controllers/index.ts');
+    assert.match(src, /return Array\.from\(new Set\(\[storeId, \.\.\.zoneRows\.rows\.map\(r => r\.storeId\)\]\)\);/);
+    assert.doesNotMatch(src, /return zoneRows\.rows\.length \? zoneRows\.rows\.map\(r => r\.storeId\) : \[storeId\];/);
+  });
+
+  test('analytics store filters cast the UUID column to uuid[]', () => {
+    const src = read('services/order.service.ts');
+    assert.ok(src.includes('o.store_id = ANY(${at()}::uuid[])'));
+    assert.ok(src.includes('o.store_id = ANY($${weeklyParams.length}::uuid[])'));
+    assert.ok(src.includes('o.store_id = ANY($${params.length + 1}::uuid[])'));
+    assert.ok(!src.includes('o.store_id = ANY(${at()}::text[])'));
+    assert.ok(!src.includes('o.store_id = ANY($${weeklyParams.length}::text[])'));
+    assert.ok(!src.includes('o.store_id = ANY($${params.length + 1}::text[])'));
+  });
 });
