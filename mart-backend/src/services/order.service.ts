@@ -13,6 +13,28 @@ import { ORDER_BROWSE_DATE_SQL } from '../utils/orderDate';
 import { ReferralService } from './referral.service';
 import { REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR, referralDiscount, hasDiscountStack } from '../utils/referralLogic';
 
+const parseReportDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
+const formatReportDate = (value: Date) => value.toISOString().slice(0, 10);
+const addReportDays = (value: string, days: number) => {
+  const date = parseReportDate(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatReportDate(date);
+};
+const previousMonthWindow = (anchor: string) => {
+  const date = parseReportDate(anchor);
+  const first = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - 1, 1));
+  const last = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 0));
+  return { start: formatReportDate(first), end: formatReportDate(last) };
+};
+const calendarWindow = (range: string, from: string | undefined, to: string | undefined, anchor: string) => {
+  if (range === 'custom' && from && to) return { start: from, end: to };
+  if (range === 'today') return { start: anchor, end: anchor };
+  const days = /^(\d+)d$/.exec(range);
+  if (days) return { start: addReportDays(anchor, -(Number(days[1]) - 1)), end: anchor };
+  if (range === 'last_month') return previousMonthWindow(anchor);
+  return null;
+};
+
 // Reasons a customer may give for cancelling, chosen from the order screen. The
 // keys are what is stored in mart_orders.cancellation_reason; only these values
 // are accepted so the field stays a controlled vocabulary the hub can report on.
@@ -219,8 +241,9 @@ export function buildOrderWindow(
     params.push(to);
   } else if (range === 'today') {
     clauses.push(`${column} >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
-  } else if (range === '7d' || range === '30d') {
-    clauses.push(`${column} >= ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') - (${range === '7d' ? 6 : 29}::int * INTERVAL '1 day'))`);
+  } else if (range === '5d' || range === '7d' || range === '10d' || range === '30d') {
+    const days = Number.parseInt(range, 10);
+    clauses.push(`${column} >= ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') - (${days - 1}::int * INTERVAL '1 day'))`);
   } else if (range === 'last_month') {
     clauses.push(`${column} >= (date_trunc('month', (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 month') AT TIME ZONE 'Asia/Kolkata')`);
     clauses.push(`${column} < (date_trunc('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
@@ -1023,6 +1046,113 @@ export class OrderService {
       freeDeliveries: row?.free_deliveries ?? 0,
       couponOrders: row?.coupon_orders ?? 0,
       couponAmount: Number(row?.coupon_amount ?? 0),
+    };
+  }
+
+  static async getOrderInsights(
+    range: string,
+    from: string | undefined,
+    to: string | undefined,
+    storeId: string | null,
+    limit: number,
+    offset: number,
+    anchor: string,
+  ) {
+    const { where, params } = buildOrderWindow(range, from, to, storeId, { dateBasis: 'browse' });
+    const calendar = calendarWindow(range, from, to, anchor);
+    const calendarParams = calendar ? [calendar.start, calendar.end] : [];
+    const dateStart = params.length + 1;
+    const byDayCte = `WITH by_day AS (
+       SELECT (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date AS day,
+              COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
+              COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
+              COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue
+       FROM mart_orders o
+       ${where}
+       GROUP BY 1
+     )`;
+    const dailyCte = calendar
+      ? `${byDayCte}, day_series AS (
+           SELECT generate_series($${dateStart}::date, $${dateStart + 1}::date, INTERVAL '1 day')::date AS day
+         ), daily AS (
+           SELECT d.day,
+                  COALESCE(b.total, 0)::int AS total,
+                  COALESCE(b.delivered, 0)::int AS delivered,
+                  COALESCE(b.cancelled, 0)::int AS cancelled,
+                  COALESCE(b.revenue, 0)::float AS revenue
+           FROM day_series d
+           LEFT JOIN by_day b ON b.day = d.day
+         )`
+      : `${byDayCte}, daily AS (SELECT day, total, delivered, cancelled, revenue FROM by_day)`;
+    const dailyParams = [...params, ...calendarParams];
+    const limitIndex = dailyParams.length + 1;
+    const [daily, dayCount] = await Promise.all([
+      query<{
+        date: string; total: number; delivered: number; cancelled: number;
+        revenue: number;
+      }>(
+        `${dailyCte}
+         SELECT to_char(day, 'YYYY-MM-DD') AS date,
+                total, delivered, cancelled, revenue
+         FROM daily
+         ORDER BY day DESC
+         LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
+        [...dailyParams, limit, offset]
+      ),
+      query<{ totalDays: number }>(
+        `${dailyCte} SELECT COUNT(*)::int AS "totalDays" FROM daily`,
+        dailyParams
+      ),
+    ]);
+
+    const weeklyParams: unknown[] = [anchor];
+    if (storeId) weeklyParams.push(storeId);
+    const weeklyRows = await query<{ weeksAgo: number; value: number }>(
+      `SELECT FLOOR(((($1::date) - ((${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date))) / 7.0)::int AS "weeksAgo",
+              COUNT(*)::int AS value
+       FROM mart_orders o
+       WHERE (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date > (($1::date) - 56)
+         AND (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date <= ($1::date)
+         ${storeId ? `AND o.store_id = $${weeklyParams.length}` : ''}
+       GROUP BY 1`,
+      weeklyParams
+    );
+
+    const byWeeksAgo = new Map(weeklyRows.rows.map(row => [Number(row.weeksAgo), Number(row.value)]));
+    const anchorDate = new Date(`${anchor}T00:00:00.000Z`);
+    const weekly = Array.from({ length: 8 }, (_, index) => {
+      const weeksAgo = 7 - index;
+      const end = new Date(anchorDate);
+      end.setUTCDate(end.getUTCDate() - weeksAgo * 7);
+      const start = new Date(end);
+      start.setUTCDate(start.getUTCDate() - 6);
+      return {
+        label: weeksAgo === 0 ? 'This wk' : weeksAgo === 1 ? 'Last wk' : `${weeksAgo}w ago`,
+        value: byWeeksAgo.get(weeksAgo) || 0,
+        start: start.toISOString().slice(0, 10),
+        end: end.toISOString().slice(0, 10),
+      };
+    });
+
+    const totalDays = Number(dayCount.rows[0]?.totalDays) || 0;
+    return {
+      data: {
+        daily: daily.rows.map(row => ({
+          date: row.date,
+          total: Number(row.total),
+          delivered: Number(row.delivered),
+          cancelled: Number(row.cancelled),
+          revenue: Number(row.revenue),
+        })),
+        weekly,
+      },
+      pagination: {
+        limit,
+        offset,
+        total: totalDays,
+        hasMore: offset + daily.rows.length < totalDays,
+      },
     };
   }
 
@@ -2305,49 +2435,85 @@ export class OrderService {
     });
   }
 
-  static async getTopSellingProducts(range = '30d', storeIds?: string[] | null, from?: string, to?: string) {
-    const params: unknown[] = [];
-    const conditions: string[] = [`o.status = 'delivered'`];
+  static async getTopSellingProducts(
+    range = '30d',
+    storeIds?: string[] | null,
+    from?: string,
+    to?: string,
+    opts?: { category?: string; limit?: number; offset?: number; sortBy?: 'units' | 'orders' },
+  ) {
+    const dateWindow = buildOrderWindow(range, from, to, null, { dateBasis: 'browse' });
+    const baseParams: unknown[] = [...dateWindow.params];
+    const baseConditions: string[] = [`o.status = 'delivered'`];
+    if (dateWindow.clause) baseConditions.push(dateWindow.clause);
     if (storeIds && storeIds.length) {
-      conditions.push(`o.store_id = ANY($${params.length + 1}::uuid[])`);
-      params.push(storeIds);
+      baseConditions.push(`o.store_id = ANY($${baseParams.length + 1}::uuid[])`);
+      baseParams.push(storeIds);
     }
-    const dateCol = `COALESCE(o.delivered_at, o.created_at)`;
-    if (range === '5d') conditions.push(`${dateCol} >= NOW() - INTERVAL '5 days'`);
-    else if (range === '10d') conditions.push(`${dateCol} >= NOW() - INTERVAL '10 days'`);
-    else if (range === '30d') conditions.push(`${dateCol} >= NOW() - INTERVAL '30 days'`);
-    else if (range === 'custom' && from && to) {
-      const fromIndex = params.length + 1;
-      params.push(from);
-      const toIndex = params.length + 1;
-      params.push(to);
-      conditions.push(`${dateCol} >= (($${fromIndex}::date)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
-      conditions.push(`${dateCol} < ((($${toIndex}::date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`);
-    }
-    const where = conditions.join(' AND ');
-    const result = await query<{
-      id: string; name: string; hindiName: string | null; categoryId: string | null; categoryName: string | null; orderCount: number; quantitySold: number; unit: string;
-    }>(
-      `SELECT COALESCE(p.id::text, 'name:' || md5(oi.product_name)) AS id,
-              COALESCE(p.name, oi.product_name) AS name,
-              p.local_name AS "hindiName",
-              p.category_id AS "categoryId",
-              COALESCE(c.name, 'Uncategorised') AS "categoryName",
-              COUNT(DISTINCT o.id)::int AS "orderCount",
-              COALESCE(SUM(oi.quantity), 0)::int AS "quantitySold",
-              COALESCE(MAX(oi.unit), '') AS "unit"
-         FROM mart_orders o
-         JOIN mart_order_items oi ON oi.order_id = o.id
-         LEFT JOIN mart_products p ON p.id = oi.product_id
-         LEFT JOIN mart_categories c ON c.id = p.category_id
-        WHERE ${where}
-        GROUP BY p.id, COALESCE(p.name, oi.product_name), p.local_name, p.category_id, c.name, oi.product_name
-        ORDER BY "orderCount" DESC, name ASC`,
-      params
-    );
-    const categories = [...new Set(result.rows.map(r => r.categoryName || 'Uncategorised'))].sort();
+
+    const source = `FROM mart_orders o
+      JOIN mart_order_items oi ON oi.order_id = o.id
+      LEFT JOIN mart_products p ON p.id = oi.product_id
+      LEFT JOIN mart_categories c ON c.id = p.category_id`;
+    const groupBy = `p.id, COALESCE(p.name, oi.product_name), p.local_name, p.category_id, c.name, oi.product_name`;
+    const scope = (includeCategory: boolean) => {
+      const scopedParams = [...baseParams];
+      const conditions = [...baseConditions];
+      if (includeCategory && opts?.category) {
+        scopedParams.push(opts.category);
+        conditions.push(`COALESCE(c.name, 'Uncategorised') = $${scopedParams.length}`);
+      }
+      return { where: conditions.join(' AND '), params: scopedParams };
+    };
+    const unfiltered = scope(false);
+    const filtered = scope(true);
+
+    const productParams = [...filtered.params];
+    const limitClause = opts?.limit ? `LIMIT $${productParams.length + 1}` : '';
+    if (opts?.limit) productParams.push(opts.limit);
+    const offsetClause = opts?.limit && opts?.offset ? ` OFFSET $${productParams.length + 1}` : '';
+    if (opts?.limit && opts?.offset) productParams.push(opts.offset);
+
+    const [categoryRows, countRows, result] = await Promise.all([
+      query<{ categoryName: string }>(
+        `SELECT DISTINCT COALESCE(c.name, 'Uncategorised') AS "categoryName"
+         ${source}
+         WHERE ${unfiltered.where}
+         ORDER BY 1`,
+        unfiltered.params
+      ),
+      query<{ total: number }>(
+        `SELECT COUNT(*)::int AS total FROM (
+           SELECT 1 ${source} WHERE ${filtered.where} GROUP BY ${groupBy}
+         ) grouped`,
+        filtered.params
+      ),
+      query<{
+        id: string; name: string; hindiName: string | null; categoryId: string | null; categoryName: string | null; orderCount: number; quantitySold: number; revenue: number; unit: string;
+      }>(
+        `SELECT COALESCE(p.id::text, 'name:' || md5(oi.product_name)) AS id,
+                COALESCE(p.name, oi.product_name) AS name,
+                p.local_name AS "hindiName",
+                p.category_id AS "categoryId",
+                COALESCE(c.name, 'Uncategorised') AS "categoryName",
+                COUNT(DISTINCT o.id)::int AS "orderCount",
+                COALESCE(SUM(oi.quantity), 0)::int AS "quantitySold",
+                COALESCE(SUM(oi.total), 0)::float AS revenue,
+                COALESCE(MAX(oi.unit), '') AS "unit"
+           ${source}
+          WHERE ${filtered.where}
+          GROUP BY ${groupBy}
+          ORDER BY ${opts?.sortBy === 'units' ? '"quantitySold"' : '"orderCount"'} DESC, name ASC
+          ${limitClause}${offsetClause}`,
+        productParams
+      ),
+    ]);
+
+    const total = Number(countRows.rows[0]?.total) || 0;
+    const limit = opts?.limit || 0;
+    const offset = opts?.offset || 0;
     return {
-      categories,
+      categories: categoryRows.rows.map(r => r.categoryName || 'Uncategorised'),
       products: result.rows.map(r => ({
         id: r.id,
         name: r.name,
@@ -2356,8 +2522,15 @@ export class OrderService {
         categoryName: r.categoryName || 'Uncategorised',
         orderCount: Number(r.orderCount || 0),
         quantitySold: Number(r.quantitySold || 0),
+        revenue: Number(r.revenue || 0),
         unit: r.unit || '',
       })),
+      pagination: {
+        limit,
+        offset,
+        total,
+        hasMore: limit ? offset + result.rows.length < total : false,
+      },
     };
   }
 

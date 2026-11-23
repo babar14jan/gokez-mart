@@ -507,6 +507,7 @@ export class InventoryService {
       const totalCost = unitCost === null ? null : roundMoney(outQty * unitCost);
       const newQty = Math.max(0, current + qty);
       const movementType = ['damage','spoiled','expired','lost','missing'].includes(reason) ? 'damage' : 'adjustment';
+      const logNote = note ? `${reason}: ${note}` : reason;
       const newStatus = newQty <= 0 ? 'out_of_stock' : cur.availability_status;
       await client.query(
         `UPDATE mart_store_products
@@ -517,7 +518,7 @@ export class InventoryService {
       await client.query(
         `INSERT INTO mart_inventory_log (product_id, store_id, change_qty, reason, note, created_by, idempotency_key)
          VALUES ($1, $2, $3, 'manual_correction', $4, $5, $6)`,
-        [productId, storeId, qty, note || reason, createdBy, idempotencyKey || null]
+         [productId, storeId, qty, logNote, createdBy, idempotencyKey || null]
       );
       await client.query(
         `INSERT INTO mart_inventory_movements

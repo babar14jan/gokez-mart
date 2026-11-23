@@ -111,6 +111,8 @@ router.post('/admin/orders/restore',       authenticate, requireSuperAdmin, ctrl
 router.get('/admin/analytics/summary', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetAnalyticsSummary); // ?range=&from=&to=&storeId=
 router.get('/admin/analytics/customers', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetCustomerAggregates); // ?range=&from=&to=&storeId=&top=
 router.get('/admin/analytics/top-products', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetTopSellingProducts); // ?range=5d|10d|30d|all&storeId=
+router.get('/admin/analytics/order-insights', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetOrderInsights); // ?range=&from=&to=&limit=&offset=
+router.get('/admin/analytics/product-leaders', authenticate, requireRole('super_admin', 'store_owner', 'store_manager'), ctrl.adminGetProductLeaders); // ?range=&from=&to=&category=&limit=
 router.get('/admin/daily-sales',          authenticate, ctrl.adminGetDailySales);         // ?mode=today|yesterday|month|all|custom&from=&to=&storeId=
 router.get('/admin/daily-sales/day',      authenticate, ctrl.adminGetDailySalesDay);     // ?date=&storeId=
 router.get('/admin/daily-sales/entries',  authenticate, ctrl.adminListOfflineSales);     // ?date=&storeId=

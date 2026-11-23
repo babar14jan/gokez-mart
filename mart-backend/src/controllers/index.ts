@@ -1416,15 +1416,7 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
 // itemised rows in mart_offline_sales (one per product sold), so the day's
 // cash/UPI split is a SUM over the rows staff actually entered.
 
-export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const rangeRaw = typeof req.query.range === 'string' ? req.query.range : '30d';
-  const range = ['5d', '10d', '30d', 'all', 'custom'].includes(rangeRaw) ? rangeRaw : '30d';
-  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
-  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
-  const storeId = resolveStoreId(req);
-  if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
-    throw forbidden('Top selling stats are available to head store managers and owners only');
-  }
+async function getAnalyticsStoreIds(storeId: string): Promise<string[]> {
   const zoneRows = await query<{ storeId: string }>(
     `SELECT zs.store_id AS "storeId"
        FROM mart_zones z
@@ -1432,8 +1424,71 @@ export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest,
       WHERE z.primary_store_id = $1 AND z.is_active = true`,
     [storeId]
   );
-  const storeIds = zoneRows.rows.length ? zoneRows.rows.map(r => r.storeId) : [storeId];
-  const data = await OrderService.getTopSellingProducts(range, storeIds, from, to);
+  return zoneRows.rows.length ? zoneRows.rows.map(r => r.storeId) : [storeId];
+}
+
+export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const rangeRaw = typeof req.query.range === 'string' ? req.query.range : '30d';
+  const range = ['5d', '10d', '30d', 'all', 'custom'].includes(rangeRaw) ? rangeRaw : '30d';
+  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
+  }
+  const storeId = resolveStoreId(req);
+  if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
+    throw forbidden('Top selling stats are available to head store managers and owners only');
+  }
+  const storeIds = await getAnalyticsStoreIds(storeId);
+  const category = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 50, 1), 100);
+  const offset = Math.max(Number.parseInt(String(req.query.offset), 10) || 0, 0);
+  const data = await OrderService.getTopSellingProducts(range, storeIds, from, to, {
+    category: category || undefined,
+    limit,
+    offset,
+    sortBy: 'orders',
+  });
+  res.json({ success: true, data });
+});
+
+const istDayKey = (offsetDays = 0) =>
+  new Date(Date.now() + offsetDays * 86400000 + 5.5 * 3600000).toISOString().slice(0, 10);
+
+const REPORT_RANGES = new Set(['today', 'yesterday', '7d', '30d', 'last_month', 'all', 'custom']);
+
+function analyticsWindowParams(req: AdminRequest) {
+  const rawRange = typeof req.query.range === 'string' ? req.query.range : 'all';
+  let range = REPORT_RANGES.has(rawRange) ? rawRange : 'all';
+  let from = typeof req.query.from === 'string' ? req.query.from : undefined;
+  let to = typeof req.query.to === 'string' ? req.query.to : undefined;
+  if (range === 'yesterday') { from = istDayKey(-1); to = from; range = 'custom'; }
+  return { range, from, to, anchor: range === 'custom' && to ? to : istDayKey() };
+}
+
+export const adminGetOrderInsights = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { range, from, to, anchor } = analyticsWindowParams(req);
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
+  }
+  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 50, 1), 100);
+  const offset = Math.max(Number.parseInt(String(req.query.offset), 10) || 0, 0);
+  const result = await OrderService.getOrderInsights(range, from, to, resolveStoreId(req), limit, offset, anchor);
+  res.json({ success: true, ...result });
+});
+
+export const adminGetProductLeaders = asyncHandler(async (req: AdminRequest, res: Response) => {
+  const { range, from, to } = analyticsWindowParams(req);
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
+  }
+  const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
+  const categoryParam = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 20, 1), 100);
+  const data = await OrderService.getTopSellingProducts(
+    range, storeIds, from, to,
+    { category: categoryParam || undefined, limit, sortBy: 'units' }
+  );
   res.json({ success: true, data });
 });
 
@@ -2027,8 +2082,8 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
   // spend only counts delivered orders. Materialised mart_customers counters
   // drift once an order is cancelled or backfilled, so they are not read here.
   const SORTS: Record<string, string> = {
-    orders_desc: '"orderCount" DESC, "createdAt" DESC',
-    spend_desc: '"totalSpent" DESC, "orderCount" DESC',
+    orders_desc: '"completedOrders" DESC, "createdAt" DESC',
+    spend_desc: '"totalSpent" DESC, "completedOrders" DESC',
     name_asc: 'name ASC NULLS LAST, phone ASC',
     newest: '"createdAt" DESC',
   };
@@ -2047,8 +2102,20 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
   const countWindow = buildOrderWindow(range, from, to, null, { startIndex: 4, dateBasis: 'browse' });
   const statsWindow = buildOrderWindow(range, from, to, null, { startIndex: 1, dateBasis: 'browse' });
   const newWindow = buildOrderWindow(range, from, to, null, {
-    column: 'fd.first_delivered_at',
+    column: 'first_delivered_at',
     startIndex: 1 + statsWindow.params.length,
+  });
+  const listCreatedWindow = buildOrderWindow(range, from, to, null, {
+    column: 'c.created_at',
+    startIndex: 5 + listWindow.params.length,
+  });
+  const countCreatedWindow = buildOrderWindow(range, from, to, null, {
+    column: 'c.created_at',
+    startIndex: 4 + countWindow.params.length,
+  });
+  const statsCreatedWindow = buildOrderWindow(range, from, to, null, {
+    column: 'c.created_at',
+    startIndex: 1 + statsWindow.params.length + newWindow.params.length,
   });
 
   const statsSql = ranged
@@ -2069,17 +2136,31 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
          SELECT w.phone,
                 COUNT(*) FILTER (WHERE w.status = 'delivered')::int AS delivered_orders,
                 COALESCE(SUM(w.total) FILTER (WHERE w.status = 'delivered'), 0)::float AS delivered_revenue
-         FROM window_orders w
-         WHERE w.phone IS NOT NULL
-         GROUP BY w.phone
-       )
-       SELECT COUNT(*)::int AS "totalCustomers",
-              COALESCE(SUM(a.delivered_revenue), 0)::float AS "totalRevenue",
-              COALESCE(SUM(a.delivered_orders), 0)::int AS "totalOrders",
-              COUNT(*) FILTER (WHERE NOT (${newWindow.clause || 'FALSE'}))::int AS "repeatCustomers",
-              COUNT(*) FILTER (WHERE ${newWindow.clause || 'FALSE'})::int AS "newCustomers"
-       FROM activity a
-       JOIN first_deliveries fd ON fd.phone = a.phone`
+          FROM window_orders w
+          WHERE w.phone IS NOT NULL
+          GROUP BY w.phone
+        ), signups AS (
+          SELECT NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
+          FROM mart_customers c
+          WHERE ${statsCreatedWindow.clause}
+        ), buyers AS (
+          SELECT a.*, fd.first_delivered_at
+          FROM activity a
+          JOIN first_deliveries fd ON fd.phone = a.phone
+        ), signup_stats AS (
+          SELECT COUNT(*)::int AS "signupCustomers",
+                 COUNT(*) FILTER (WHERE a.phone IS NOT NULL)::int AS "signupWithOrders"
+          FROM signups s
+          LEFT JOIN activity a ON a.phone = s.ckey
+          WHERE s.ckey IS NOT NULL
+        )
+        SELECT (SELECT COUNT(*)::int FROM buyers) AS "totalCustomers",
+               (SELECT COALESCE(SUM(delivered_revenue), 0)::float FROM buyers) AS "totalRevenue",
+               (SELECT COALESCE(SUM(delivered_orders), 0)::int FROM buyers) AS "totalOrders",
+               (SELECT COUNT(*) FILTER (WHERE NOT (${newWindow.clause || 'FALSE'}))::int FROM buyers) AS "repeatCustomers",
+               (SELECT COUNT(*) FILTER (WHERE ${newWindow.clause || 'FALSE'})::int FROM buyers) AS "newCustomers",
+               (SELECT "signupCustomers" FROM signup_stats) AS "signupCustomers",
+               (SELECT "signupWithOrders" FROM signup_stats) AS "signupWithOrders"`
     : `WITH phone_orders AS (
          SELECT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS phone,
                 o.status, o.total, o.created_at, o.delivered_at
@@ -2096,16 +2177,26 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
                 COALESCE(SUM(p.total) FILTER (WHERE p.status = 'delivered'), 0)::float AS delivered_revenue,
                 BOOL_OR(p.status NOT IN ('cancelled', 'failed_delivery', 'terminated')
                         AND p.created_at > f.first_delivered_at) AS is_returning
-         FROM first_deliveries f
-         JOIN phone_orders p ON p.phone = f.phone
-         GROUP BY f.phone, f.first_delivered_at
-       )
-       SELECT COUNT(*)::int AS "totalCustomers",
-              COALESCE(SUM(delivered_revenue), 0)::float AS "totalRevenue",
-              COALESCE(SUM(delivered_orders), 0)::int AS "totalOrders",
-              COUNT(*) FILTER (WHERE is_returning)::int AS "repeatCustomers",
-              COUNT(*) FILTER (WHERE NOT is_returning AND first_delivered_at >= now() - interval '30 days')::int AS "newCustomers"
-       FROM customers`;
+          FROM first_deliveries f
+          JOIN phone_orders p ON p.phone = f.phone
+          GROUP BY f.phone, f.first_delivered_at
+        ), signups AS (
+          SELECT NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
+          FROM mart_customers c
+        ), signup_stats AS (
+          SELECT COUNT(*)::int AS "signupCustomers",
+                 COUNT(*) FILTER (WHERE fd.phone IS NOT NULL)::int AS "signupWithOrders"
+          FROM signups s
+          LEFT JOIN first_deliveries fd ON fd.phone = s.ckey
+          WHERE s.ckey IS NOT NULL
+        )
+        SELECT (SELECT COUNT(*)::int FROM customers) AS "totalCustomers",
+               (SELECT COALESCE(SUM(delivered_revenue), 0)::float FROM customers) AS "totalRevenue",
+               (SELECT COALESCE(SUM(delivered_orders), 0)::int FROM customers) AS "totalOrders",
+               (SELECT COUNT(*) FILTER (WHERE is_returning)::int FROM customers) AS "repeatCustomers",
+               (SELECT COUNT(*) FILTER (WHERE NOT is_returning AND first_delivered_at >= now() - interval '30 days')::int FROM customers) AS "newCustomers",
+               (SELECT "signupCustomers" FROM signup_stats) AS "signupCustomers",
+               (SELECT "signupWithOrders" FROM signup_stats) AS "signupWithOrders"`;
 
   const [customers, counts, stats] = await Promise.all([
     query(
@@ -2131,52 +2222,70 @@ export const adminGetCustomers = asyncHandler(async (req: AdminRequest, res: Res
               COALESCE(a."totalSpent", 0)::float AS "totalSpent"
        FROM classified c
        LEFT JOIN order_agg a ON a.ckey = c.ckey
-       WHERE ($1 = 'all' OR c."identityType" = $1)
+        WHERE ($1 = 'all' OR c."identityType" = $1)
          AND ($4 = '' OR c.name ILIKE $4 OR c.phone ILIKE $4 OR c.address ILIKE $4)
-         AND (${ranged ? 'a.ckey IS NOT NULL' : 'TRUE'})
-       ORDER BY ${orderBy}
-       LIMIT $2 OFFSET $3`,
-      [identity, limit, offset, searchPattern, ...listWindow.params]
-    ),
-    query<{ total: number; signedIn: number; guestCheckout: number; filtered: number }>(
-      `WITH classified AS (
-         SELECT c.name, c.phone, c.address, ${identitySql} as "identityType",
-                NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
-         FROM mart_customers c
-       ), active AS (
-         SELECT DISTINCT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS ckey
-         FROM mart_orders o
-         LEFT JOIN mart_customers cu ON cu.id = o.customer_id
-         ${countWindow.where}
-       )
-       SELECT COUNT(*) FILTER (WHERE $3 = 'all' OR a.ckey IS NOT NULL)::int as total,
-              COUNT(*) FILTER (WHERE "identityType" = 'signed_in'
-                                 AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as "signedIn",
-              COUNT(*) FILTER (WHERE "identityType" = 'guest_checkout'
-                                 AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as "guestCheckout",
-              COUNT(*) FILTER (WHERE ($1 = 'all' OR "identityType" = $1)
-                                 AND ($2 = '' OR name ILIKE $2 OR phone ILIKE $2 OR address ILIKE $2)
-                                 AND ($3 = 'all' OR a.ckey IS NOT NULL))::int as filtered
-       FROM classified c
-       LEFT JOIN active a ON a.ckey = c.ckey`,
-      [identity, searchPattern, range, ...countWindow.params]
-    ),
-    query<{ totalCustomers: number; totalRevenue: number; totalOrders: number; repeatCustomers: number; newCustomers: number }>(
-      statsSql,
-      ranged ? [...statsWindow.params, ...newWindow.params] : []
-    ),
+         AND (${ranged ? `(COALESCE(a.ckey IS NOT NULL, FALSE) OR (${listCreatedWindow.clause || 'FALSE'}))` : 'TRUE'})
+        ORDER BY ${orderBy}
+        LIMIT $2 OFFSET $3`,
+       [identity, limit, offset, searchPattern, ...listWindow.params, ...listCreatedWindow.params]
+     ),
+     query<{ total: number; signedIn: number; guestCheckout: number; filtered: number }>(
+       `WITH classified AS (
+          SELECT c.name, c.phone, c.address, c.created_at, ${identitySql} as "identityType",
+                 NULLIF(regexp_replace(c.phone, '\\D', '', 'g'), '') AS ckey
+          FROM mart_customers c
+        ), active AS (
+          SELECT DISTINCT NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '') AS ckey
+          FROM mart_orders o
+          LEFT JOIN mart_customers cu ON cu.id = o.customer_id
+          ${countWindow.where}
+        ), in_range AS (
+          SELECT c.*, (COALESCE(a.ckey IS NOT NULL, FALSE) OR (${countCreatedWindow.clause || 'FALSE'})) AS "inRange"
+          FROM classified c
+          LEFT JOIN active a ON a.ckey = c.ckey
+        )
+        SELECT COUNT(*) FILTER (WHERE $3 = 'all' OR "inRange")::int as total,
+               COUNT(*) FILTER (WHERE "identityType" = 'signed_in'
+                                  AND ($3 = 'all' OR "inRange"))::int as "signedIn",
+               COUNT(*) FILTER (WHERE "identityType" = 'guest_checkout'
+                                  AND ($3 = 'all' OR "inRange"))::int as "guestCheckout",
+               COUNT(*) FILTER (WHERE ($1 = 'all' OR "identityType" = $1)
+                                  AND ($2 = '' OR name ILIKE $2 OR phone ILIKE $2 OR address ILIKE $2)
+                                  AND ($3 = 'all' OR "inRange"))::int as filtered
+        FROM in_range c`,
+       [identity, searchPattern, range, ...countWindow.params, ...countCreatedWindow.params]
+     ),
+     query<{
+       totalCustomers: number; totalRevenue: number; totalOrders: number;
+       repeatCustomers: number; newCustomers: number;
+       signupCustomers: number; signupWithOrders: number;
+     }>(
+       statsSql,
+       ranged ? [...statsWindow.params, ...newWindow.params, ...statsCreatedWindow.params] : []
+     ),
   ]);
   const count = counts.rows[0] || { total: 0, signedIn: 0, guestCheckout: 0, filtered: 0 };
   const filteredTotal = count.filtered;
-  const customerStats = stats.rows[0] || { totalCustomers: 0, totalRevenue: 0, totalOrders: 0, repeatCustomers: 0, newCustomers: 0 };
+  const customerStats = stats.rows[0] || {
+    totalCustomers: 0, totalRevenue: 0, totalOrders: 0,
+    repeatCustomers: 0, newCustomers: 0, signupCustomers: 0, signupWithOrders: 0,
+  };
+  const signupCustomers = Number(customerStats.signupCustomers) || 0;
+  const signupWithOrders = Number(customerStats.signupWithOrders) || 0;
+  const totalOrders = Number(customerStats.totalOrders) || 0;
+  const totalRevenue = Number(customerStats.totalRevenue) || 0;
   res.json({
     success: true,
     data: customers.rows,
     counts: { total: count.total, signedIn: count.signedIn, guestCheckout: count.guestCheckout },
     stats: {
       ...customerStats,
+      signupCustomers,
+      signupWithOrders,
+      signupWithoutOrders: Math.max(signupCustomers - signupWithOrders, 0),
+      avgOrderValue: totalOrders > 0 ? Math.round((totalRevenue / totalOrders) * 100) / 100 : 0,
       avgOrders: customerStats.totalCustomers > 0
-        ? Math.round((customerStats.totalOrders / customerStats.totalCustomers) * 10) / 10
+        ? Math.round((totalOrders / customerStats.totalCustomers) * 10) / 10
         : 0,
     },
     pagination: { limit, offset, total: filteredTotal, hasMore: offset + customers.rows.length < filteredTotal },

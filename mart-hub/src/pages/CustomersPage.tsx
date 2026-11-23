@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { customersApi, type CustomerSort, type CustomerStats, type SummaryRange } from '../services/api';
 import PageSkeleton from '../components/PageSkeleton';
-import { DateRangeChips } from '../components/DateRangeFilter';
+import { DateRangeChips, istDay } from '../components/DateRangeFilter';
 
 interface Customer {
   id: string; phone: string; name: string | null; address: string | null;
@@ -30,11 +30,6 @@ interface CustomerPagination {
 
 const PAGE_SIZE = 50;
 
-const toDateStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-const yesterdayStr = () => toDateStr(new Date(new Date().setDate(new Date().getDate() - 1)));
-
 const SORT_OPTIONS: { id: CustomerSort; label: string }[] = [
   { id: 'orders_desc', label: 'Most orders' },
   { id: 'spend_desc', label: 'Highest spend' },
@@ -44,7 +39,9 @@ const SORT_OPTIONS: { id: CustomerSort; label: string }[] = [
 
 const EMPTY_STATS: CustomerStats = {
   totalCustomers: 0, totalRevenue: 0, totalOrders: 0,
-  repeatCustomers: 0, newCustomers: 0, avgOrders: 0,
+  repeatCustomers: 0, newCustomers: 0,
+  signupCustomers: 0, signupWithOrders: 0, signupWithoutOrders: 0,
+  avgOrderValue: 0, avgOrders: 0,
 };
 
 type CustomerRange = SummaryRange | 'yesterday';
@@ -64,14 +61,14 @@ export default function CustomersPage() {
   const [pagination, setPagination] = useState<CustomerPagination>({ offset: 0, total: 0, hasMore: false });
   const [error, setError] = useState('');
   const [range, setRange] = useState<CustomerRange>('all');
-  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
-  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+  const [customFrom, setCustomFrom] = useState(istDay());
+  const [customTo, setCustomTo] = useState(istDay());
 
   // 'yesterday' isn't a SummaryRange; the API takes 'custom' plus explicit from/to.
   const rangeParams = () => ({
     range: range === 'yesterday' ? 'custom' : range,
-    from: range === 'yesterday' ? yesterdayStr() : range === 'custom' ? customFrom : undefined,
-    to: range === 'yesterday' ? yesterdayStr() : range === 'custom' ? customTo : undefined,
+    from: range === 'yesterday' ? istDay(-1) : range === 'custom' ? customFrom : undefined,
+    to: range === 'yesterday' ? istDay(-1) : range === 'custom' ? customTo : undefined,
   });
 
   // Debounce the search text so we don't fire a request on every keystroke.
@@ -115,10 +112,10 @@ export default function CustomersPage() {
   const repeatShare = stats.totalCustomers > 0 ? Math.round((stats.repeatCustomers / stats.totalCustomers) * 100) : 0;
 
   const kpis = useMemo(() => ([
-    { label: 'Total Customers', value: counts.total.toLocaleString('en-IN'), sub: `${counts.signedIn} signed in · ${counts.guestCheckout} guest`, icon: Users, gradient: 'from-cyan-500 to-cyan-600' },
-    { label: 'New Customers', value: stats.newCustomers.toLocaleString('en-IN'), sub: 'last 30 days', icon: UserPlus, gradient: 'from-violet-500 to-violet-600' },
+    { label: 'Total Customers', value: counts.total.toLocaleString('en-IN'), sub: `${stats.newCustomers} new · ${counts.guestCheckout} guest`, icon: Users, gradient: 'from-cyan-500 to-cyan-600' },
+    { label: 'New Customers', value: stats.signupCustomers.toLocaleString('en-IN'), sub: `${stats.signupWithOrders} ordered · ${stats.signupWithoutOrders} no order`, icon: UserPlus, gradient: 'from-violet-500 to-violet-600' },
     { label: 'Returning Customers', value: stats.repeatCustomers.toLocaleString('en-IN'), sub: `${repeatShare}% of buyers`, icon: Repeat, gradient: 'from-amber-500 to-amber-600' },
-    { label: 'Avg Orders', value: stats.avgOrders, sub: 'per buyer', icon: ClipboardList, gradient: 'from-blue-500 to-blue-600' },
+    { label: 'Avg Order Value', value: `₹${stats.avgOrderValue.toFixed(0)}`, sub: `${stats.avgOrders} orders per buyer`, icon: ClipboardList, gradient: 'from-blue-500 to-blue-600' },
   ]), [stats, repeatShare, counts]);
 
   if (loading) return <PageSkeleton />;

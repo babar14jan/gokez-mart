@@ -122,12 +122,36 @@ function mergeValuation(summaries: ValuationSummary[]): ValuationSummary {
 
 const formatMoney = (value: number) => `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
-const REDUCTION_LABELS: Record<string, string> = {
+const REASON_LABELS: Record<string, string> = {
   damage: 'Damage', spoiled: 'Spoiled', expired: 'Expired', lost: 'Lost',
-  missing: 'Missing', consumption: 'Consumption', quality_rejection: 'Quality check', other: 'Other',
+  missing: 'Missing', consumption: 'Offline Sold', quality_rejection: 'Quality check', other: 'Other',
+  manual_correction: 'Adjustment', adjustment: 'Adjustment', restock: 'Restock', order_deducted: 'Order',
 };
-const reductionLabel = (reason: string) => REDUCTION_LABELS[reason]
-  || reason.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+const formatReason = (reason?: string | null) => reason
+  ? REASON_LABELS[reason] || reason.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+  : '';
+const reductionLabel = formatReason;
+
+const logAdjustment = (reason: string, note: string | null) => {
+  if (reason !== 'manual_correction') return { label: formatReason(reason) || 'Adjustment', note: note || '' };
+  const text = (note || '').trim();
+  if (!text) return { label: 'Adjustment', note: '' };
+  const separator = text.indexOf(':');
+  const prefix = separator >= 0 ? text.slice(0, separator).trim() : text;
+  if (REASON_LABELS[prefix] && prefix !== 'manual_correction') {
+    return {
+      label: `Adjustment · ${formatReason(prefix)}`,
+      note: separator >= 0 ? text.slice(separator + 1).trim() : '',
+    };
+  }
+  return { label: 'Adjustment', note: text };
+};
+
+const movementLabel = (type?: string | null) => {
+  if (!type) return '';
+  if (type === 'adjustment' || type === 'damage' || type === 'reconciliation') return 'Adjustment';
+  return formatReason(type);
+};
 
 function formatStock(qty: number, unit: string): string {
   if (unit === 'kg' && qty < 1 && qty > 0) return `${Math.round(qty * 1000)} g`;
@@ -411,7 +435,7 @@ export default function InventoryPage() {
               }
               const q = movementSearch.trim().toLowerCase();
               if (!q) return true;
-              return [m.productName, m.productLocalName, m.movementType, m.reason, m.remarks, m.sourceType]
+              return [m.productName, m.productLocalName, m.movementType, movementLabel(m.movementType), m.reason, formatReason(m.reason), m.remarks, m.sourceType]
                 .some(value => String(value || '').toLowerCase().includes(q));
             }).map(m => (
               <div key={m.id} className="rounded-xl border border-gray-100 bg-white p-3 text-xs dark:border-slate-700 dark:bg-slate-800">
@@ -420,14 +444,14 @@ export default function InventoryPage() {
                   <span className="text-gray-500">{m.createdAt ? new Date(m.createdAt).toLocaleString() : ''}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-gray-600 dark:text-slate-300">
-                  <span className="font-semibold">{m.movementType}</span>
+                  <span className="font-semibold">{movementLabel(m.movementType) || m.movementType}</span>
                   <span>In: {m.quantityIn}</span>
                   <span>Out: {m.quantityOut}</span>
                   <span>Balance: {m.newBalance}</span>
                   {m.totalCost != null && <span>Cost: {m.totalCost}</span>}
                 </div>
                 <div className="mt-1 text-gray-500 dark:text-slate-400">
-                  {m.reason}{m.remarks ? ` · ${m.remarks}` : ''}{m.sourceType ? ` · ${m.sourceType}` : ''}
+                  {[formatReason(m.reason), m.remarks, m.sourceType].filter(Boolean).join(' · ')}
                 </div>
               </div>
             ))}
@@ -699,10 +723,10 @@ export default function InventoryPage() {
                     {item.recentRestocks?.length ? (
                       <div className="mt-1 space-y-0.5">
                         {item.recentRestocks.slice(0, 2).map((r, i) => {
-                          const label = r.reason === 'restock' ? 'Restock' : r.reason === 'order_deducted' ? 'Order' : r.changeQty > 0 ? 'Added' : r.changeQty < 0 ? 'Removed' : 'Set';
+                          const { label, note } = logAdjustment(r.reason || '', r.note || null);
                           return (
                             <p key={i} className="text-[10px] text-gray-500 dark:text-slate-400">
-                              {label}: {r.changeQty > 0 ? '+' : ''}{r.changeQty} · {new Date(r.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })} · {r.createdBy || r.createdByUsername || 'System'}{r.note ? ` · ${r.note}` : ''}
+                              {label}: {r.changeQty > 0 ? '+' : ''}{r.changeQty} · {new Date(r.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })} · {r.createdBy || r.createdByUsername || 'System'}{note ? ` · ${note}` : ''}
                             </p>
                           );
                         })}
@@ -828,7 +852,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   {history.map(entry => {
                     const isPos = entry.changeQty > 0;
-                    const label = entry.reason === 'restock' ? 'Restock' : entry.reason === 'order_deducted' ? 'Order' : 'Manual correction';
+                    const { label, note } = logAdjustment(entry.reason, entry.note);
                     const date = new Date(entry.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
                     return (
                       <div key={entry.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-slate-700">
@@ -843,7 +867,7 @@ export default function InventoryPage() {
                             </span>
                           </div>
                           {entry.orderNumber && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">Order #{entry.orderNumber}</p>}
-                          {entry.note && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{entry.note}</p>}
+                          {note && <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5">{note}</p>}
                           <div className="flex items-center justify-between mt-1">
                             <span className="text-[10px] text-gray-500 dark:text-slate-400">{entry.createdByName || entry.createdByUsername || 'System'}</span>
                             <span className="text-[10px] text-gray-500 dark:text-slate-400">{date}</span>
