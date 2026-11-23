@@ -7,7 +7,7 @@ import CategoryIcon from './CategoryIcon';
 import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
 import { usePageBottom } from '../utils/pageBottom';
-import { matchScore } from '../utils/productMatch';
+import { matchScore, sortProductsForCustomer } from '../utils/productMatch';
 import { recordRecentSearch } from '../utils/recentSearches';
 import ProductSuggestionList from './ProductSuggestionList';
 
@@ -83,23 +83,24 @@ export default function CategoriesView({ categories, products, initialCategoryId
   }, [initialCategoryId, initialCategorySlug, visibleCategories, activeCatId]);
 
   const query = search.trim().toLowerCase();
+  const orderedProducts = useMemo(() => sortProductsForCustomer(products), [products]);
   // A search is always catalogue-wide — name, Hindi name or any alias — even
   // while a category tab is open. With no query the active tab's products show.
   // Ranked with the SAME scorer as the catalog sheet / Fresh page, closest
   // keyword first, so every search surface lists products in the same order.
   const rankedProducts = useMemo(
     () => (query
-      ? products
+      ? orderedProducts
         .map((product, index) => ({ product, index, score: matchScore(product, query) }))
         .filter(entry => entry.score < 7)
         .sort((a, b) => a.score - b.score || a.index - b.index)
         .map(entry => entry.product)
       : []),
-    [products, query],
+    [orderedProducts, query],
   );
   const filteredProducts = query
     ? rankedProducts
-    : products.filter(product => product.categoryId === activeCatId);
+    : orderedProducts.filter(product => product.categoryId === activeCatId);
   // Same eight live suggestions every other search surface shows.
   const suggestions = rankedProducts.slice(0, 8);
   const categoryById = useMemo(
