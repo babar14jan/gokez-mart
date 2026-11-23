@@ -12,7 +12,7 @@ import { loadRecentSearches, recordRecentSearch, clearRecentSearches } from '../
 import { loadRecentlyViewedIds } from '../utils/recentlyViewed';
 import { track } from '../utils/track';
 import { useKeyboardDismiss } from '../utils/useKeyboardDismiss';
-import { matchScore } from '../utils/productMatch';
+import { matchScore, sortProductsForCustomer } from '../utils/productMatch';
 import ProductSuggestionList from './ProductSuggestionList';
 
 interface CatalogSearchSheetProps {
@@ -88,12 +88,8 @@ export default function CatalogSearchSheet({
     const bySlug = new Map(categoriesWithProducts.map(category => [String(category.slug).toLowerCase(), category]));
     return (freshCategorySlugs || [])
       .map(slug => bySlug.get(String(slug).toLowerCase()))
-      // A tab whose only products are combos would render empty (combos are
-      // excluded from Fresh), so drop it up front.
-      .filter((category): category is Category =>
-        Boolean(category) && products.some(product => product.categoryId === category!.id && !product.isBundle)
-      );
-  }, [freshMode, freshCategorySlugs, categoriesWithProducts, products]);
+      .filter((category): category is Category => Boolean(category));
+  }, [freshMode, freshCategorySlugs, categoriesWithProducts]);
   // The catalogue opens on a concrete category instead of an "All" view.
   // Fresh starts on its first configured tab; search falls back to Vegetables,
   // then the first category that has products.
@@ -105,17 +101,17 @@ export default function CatalogSearchSheet({
     return vegetables?.id || categoriesWithProducts[0]?.id || null;
   }, [freshMode, freshTabs, categoriesWithProducts]);
 
+  const orderedProducts = useMemo(() => sortProductsForCustomer(products), [products]);
   // Live matches, closest keyword first. Recomputed on every keystroke — the
   // catalogue already lives on the client, so no request is needed.
   const results = useMemo(() => {
     if (!query) return [] as Product[];
-    return products
-      .filter(product => !freshMode || !product.isBundle)
+    return orderedProducts
       .map((product, index) => ({ product, index, score: matchScore(product, query) }))
       .filter(entry => entry.score < 7)
       .sort((a, b) => a.score - b.score || a.index - b.index)
       .map(entry => entry.product);
-  }, [products, query]);
+  }, [orderedProducts, query]);
   const suggestions = results.slice(0, 8);
   // Before the effect below has run (or while categories are still loading),
   // fall back to the default so the sheet never flashes an "all products" grid.
@@ -126,12 +122,11 @@ export default function CatalogSearchSheet({
     // the page is empty rather than leaking the rest of the catalogue.
     if (freshMode && !activeCategoryId) return [] as Product[];
     if (!freshMode && !query) return [] as Product[];
-    const list = products.filter(product =>
-      (!freshMode || !product.isBundle) &&
-      (!activeCategoryId || product.categoryId === activeCategoryId)
+    const list = orderedProducts.filter(product =>
+      !activeCategoryId || product.categoryId === activeCategoryId
     );
     return freshMode && freshLimit && freshLimit > 0 ? list.slice(0, freshLimit) : list;
-  }, [query, results, products, activeCategoryId, freshMode, freshLimit]);
+  }, [query, results, orderedProducts, activeCategoryId, freshMode, freshLimit]);
   const gridCols = !query && freshMode && freshLayout === 'grid'
     ? freshColumns === 2 ? 'grid-cols-2 md:grid-cols-6' : freshColumns === 4 ? 'grid-cols-4 md:grid-cols-6' : 'grid-cols-3 md:grid-cols-6'
     : 'grid-cols-3 sm:grid-cols-5 md:grid-cols-6';
@@ -398,7 +393,7 @@ export default function CatalogSearchSheet({
               scrollbar gutters so the white row stays flush with the band. */}
           {!query && freshTabs.length > 0 && (
             <div className={`sticky top-0 z-30 bg-white shadow-sm dark:bg-slate-900 ${inline ? "app-bleed-x" : ""}`}>
-              <div className="mx-auto w-full max-w-6xl page-x pb-5 pt-2">
+              <div className="mx-auto w-full max-w-6xl page-x pb-1 pt-2">
                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                   {freshTabs.map(category => {
                     const selected = category.id === activeCategoryId;

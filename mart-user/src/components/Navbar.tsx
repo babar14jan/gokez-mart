@@ -163,6 +163,7 @@ function ZoneDropdown({ onUseMyLocation }: ZoneDropdownProps) {
 const navItems = [
   { id: 'home',       label: 'Home',       Icon: Home },
   { id: 'categories', label: 'Categories', Icon: LayoutGrid },
+  { id: 'fresh',      label: 'Fresh',      image: '/fresh_icon.webp' },
   { id: 'orders',     label: 'Orders',     Icon: Package },
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
@@ -206,14 +207,15 @@ export default function Navbar({ onUseMyLocation, activeView, onNavChange, onChe
             {/* Center: nav items + Cart. Pinned to the container centre by the two
                 equal-width side slots so the nav is stable across views. */}
             <nav className="hidden sm:flex shrink-0 items-center gap-1">
-              {navItems.map(({ id, label, Icon }) => {
+              {navItems.map(item => {
+                const { id, label } = item;
                 const isActive = activeView === id;
                 return (
-                  <button key={id} onClick={() => onNavChange(id)} aria-label={label}
+                  <button key={id} onClick={() => onNavChange(id)} aria-label={id === 'fresh' ? 'Fresh products' : label}
                     className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-700/50 lg:px-4 ${
                       isActive ? 'bg-gokez-700 text-white shadow-sm' : 'text-gokez-900/75 hover:bg-white/35 hover:text-gokez-950 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white'
                     }`}>
-                    <Icon className="w-4 h-4" />
+                    {'Icon' in item ? <item.Icon className="w-4 h-4" /> : <img src={item.image} alt="" className="h-4 w-4 object-contain" />}
                     <span className="hidden lg:inline">{label}</span>
                   </button>
                 );

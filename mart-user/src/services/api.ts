@@ -194,6 +194,7 @@ export interface Product {
   photoVariants?: Array<{ smallUrl?: string | null; thumbnailUrl: string; largeUrl: string }> | null;
   /** A fixed combo/bundle sold as one product. Drives the "Today's Combos" section. */
   isBundle: boolean;
+  sortOrder?: number;
 }
 
 /**
