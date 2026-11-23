@@ -42,12 +42,52 @@ payments go directly to the merchant.
   responses, database-backed session roles, stricter phone validation and the
   2Factor `Login_OTP` SMS flow.
 
+### 2026-11-20 (current `main`)
+
+- **Referral and Earn.** Customers get a personal code/link, a homepage referral
+  banner, checkout credit with first-order minimum/discount handling, staged
+  rewards and credit reservation/release. Hub adds overview, campaigns, records,
+  customer rewards, reward ledger, fraud review, reports and CSV export.
+- **Native customer Android app.** `mart-user/android` wraps the production web
+  app with Capacitor 7, branded splash/icons, allowed in-app routes and a
+  build-time `VITE_API_URL`; GitHub Actions builds a debug APK on `mart-user`
+  changes. FCM deep links are wired in the app, but backend FCM token routes are
+  still pending.
+- **Catalog pricing and options.** Products support selectable weight/quantity
+  options with per-option price, discount and default choice; cards show option
+  counts and struck-through original prices. Combo products can be removed from
+  a store and the master catalog, and inventory is managed per component.
+- **Fresh and customer UX.** Fresh is a normal in-flow page with scoped search,
+  suggestions, recent searches, an empty-search state and active nav highlight.
+  Header/chrome collapse and dark-mode styling were polished, product sheets
+  close reliably on pull-down, notification opt-in has a cooldown and login can
+  auto-request permission, and standalone iOS installs are tracked.
+- **Inventory.** Hub stock editing moved to inline rows with a floating save bar
+  and reviewable drafts; cards show only the user's latest add/remove/set
+  actions while the full log stays in Stock History/Ledger. Movements have
+  Today/Yesterday/All filtering, reduction reasons, costed stock lines, daily
+  valuation snapshots, KPI cards and profitability views.
+- **Analytics and Hub operations.** Store-scoped analytics helpers, custom date
+  validation, order insights, authenticated product leaders, top-15 product
+  ordering, zone-scoped settings, an image manager and retry/Done bulk upload
+  handling were added; sidebar, login, splash and icons were rebranded.
+- **Promotions.** Audience/cohort fixes, WhatsApp deep links, test recipients,
+  promotion open tracking and click fallback, emoji picker, and automatic
+  marketing consent on signup/first notification grant.
+- **Reliability and deployment.** Cart conflicts are replaced instead of
+  rejected; catalog SSE is stamp-gated and scope-capped; OOS cart lines are
+  excluded from totals; after-hours orders auto-confirm without auto-preparing,
+  and preparing requires confirmation with delivery-time recalculation. Images
+  now use the Hostinger storage service; Hostinger VPS deployment docs and
+  Docker networking fixes are in place, Supabase storage references removed,
+  both PWA update policies set to `silent`, and apps bumped to v0.1.7.
+
 ## What is in this repository
 
 | Part | Purpose | Package |
 | --- | --- | --- |
 | `mart-backend` | Express + TypeScript API, PostgreSQL, migrations, Web Push, image uploads, SSE | `mart-backend` |
-| `mart-user` | Current production customer storefront and installed PWA; source of truth for customer web behaviour | `mart-user` |
+| `mart-user` | Current production customer storefront and installed PWA; source of truth for customer web behaviour, with a Capacitor native Android project under `mart-user/android` | `mart-user` |
 | `mart-hub` | Store owner, staff, delivery and super-admin operations app | `mart-hub` |
 | `mart-mobile` | Native Expo customer app under active development; currently behind `mart-user` and not in root workspaces | `mart-mobile` |
 | `docs` | Deployment, cost and homepage UX audit notes | — |
@@ -55,15 +95,19 @@ payments go directly to the merchant.
 ```text
 gokez-mart/
 ├── mart-backend/          # API, migrations, backend tests
-├── mart-user/             # customer React app + PWA
+├── mart-user/             # customer React app + PWA + Android wrapper
+│   └── android/           # Capacitor 7 native customer app
 ├── mart-hub/              # operations React app + PWA
 ├── mart-mobile/           # Expo / React Native app
 ├── docs/
 │   ├── BACKEND_COST_AUDIT.md
+│   ├── DEPLOY_HOSTINGER.md
 │   ├── DEPLOY_RENDER.md
+│   ├── HOSTINGER_STORAGE.md
 │   ├── HOMEPAGE_UX_AUDIT.md
 │   └── marketing/
-├── .github/workflows/     # legacy Android build workflows
+├── storage-service/       # Hostinger image storage API
+├── .github/workflows/     # Android APK and deployment workflows
 ├── docker-compose.local.yml
 ├── render.yaml            # primary API deployment
 ├── railway.json           # fallback API deployment
@@ -97,9 +141,10 @@ The API prefix is `/api/v1`. The unauthenticated health endpoint is
 | Customer web | React 18, TypeScript 5, Vite 5, Tailwind 3, Zustand, Axios |
 | Hub | React 18, React Router 6, TypeScript 5, Vite 5, Tailwind 3, Zustand, Axios, React Hook Form, `xlsx` |
 | Mobile | Expo SDK 54, React Native 0.81, React 19, Expo Router 6, NativeWind 4, Zustand, Expo SecureStore |
+| Customer Android | Capacitor 7 wrapping `mart-user`, Java 21+, Android SDK 35, FCM push plumbing |
 | Database | PostgreSQL 16 locally; Supabase-compatible PostgreSQL in production |
-| Storage | Supabase Storage, optional |
-| Deployments | Render (API), Cloudflare Pages (web), EAS (mobile, not yet configured) |
+| Storage | Hostinger storage service; WebP variants and public reads through `images.gokez.com` |
+| Deployments | Render (API blueprint), Hostinger VPS (API/VPS path), Cloudflare Pages (web), GitHub Actions (customer debug APK), EAS (Expo mobile, not yet configured) |
 
 Node `20.15.0` is pinned in `.nvmrc`; both root and backend require Node
 `>=20.9.0`.
@@ -111,6 +156,8 @@ Node `20.15.0` is pinned in `.nvmrc`; both root and backend require Node
 - Node.js 20.15 or newer
 - npm
 - Docker only if you want the bundled local PostgreSQL
+- Java 21+ and Android Studio with SDK platform 35/build tools 35+ for native
+  Android builds
 - Expo Go / Xcode / Android tooling only if working on `mart-mobile`
 
 ### Install and run the three main apps
@@ -171,6 +218,25 @@ sure the backend is listening on that interface. The `start:local` script passes
 the macOS `en0` IP to `app.config.js` as `DEV_IP`, but the API client reads only
 `EXPO_PUBLIC_API_URL`, so set that value explicitly in `.env` for a device.
 
+### Customer Android app
+
+`mart-user/android` is a Capacitor 7 wrapper around the production customer web
+app, not the Expo app in `mart-mobile`. `VITE_API_URL` is baked into the JS at
+build time and is required; without it the app calls the frontend origin.
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+VITE_API_URL="https://api.mart.gokez.com/api/v1" npm run apk:debug --workspace=mart-user
+```
+
+The debug APK is written to
+`mart-user/android/app/build/outputs/apk/debug/app-debug.apk`. The application
+id is `com.gokez.mart.customer` and the WebView origin is
+`https://mart.gokez.com`. See `mart-user/docs/android-capacitor.md` for Android
+Studio, Firebase `google-services.json`, allowed deep links and notification
+payload details. Native push is not operational until backend FCM token
+registration/unregistration routes are added.
+
 ### Ports and proxies
 
 | Process | Port |
@@ -197,14 +263,20 @@ this value in at build time.
 | `npm run start --workspace=mart-backend` | Self-healing production start script |
 | `npm test --workspace=mart-backend` | Backend Node test suite |
 | `npm run build --workspace=mart-user` | Type-check, Vite build, stamp versions, prerender public pages, run SEO checks |
+| `npm run cap:build --workspace=mart-user` | Build the customer web app, then `cap sync android` |
+| `npm run cap:open --workspace=mart-user` | Open the Capacitor Android project in Android Studio |
+| `npm run cap:run --workspace=mart-user` | Run the customer Android app on a connected device/emulator |
+| `npm run apk:debug --workspace=mart-user` | Build the customer web app, sync Capacitor and assemble a debug APK |
 | `npm run seo:check --workspace=mart-user` | Verify SEO source/build contract without a full build |
 | `npm test --workspace=mart-user` | Customer app test suite |
 | `npm run build --workspace=mart-hub` | Type-check, Vite build and stamp versions |
 | `npm run preview --workspace=mart-user` | Preview the customer build on port `5177` |
 | `npm run preview --workspace=mart-hub` | Preview the Hub build on port `5178` |
 
-Mobile commands live in `mart-mobile/package.json`: `start`, `android`, `ios`,
-`start:local`, `build:preview` and `build:prod` (EAS).
+Expo mobile commands live in `mart-mobile/package.json`: `start`, `android`,
+`ios`, `start:local`, `build:preview` and `build:prod` (EAS). Customer Android
+branding helpers in `mart-user/package.json` include `gen:ios-splash`,
+`gen:native-splash`, `gen:app-icons` and `gen:brand-assets`.
 
 ## Environment variables
 
@@ -213,7 +285,7 @@ Mobile commands live in `mart-mobile/package.json`: `start`, `android`, `ios`,
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `NODE_ENV` | Production | `production` enables production guards and disables local OTP/storage shortcuts |
-| `PORT` | No | Defaults to `3004`; do not set on Render |
+| `PORT` | No | Defaults to `3004`; do not set on Render; Hostinger sets `3000` explicitly |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `ALLOW_REMOTE_DATABASE` | Local only | Set to `true` only to deliberately allow a non-local database in development |
 | `MART_JWT_SECRET` | Yes in production | Unique secret, at least 32 characters |
@@ -221,10 +293,11 @@ Mobile commands live in `mart-mobile/package.json`: `start`, `android`, `ios`,
 | `MART_CORS_ORIGIN` | Yes in production | Comma-separated HTTPS page origins, for example `https://mart.gokez.com,https://hub.gokez.com` |
 | `MART_PUBLIC_API_URL` | Production promotions | Public API base including `/api/v1`; used to build promotion click-tracking URLs |
 | `MART_CUSTOMER_APP_URL` | Optional | Customer storefront origin used to resolve promotion destinations; defaults to the first CORS origin |
-| `MART_STORAGE_PUBLIC_BASE_URL` | Optional | Public base URL for stored images; defaults to Supabase public URL or local `/uploads` |
-| `SUPABASE_URL` | For uploads | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | For uploads | Server-side Supabase key |
-| `SUPABASE_BUCKET` | No longer used | Legacy Supabase bucket is fixed to `mart-products` in code |
+| `IMAGE_STORAGE_DRIVER` | Production uploads | `hostinger`; the only supported driver |
+| `HOSTINGER_STORAGE_URL` | Production uploads | `http://gokez-storage:8080` inside the VPS Docker network; `http://localhost:8080` locally |
+| `HOSTINGER_STORAGE_API_KEY` | Production uploads | Shared key with the storage service |
+| `HOSTINGER_STORAGE_PROJECT_ID` | No | Defaults to `gokez-mart` |
+| `MART_BACKGROUND_JOBS_ENABLED` | No | Defaults to `true`; set `false` on an overlapping API instance to avoid duplicate jobs |
 | `TWO_FACTOR_API_KEY` | Production | Sends customer OTPs; without it customer sign-in fails |
 | `VAPID_PUBLIC_KEY` | Optional | Web Push public key |
 | `VAPID_PRIVATE_KEY` | Optional | Web Push private key |
@@ -232,6 +305,10 @@ Mobile commands live in `mart-mobile/package.json`: `start`, `android`, `ios`,
 | `SENTRY_DSN` | Optional | Enables Sentry only in production |
 | `NOMINATIM_BASE_URL` | Optional | Reverse geocoding provider |
 | `NOMINATIM_USER_AGENT` | Optional | Required by public Nominatim etiquette |
+
+Public image reads are served by `storage-service` at
+`https://images.gokez.com`; the old `MART_STORAGE_PUBLIC_BASE_URL` override and
+Supabase storage variables have been removed from code and env examples.
 
 Production refuses to boot when `MART_JWT_SECRET` is missing, is a known
 placeholder, is shorter than 32 characters, or when `MART_CORS_ORIGIN` is empty
@@ -300,17 +377,19 @@ listening, then starts the Express app in `mart-backend/src/app.ts`.
 ### Orders, realtime and notifications
 
 - Order placement runs in a transaction and supports idempotency keys.
-- In-hours pending orders auto-confirm after 2 seconds; non-scheduled confirmed
-  orders auto-start preparing after 3 minutes. Both transitions are recoverable
-  after a restart. Scheduled orders still auto-confirm, but remain `confirmed`
-  until staff start preparing them for the delivery window.
+- Pending orders auto-confirm after 2 seconds, including after-hours orders.
+  Auto-preparing was removed: staff must confirm preparation, which recalculates
+  the promised delivery time. Auto-confirm is recoverable after a restart.
+  Scheduled orders still auto-confirm, but remain `confirmed` until staff start
+  preparing them for the delivery window.
 - The Hub receives live order events over Server-Sent Events at
   `GET /api/v1/admin/events`.
 - Web Push subscriptions are stored for customers, guests and admins. Guests
   are addressed by the order tracking token. Promotional pushes support
   cohorts, zone targeting, quiet hours, preview/test sends and click tracking.
 - Inventory is deducted when an order becomes `delivered`, but only when the
-  store has inventory tracking enabled.
+  store has inventory tracking enabled; bundle lines consume stock from their
+  components.
 - Campaign redemptions are reversed when an order becomes `cancelled`,
   `failed_delivery` or `terminated`.
 - Guests can use first-order/all campaigns, but inactive-customer and
@@ -332,15 +411,18 @@ listening, then starts the Express app in `mart-backend/src/app.ts`.
 ### Uploads
 
 Multer keeps uploads in memory, limits them to 5 MB, and Sharp converts images
-to WebP. Files are written to Supabase Storage when configured; local
-development can fall back to the local uploads directory. Uploaded product
-images are served with a one-year cache policy from Supabase.
+to WebP. Files are written through the Hostinger storage service
+(`IMAGE_STORAGE_DRIVER=hostinger`) and served publicly from
+`https://images.gokez.com`; local storage remains only for development and
+migration. On the VPS the API must reach the storage container at
+`http://gokez-storage:8080`, not `127.0.0.1`.
 
-Product images now generate thumbnail and large variants (`photo_variants`,
+Product images generate thumbnail and large variants (`photo_variants`,
 `mart_product_image_assets`). The storefront uses the thumbnail for cards and
-the large variant for detail views. A background cleanup loop removes orphaned
-image assets and storage objects; `images:export-local` exports local files for
-migration to object storage.
+the large variant for detail views. Hub's Image Manager lists, inspects and
+deletes stored images and shows where each is referenced. A background cleanup
+loop removes orphaned image assets and storage objects; `images:export-local`
+exports legacy local files for migration.
 
 ### Operations
 
@@ -348,9 +430,11 @@ Sentry is initialised only in production when `SENTRY_DSN` is set. SIGTERM
 handling drains in-flight requests and the database pool within an 8-second
 budget; Render waits up to 30 seconds before killing the process.
 
-Background work includes recovery of pending auto-confirm/auto-preparing
-transitions, scheduled promotional-push dispatch, and product-image cleanup.
-Each loop is idempotent and safe to run on every instance.
+Background work includes recovery of pending auto-confirm transitions,
+scheduled promotional-push dispatch, product-image cleanup, daily inventory
+snapshot creation and referral reward/reservation processing. Each loop is
+idempotent; set `MART_BACKGROUND_JOBS_ENABLED=false` on an overlapping API
+instance to avoid duplicate work.
 
 ## Roles and access
 
@@ -381,11 +465,12 @@ zone-wide ledger.
 | `/categories` | `super_admin`, `store_owner` |
 | `/delivery` | `staff`, `delivery_staff` |
 | `/feedback` | `super_admin`, `store_owner`, `store_manager` |
-| `/analytics` | `super_admin`, `store_owner`, `store_manager` |
+| `/analytics`, `/top-selling` | `super_admin`, `store_owner`, `store_manager` |
 | `/daily-sales` | `super_admin`, `store_owner`, `store_manager` (head store only) |
 | `/stores` | `super_admin`, `store_owner`, `store_manager` |
 | `/campaigns`, `/home-sections` | `super_admin`, `store_owner` |
-| `/promotions`, `/zones`, `/subscriptions`, `/store-applications`, `/users`, `/compliance`, `/customers`, `/customer-leads`, `/suggestions`, `/install-analytics`, `/carousel` | `super_admin` |
+| `/promotions`, `/zones`, `/subscriptions`, `/store-applications`, `/users`, `/compliance`, `/customers`, `/customer-leads`, `/suggestions`, `/install-analytics`, `/carousel`, `/restore-order`, `/image-manager` | `super_admin` |
+| `/referrals` and its `/referral-*` redirects | `super_admin` |
 | `/login`, `/apply`, `/merchant-terms`, `/hub`, `/landing` | Public |
 
 `/team` redirects to `/stores`; the separate Team and Settings pages were
@@ -468,8 +553,9 @@ app.
 - Guest order tracking through an unguessable tracking token
 - Address book with zones, coordinates and geofence checks
 - Split-view category browsing and three-column mobile product grid
-- Product weight/unit options, bundles and search aliases; search ranks exact
-  product names ahead of local names and aliases
+- Selectable product weight/quantity options with per-option price, discount and
+  default choice; bundles and search aliases; search ranks exact product names
+  ahead of local names and aliases
 - Floating cart and checkout overlay that does not lose the underlying page
 - Delivery preferences: fastest delivery or a scheduled **next-day 60-minute**
   IST window with a 30-minute lead; legacy `within_30`/`within_60` values still
@@ -480,8 +566,11 @@ app.
 - Campaigns, coupons, first-order and inactive-customer eligibility; campaigns
   can require scheduled delivery, exclude the first hour, or target zones and
   categories
+- Referral page with personal code/link, share flow, credit balance and reward
+  details; referral banners can be placed in dynamic homepage sections
 - Dynamic homepage sections, carousel, deals, personalised rows and an
-  admin-configurable **Fresh** page in the centre navigation
+  admin-configurable **Fresh** page in the centre navigation with scoped search,
+  suggestions, recent searches and an empty-search state
 - Order history, order again, detailed tracking, status timeline, cancellation
   requests and partial-delivery adjustment history
 - Browser-printable receipt/save-as-PDF, marked as a purchase receipt rather
@@ -495,7 +584,8 @@ app.
 ### Customer views
 
 `home`, `about`, `what-is-gokez-mart`, `categories`, `deals`, `orders`,
-`account`, `privacy`, `terms`, `grievance`, `delete-account`, `feedback`.
+`account`, `privacy`, `terms`, `grievance`, `delete-account`, `feedback`,
+`referral`, `fresh`.
 
 Checkout is an overlay mounted over the current view, not a standalone route;
 `/checkout` restores the overlay on reload. The public pages `/about/` and
@@ -508,8 +598,9 @@ Gokez Hub is the operations and management app.
 ### Hub features
 
 - Role-adaptive sidebar and bottom navigation
-- Dashboard and analytics for orders, revenue, customers and offers, with a
-  shared browse-date basis and an in-progress KPI
+- Dashboard and analytics for orders, revenue, customers, offers, order insights
+  and authenticated product leaders, with a shared browse-date basis, custom
+  ranges, top-15 ordering and an in-progress KPI
 - Live order stream over SSE, a live-order alarm and a configurable ringtone
 - Order confirmation, preparation, dispatch, delivery, cancellation,
   failed-delivery and termination flows
@@ -518,14 +609,18 @@ Gokez Hub is the operations and management app.
 - Per-store fulfilment controls for multi-store orders
 - Delivery assignment with active team-member filtering
 - Delivery view with Google Maps navigation and status progression
-- Product management, drag-to-reorder, category images and Excel/CSV catalog
-  import
+- Product management with selectable weight/quantity options (per-option price,
+  discount and default), drag-to-reorder, combo removal and Excel/CSV catalog
+  import with retry/Done feedback
 - Category slug normalisation/validation, category-scoped product codes
   (editable prefix, immutable once products exist) and generated
   thumbnail/large image variants with bulk upload
+- Image Manager for listing stored images, checking usage references and
+  deleting orphaned or replaced assets
 - Master product catalog managed by super admins and priced per store by owners
-- Inventory, restock and adjustment history with idempotency keys; zone heads
-  can manage member-store inventory
+- Inventory inline editing with reviewable drafts, restock/adjustment history,
+  movement ledger filters, costed stock lines, daily valuation snapshots and
+  profitability views; zone heads can manage member-store inventory
 - Daily Sales ledger: online app orders plus itemised offline cash/UPI counter
   sales, restricted to super admins and head-store owners/managers
 - Store onboarding wizard, subscriptions, branding, hours and deactivation;
@@ -533,8 +628,10 @@ Gokez Hub is the operations and management app.
 - Team management, username lookup and multi-store assignments
 - Customer, lead and funnel views for super admins
 - Campaigns, coupons, carousel, dynamic homepage sections and the Fresh page
+- Referral/Earn management: campaigns, records, customer rewards, reward ledger,
+  fraud review, reports, CSV export and credit adjustments
 - Promotional Web Push: cohorts, zone targeting, quiet hours, preview/test/send,
-  delivery audit and click analytics
+  test recipients, delivery audit, open/click tracking and click fallback
 - Zone management with head store, member stores, zone hours and delivery policy
 - Compliance: deletion requests, grievances and audit logs
 - Feedback and product-suggestion review
@@ -544,8 +641,10 @@ Gokez Hub is the operations and management app.
 
 ## Mobile app
 
-`mart-mobile` is a native Expo app under active development. It is not part of
-the root workspace and currently has no CI or production EAS project configured.
+`mart-mobile` is a separate native Expo app under active development, distinct
+from the Capacitor customer Android wrapper in `mart-user/android`. It is not
+part of the root workspace and currently has no CI or production EAS project
+configured.
 It is behind the current `mart-user` web experience; the sections below document
 the mobile snapshot and its gaps, not feature parity with the web app.
 
@@ -600,8 +699,8 @@ any non-terminal order ──► terminated (super_admin or store_owner)
 
 | Status | Meaning | Rules |
 | --- | --- | --- |
-| `pending` | Order placed | In-hours orders auto-confirm after 2 seconds; staff can also confirm or cancel |
-| `confirmed` | Store accepted the order | Auto-starts preparing after 3 minutes unless scheduled; staff can cancel or reschedule |
+| `pending` | Order placed | Orders auto-confirm after 2 seconds, including after-hours; staff can also confirm or cancel |
+| `confirmed` | Store accepted the order | Staff must confirm preparation, which recalculates the promised delivery time; staff can cancel or reschedule |
 | `preparing` | Being packed | Moves to ready-to-pickup |
 | `ready_to_pickup` | Packed and assigned | Requires an active delivery handler for the store; member-store pickup marks the fulfilment prepared |
 | `out_for_delivery` | Assigned handler started delivery | Only the assigned handler can start |
@@ -614,8 +713,8 @@ any non-terminal order ──► terminated (super_admin or store_owner)
 normal delivery path still goes from `ready_to_pickup` to `out_for_delivery`.
 For multi-store orders, `picked_up` is a per-store fulfilment status in
 `mart_order_store_fulfilments`; the Hub and dashboard count it as in progress.
-Scheduled orders auto-confirm like any other order, but they do not
-auto-start preparing; they stay `confirmed` until staff begin preparation for
+All orders auto-confirm like any other order, but none auto-start preparing;
+they stay `confirmed` until staff begin preparation. Scheduled orders wait for
 the delivery window.
 
 ### Cancellation, rescheduling and adjustments
@@ -634,7 +733,8 @@ the delivery window.
 
 ### After-hours and scheduled orders
 
-- Orders placed while the store is closed are still accepted.
+- Orders placed while the store is closed are still accepted and auto-confirm
+  like other orders, but they never auto-start preparing.
 - The customer is told the store is closed and when it opens next.
 - A manager can use “confirm for next opening”, which sets the order to
   `confirmed`, records `confirmed_next_open`, and sets `scheduled_for` to the
@@ -674,11 +774,11 @@ receives payment directly.
 ## API overview
 
 There is no generated OpenAPI/Swagger document. The authoritative route list is
-`mart-backend/src/routes/index.ts`, which currently declares 172 routes:
+`mart-backend/src/routes/index.ts`, which currently declares 218 routes:
 
-- 68 GET
-- 53 POST
-- 39 PUT
+- 93 GET
+- 71 POST
+- 42 PUT
 - 12 DELETE
 - 0 PATCH
 
@@ -688,23 +788,26 @@ mounted under `/api/v1`.
 
 | Group | Representative paths | Notes |
 | --- | --- | --- |
-| Customer auth | `/auth/send-otp`, `/auth/verify-otp`, `/auth/me`, `/auth/logout` | OTP; production uses 2Factor `Login_OTP` |
-| Customer profile/orders | `/auth/orders`, `/auth/orders/:id/cancel`, `/auth/orders/:id/cancellation-request`, `/auth/addresses` | Customer JWT required |
+| Customer auth | `/auth/send-otp`, `/auth/verify-otp`, `/auth/me`, `/auth/profile`, `/auth/logout` | OTP; production uses 2Factor `Login_OTP` |
+| Customer profile/orders | `/auth/orders`, `/auth/orders/:id/cancel`, `/auth/orders/:id/cancellation-request`, `/auth/addresses`, `/auth/upload/photo` | Customer JWT required |
 | Public catalog | `/stores`, `/zones`, `/categories`, `/products`, `/settings/public`, `/catalog/stamp`, `POST /recommendations` | Store/zone-scoped queries; recommendations are cart-aware |
 | Orders | `POST /orders`, `/guest-details`, `/orders/track`, `/orders/track/tokens`, `/orders/track/:id/cancel`, `/orders/track/:id/cancellation-request` | Guest and signed-in flows |
+| Referrals | `/referrals/me`, `/referrals/validate`, `/referrals/claim`, `/referrals/credits`, `/referrals/credits/reserve`, `/referrals/credits/:id/release` | Customer codes, first-order credit and reward ledger |
 | Admin auth | `/admin/login`, `/admin/logout`, `/admin/me`, `/admin/change-password` | Session-backed JWT |
 | Admin orders | `/admin/orders`, `/admin/orders/:id/status`, `/admin/orders/:id/items`, `/admin/orders/:id/fulfilments/:storeId`, `/admin/orders/:id/reschedule`, `/admin/orders/:id/confirm-next-open`, `/admin/orders/:id/terminate`, `/admin/events` | SSE live stream, adjustments and per-store fulfilment |
 | Daily sales | `/admin/daily-sales`, `/admin/daily-sales/day`, `/admin/daily-sales/entries` | Online totals plus offline counter sales |
-| Catalog and products | `/admin/products`, `/admin/categories`, `/admin/catalog`, `/admin/products/bulk-from-catalog` | Per-store pricing, product codes, master catalog |
+| Catalog and products | `/admin/products`, `/admin/categories`, `/admin/catalog`, `/admin/products/bulk-from-catalog`, `/admin/products/:id/components` | Per-store pricing, option fields, product codes, master catalog |
 | Stores and subscriptions | `/admin/stores`, `/admin/stores/:id/settings`, `/admin/store-subscriptions`, `/admin/store-applications` | Super-admin operations |
 | Zones | `/admin/zones`, `/admin/zones/:id/stores`, `/admin/zones/:id/primary`, `/admin/zones/:id/settings` | Head store, member stores and zone policy |
 | Team | `/admin/stores/:storeId/team`, `/admin/users/lookup`, `/admin/users/:userId/stores` | Store-scoped assignments |
-| Inventory | `/admin/inventory`, `/admin/inventory/bulk-restock`, `/admin/inventory/:productId/stock`, `/admin/inventory/:productId/history` | Idempotency required on writes |
-| Customers and funnel | `/admin/customers`, `/admin/customer-leads`, `/admin/customer-funnel/extended`, `/admin/install-analytics` | Super-admin analytics; browse-date basis |
-| Campaigns and homepage | `/admin/campaigns`, `/admin/carousel`, `/admin/home-sections`, `/campaigns/eligible`, `/campaigns/validate` | Public and admin sides |
-| Promotions | `/admin/promotions`, `/admin/promotions/:id/preview`, `/admin/promotions/:id/test`, `/admin/promotions/:id/send`, `/promotions/:id/click` | Web Push campaigns and click tracking |
+| Inventory | `/admin/inventory`, `/admin/inventory/bulk-restock`, `/admin/inventory/movements`, `/admin/inventory/valuation`, `/admin/inventory/valuation-summary`, `/admin/inventory/profitability`, `/admin/inventory/:productId/stock`, `/admin/inventory/:productId/history` | Idempotency on writes; ledger, snapshots and costed views |
+| Customers, funnel and analytics | `/admin/customers`, `/admin/customer-leads`, `/admin/customer-funnel/extended`, `/admin/install-analytics`, `/admin/analytics/summary`, `/admin/analytics/customers`, `/admin/analytics/top-products`, `/admin/analytics/order-insights`, `/admin/analytics/product-leaders` | Super-admin/funnel analytics and scoped Hub analytics |
+| Campaigns and homepage | `/admin/campaigns`, `/admin/carousel`, `/admin/home-sections`, `/campaigns/eligible`, `/campaigns/validate` | Public and admin sides; referral banner is a home-section kind |
+| Promotions | `/admin/promotions`, `/admin/promotions/audience/preview`, `/admin/promotions/audience/customers`, `/admin/promotions/:id/preview`, `/admin/promotions/:id/test`, `/admin/promotions/:id/send`, `/promotions/:id/click` | Web Push cohorts, test recipients and click/open tracking |
+| Image manager | `/admin/storage/clean`, `/admin/storage/images`, `/admin/storage/images/:id`, `/admin/storage/images/:id/delete` | Hostinger storage inspection and cleanup |
+| Admin referrals | `/admin/referral/campaigns`, `/admin/referral/records`, `/admin/referral/customers`, `/admin/referral/ledger`, `/admin/referral/fraud`, `/admin/referral/reports/:type`, `/admin/referral/export` | Super-admin campaign, reward, fraud and reporting controls |
 | Compliance | `/compliance/deletion`, `/compliance/grievances`, `/compliance/data-export`, `/compliance/marketing-consent`, `/admin/compliance/audit-logs` | DPDP flows |
-| Push | `/push/vapid-public-key`, `/push/subscribe/customer`, `/push/subscribe/guest`, `/push/subscribe/admin` | Guest subscription uses tracker token |
+| Push | `/push/vapid-public-key`, `/push/subscribe/customer`, `/push/subscribe/guest`, `/push/subscribe/admin` | Web Push/VAPID only; guest uses tracker token, FCM routes pending |
 | Feedback and suggestions | `POST /feedback`, `POST /suggestions`, `/admin/feedback`, `/admin/suggestions` | Public suggestion submission |
 
 Responses use:
@@ -746,8 +849,8 @@ inventory restock/stock changes. The header is allowed by CORS.
 The backend owns the schema and applies migrations automatically before it
 starts listening. There is no separate production migration step.
 
-- 127 SQL migration files exist in `mart-backend/src/database/migrations`.
-- 54 application tables are declared in those migrations, plus the runtime
+- 148 SQL migration files exist in `mart-backend/src/database/migrations`.
+- 71 application tables are declared in those migrations, plus the runtime
   `mart_migrations` ledger.
 - Applied migrations are recorded in `mart_migrations`.
 - Each migration runs in its own transaction under a PostgreSQL
@@ -764,10 +867,11 @@ starts listening. There is no separate production migration step.
 | Admin/team | `mart_admins`, `mart_admin_store_assignments`, `mart_admin_sessions` |
 | Customers | `mart_customers`, `mart_customer_addresses`, `mart_customer_leads`, `mart_otps`, `mart_consents`, `mart_token_blacklist` |
 | Orders | `mart_orders`, `mart_order_items`, `mart_order_item_bundle_components`, `mart_order_status_events`, `mart_order_delivery_events`, `mart_order_store_fulfilments`, `mart_order_item_adjustments` |
-| Inventory | `mart_inventory_log` |
+| Inventory | `mart_inventory_log`, `mart_inventory_movements`, `mart_inventory_daily_snapshots`, `mart_purchase_batches`, `mart_purchase_receipts`, `mart_purchase_receipt_lines`, `mart_stock_adjustments`, `mart_stock_reservations`, `mart_stock_transfers`, `mart_stock_transfer_lines` |
 | Sales | `mart_offline_sales` |
 | Campaigns | `mart_campaigns`, `mart_campaign_targets`, `mart_campaign_uses`, `mart_campaign_changes`, `mart_campaign_zones`, `mart_campaign_categories`, `mart_carousel_slides`, `mart_carousel_settings`, `mart_home_sections` |
 | Promotions | `mart_promotions`, `mart_promotion_deliveries` |
+| Referral | `mart_referral_campaigns`, `mart_referral_codes`, `mart_referrals`, `mart_referral_rewards`, `mart_referral_credits`, `mart_referral_transactions`, `mart_referral_audit_logs` |
 | Funnel/analytics | `mart_funnel_sessions`, `mart_funnel_events`, `mart_visitor_attribution`, `mart_install_events`, `mart_install_rollup`, `mart_carts` |
 | Engagement | `mart_feedback`, `mart_push_subscriptions` |
 | Compliance | `mart_deletion_requests`, `mart_grievances`, `mart_data_exports`, `mart_audit_logs` |
@@ -775,11 +879,11 @@ starts listening. There is no separate production migration step.
 
 ### Migration numbering
 
-The directory contains 127 files but the sequence is not perfectly contiguous:
+The directory contains 148 files but the sequence is not perfectly contiguous:
 
 - `049` and `050` are absent.
 - `079`, `080` and `103` each have two files with different suffixes.
-- `126_scheduled_label.sql` is currently the highest file.
+- `148_inventory_daily_snapshots.sql` is currently the highest file.
 
 Migrations are applied in **lexicographic filename order** and are recorded by
 filename. Do not renumber migrations that have already run in an environment.
@@ -800,10 +904,13 @@ accounts before using a database for a new production launch.
 
 | Area | Test files | Command |
 | --- | --- | --- |
-| Backend | 24 | `npm test --workspace=mart-backend` |
-| Customer web | 8 | `npm test --workspace=mart-user` |
+| Backend | 30 | `npm test --workspace=mart-backend` |
+| Customer web | 10 | `npm test --workspace=mart-user` |
 | Hub | 0 | — |
 | Mobile | 0 | — |
+
+Newer coverage includes backend referral, referral Hub tab and inventory
+valuation tests, plus customer referral login/UI tests.
 
 The backend suite uses Node's built-in test runner with `tsx`. Some tests need a
 configured local PostgreSQL and complete environment; a fresh checkout should
@@ -816,7 +923,7 @@ There is no lint script in the repository. TypeScript checks run as part of each
 
 ## Deployment
 
-### API on Render (primary)
+### API on Render (existing blueprint)
 
 `render.yaml` describes the service:
 
@@ -843,6 +950,18 @@ Config as Code as deprecated, with existing files supported only until
 **2026-12-01**; configure Railway from its dashboard if it is still used. Use the
 same root directory, build/start commands and environment variables as Render.
 
+### Hostinger VPS
+
+`deploy/hostinger/`, `.github/workflows/deploy-backend-hostinger.yml` and
+`docs/DEPLOY_HOSTINGER.md` describe the VPS path that moves the API off Render.
+Deploy `storage-service` first, then set `HOSTINGER_STORAGE_URL` to
+`http://gokez-storage:8080` (container-to-container, not `127.0.0.1`). The API
+runs on port `3000` behind nginx, reuses the existing PostgreSQL database, and
+keeps the same variable names as Render. Set
+`MART_BACKGROUND_JOBS_ENABLED=false` on an overlapping instance. See
+`docs/HOSTINGER_ENV_MAPPING.md`, `docs/HOSTINGER_STORAGE.md` and
+`docs/HOSTINGER_MIGRATION_PROCEDURE.md` for the full checklist.
+
 ### Customer web and Hub on Cloudflare Pages
 
 | App | Build command | Output | Required build variable |
@@ -855,18 +974,22 @@ it.
 
 ### Mobile
 
-There is no production mobile deployment yet. Builds use EAS profiles in
+There is no production Expo mobile deployment yet. Builds use EAS profiles in
 `mart-mobile/eas.json`. Run `eas init` first and set the resulting project ID in
 `app.config.js`. `build:preview` produces an internal Android APK;
 `build:prod` produces an Android App Bundle and iOS build per the EAS profile.
 
-### Legacy Android workflows
+The separate customer Capacitor app is built by
+`.github/workflows/build-android.yml` on `mart-user` changes to `main` and by
+manual dispatch. It runs `VITE_API_URL=https://api.mart.gokez.com/api/v1 npm run
+cap:build --workspace=mart-user`, then assembles and uploads a debug APK. It is
+not a signed Play Store release.
 
-`.github/workflows/build-android.yml` and
-`.github/workflows/build-hub-android.yml` still attempt Capacitor sync/builds
-against `mart-user/android` and `mart-hub/android`. Those directories and the
-Capacitor dependencies no longer exist. These workflows are stale and will fail
-if triggered. The current native path is `mart-mobile` with Expo/EAS.
+### Hub Android workflow
+
+`.github/workflows/build-hub-android.yml` is still stale: it tries to sync
+Capacitor in `mart-hub` and build `mart-hub/android`, but that project and its
+Capacitor dependencies do not exist. Do not rely on it unless it is reimplemented.
 
 ## PWA and versioning
 
@@ -888,7 +1011,8 @@ documentation is obsolete; a normal build stamps it automatically.
 ### Update policy
 
 - Both `mart-user/public/update-policy.json` and
-  `mart-hub/public/update-policy.json` support `silent` (default) and `force`.
+  `mart-hub/public/update-policy.json` support `silent` (default) and `force`;
+  both are currently set to `silent`.
 - `silent` applies a new deploy on the next open/background, without
   interrupting an active session.
 - `force` makes an open tab or installed PWA switch to the new build within about
@@ -963,8 +1087,9 @@ These are current code-level limitations, not aspirational features:
    `picked_up` normally, but the master order still has no transition into it;
    the operational path is `ready_to_pickup → out_for_delivery → delivered`.
    Hub/mobile still display the legacy master status where old rows exist.
-8. **The old Android workflows are stale.** They reference removed Capacitor
-   projects and will fail if triggered.
+8. **The Hub Android workflow is stale.** `build-hub-android.yml` references a
+   removed `mart-hub/android` Capacitor project. The customer
+   `build-android.yml` workflow is valid and produces a debug APK.
 9. **No online payment gateway exists.** Cash/UPI is collected and recorded at
    delivery; the app does not process cards, wallets or online UPI.
 10. **No OpenAPI/Swagger document exists.** The route file is the API reference.
@@ -989,6 +1114,13 @@ These are current code-level limitations, not aspirational features:
 18. **Mobile is behind the current customer web app.** `mart-user` is the
     production source of truth; `mart-mobile` has fewer implemented flows and
     should not be treated as feature-equivalent.
+19. **Native customer push is not fully wired.** The Capacitor app handles FCM
+    payloads and deep links, but the backend has no FCM token
+    register/unregister routes; `google-services.json` is supplied outside the
+    repo. Web Push on the website/PWA is unchanged.
+20. **The customer Android build needs a build-time API URL.** `VITE_API_URL` is
+    baked into the JS bundle; omitting it makes the app call the frontend origin
+    and show no data. CI sets it to the production API.
 
 ## Git workflow
 
@@ -996,19 +1128,28 @@ These are current code-level limitations, not aspirational features:
 feature/* -> develop -> main
 ```
 
-Work in a feature branch. `main` triggers the Render API deploy and the
-Cloudflare Pages builds. Do not commit secrets, `.env` files, service-role keys,
-VAPID private keys, JWT secrets or Supabase credentials.
+Work in a feature branch. `main` triggers the Render API deploy, Cloudflare
+Pages builds and the customer Capacitor debug APK workflow. Do not commit
+secrets, `.env` files, service-role keys, storage API keys, VAPID private keys,
+JWT secrets or Supabase database credentials.
 
 ## Documentation
 
 - `docs/DEPLOY_RENDER.md`: Render blueprint, manual setup, DNS cutover, Railway
   differences, health verification and rollback context
+- `docs/DEPLOY_HOSTINGER.md`: Hostinger VPS API/storage deployment, Docker
+  networking, nginx, cutover and rollback
+- `docs/HOSTINGER_ENV_MAPPING.md`, `docs/HOSTINGER_STORAGE.md`,
+  `docs/HOSTINGER_MIGRATION_PROCEDURE.md`, `docs/IMAGE_STORAGE_AUDIT.md`:
+  Hostinger storage and environment references
 - `docs/BACKEND_COST_AUDIT.md`: backend resource usage and cost review
 - `docs/DESIGN_UX_AUDIT_AND_PLAN.md`: design and UX audit notes
 - `docs/HOMEPAGE_UX_AUDIT.md`: storefront homepage UX notes
+- `INVENTORY_AUDIT_AND_PLAN.md`: inventory console and stock-accounting audit
 - `ZONE_MULTI_STORE_IMPLEMENTATION_PLAN.md`: zone/multi-store design and
   rollout reference
+- `mart-user/docs/android-capacitor.md`: Capacitor customer app build, identity,
+  Firebase and notification setup
 - `docs/marketing/`: brand and QR assets/scripts
 - `mart-mobile/PLAN.md` and `mart-mobile/RULES.md`: mobile planning and product
   reference documents; verify details against current code rather than treating
