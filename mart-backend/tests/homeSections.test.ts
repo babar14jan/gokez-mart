@@ -28,6 +28,8 @@ const require = createRequire(__filename);
 interface Call { text: string; params: unknown[] }
 
 const calls: Call[] = [];
+let sectionsOverride: any[] | null = null;
+let below30Rows: any[] | null = null;
 
 const pg = require('pg');
 (pg.Pool.prototype as any).connect = async function () {
@@ -54,7 +56,11 @@ const pg = require('pg');
           isAvailable: true, availabilityStatus: 'in_stock', isBundle: false, sortOrder: 0, createdAt: new Date()
         })) };
       }
+      if (/ROUND\(sp\.price::numeric/.test(text)) {
+        return { rows: below30Rows || [{ id: 'cheap-1' }] };
+      }
       if (/FROM mart_home_sections/.test(text) && /is_enabled = true/.test(text)) {
+        if (sectionsOverride) return { rows: sectionsOverride };
         return { rows: [{
           id: 's1', storeId: params[0], kind: 'manual', sectionKey: 'top_picks',
           title: 'Store Favourites', subtitle: null, sortOrder: 4, isEnabled: true,
@@ -75,7 +81,7 @@ const {
 /** Reads a repo file by workspace-relative path. */
 const read = (p: string) => require('fs').readFileSync(require('path').resolve(__dirname, '../..', p), 'utf8');
 
-beforeEach(() => { calls.length = 0; });
+beforeEach(() => { calls.length = 0; sectionsOverride = null; below30Rows = null; });
 
 const EMPTY_CONFIG = { categorySlug: null, productIds: [], limit: null, layout: null };
 
@@ -169,6 +175,12 @@ describe('B. sections can only be created for known, renderable types', () => {
     await HomeSectionService.create('store-1', { kind: 'fresh', title: 'Fresh' });
     const insert = [...calls].reverse().find(c => /INSERT INTO mart_home_sections/.test(c.text))!;
     assert.equal(insert.params[1], 'fresh');
+  });
+
+  test('the Below 30 shelf is a creatable kind', async () => {
+    await HomeSectionService.create('store-1', { kind: 'below_30', title: 'Below 30' });
+    const insert = [...calls].reverse().find(c => /INSERT INTO mart_home_sections/.test(c.text))!;
+    assert.equal(insert.params[1], 'below_30');
   });
 });
 
@@ -264,6 +276,12 @@ describe('E. route wiring and the seed migration', () => {
     assert.match(sql, /categorySlugs/);
     assert.match(sql, /INSERT INTO mart_home_sections/);
   });
+
+  test('migration 147 allows the Below 30 shelf kind', () => {
+    const sql = read('mart-backend/src/database/migrations/147_home_sections_below_30_kind.sql');
+    assert.match(sql, /'below_30'/);
+    assert.match(sql, /mart_home_sections_kind_check/);
+  });
 });
 
 describe('G. Store Favourites (top_picks) falls back to bestsellers when unpicked', () => {
@@ -294,4 +312,52 @@ describe('F. deals and top_picks are creatable types', () => {
       assert.ok(['deals','manual'].includes(insert.params[1]));
     });
   }
+});
+
+describe('H. Below 30 resolves active in-stock discounted products', () => {
+  test('the resolver filters on rounded discounted price below 30', async () => {
+    sectionsOverride = [{
+      id: 'sec-below', storeId: 'store-1', kind: 'below_30', sectionKey: 'below_30',
+      title: 'Below 30', subtitle: null, sortOrder: 1, isEnabled: true, layout: 'row',
+      config: { categorySlugs: ['snacks'], limit: null },
+    }];
+    const sections = await HomeSectionService.publicSections('store-1');
+    assert.equal(sections.length, 1);
+    assert.deepEqual((sections[0].config as any).productIds, ['cheap-1']);
+    const sql = calls.find(c => /ROUND\(sp\.price::numeric/.test(c.text))!;
+    assert.ok(sql, 'a discounted-price query should run');
+    assert.match(sql.text, /availability_status = 'available'/);
+    assert.match(sql.text, /sp\.is_available = true/);
+    assert.match(sql.text, /< 30/);
+    assert.deepEqual(sql.params, ['store-1', ['snacks']]);
+  });
+
+  test('the resolver falls back to the legacy categorySlug when categorySlugs is absent', async () => {
+    sectionsOverride = [{
+      id: 'sec-below-legacy', storeId: 'store-1', kind: 'below_30', sectionKey: 'below_30',
+      title: 'Below 30', subtitle: null, sortOrder: 1, isEnabled: true, layout: 'row',
+      config: { categorySlug: 'snacks', productIds: [], limit: null, layout: null },
+    }];
+    const sections = await HomeSectionService.publicSections('store-1');
+    assert.equal(sections.length, 1);
+    assert.deepEqual((sections[0].config as any).productIds, ['cheap-1']);
+    const sql = calls.find(c => /ROUND\(sp\.price::numeric/.test(c.text))!;
+    assert.ok(sql, 'a discounted-price query should run');
+    assert.match(sql.text, /LOWER\(c\.slug\) = ANY\(\$2::text\[\]\)/);
+    assert.deepEqual(sql.params, ['store-1', ['snacks']]);
+  });
+
+  test('the resolver has no early SQL limit and applies cfg.limit after exclusions', async () => {
+    below30Rows = [{ id: 'skip-1' }, { id: 'cheap-1' }, { id: 'cheap-2' }];
+    sectionsOverride = [{
+      id: 'sec-below-limit', storeId: 'store-1', kind: 'below_30', sectionKey: 'below_30',
+      title: 'Below 30', subtitle: null, sortOrder: 1, isEnabled: true, layout: 'row',
+      config: { categorySlug: 'snacks', excludeProductIds: ['skip-1'], limit: 1 },
+    }];
+    const sections = await HomeSectionService.publicSections('store-1');
+    const sql = calls.find(c => /ROUND\(sp\.price::numeric/.test(c.text))!;
+    assert.ok(sql, 'a discounted-price query should run');
+    assert.doesNotMatch(sql.text, /\bLIMIT\s+\d+/i, 'exclusions must not be capped by an early SQL limit');
+    assert.deepEqual((sections[0].config as any).productIds, ['cheap-1']);
+  });
 });

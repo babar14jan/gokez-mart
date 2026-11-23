@@ -214,7 +214,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         if (!items.length) return null;
         return (
           <div key={section} className={collapsed ? 'mb-2' : 'mb-4'}>
-            {!collapsed && <p className="px-2 pb-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500">{section}</p>}
+            {!collapsed && <p className="px-4 pb-1.5 text-left text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-slate-500">{section}</p>}
             <div className="space-y-0.5">
               {items.map(item => {
                 const active = pathname === item.href;
@@ -228,7 +228,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <item.icon className={`flex-shrink-0 ${collapsed ? 'w-8 h-8' : 'w-5 h-5'}`} />
                     {collapsed
                       ? <span className={`text-xs font-semibold text-center leading-tight ${active ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</span>
-                      : <span className="truncate text-center">{item.label}</span>
+                      : <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
                     }
                   </NavLink>
                 );

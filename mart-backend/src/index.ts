@@ -7,6 +7,7 @@ import { recoverAutomaticOrderTransitions } from './controllers';
 import { PromotionService } from './services/promotion.service';
 import { ProductImageAssetService } from './services/productImageAsset.service';
 import { ReferralService } from './services/referral.service';
+import { InventoryService } from './services/inventory.service';
 
 async function start() {
   // Run migrations before starting the server
@@ -53,6 +54,15 @@ async function start() {
     expireReferrals();
     const referralTimer = setInterval(expireReferrals, 60_000);
     referralTimer.unref();
+
+    const snapshotInventory = () => {
+      InventoryService.ensureDailySnapshots().catch(error => {
+        console.error('[inventory] daily snapshot failed:', error);
+      });
+    };
+    snapshotInventory();
+    const inventorySnapshotTimer = setInterval(snapshotInventory, 30 * 60_000);
+    inventorySnapshotTimer.unref();
   } else {
     console.log('[background-jobs] disabled by MART_BACKGROUND_JOBS_ENABLED=false');
   }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, GripVertical, Pencil, Trash2, Eye, EyeOff, LayoutGrid, Copy, Search, X, ArrowUp, ArrowDown, Image, Sparkles, Package } from 'lucide-react';
 import { homeSectionsApi, productsApi, categoriesApi, carouselApi } from '../services/api';
+import { browseProducts, getDiscountedPrice } from '../utils/productBrowse';
 import { getActiveStoreId } from '../utils/store';
 import PageSkeleton from '../components/PageSkeleton';
 import SmartImage from '../components/SmartImage';
@@ -10,6 +12,7 @@ const KINDS = [
   { key: 'category', label: 'Category shelf', hint: 'Show products from one or more categories, auto-sorted.', icon: LayoutGrid, usesProducts: false, multiCategory: true },
   { key: 'combo', label: 'Combos / Basket', hint: 'Mix products from different categories into one basket.', icon: Package, usesProducts: true, multiCategory: true },
   { key: 'deals', label: 'Deals', hint: 'Auto-show discounted products, biggest discount first.', icon: Package, usesProducts: false, multiCategory: true },
+  { key: 'below_30', label: 'Below ₹30', hint: 'Auto-show active in-stock products with a discounted price under ₹30.', icon: Package, usesProducts: false, multiCategory: true },
   { key: 'bestsellers', label: 'Bestsellers', hint: 'Top-selling products for this store in the last 30 days.', icon: Sparkles, usesProducts: false, multiCategory: true },
   { key: 'new_arrivals', label: 'New arrivals', hint: 'Recently added products.', icon: Sparkles, usesProducts: false, multiCategory: true },
   { key: 'banner', label: 'Banner', hint: 'Image with an optional link.', icon: Image, usesProducts: false, multiCategory: false },
@@ -46,7 +49,7 @@ interface FormState {
 const emptyForm = (k: KindKey): FormState => ({
   kind: k, title: k === 'fresh' ? 'Fresh' : (k === 'referral_banner' ? 'Refer & Earn' : (KINDS.find(x => x.key === k)?.label || k)), subtitle: '',
   categorySlugs: k === 'fresh' ? ['vegetables'] : [], productIds: [], excludeProductIds: [],
-  limit: '', columns: '', layout: '', isEnabled: true, badge: '',
+  limit: k === 'below_30' ? '30' : '', columns: '', layout: '', isEnabled: true, badge: '',
   fallback: 'none', sort: 'catalogue',
   imageUrl: '', buttonText: '', href: '', alt: '', visibilityRule: 'always', aspectRatio: '16/5', buttonColor: 'white',
 });
@@ -54,6 +57,7 @@ const emptyForm = (k: KindKey): FormState => ({
 const inp = "w-full px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40";
 
 export default function HomeSectionsPage() {
+  const navigate = useNavigate();
   const storeId = getActiveStoreId();
   const [sections, setSections] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -249,6 +253,20 @@ export default function HomeSectionsPage() {
   const filteredProducts = products
     .filter((product: any) => (product.name || '').toLowerCase().includes(productSearch.trim().toLowerCase()))
     .slice(0, 80);
+  const previewCategoryIds = new Set(categories.filter((c: any) => form.categorySlugs.includes(c.slug)).map((c: any) => c.id));
+  const previewSource = form.categorySlugs.length
+    ? products.filter((product: any) => product.categoryId && previewCategoryIds.has(product.categoryId))
+    : products;
+  const below30Limit = Number(form.limit) > 0 ? Math.min(Number(form.limit), 60) : 30;
+  const below30Preview = form.kind === 'below_30'
+    ? browseProducts(previewSource, {
+        statuses: ['available'],
+        preset: 'below30',
+        sort: 'price_asc',
+        excludedIds: form.excludeProductIds,
+        limit: below30Limit,
+      })
+    : [];
 
   return (
     <div className="space-y-4">
@@ -376,6 +394,11 @@ export default function HomeSectionsPage() {
                           <div key={slug} className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-600 px-2 py-1.5">
                             <span className="text-[11px] font-bold text-gray-400 w-4">{idx + 1}</span>
                             <span className="flex-1 min-w-0 text-xs text-gray-900 dark:text-white truncate">{cat?.name || slug}</span>
+                            {cat && (
+                              <button type="button" title="Arrange products in this category" onClick={() => navigate(`/products?category=${encodeURIComponent(cat.id)}&arrange=1`)}>
+                                <GripVertical className="w-3.5 h-3.5 text-emerald-500" />
+                              </button>
+                            )}
                             <button type="button" onClick={() => moveSlug(slug, -1)} disabled={idx === 0}><ArrowUp className="w-3.5 h-3.5 text-gray-400" /></button>
                             <button type="button" onClick={() => moveSlug(slug, 1)} disabled={idx === form.categorySlugs.length - 1}><ArrowDown className="w-3.5 h-3.5 text-gray-400" /></button>
                             <button type="button" onClick={() => toggleSlug(slug)}><X className="w-3.5 h-3.5 text-red-400" /></button>
@@ -393,6 +416,7 @@ export default function HomeSectionsPage() {
                     ))}
                   </div>
                   <p className="text-[11px] text-gray-400 mt-1">Only these categories appear as Fresh tabs; add any category here. Other categories never show in Fresh.</p>
+                  <p className="text-[11px] text-gray-400 mt-1">Use the grip icon to mix display order modes for a Fresh tab. Earlier modes win shared products; the same saved order is used on customer category pages.</p>
                 </div>
               ) : (activeKind?.multiCategory) && (
                 <div>
@@ -450,6 +474,26 @@ export default function HomeSectionsPage() {
                       <button className={`rounded-lg px-3 py-1.5 text-xs font-bold ${(form as any).buttonColor === 'banner' ? 'bg-gokez-700 text-white' : 'bg-white text-gokez-800'}`}>{(form as any).buttonText || 'Share'}</button>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {form.kind === 'below_30' && (
+                <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                  <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-slate-300">Preview — active, in stock, discounted price under ₹30</p>
+                  {below30Preview.length === 0 ? (
+                    <p className="text-[11px] text-amber-600">No products match this shelf.</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto divide-y divide-gray-100 rounded-lg dark:divide-slate-700">
+                      {below30Preview.slice(0, 8).map((product: any) => (
+                        <div key={product.id} className="flex items-center gap-2 px-2 py-1.5">
+                          <SmartImage src={product.photoUrl} className="h-7 w-7 flex-shrink-0 rounded-lg" imgClassName="object-cover" fallback={<div className="h-7 w-7 rounded-lg bg-gray-100 dark:bg-slate-700" />} />
+                          <span className="min-w-0 flex-1 truncate text-xs text-gray-900 dark:text-white">{product.name}</span>
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">₹{getDiscountedPrice(product)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-1 text-[11px] text-gray-400">Showing {Math.min(below30Preview.length, 8)} of {below30Preview.length} matching products.</p>
                 </div>
               )}
 
