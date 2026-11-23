@@ -154,31 +154,54 @@ export default function DashboardPage() {
     [allOrders],
   );
 
+  const localStatusCounts = useMemo(() => ({
+    pending: filtered.filter(o => o.status === 'pending').length,
+    confirmed: filtered.filter(o => o.status === 'confirmed').length,
+    delivered: filtered.filter(o => o.status === 'delivered').length,
+    cancelled: filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length,
+    preparing: filtered.filter(o => o.status === 'preparing').length,
+    readyToPickup: filtered.filter(o => o.status === 'ready_to_pickup').length,
+    outForDelivery: filtered.filter(o => o.status === 'out_for_delivery').length,
+    pickedUp: filtered.filter(o => o.status === 'picked_up').length,
+  }), [filtered]);
+
+  const localRevenue = useMemo(
+    () => filtered.filter(o => o.status === 'delivered').reduce((sum, o) => sum + Number(o.total || 0), 0),
+    [filtered],
+  );
+
+  const localCouponAmount = useMemo(
+    () => filtered.filter(o => !['cancelled', 'failed_delivery', 'terminated'].includes(o.status))
+      .reduce((sum, o) => sum + Number(o.campaignDiscount || 0), 0),
+    [filtered],
+  );
+
+  const localOrderValue = useMemo(
+    () => filtered.filter(o => !['cancelled', 'failed_delivery', 'terminated'].includes(o.status))
+      .reduce((sum, o) => sum + Number(o.total || 0), 0),
+    [filtered],
+  );
+
   const kpis = useMemo(() => {
-    if (scheduledView) {
-      const pending = filtered.filter(o => o.status === 'pending').length;
-      const confirmed = filtered.filter(o => o.status === 'confirmed').length;
-      const preparing = filtered.filter(o => o.status === 'preparing').length;
-      const readyToPickup = filtered.filter(o => o.status === 'ready_to_pickup').length;
-      const outForDelivery = filtered.filter(o => o.status === 'out_for_delivery').length;
-      const pickedUp = filtered.filter(o => o.status === 'picked_up').length;
-      return {
-        total:     filtered.length,
-        pending,
-        confirmed,
-        delivered: filtered.filter(o => o.status === 'delivered').length,
-        cancelled: filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length,
-        preparing,
-        readyToPickup,
-        outForDelivery,
-        pickedUp,
-        inProgress: pending + confirmed + preparing + readyToPickup + outForDelivery + pickedUp,
-        revenue:   0,
-      };
-    }
+    const inProgress = localStatusCounts.pending + localStatusCounts.confirmed + localStatusCounts.preparing
+      + localStatusCounts.readyToPickup + localStatusCounts.outForDelivery + localStatusCounts.pickedUp;
+    const local = {
+      total: filtered.length,
+      pending: localStatusCounts.pending,
+      confirmed: localStatusCounts.confirmed,
+      delivered: localStatusCounts.delivered,
+      cancelled: localStatusCounts.cancelled,
+      preparing: localStatusCounts.preparing,
+      readyToPickup: localStatusCounts.readyToPickup,
+      outForDelivery: localStatusCounts.outForDelivery,
+      pickedUp: localStatusCounts.pickedUp,
+      inProgress,
+      revenue: scheduledView ? 0 : localRevenue,
+    };
+    if (scheduledView || filtered.length > 0) return local;
     return {
-      total:     summary.placed,
-      pending:   summary.pending,
+      total: summary.placed,
+      pending: summary.pending,
       confirmed: summary.confirmed,
       delivered: summary.delivered,
       cancelled: summary.cancelled,
@@ -187,14 +210,15 @@ export default function DashboardPage() {
       outForDelivery: summary.outForDelivery,
       pickedUp: summary.pickedUp,
       inProgress: summary.pending + summary.confirmed + summary.preparing + summary.readyToPickup + summary.outForDelivery + summary.pickedUp,
-      revenue:   summary.revenue,
+      revenue: summary.revenue,
     };
-  }, [scheduledView, filtered, summary]);
+  }, [scheduledView, filtered, localStatusCounts, localRevenue, summary]);
 
   const displayCustomerAgg = useMemo(() => {
-    if (!scheduledView) return customerAgg;
-    const phones = new Set(filtered.map(o => o.guestPhone).filter(Boolean));
-    return { totalCustomers: phones.size, newCustomers: phones.size, repeatCustomers: 0, avgOrders: 0, top: [] };
+    const phones = new Set(filtered.map((o) => o.guestPhone).filter(Boolean));
+    const hasBackendAgg = customerAgg.totalCustomers > 0 || customerAgg.newCustomers > 0 || customerAgg.repeatCustomers > 0;
+    const base = hasBackendAgg ? customerAgg : { totalCustomers: phones.size, newCustomers: phones.size, repeatCustomers: 0, avgOrders: 0, top: [] };
+    return { ...base, totalCustomers: scheduledView || filtered.length > 0 ? phones.size : base.totalCustomers };
   }, [scheduledView, filtered, customerAgg]);
 
   const rangeLabel = range === 'custom'
@@ -211,10 +235,13 @@ export default function DashboardPage() {
   const scheduledValue = filtered.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const scheduledCoupon = filtered.reduce((sum, order) => sum + Number(order.campaignDiscount || 0), 0);
   const displayRevenue = scheduledView ? scheduledValue : kpis.revenue;
-  const displayCouponAmount = scheduledView ? scheduledCoupon : summary.couponAmount;
+  const displayCouponAmount = scheduledView ? scheduledCoupon
+    : filtered.length > 0 ? localCouponAmount : summary.couponAmount;
+  const displayOrderValue = scheduledView ? scheduledValue
+    : filtered.length > 0 ? localOrderValue : displayRevenue + displayCouponAmount;
   const revenueSub = scheduledView && filtered.length === 0
     ? 'No scheduled orders'
-    : `₹${(displayRevenue + displayCouponAmount).toFixed(0)} order value − ₹${displayCouponAmount.toFixed(0)} coupons`;
+    : `₹${displayOrderValue.toFixed(0)} order value − ₹${displayCouponAmount.toFixed(0)} coupons`;
   const navigate = useNavigate();
 
   if (loading) return <PageSkeleton />;

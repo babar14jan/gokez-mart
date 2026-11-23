@@ -415,3 +415,24 @@ describe('IST formatting for the hub', () => {
     }
   });
 });
+
+describe('automatic order transitions keep their original guards', () => {
+  const service = readFileSync(join(__dirname, '..', 'src', 'services', 'order.service.ts'), 'utf8');
+  const controller = readFileSync(join(__dirname, '..', 'src', 'controllers', 'index.ts'), 'utf8');
+
+  test('new orders still auto-confirm at 2 seconds and auto-prepare at 3 minutes', () => {
+    assert.match(controller, /setTimeout\(\(\) => \{ void autoConfirmOrder\(result\.orderId\); \}, 2000\);/);
+    assert.match(controller, /setTimeout\(\(\) => \{ void autoStartPreparingOrder\(result\.orderId\); \}, 3 \* 60 \* 1000\);/);
+  });
+
+  test('after-hours orders confirm but never auto-prepare', () => {
+    assert.match(service, /static async autoConfirmPending[\s\S]*?if \(!existing \|\| existing\.status !== 'pending'\) return null;/);
+    assert.match(service, /confirmed_next_open = CASE WHEN placed_outside_hours THEN true ELSE confirmed_next_open END/);
+    assert.match(service, /static async autoStartPreparing[\s\S]*?existing\.status !== 'confirmed' \|\| existing\.deliveryPreference === 'scheduled' \|\| existing\.placedOutsideHours/);
+  });
+
+  test('restart recovery uses the same 2 second and 3 minute windows and guards', () => {
+    assert.match(service, /getOverdueAutomaticTransitions[\s\S]*?status = 'pending'[\s\S]*?created_at <= NOW\(\) - INTERVAL '2 seconds'/);
+    assert.match(service, /getOverdueAutomaticTransitions[\s\S]*?status = 'confirmed'[\s\S]*?delivery_preference IS DISTINCT FROM 'scheduled'[\s\S]*?placed_outside_hours = false[\s\S]*?updated_at <= NOW\(\) - INTERVAL '3 minutes'/);
+  });
+});

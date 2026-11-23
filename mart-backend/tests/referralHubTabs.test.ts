@@ -130,6 +130,11 @@ describe('Referral hub consolidation', () => {
       assert.ok(source.includes('scheduledCount'));
       assert.ok(!source.includes('Scheduled orders not delivered'));
     }
+    const dashboard = readHub('pages/DashboardPage.tsx');
+    assert.ok(dashboard.includes('const localStatusCounts'));
+    assert.ok(dashboard.includes('localStatusCounts.pending + localStatusCounts.confirmed'));
+    assert.ok(dashboard.includes('newCustomers} new · ${displayCustomerAgg.repeatCustomers} repeat'));
+    assert.ok(!dashboard.includes('in range'));
   });
 
   test('overview keeps only outcome and financial KPIs', () => {
