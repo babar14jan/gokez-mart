@@ -21,7 +21,7 @@ export function printReceipt(order: any) {
 
   const itemSavings = Number(order.itemSavings) || 0;
   const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
-  const campaignDiscount = Number(order.campaignDiscount) || 0;
+  const campaignDiscount = Math.floor(Number(order.campaignDiscount) || 0);
   const referralDiscount = getOrderReferralDiscount(order);
   const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount + referralDiscount;
   const itemTotalStrike = itemSavings > 0
@@ -85,7 +85,7 @@ export function printReceipt(order: any) {
         ${campaignDiscount > 0 ? `
         <tr>
           <td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">${order.couponCodeUsed ? `Coupon: ${order.couponCodeUsed}` : 'Offer discount'}</td>
-          <td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${order.campaignDiscount}</td>
+          <td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${campaignDiscount}</td>
         </tr>` : ''}
         ${referralDiscount > 0 ? `
         <tr>

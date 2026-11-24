@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Download, Loader2 } from 'lucide-react';
 import {
   referralAdminApi, downloadReferralCsv, apiErrorMessage,
@@ -69,9 +70,18 @@ export default function ReferralReportsPage({ embedded = false }: { embedded?: b
     }
     if (isCustomers(row)) {
       return <tr key={index} className="border-b border-gray-50 dark:border-slate-700/50">
-        <td className="py-2.5 text-[11px] font-mono text-gray-600 dark:text-slate-400">{row.customerId}</td>
+        <td className="py-2.5">
+          <Link to={`/referrals?tab=customers&customerId=${encodeURIComponent(row.customerId || '')}`}
+            className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+            {row.name || 'Customer'}
+          </Link>
+          <p className="text-[10px] text-gray-500">{row.phone || '—'} · <span className="font-mono">{row.customerId?.slice(0, 8) || '—'}</span></p>
+        </td>
         <td className="py-2.5 text-xs text-right text-gray-900 dark:text-white">{row.referrals}</td>
         <td className="py-2.5 text-xs text-right text-emerald-600 dark:text-emerald-400">{row.rewarded}</td>
+        <td className="py-2.5 text-xs text-right font-semibold text-gray-900 dark:text-white">{fmtMoney(row.earnedAmount)}</td>
+        <td className="py-2.5 text-xs text-right text-amber-600 dark:text-amber-400">{fmtMoney(row.pendingAmount)}</td>
+        <td className="py-2.5 text-xs text-right text-emerald-600 dark:text-emerald-400">{fmtMoney(row.unlockedAmount)}</td>
       </tr>;
     }
     if (isLiability(row)) {
@@ -95,14 +105,14 @@ export default function ReferralReportsPage({ embedded = false }: { embedded?: b
   };
 
   const headers = type === 'orders' ? ['Day', 'Orders', 'Value']
-    : type === 'customers' ? ['Customer ID', 'Referrals', 'Rewarded']
+    : type === 'customers' ? ['Customer', 'Referrals', 'Rewarded', 'Earned', 'Pending', 'Unlocked']
     : type === 'liability' ? ['Customer ID', 'Status', 'Credits', 'Amount']
     : ['Status', 'Count', 'Delivered', 'Rate'];
 
   return (
     <div className="space-y-4">
       <PanelHeader embedded={embedded} title="Referral Reports"
-        subtitle="Conversion, order, customer and credit-liability views with CSV exports."
+        subtitle="Conversion, order, referrer and credit-liability views. Open a referrer to see who they invited."
         actions={<>
           <button onClick={() => exportCsv('records')} disabled={Boolean(exporting)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 disabled:opacity-50">
@@ -135,7 +145,7 @@ export default function ReferralReportsPage({ embedded = false }: { embedded?: b
             <table className="w-full">
               <thead>
                 <tr className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-slate-700">
-                  {headers.map(h => <th key={h} className={`px-4 py-2 font-semibold ${h === 'Status' || h === 'Day' || h === 'Customer ID' ? 'text-left' : 'text-right'}`}>{h}</th>)}
+                  {headers.map(h => <th key={h} className={`px-4 py-2 font-semibold ${h === 'Status' || h === 'Day' || h === 'Customer' || h === 'Customer ID' ? 'text-left' : 'text-right'}`}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>{rows.map(renderRow)}</tbody>

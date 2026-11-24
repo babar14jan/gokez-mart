@@ -46,14 +46,16 @@ export function hasDiscountStack(
 
 /** A referrer's cap counts already-issued referrer rewards, including capped claims. */
 export function capReached(issuedReferrerRewards: number, maxReferrals: number): boolean {
-  return Math.max(0, Number(issuedReferrerRewards) || 0) >= Math.max(0, Number(maxReferrals) || 0);
+  const max = Number(maxReferrals);
+  if (!Number.isFinite(max) || max <= 0) return false;
+  return Math.max(0, Number(issuedReferrerRewards) || 0) >= Math.floor(max);
 }
 
-/** `null` or `undefined` expiry days means the credit never expires. */
+/** `null`, `undefined`, zero or negative expiry days means the credit never expires. */
 export function addDays(source: Date | string | number, days: number | null | undefined): Date | null {
-  if (days === null || days === undefined) return null;
+  if (days === null || days === undefined || !Number.isFinite(Number(days)) || Number(days) <= 0) return null;
   const result = new Date(source);
-  result.setUTCDate(result.getUTCDate() + Math.max(0, Math.floor(days)));
+  result.setUTCDate(result.getUTCDate() + Math.floor(Number(days)));
   return result;
 }
 
@@ -98,6 +100,9 @@ export function parseRewardStages(value: unknown, totalAmount: number): Referral
   }
   if (!Array.isArray(raw) || raw.length === 0) {
     throw new Error('At least one reward stage is required');
+  }
+  if (raw.length > 10) {
+    throw new Error('A campaign can have at most 10 reward stages');
   }
 
   const stages = raw.map((entry, index) => {

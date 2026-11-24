@@ -35,6 +35,21 @@ const scopedCartSubtotal = (campaign: any, cartTotal: number, items: CampaignCar
   }, 0);
 };
 
+export const campaignDiscountAmount = (campaign: any, eligibleTotal: number): number => {
+  const total = Math.max(0, Number(eligibleTotal) || 0);
+  if (campaign?.discount_type === 'flat') {
+    return Math.max(0, Math.floor(Math.min(Number(campaign.discount_value) || 0, total)));
+  }
+  if (campaign?.discount_type === 'percent') {
+    const raw = (total * (Number(campaign.discount_value) || 0)) / 100;
+    const capped = campaign.max_discount !== null && campaign.max_discount !== undefined && campaign.max_discount !== ''
+      ? Math.min(raw, Math.max(0, Number(campaign.max_discount) || 0))
+      : raw;
+    return Math.max(0, Math.floor(capped));
+  }
+  return 0;
+};
+
 const hasScopedCartItem = (campaign: any, items: CampaignCartItem[]): boolean => {
   const ids = campaignCategoryIds(campaign);
   if (ids.length === 0) return true;
@@ -70,6 +85,12 @@ const validateCampaignTerms = (data: any): void => {
   }
   if (discountType === 'percent' && (discountValue <= 0 || discountValue > 100)) {
     throw new Error('Percentage discount must be greater than 0 and no more than 100');
+  }
+  if (discountType === 'flat' && !Number.isInteger(discountValue)) {
+    throw new Error('Flat discount must be a whole rupee amount');
+  }
+  if (maxDiscount !== null && !Number.isInteger(maxDiscount)) {
+    throw new Error('Maximum discount must be a whole rupee amount');
   }
   if ((discountType === 'flat' || discountType === 'free_delivery') && discountValue < 0) {
     throw new Error('Discount value cannot be negative');
@@ -852,14 +873,7 @@ export class CampaignService {
   }
 
   static calculateDiscount(campaign: any, cartTotal: number): number {
-    const eligibleTotal = campaign.categorySubtotal ?? cartTotal;
-    if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), eligibleTotal);
-    if (campaign.discount_type === 'percent') {
-      const disc = (eligibleTotal * parseFloat(campaign.discount_value)) / 100;
-      return campaign.max_discount ? Math.min(disc, parseFloat(campaign.max_discount)) : disc;
-    }
-    if (campaign.discount_type === 'free_delivery') return 0; // handled separately
-    return 0;
+    return campaignDiscountAmount(campaign, campaign.categorySubtotal ?? cartTotal);
   }
 
   static async recordUse(campaignId: string, customerId: string | null, orderId: string, discountApplied: number, couponCode?: string): Promise<void> {

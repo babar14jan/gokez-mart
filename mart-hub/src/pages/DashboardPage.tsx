@@ -12,6 +12,8 @@ import { DATE_RANGE_OPTIONS, CustomDateInputs, DateRangeChips, ScheduledFilterBu
 
 type Range = 'today' | 'yesterday' | 'custom' | 'all';
 
+const wholeRupees = (value: unknown): number => Math.max(0, Math.floor(Number(value) || 0));
+
 const ROLE_MESSAGES: Record<string, string> = {
   super_admin:    'Here\u2019s the overview across your stores.',
   store_owner:    'Here\u2019s how your store is performing.',
@@ -166,19 +168,19 @@ export default function DashboardPage() {
   }), [filtered]);
 
   const localRevenue = useMemo(
-    () => filtered.filter(o => o.status === 'delivered').reduce((sum, o) => sum + Number(o.total || 0), 0),
+    () => filtered.filter(o => o.status === 'delivered').reduce((sum, o) => sum + (Number(o.total) || 0), 0),
     [filtered],
   );
 
   const localCouponAmount = useMemo(
     () => filtered.filter(o => !['cancelled', 'failed_delivery', 'terminated'].includes(o.status))
-      .reduce((sum, o) => sum + Number(o.campaignDiscount || 0), 0),
+      .reduce((sum, o) => sum + (Number(o.campaignDiscount) || 0), 0),
     [filtered],
   );
 
   const localOrderValue = useMemo(
     () => filtered.filter(o => !['cancelled', 'failed_delivery', 'terminated'].includes(o.status))
-      .reduce((sum, o) => sum + Number(o.total || 0), 0),
+      .reduce((sum, o) => sum + (Number(o.total) || 0), 0),
     [filtered],
   );
 
@@ -232,13 +234,15 @@ export default function DashboardPage() {
     kpis.outForDelivery > 0 ? `${kpis.outForDelivery} out` : '',
     kpis.pickedUp > 0 ? `${kpis.pickedUp} picked up` : '',
   ].filter(Boolean).join(' · ') || 'No active orders';
-  const scheduledValue = filtered.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const scheduledCoupon = filtered.reduce((sum, order) => sum + Number(order.campaignDiscount || 0), 0);
-  const displayRevenue = scheduledView ? scheduledValue : kpis.revenue;
-  const displayCouponAmount = scheduledView ? scheduledCoupon
+  const scheduledValue = filtered.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+  const scheduledCoupon = filtered.reduce((sum, order) => sum + (Number(order.campaignDiscount) || 0), 0);
+  const couponValue = scheduledView ? scheduledCoupon
     : filtered.length > 0 ? localCouponAmount : summary.couponAmount;
-  const displayOrderValue = scheduledView ? scheduledValue
-    : filtered.length > 0 ? localOrderValue : displayRevenue + displayCouponAmount;
+  const rawOrderValue = scheduledView ? scheduledValue
+    : filtered.length > 0 ? localOrderValue : kpis.revenue + couponValue;
+  const displayRevenue = wholeRupees(scheduledView ? scheduledValue : kpis.revenue);
+  const displayCouponAmount = wholeRupees(couponValue);
+  const displayOrderValue = wholeRupees(rawOrderValue);
   const revenueSub = scheduledView && filtered.length === 0
     ? 'No scheduled orders'
     : `₹${displayOrderValue.toFixed(0)} order value − ₹${displayCouponAmount.toFixed(0)} coupons`;

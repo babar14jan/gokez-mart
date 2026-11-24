@@ -25,12 +25,6 @@ export interface ReferralRewardStage {
   amount: number;
 }
 
-const DEFAULT_TOTAL_REWARD_AMOUNT = '50';
-const DEFAULT_REWARD_STAGES: ReferralRewardStage[] = [
-  { stage: 1, amount: 25 },
-  { stage: 2, amount: 25 },
-];
-
 export interface ReferralSummary {
   referrals: number;
   rewarded: number;
@@ -43,6 +37,8 @@ export interface ReferralSummary {
   liability: number;
   redeemed: number;
   credits: number;
+  liabilityByRole?: Array<{ role: string; liability: number; redeemed: number }>;
+  liabilityByStage?: Array<{ role: string; stage: number; liability: number; redeemed: number }>;
 }
 
 export interface ReferralCampaign {
@@ -52,6 +48,7 @@ export interface ReferralCampaign {
   version: number;
   total_reward_amount: number | string | null;
   reward_stages: ReferralRewardStage[] | null;
+  redemption_min_order_amount: number | string | null;
   expiry_days: number | string | null;
   max_referrals_per_referrer: number | string | null;
   stacking_enabled: boolean;
@@ -76,6 +73,7 @@ export interface ReferralCampaignForm {
   name: string;
   totalRewardAmount: string;
   stageAmounts: string[];
+  redemptionMinOrderAmount: string;
   expiryDays: string;
   maxReferralsPerReferrer: string;
   stackingEnabled: boolean;
@@ -124,8 +122,13 @@ export interface ReferralRecord {
   qualifyingOrderId: string | null;
   notes: string | null;
   code: string | null;
+  referredName: string | null;
   referredPhone: string | null;
+  referrerName: string | null;
   referrerPhone: string | null;
+  creditAmount: number;
+  pendingAmount: number;
+  unlockedAmount: number;
   campaignName: string | null;
   campaignVersion: number | string | null;
 }
@@ -158,7 +161,12 @@ export interface ReferralCustomer {
   name: string | null;
   code: string | null;
   successfulReferrals: number;
+  rewardedReferrals: number;
   availableCredits: number;
+  totalEarned: number;
+  pendingAmount: number;
+  unlockedAmount: number;
+  redeemedAmount: number;
 }
 
 export interface ReferralLedgerEntry {
@@ -206,8 +214,13 @@ export interface OrdersReportRow {
 
 export interface CustomersReportRow {
   customerId: string;
+  name: string | null;
+  phone: string | null;
   referrals: number;
   rewarded: number;
+  earnedAmount: number;
+  pendingAmount: number;
+  unlockedAmount: number;
 }
 
 export interface LiabilityReportRow {
@@ -225,6 +238,7 @@ export interface ReferralRecordFilters {
   from?: string;
   to?: string;
   customerId?: string;
+  referrerId?: string;
   limit?: number;
   offset?: number;
 }
@@ -290,8 +304,11 @@ export const referralAdminApi = {
   getRecord: (id: string) =>
     list<ReferralRecordDetail>(`/admin/referral/records/${id}`),
 
-  getCustomers: (query: string, limit = 50, offset = 0) =>
-    list<Paged<ReferralCustomer>>('/admin/referral/customers', { query, limit, offset }),
+  getCustomers: (query: string, limit = 50, offset = 0, customerId?: string, filter?: string) =>
+    list<Paged<ReferralCustomer>>('/admin/referral/customers', {
+      query, limit, offset, customerId,
+      filter: filter && filter !== 'all' ? filter : undefined,
+    }),
   getLedger: (filters: ReferralLedgerFilters = {}) =>
     list<Paged<ReferralLedgerEntry>>('/admin/referral/ledger', filters),
 
@@ -391,13 +408,15 @@ export const changeStageCount = (amounts: string[], total: unknown, count: numbe
 };
 
 export const campaignToForm = (campaign: ReferralCampaign | null | undefined): ReferralCampaignForm => {
-  const configuredStages = Array.isArray(campaign?.reward_stages) && campaign.reward_stages.length
-    ? campaign.reward_stages
-    : DEFAULT_REWARD_STAGES;
+  const configuredStages = Array.isArray(campaign?.reward_stages) ? campaign.reward_stages : [];
   return {
     name: campaign?.name || '',
-    totalRewardAmount: campaign ? String(num(campaign.total_reward_amount)) : DEFAULT_TOTAL_REWARD_AMOUNT,
+    totalRewardAmount: campaign && campaign.total_reward_amount !== null && campaign.total_reward_amount !== undefined
+      ? String(num(campaign.total_reward_amount)) : '',
     stageAmounts: configuredStages.map(stage => String(num(stage.amount))),
+    redemptionMinOrderAmount: campaign?.redemption_min_order_amount === null
+      || campaign?.redemption_min_order_amount === undefined || campaign?.redemption_min_order_amount === ''
+      ? '' : String(campaign.redemption_min_order_amount),
     expiryDays: campaign?.expiry_days === null || campaign?.expiry_days === undefined || campaign?.expiry_days === ''
       ? '' : String(campaign.expiry_days),
     maxReferralsPerReferrer: campaign ? String(num(campaign.max_referrals_per_referrer)) : '10',
@@ -419,6 +438,7 @@ export const campaignFormToPayload = (form: ReferralCampaignForm): Record<string
   name: form.name.trim(),
   totalRewardAmount: num(form.totalRewardAmount),
   rewardStages: form.stageAmounts.map((amount, index) => ({ stage: index + 1, amount: num(amount) })),
+  redemptionMinOrderAmount: form.redemptionMinOrderAmount === '' ? null : num(form.redemptionMinOrderAmount),
   expiryDays: form.expiryDays === '' ? null : num(form.expiryDays),
   maxReferralsPerReferrer: num(form.maxReferralsPerReferrer),
   stackingEnabled: form.stackingEnabled,

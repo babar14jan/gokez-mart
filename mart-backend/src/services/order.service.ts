@@ -12,6 +12,7 @@ import { CUSTOMER_CANCELLATION_MESSAGES, getCancellationPolicy } from '../utils/
 import { ORDER_BROWSE_DATE_SQL } from '../utils/orderDate';
 import { ReferralService } from './referral.service';
 import { REFERRAL_DISCOUNT_EXCLUSIVITY_ERROR, referralDiscount, hasDiscountStack } from '../utils/referralLogic';
+import { campaignDiscountAmount } from './campaign.service';
 
 const parseReportDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const formatReportDate = (value: Date) => value.toISOString().slice(0, 10);
@@ -672,11 +673,7 @@ export class OrderService {
       }
 
       const campaignDiscount = campaign
-        ? campaign.discount_type === 'flat'
-          ? Math.min(Number(campaign.discount_value), campaign.categorySubtotal ?? subtotal)
-          : campaign.discount_type === 'percent'
-            ? Math.min(((campaign.categorySubtotal ?? subtotal) * Number(campaign.discount_value)) / 100, campaign.max_discount ? Number(campaign.max_discount) : Number.MAX_SAFE_INTEGER)
-            : 0
+        ? campaignDiscountAmount(campaign, campaign.categorySubtotal ?? subtotal)
         : 0;
       // freeAbove = 0 means the store has no free-delivery threshold, so the
       // delivery charge still applies. Without this guard `subtotal >= 0` would
@@ -807,7 +804,7 @@ export class OrderService {
        );
 
        if (data.referralCreditId) {
-         await ReferralService.consumeCreditForOrder(client, data.customerId!, data.referralCreditId, orderId);
+           await ReferralService.consumeCreditForOrder(client, data.customerId!, data.referralCreditId, orderId);
        }
 
        if (data.scheduledLabel) {

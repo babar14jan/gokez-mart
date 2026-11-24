@@ -145,6 +145,11 @@ describe('Referral hub consolidation', () => {
     for (const label of ['Capped', 'Rejected', 'Total Rewards Issued', 'Expired / Reversed']) {
       assert.ok(!overview.includes(`label="${label}"`));
     }
+    for (const section of ['Liability by Side', 'Liability by Stage']) {
+      assert.ok(overview.includes(section));
+    }
+    assert.ok(overview.includes('summary.liabilityByRole'));
+    assert.ok(overview.includes('summary.liabilityByStage'));
   });
 
   test('the referral tab bar matches the Hub view-tab style', () => {
@@ -218,7 +223,9 @@ describe('Referral stage editor', () => {
 
   test('editable stages become sequential payload stages', () => {
     const form = campaignToForm(null);
-    const payload = campaignFormToPayload({ ...form, totalRewardAmount: '50', stageAmounts: ['20', '15', '15'] });
+    const payload = campaignFormToPayload({
+      ...form, totalRewardAmount: '50', stageAmounts: ['20', '15', '15'], redemptionMinOrderAmount: '199',
+    });
     assert.deepEqual(payload.rewardStages, [
       { stage: 1, amount: 20 },
       { stage: 2, amount: 15 },
@@ -232,5 +239,114 @@ describe('Referral stage editor', () => {
     assert.ok(page.includes('setStageCount(form.stageAmounts.length - 1)'));
     assert.ok(page.includes('stagesMatchTotal(form.stageAmounts, form.totalRewardAmount)'));
     assert.ok(page.includes('left to assign'));
+  });
+
+  test('reward amounts and redemption minimum come from configuration only', () => {
+    const api = readHub('services/referralAdminApi.ts');
+    const page = readHub('pages/ReferralCampaignsPage.tsx');
+    assert.ok(api.includes('redemption_min_order_amount: number | string | null'));
+    assert.ok(api.includes('redemptionMinOrderAmount: string'));
+    assert.ok(api.includes("redemptionMinOrderAmount: form.redemptionMinOrderAmount === '' ? null : num(form.redemptionMinOrderAmount)"));
+    assert.ok(!api.includes('DEFAULT_TOTAL_REWARD_AMOUNT'));
+    assert.ok(!api.includes('DEFAULT_REWARD_STAGES'));
+    assert.ok(page.includes('Minimum order to redeem (₹)'));
+    assert.ok(page.includes("form.redemptionMinOrderAmount !== '' && num(form.redemptionMinOrderAmount) < 0"));
+    assert.ok(page.includes('Blank uses the global referral minimum configured in Settings'));
+    assert.ok(page.includes('Max referrals per referrer must be at least 1'));
+    assert.ok(page.includes('Expiry days must be blank or at least 1'));
+  });
+});
+
+describe('Referral wallet stage transparency', () => {
+  test('all unlocked money is shown but only the active stage is redeemable', () => {
+    const userApi = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'services', 'api.ts'), 'utf8');
+    const utils = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'utils', 'referral.ts'), 'utf8');
+    const page = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'pages', 'ReferralPage.tsx'), 'utf8');
+    const sheet = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'components', 'ReferEarnSheet.tsx'), 'utf8');
+    const banner = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'components', 'ReferralBanner.tsx'), 'utf8');
+    const checkout = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'pages', 'CheckoutPage.tsx'), 'utf8');
+    assert.ok(userApi.includes('redeemableNow?: boolean'));
+    assert.ok(userApi.includes('redeemableNow?: number'));
+    assert.ok(utils.includes('export function redeemableReferralBalance'));
+    assert.ok(!utils.includes('reward = 50'));
+    assert.ok(!utils.includes('total / 2'));
+    assert.ok(page.includes('Unlocked total'));
+    assert.ok(page.includes('Redeemable now'));
+    assert.ok(page.includes('Unlocks after earlier stages'));
+    assert.ok(page.includes('Total earned so far'));
+    assert.ok(page.includes('A friend who enters it at signup'));
+    assert.ok(page.includes('on later orders'));
+    assert.ok(page.includes('no referral minimum'));
+    assert.ok(page.includes('No referral minimum'));
+    assert.ok(page.includes('counts rewards issued and not used yet'));
+    assert.ok(page.includes('After your friend’s first order is delivered'));
+    assert.ok(page.includes('You can use up to'));
+    assert.ok(page.includes('sharing your code has no limit'));
+    assert.ok(!page.includes('product subtotal to redeem'));
+    assert.ok(sheet.includes('Both of you can earn'));
+    assert.ok(sheet.includes('A friend who enters it at signup'));
+    assert.ok(sheet.includes('on later orders'));
+    assert.ok(sheet.includes('No referral minimum'));
+    assert.ok(sheet.includes('counts rewards issued and not used yet'));
+    assert.ok(sheet.includes('You can use up to'));
+    assert.ok(sheet.includes('sharing your code has no limit'));
+    assert.ok(sheet.includes('If another offer was used'));
+    assert.ok(!sheet.includes('After the first order, rewards need'));
+    assert.ok(banner.includes('both of you earn rewards'));
+    assert.ok(checkout.includes('credit.redeemableNow !== false'));
+    assert.ok(checkout.includes('Redeemable referral balance'));
+    assert.ok(checkout.includes('Math.min(Math.max(0, Number(referralApplied.amount) || 0)'));
+    assert.ok(checkout.includes('Apply to your first order — no referral minimum.'));
+    assert.ok(checkout.includes('function isWelcomeCouponOffer'));
+    assert.ok(checkout.includes('campaigns={eligibleCampaigns.filter(c => !isWelcomeCouponOffer(c))}'));
+    assert.ok(checkout.includes('!c.requires_scheduled_delivery'));
+    assert.ok(checkout.includes('Have a coupon code?'));
+    assert.ok(checkout.includes('referralSection={referralSection}'));
+  });
+});
+
+describe('Referral people view', () => {
+  const readBackend = (rel: string) => readFileSync(join(__dirname, '..', 'src', rel), 'utf8');
+
+  test('the customers endpoint supplies names, counts and credit amounts', () => {
+    const controller = readBackend('controllers/index.ts');
+    for (const field of ['"rewardedReferrals"', '"totalEarned"', '"pendingAmount"', '"unlockedAmount"', '"redeemedAmount"']) {
+      assert.ok(controller.includes(field), `${field} is returned by /admin/referral/customers`);
+    }
+    assert.ok(controller.includes('req.query.customerId'), 'deep links can load one referrer directly');
+    assert.ok(controller.includes('req.query.filter'), 'the list can be filtered by customer segment');
+    assert.ok(controller.includes("pending: `EXISTS"), 'pending rewards are a supported segment');
+    assert.match(controller, /countWhere/, 'exact-id and search filters use separate placeholder numbering');
+  });
+
+  test('referral records expose referred names and per-referral credit amounts', () => {
+    const service = readBackend('services/referral.service.ts');
+    for (const field of ['"referredName"', '"referrerName"', '"creditAmount"', '"pendingAmount"', '"unlockedAmount"']) {
+      assert.ok(service.includes(field), `${field} is returned by the records query`);
+    }
+    assert.ok(service.includes('filters.referrerId'), 'records can be filtered by referrer');
+    assert.ok(service.includes('c.name, c.phone'), 'the top-customers report includes human-readable identity');
+  });
+
+  test('the hub turns a referrer into a searchable, drillable profile', () => {
+    const api = readHub('services/referralAdminApi.ts');
+    assert.ok(api.includes('referrerId?: string'), 'the hub can filter records by referrer');
+    assert.ok(api.includes('getCustomers: (query: string, limit = 50, offset = 0, customerId?: string, filter?: string)'), 'deep links resolve a customer');
+
+    const customers = readHub('pages/ReferralCustomerRewardsPage.tsx');
+    assert.ok(customers.includes('Referral People'), 'the page is named for people, not just accounts');
+    assert.ok(customers.includes('aria-label="Filter customers"'), 'the table has a customer filter');
+    assert.ok(customers.includes('{total.toLocaleString(\'en-IN\')} {activeFilter.countLabel}'), 'the count pill reflects the active filter');
+    assert.ok(customers.includes("{ value: 'referred', label: 'Has referred'"), 'customers with referrals can be isolated');
+    assert.ok(customers.includes('getRecords({ referrerId: customerId, limit: 100 })'), 'selecting a referrer loads their network');
+    assert.ok(customers.includes('People referred by'), 'the network table names the referrer');
+    assert.ok(customers.includes('Total earned'), 'earning totals are visible');
+    assert.ok(customers.includes('Pending'), 'pending credits are visible');
+    assert.ok(customers.includes('Unlocked'), 'unlocked credits are visible');
+    assert.ok(customers.includes('Reward ledger totals'), 'the original ledger detail is kept');
+
+    const reports = readHub('pages/ReferralReportsPage.tsx');
+    assert.ok(reports.includes('/referrals?tab=customers&customerId='), 'top customers link into the referrer profile');
+    assert.ok(reports.includes("'Customer', 'Referrals', 'Rewarded', 'Earned', 'Pending', 'Unlocked'"), 'the report is human readable');
   });
 });

@@ -156,7 +156,7 @@ function OrderDetailSheet({
             {(() => {
               const itemSavings = Number(order.itemSavings) || 0;
               const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
-              const campaignDiscount = Number(order.campaignDiscount) || 0;
+              const campaignDiscount = Math.floor(Number(order.campaignDiscount) || 0);
               const referralDiscount = getOrderReferralDiscount(order);
               const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
               const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount + referralDiscount;
@@ -190,7 +190,7 @@ function OrderDetailSheet({
                   {hasCampaign && (
                     <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
                       <span>{order.campaignRequiresScheduledDelivery ? 'Scheduled delivery discount' : order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}</span>
-                      {campaignDiscount > 0 && <span className="font-semibold">-₹{order.campaignDiscount}</span>}
+                        {campaignDiscount > 0 && <span className="font-semibold">-₹{campaignDiscount}</span>}
                     </div>
                   )}
                   {referralDiscount > 0 && (
