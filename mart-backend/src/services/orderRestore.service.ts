@@ -502,7 +502,7 @@ async function buildCandidate(
   const settings = headStoreId ? await SettingsService.getPublic(headStoreId) : {};
   const storeDeliveryCharge = roundMoney(toNumber(settings.delivery_charge));
   const freeAbove = roundMoney(toNumber(settings.free_delivery_above));
-  let campaignDiscount = roundMoney(campaignUse?.discountApplied ?? 0);
+  let campaignDiscount = Math.max(0, Math.floor(roundMoney(campaignUse?.discountApplied ?? 0)));
   const recoveredTotal = funnel?.total != null && Number.isFinite(Number(funnel.total))
     ? roundMoney(Number(funnel.total))
     : null;
@@ -514,7 +514,7 @@ async function buildCandidate(
     } else {
       const gap = roundMoney(recoveredTotal - subtotal);
       if (gap < 0) {
-        campaignDiscount = roundMoney(-gap);
+        campaignDiscount = Math.max(0, Math.floor(roundMoney(-gap)));
         deliveryCharge = 0;
         warnings.push(`The recovered total is below the cart subtotal; a discount of ₹${campaignDiscount} was inferred.`);
       } else {

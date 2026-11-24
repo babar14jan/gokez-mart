@@ -110,7 +110,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
 
   const items: any[] = Array.isArray(order?.items) ? order.items : [];
   const deliveryCharge = Number(order?.deliveryCharge) || 0;
-  const campaignDiscount = Number(order?.campaignDiscount) || 0;
+  const campaignDiscount = Math.floor(Number(order?.campaignDiscount) || 0);
   const referralDiscount = Number(order?.referralDiscount) || 0;
   const originalTotal = Number(order?.total) || 0;
   const hasNextDayCoupon = Boolean(
@@ -404,7 +404,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                           : 'Remove next-day coupon and deliver now'}
                       </span>
                       <span className="mt-0.5 block text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-                        Coupon saving ₹{campaignDiscount.toFixed(2)}
+                        Coupon saving ₹{campaignDiscount.toFixed(0)}
                         {Number(order.freeDeliverySaving) > 0 && campaignDiscount === 0
                           ? ` · free delivery ₹${Number(order.freeDeliverySaving).toFixed(2)}`
                           : ''}
@@ -414,7 +414,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                   </label>
                   {removeNextDayCoupon && (
                     <p className="mt-2 rounded-lg bg-amber-100/70 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                      Payable increases by ₹{restoredCouponAmount.toFixed(2)}
+                      Payable increases by ₹{restoredCouponAmount.toFixed(0)}
                       {Number(order.freeDeliverySaving) > 0 && campaignDiscount === 0 ? ' at minimum; any free-delivery charge is restored if the revised subtotal falls below the store threshold' : ''}.
                       The scheduled tag and label are removed in both apps.
                       {order.status !== 'delivered' ? ' Delivery switches from the next-day slot to immediate.' : ''}
@@ -654,7 +654,7 @@ export default function ManageOrderDialog({ onClose, onSaved }: Props) {
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="text-gray-700 dark:text-slate-300">Next-day coupon</span>
                     <span className="flex-shrink-0 font-semibold text-amber-700 dark:text-amber-400">
-                      removed · +₹{restoredCouponAmount.toFixed(2)}
+                      removed · +₹{Math.floor(Number(restoredCouponAmount) || 0).toFixed(0)}
                     </span>
                   </div>
                 )}

@@ -19,6 +19,7 @@ const {
   isReferralReservationExpired,
   normalizeReferralCode,
   readCheckoutReferralSelection,
+  redeemableReferralBalance,
   referralCodeFromSearch,
   saveCheckoutReferralSelection,
 } = await import('../src/utils/referral');
@@ -66,11 +67,14 @@ describe('referral link helpers', () => {
 
   test('share message contains the code, the link and the reward copy', () => {
     const link = buildReferralLink('k7p9x2', 'https://mart.gokez.com');
-    const message = buildReferralShareMessage('k7p9x2', link);
+    const message = buildReferralShareMessage('k7p9x2', link, [
+      { stage: 1, amount: 25 },
+      { stage: 2, amount: 25 },
+    ]);
     assert.ok(message.includes('K7P9X2'));
     assert.ok(message.includes(link));
     assert.ok(message.includes('₹25'));
-    assert.ok(message.includes('first qualifying order'));
+    assert.ok(message.includes('first order'));
     assert.ok(message.includes('delivered'));
     assert.ok(!message.includes('₹50'));
   });
@@ -122,6 +126,17 @@ describe('referral discount rules', () => {
     ];
     assert.equal(availableReferralBalance(credits), 40);
     assert.equal(availableReferralBalance([]), 0);
+  });
+
+  test('stage-locked credits are excluded from the spendable balance', () => {
+    const credits = [
+      { id: 'a', amount: 20, status: 'available', redeemableNow: true },
+      { id: 'b', amount: 30, status: 'available', redeemableNow: false },
+      { id: 'c', amount: 10, status: 'available' },
+      { id: 'd', amount: 40, status: 'reserved', redeemableNow: true },
+    ];
+    assert.equal(redeemableReferralBalance(credits), 30);
+    assert.equal(redeemableReferralBalance([]), 0);
   });
 
   test('expired reservations are detected', () => {
@@ -224,8 +239,8 @@ describe('referral integration points', () => {
       '{isLoggedIn && (',
       'Refer & Earn',
       'normalizeReferralCode(referralData?.code) || \'—\'',
-      'Total referral balance:',
-      'formatReferralRupees((referralData?.stats?.available ?? 0) + (referralData?.stats?.pending ?? 0))',
+      'Redeemable referral balance:',
+      'formatReferralRupees(referralData?.stats?.redeemableNow ?? referralData?.stats?.available ?? 0)',
       'handleShareReferral',
       'Share',
       'View details',
@@ -270,10 +285,11 @@ describe('referral integration points', () => {
       'Your referral benefit',
       'Your progress',
       'Rewards wallet',
-      'Total earned (incl. pending)',
-      'stays pending until that order is delivered',
-      'Pending rewards are not redeemable until they unlock.',
-      'Only unlocked credits are shown as',
+      'Total earned so far',
+      'Total earned so far includes pending rewards',
+      'Unlocked total counts rewards issued and not used yet',
+      'Redeemable now is what you can use at checkout today',
+      'Rewards open in stage order',
       'Your credits',
       'Referral history',
       'role="alert"',
@@ -298,13 +314,13 @@ describe('referral integration points', () => {
 
   test('checkout selects the next referral credit locally until the order is placed', () => {
     const checkout = assertIncludes('src/pages/CheckoutPage.tsx', [
-      'Total referral balance: ₹',
-      'You can avail ₹',
+      'Redeemable referral balance: ₹',
+      'You can use ₹',
       "'Apply'",
       "'Remove'",
       'nextReferralCredit',
       'nextReferralAmount',
-      'availableReferralBalance(referralCredits)',
+      'redeemableReferralBalance(referralCredits)',
       'creditId: credit.id',
       'const formId = `checkout-form-${useId().replace(/:/g, \'\')}`;',
       '<form id={formId}',
@@ -321,7 +337,7 @@ describe('referral integration points', () => {
       'calculateOrderSavings(',
       "credit.benefitType === 'first_order'",
       'First-order referral discount: ₹',
-      'Apply to your first eligible order; minimum product subtotal applies.',
+      'Apply to your first order — no referral minimum.',
       'Referral Reward',
       'confirmedCampaignDiscount + confirmedReferralDiscount',
     ]);

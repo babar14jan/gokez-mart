@@ -19,7 +19,7 @@ import { getFunnelSessionId, syncFunnelCart, track, trackOnce } from '../utils/t
 import { requestErrorMessage, isTransportFailure } from '../utils/networkError';
 import { useGuestAddressStore } from '../store/guestAddressStore';
 import {
-  availableReferralBalance, calculateOrderSavings, calculateOrderTotals,
+  redeemableReferralBalance, calculateOrderSavings, calculateOrderTotals,
   canApplyCampaignDiscount, canApplyReferralDiscount, clearCheckoutReferralSelection,
   discountConflictMessage, getOrderReferralDiscount, readCheckoutReferralSelection,
   saveCheckoutReferralSelection,
@@ -201,6 +201,26 @@ type OfferCampaign = {
   categoryIds?: string[];
   categoryNames?: string[];
 };
+
+function isWelcomeCouponOffer(c: OfferCampaign): boolean {
+  return Boolean(c.coupon_code) && !c.requires_scheduled_delivery
+    && (c.eligibility_type === 'first_order' || c.allow_redemption_until_used === true);
+}
+
+function campaignDiscountAmount(campaign: any, eligibleTotal: number): number {
+  const total = Math.max(0, Number(eligibleTotal) || 0);
+  if (campaign?.discount_type === 'flat') {
+    return Math.max(0, Math.floor(Math.min(Number(campaign.discount_value) || 0, total)));
+  }
+  if (campaign?.discount_type === 'percent') {
+    const raw = (total * (Number(campaign.discount_value) || 0)) / 100;
+    const capped = campaign.max_discount !== null && campaign.max_discount !== undefined && campaign.max_discount !== ''
+      ? Math.min(raw, Math.max(0, Number(campaign.max_discount) || 0))
+      : raw;
+    return Math.max(0, Math.floor(capped));
+  }
+  return 0;
+}
 
 /* The admin stores these as NUMERIC, so they arrive as "50.00" and would otherwise
    print as a bare \u20b950.00 next to prose that says "Rs50". */
@@ -766,7 +786,6 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const [referralApplied, setReferralApplied] = useState(() => readCheckoutReferralSelection());
   const [referralError, setReferralError] = useState('');
   const [referralMinimumBlocked, setReferralMinimumBlocked] = useState(false);
-  const [referralMinimumOrderAmount, setReferralMinimumOrderAmount] = useState(0);
 
   const clearOfferShortfall = () => {
     setOfferMinimumOrder(null);
@@ -784,16 +803,11 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       return;
     }
     try {
-      const [creditsResponse, meResponse] = await Promise.all([
-        referralApi.getCredits(),
-        referralApi.getMe(),
-      ]);
+      const creditsResponse = await referralApi.getCredits();
       const items: ReferralCredit[] = creditsResponse.data?.data?.items || [];
-      setReferralCredits(items.filter(credit => credit.status === 'available'));
-      setReferralMinimumOrderAmount(Number(meResponse.data?.data?.minimumOrderAmount) || 0);
+      setReferralCredits(items.filter(credit => credit.status === 'available' && credit.redeemableNow !== false));
     } catch {
       setReferralCredits([]);
-      setReferralMinimumOrderAmount(0);
     } finally {
       setReferralCreditsLoaded(true);
     }
@@ -802,12 +816,6 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   useEffect(() => {
     void loadReferralCredits();
   }, [loadReferralCredits]);
-
-  useEffect(() => {
-    if (referralMinimumBlocked && referralMinimumOrderAmount > 0 && cartSubtotal >= referralMinimumOrderAmount) {
-      setReferralMinimumBlocked(false);
-    }
-  }, [referralMinimumBlocked, referralMinimumOrderAmount, cartSubtotal]);
 
   useEffect(() => {
     if (!referralCreditsLoaded || !referralApplied) return;
@@ -827,6 +835,13 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   );
   const nextReferralAmount = Number(nextReferralCredit?.amount) || 0;
   const firstOrderReferralCredit = referralCredits.find(credit => credit.benefitType === 'first_order') || null;
+  const referralMinimumOrderAmount = nextReferralCredit && nextReferralCredit.benefitType !== 'first_order'
+    ? Math.max(0, Number(nextReferralCredit.redemptionMinOrderAmount) || 0) : 0;
+  useEffect(() => {
+    if (referralMinimumBlocked && cartSubtotal >= referralMinimumOrderAmount) {
+      setReferralMinimumBlocked(false);
+    }
+  }, [referralMinimumBlocked, referralMinimumOrderAmount, cartSubtotal]);
   const referralMinimumMessage = referralMinimumOrderAmount > 0 && cartSubtotal < referralMinimumOrderAmount
     ? `Add ₹${Math.max(0, referralMinimumOrderAmount - cartSubtotal).toFixed(0)} more to use your referral reward.`
     : '';
@@ -1000,13 +1015,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   };
 
   const calcDiscount = (campaign: any, cartTotal: number): number => {
-    const eligibleTotal = scopedSubtotal(campaign, cartTotal);
-    if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), eligibleTotal);
-    if (campaign.discount_type === 'percent') {
-      const d = (eligibleTotal * parseFloat(campaign.discount_value)) / 100;
-      return campaign.max_discount ? Math.min(d, parseFloat(campaign.max_discount)) : d;
-    }
-    return 0;
+    return campaignDiscountAmount(campaign, scopedSubtotal(campaign, cartTotal));
   };
 
   const rejectReferralConflict = () => {
@@ -1160,7 +1169,9 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const actualDelivery = appliedCampaign?.discount_type === 'free_delivery' && campaignMeetsMinimum
     ? 0
     : (freeAbove > 0 && sub >= freeAbove ? 0 : deliveryCharge);
-  const referralDiscount = referralApplied ? Math.max(0, Number(referralApplied.amount) || 0) : 0;
+  const referralDiscount = referralApplied
+    ? Math.min(Math.max(0, Number(referralApplied.amount) || 0), Math.max(0, sub - displayedCampaignDiscount))
+    : 0;
   const total = calculateOrderTotals({
     subtotal: sub,
     deliveryCharge: actualDelivery,
@@ -1496,12 +1507,12 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
           <p className="text-sm font-bold text-gray-900 dark:text-white">
             {firstOrderReferralCredit
               ? `First-order referral discount: ₹${money(firstOrderReferralCredit.amount)}`
-              : `Total referral balance: ₹${money(availableReferralBalance(referralCredits))}`}
+              : `Redeemable referral balance: ₹${money(redeemableReferralBalance(referralCredits))}`}
           </p>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
             {firstOrderReferralCredit
-              ? 'Apply to your first eligible order; minimum product subtotal applies.'
-              : `You can avail ₹${money(referralDisplayAmount)} right now.`}
+              ? 'Apply to your first order — no referral minimum.'
+              : `You can use ₹${money(referralDisplayAmount)} on this order.`}
           </p>
         </div>
         <button
@@ -1765,7 +1776,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
           {/* ── Offers / Coupons ── */}
           <OffersPanel
             cardClass={card}
-            campaigns={eligibleCampaigns}
+            campaigns={eligibleCampaigns.filter(c => !isWelcomeCouponOffer(c))}
             applied={appliedCampaign}
             appliedCode={appliedCouponCode}
             notice={offerNotice}

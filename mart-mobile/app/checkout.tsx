@@ -154,9 +154,11 @@ export default function CheckoutScreen() {
     if (camp.discount_type === 'flat') disc = Math.min(parseFloat(camp.discount_value), cartTotal);
     else if (camp.discount_type === 'percent') {
       disc = (cartTotal * parseFloat(camp.discount_value)) / 100;
-      if (camp.max_discount) disc = Math.min(disc, parseFloat(camp.max_discount));
+      if (camp.max_discount !== null && camp.max_discount !== undefined && camp.max_discount !== '') {
+        disc = Math.min(disc, Math.max(0, parseFloat(camp.max_discount) || 0));
+      }
     }
-    setAppliedCamp(camp); setCampDiscount(Math.round(disc));
+    setAppliedCamp(camp); setCampDiscount(Math.floor(Math.max(0, disc)));
   };
 
   const removeCampaign = (hint = '') => {

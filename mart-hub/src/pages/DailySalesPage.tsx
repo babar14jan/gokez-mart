@@ -13,6 +13,7 @@ import { DateRangeChips } from '../components/DateRangeFilter';
 
 // Indian currency formatting for the ledger figures.
 const inr = (n: number) => `₹${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const wholeInr = (n: number) => `₹${Math.max(0, Math.floor(Number(n) || 0))}`;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -604,11 +605,11 @@ function LedgerTable({ days, selectedDate, isSuperAdmin }: {
                 <tr key={d.date} className={`border-b border-slate-100 last:border-0 dark:border-slate-700/60 ${d.date === selectedDate ? 'bg-indigo-50/60 dark:bg-indigo-500/10' : ''}`}>
                   <td className="px-1.5 py-2 font-medium text-slate-800 sm:px-4 sm:py-3 dark:text-slate-100">{d.date}</td>
                   <td className="px-1 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{d.ordersDelivered ?? d.ordersPlaced ?? 0}</td>
-                  {isSuperAdmin && <td className="px-1 py-2 text-purple-600 sm:px-3 sm:py-3 dark:text-purple-400">{inr(d.couponDeduction || 0)}</td>}
+                  {isSuperAdmin && <td className="px-1 py-2 text-purple-600 sm:px-3 sm:py-3 dark:text-purple-400">{wholeInr(d.couponDeduction || 0)}</td>}
                   <td className="px-1 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{inr(d.deliveryCharge)}</td>
                   <td className="px-1 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{inr(d.codValue)}</td>
                   <td className="px-1 py-2 text-slate-600 sm:px-3 sm:py-3 dark:text-slate-300">{inr(d.upiValue)}</td>
-                  <td className="px-1 py-2 text-right font-semibold text-slate-800 sm:px-3 sm:py-3 dark:text-slate-100">{inr(d.orderValueAfterCoupon)}</td>
+                  <td className="px-1 py-2 text-right font-semibold text-slate-800 sm:px-3 sm:py-3 dark:text-slate-100">{wholeInr(d.orderValueAfterCoupon)}</td>
                 </tr>
               ))}
             </tbody>

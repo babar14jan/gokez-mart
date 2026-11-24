@@ -59,6 +59,21 @@ export default function ReferralOverviewPage({ embedded = false }: { embedded?: 
     fullLabel: fmtDate(row.day, false),
     value: Number(row.orders || 0),
   }));
+  const byRole = useMemo(() => ['referrer', 'referee'].map(role => {
+    const rows = (summary.liabilityByRole || []).filter(row => row.role === role);
+    return {
+      label: role.charAt(0).toUpperCase() + role.slice(1),
+      liability: rows.reduce((sum, row) => sum + Number(row.liability || 0), 0),
+      redeemed: rows.reduce((sum, row) => sum + Number(row.redeemed || 0), 0),
+    };
+  }), [summary.liabilityByRole]);
+  const byStage = useMemo(() => [...(summary.liabilityByStage || [])]
+    .sort((a, b) => a.role.localeCompare(b.role) || a.stage - b.stage)
+    .map(row => ({
+      label: `${row.role === 'referee' ? 'Referee' : 'Referrer'} · Stage ${row.stage}`,
+      value: Number(row.liability || 0),
+      detail: `${fmtMoney(row.redeemed || 0)} redeemed`,
+    })), [summary.liabilityByStage]);
 
   if (loading) return <PageSkeleton />;
 
@@ -77,6 +92,35 @@ export default function ReferralOverviewPage({ embedded = false }: { embedded?: 
         <KpiCard label="Conversion Rate" value={`${rate}%`} sub={`${summary.rewarded} of ${summary.referrals} referrals`} icon={<TrendingUp className="w-4 h-4" />} gradient="from-lime-500 to-emerald-600" />
         <KpiCard label="Available Liability" value={fmtMoney(summary.liability)} sub={`${summary.credits.toLocaleString('en-IN')} credits available + reserved`} icon={<Landmark className="w-4 h-4" />} gradient="from-indigo-500 to-indigo-600" />
         <KpiCard label="Redeemed" value={fmtMoney(summary.redeemed)} sub="credits used on orders" icon={<Receipt className="w-4 h-4" />} gradient="from-cyan-500 to-cyan-600" />
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3">
+        {byRole.map(row => (
+          <div key={row.label} className="page-card p-4">
+            <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-2">{row.label} rewards</p>
+            <p className="text-lg font-extrabold text-gray-900 dark:text-white">{fmtMoney(row.liability)} unlocked</p>
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">{fmtMoney(row.redeemed)} redeemed</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="page-card p-4">
+          <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-4">Liability by Side</p>
+          {byRole.every(row => row.liability === 0 && row.redeemed === 0)
+            ? <p className="text-xs text-gray-500 text-center py-8">No rewards recorded yet</p>
+            : <HorizontalBars rows={byRole.map(row => ({
+                label: row.label,
+                value: row.liability,
+                detail: `${fmtMoney(row.redeemed)} redeemed`,
+              }))} />}
+        </div>
+        <div className="page-card p-4">
+          <p className="text-xs font-bold text-gray-700 dark:text-slate-300 mb-4">Liability by Stage</p>
+          {byStage.length === 0
+            ? <p className="text-xs text-gray-500 text-center py-8">No stages recorded yet</p>
+            : <HorizontalBars rows={byStage} />}
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">

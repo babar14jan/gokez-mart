@@ -14,6 +14,12 @@ export interface ReferralCreditLike {
   id: string;
   amount: number;
   status: string;
+  redeemableNow?: boolean;
+}
+
+export interface ReferralStageLike {
+  stage: number;
+  amount: number;
 }
 
 export interface OrderTotalsInput {
@@ -53,11 +59,24 @@ export function buildReferralLink(code: string, origin: string): string {
   return `${origin.replace(/\/+$/, '')}/?ref=${normalized}`;
 }
 
-export function buildReferralShareMessage(code: string, link: string, reward = 50): string {
-  const total = finite(reward);
-  const first = total / 2;
-  const remaining = Math.max(0, total - first);
-  return `Join Gokez Mart and use my referral code ${normalizeReferralCode(code)}. Get ₹${first} off your first qualifying order, then unlock ₹${remaining} after it is delivered! ${link}`;
+export function buildReferralShareMessage(
+  code: string,
+  link: string,
+  stages: Array<ReferralStageLike> = [],
+): string {
+  const ordered = [...stages].sort((a, b) => finite(a.stage) - finite(b.stage));
+  const firstStage = ordered.find(stage => finite(stage.stage) === 1) ?? ordered[0];
+  if (!firstStage) {
+    return `Join Gokez Mart and use my referral code ${normalizeReferralCode(code)} to unlock referral rewards. ${link}`;
+  }
+  const first = Math.max(0, finite(firstStage.amount));
+  const remaining = ordered
+    .filter(stage => stage !== firstStage)
+    .reduce((sum, stage) => sum + Math.max(0, finite(stage.amount)), 0);
+  const rewardText = remaining > 0
+    ? `Get ₹${first} off your first order, then unlock ₹${remaining} after it is delivered`
+    : `Get ₹${first} off your first order`;
+  return `Join Gokez Mart and use my referral code ${normalizeReferralCode(code)}. ${rewardText}! ${link}`;
 }
 
 export function buildWhatsAppReferralLink(message: string): string {
@@ -151,6 +170,13 @@ export function calculateOrderSavings(input: {
 export function availableReferralBalance(credits: Array<ReferralCreditLike> | null | undefined): number {
   return (credits || []).reduce((sum, credit) => (
     credit.status === 'available' ? sum + Math.max(0, finite(credit.amount)) : sum
+  ), 0);
+}
+
+export function redeemableReferralBalance(credits: Array<ReferralCreditLike> | null | undefined): number {
+  return (credits || []).reduce((sum, credit) => (
+    credit.status === 'available' && credit.redeemableNow !== false
+      ? sum + Math.max(0, finite(credit.amount)) : sum
   ), 0);
 }
 

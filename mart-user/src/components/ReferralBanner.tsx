@@ -28,7 +28,7 @@ export default function ReferralBanner({ section }: Props) {
 
   const cfg: any = section.config || {};
   const title = section.title || 'Refer & Earn';
-  const subtitle = section.subtitle || '';
+  const subtitle = section.subtitle || 'Refer a friend — both of you earn rewards';
   const image = cfg.imageUrl || cfg.image_url || null;
   const buttonLabel = cfg.buttonText || cfg.cta || 'Share';
 
