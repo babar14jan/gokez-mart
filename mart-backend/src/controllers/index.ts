@@ -4151,13 +4151,33 @@ export const adminReorderHomeSections = asyncHandler(async (req: AdminRequest, r
 
 // ── Public campaign routes ────────────────────────────────────────────────────
 
+const campaignCartItems = (value: unknown): any[] | null => {
+  if (value === undefined || value === null) return null;
+  let parsed = value;
+  if (typeof value === 'string') {
+    try { parsed = JSON.parse(value); } catch { return null; }
+  }
+  if (!Array.isArray(parsed)) return null;
+  return parsed.slice(0, 100).flatMap((item: any) => {
+    if (!item || typeof item !== 'object') return [];
+    const categoryId = item.categoryId ?? item.category_id;
+    const price = Number(item.price ?? item.price_cents);
+    const quantity = Number(item.quantity ?? 1);
+    if (typeof categoryId !== 'string' || !categoryId ||
+        !Number.isFinite(price) || price < 0 ||
+        !Number.isFinite(quantity) || quantity <= 0) return [];
+    return [{ categoryId, price, quantity }];
+  });
+};
+
 export const getEligibleCampaigns = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { cartTotal, storeId, zoneId } = req.query;
+  const { cartTotal, storeId, zoneId, cartItems } = req.query;
   const campaigns = await CampaignService.getEligible(
     req.customer?.id || null,
     parseFloat(cartTotal as string) || 0,
     (storeId as string) || '',
     typeof zoneId === 'string' ? zoneId : null,
+    campaignCartItems(cartItems),
   );
   res.json({ success: true, data: campaigns });
 });
@@ -4168,18 +4188,19 @@ export const getEligibleCampaigns = asyncHandler(async (req: CustomerRequest, re
 // token is present the teaser is filtered so an offer they already used is not
 // advertised back to them.
 export const getPublicWelcomeOffers = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { cartTotal, storeId, zoneId } = req.query;
+  const { cartTotal, storeId, zoneId, cartItems } = req.query;
   const offers = await CampaignService.getPublicWelcomeOffers(
     parseFloat(cartTotal as string) || 0,
     (storeId as string) || '',
     req.customer?.id || null,
     typeof zoneId === 'string' ? zoneId : null,
+    campaignCartItems(cartItems),
   );
   res.json({ success: true, data: offers });
 });
 
 export const validateCouponCode = asyncHandler(async (req: CustomerRequest, res: Response) => {
-  const { code, cartTotal, storeId, zoneId } = req.body;
+  const { code, cartTotal, storeId, zoneId, cartItems } = req.body;
   if (!code) { res.status(400).json({ success: false, error: 'Coupon code required' }); return; }
   try {
     const campaign = await CampaignService.validateCode(
@@ -4187,6 +4208,7 @@ export const validateCouponCode = asyncHandler(async (req: CustomerRequest, res:
       parseFloat(cartTotal) || 0,
       storeId || '',
       typeof zoneId === 'string' ? zoneId : null,
+      campaignCartItems(cartItems),
     );
     const discount = CampaignService.calculateDiscount(campaign, parseFloat(cartTotal) || 0);
     res.json({ success: true, data: { campaign, discount } });
