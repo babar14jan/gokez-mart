@@ -30,7 +30,7 @@ const PAYMENT_OPTIONS = [
   ['phonepay', 'PhonePe'],
 ] as const;
 
-const money = (value: number) => `₹${Number(value || 0).toFixed(0)}`;
+const money = (value: number) => `₹${Math.max(0, Math.floor(Number(value) || 0))}`;
 
 function formatDate(value: string | null | undefined) {
   if (!value) return '—';

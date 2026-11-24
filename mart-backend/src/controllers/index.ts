@@ -4814,17 +4814,57 @@ export const adminGetReferralRecord = asyncHandler(async (req: AdminRequest, res
 
 export const adminGetReferralCustomers = asyncHandler(async (req: AdminRequest, res: Response) => {
   const search = typeof req.query.query === 'string' ? req.query.query.trim().slice(0, 100) : '';
+  const customerId = typeof req.query.customerId === 'string' ? req.query.customerId.trim() : '';
+  const filter = typeof req.query.filter === 'string' ? req.query.filter.trim() : '';
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? 50), 10) || 50, 1), 200);
   const offset = Math.max(parseInt(String(req.query.offset ?? 0), 10) || 0, 0);
-  const where = search ? `WHERE c.phone ILIKE $3 OR c.name ILIKE $3 OR rc.code ILIKE $3` : '';
+  const conditions: string[] = [];
+  const countConditions: string[] = [];
   const params: unknown[] = [limit, offset];
-  if (search) params.push(`%${search}%`);
+  const countParams: unknown[] = [];
+  const segmentFilters: Record<string, string> = {
+    referred: `EXISTS (SELECT 1 FROM mart_referrals r WHERE r.referrer_customer_id = c.id)`,
+    rewarded: `EXISTS (SELECT 1 FROM mart_referrals r WHERE r.referrer_customer_id = c.id AND r.status = 'rewarded')`,
+    pending: `EXISTS (SELECT 1 FROM mart_referral_credits cr WHERE cr.customer_id = c.id AND cr.status = 'reserved')`,
+    unlocked: `EXISTS (SELECT 1 FROM mart_referral_credits cr WHERE cr.customer_id = c.id AND cr.status = 'available')`,
+    none: `NOT EXISTS (SELECT 1 FROM mart_referrals r WHERE r.referrer_customer_id = c.id)`,
+  };
+  if (segmentFilters[filter]) {
+    conditions.push(segmentFilters[filter]);
+    countConditions.push(segmentFilters[filter]);
+  }
+  if (customerId) {
+    conditions.push(`c.id = $${params.length + 1}`);
+    params.push(customerId);
+    countConditions.push(`c.id = $${countParams.length + 1}`);
+    countParams.push(customerId);
+  }
+  if (search) {
+    const index = params.length + 1;
+    conditions.push(`(c.phone ILIKE $${index} OR c.name ILIKE $${index} OR rc.code ILIKE $${index})`);
+    params.push(`%${search}%`);
+    const countIndex = countParams.length + 1;
+    countConditions.push(`(c.phone ILIKE $${countIndex} OR c.name ILIKE $${countIndex} OR rc.code ILIKE $${countIndex})`);
+    countParams.push(`%${search}%`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const countWhere = countConditions.length ? `WHERE ${countConditions.join(' AND ')}` : '';
   const [items, total] = await Promise.all([
     query(
       `SELECT c.id, c.phone, c.name, rc.code,
               (SELECT COUNT(*)::int FROM mart_referrals r WHERE r.referrer_customer_id = c.id) AS "successfulReferrals",
+              (SELECT COUNT(*)::int FROM mart_referrals r
+                WHERE r.referrer_customer_id = c.id AND r.status = 'rewarded') AS "rewardedReferrals",
               (SELECT COUNT(*)::int FROM mart_referral_credits cr
-                WHERE cr.customer_id = c.id AND cr.status IN ('available', 'reserved')) AS "availableCredits"
+                WHERE cr.customer_id = c.id AND cr.status IN ('available', 'reserved')) AS "availableCredits",
+              COALESCE((SELECT SUM(cr.amount) FROM mart_referral_credits cr
+                 WHERE cr.customer_id = c.id AND cr.status IN ('available', 'reserved', 'redeemed')), 0)::float AS "totalEarned",
+              COALESCE((SELECT SUM(cr.amount) FROM mart_referral_credits cr
+                 WHERE cr.customer_id = c.id AND cr.status = 'reserved'), 0)::float AS "pendingAmount",
+              COALESCE((SELECT SUM(cr.amount) FROM mart_referral_credits cr
+                 WHERE cr.customer_id = c.id AND cr.status = 'available'), 0)::float AS "unlockedAmount",
+              COALESCE((SELECT SUM(cr.amount) FROM mart_referral_credits cr
+                 WHERE cr.customer_id = c.id AND cr.status = 'redeemed'), 0)::float AS "redeemedAmount"
          FROM mart_customers c
          LEFT JOIN mart_referral_codes rc ON rc.customer_id = c.id
          ${where} ORDER BY c.created_at DESC LIMIT $1 OFFSET $2`,
@@ -4832,8 +4872,8 @@ export const adminGetReferralCustomers = asyncHandler(async (req: AdminRequest, 
     ),
     query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM mart_customers c
-         LEFT JOIN mart_referral_codes rc ON rc.customer_id = c.id ${where}`,
-      search ? [`%${search}%`] : []
+         LEFT JOIN mart_referral_codes rc ON rc.customer_id = c.id ${countWhere}`,
+      countParams
     ),
   ]);
   res.json({ success: true, data: { items: items.rows, total: total.rows[0]?.count || 0 } });

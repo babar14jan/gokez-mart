@@ -618,6 +618,72 @@ describe('supersede mints a new version without losing the offer', () => {
     }, 200), 100, 'unscoped campaigns still use the cart total');
   });
 
+  test('campaign configuration rejects fractional flat and maximum discounts', () => {
+    const service = readFileSync(join(__dirname, '..', 'src', 'services', 'campaign.service.ts'), 'utf8');
+    assert.ok(service.includes('Flat discount must be a whole rupee amount'));
+    assert.ok(service.includes('Maximum discount must be a whole rupee amount'));
+  });
+
+  test('calculateDiscount floors flat amounts to whole rupees', () => {
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'flat', discount_value: 12.99, categorySubtotal: 20,
+    }, 200), 12);
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'flat', discount_value: 50, categorySubtotal: 200,
+    }, 200), 50);
+  });
+
+  test('calculateDiscount floors percent amounts to whole rupees', () => {
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'percent', discount_value: 5,
+    }, 241.8), 12);
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'percent', discount_value: 5,
+    }, 259.8), 12, '12.99 must not round up to 13');
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'percent', discount_value: 50, max_discount: 0,
+    }, 200), 0);
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'percent', discount_value: 50, max_discount: 12.99,
+    }, 200), 12, 'the cap is applied before flooring');
+  });
+
+  test('whole-rupee campaign discounts are wired through placement, both apps and the database', () => {
+    const orderService = readFileSync(join(__dirname, '..', 'src', 'services', 'order.service.ts'), 'utf8');
+    const migration = readFileSync(join(__dirname, '..', 'src', 'database', 'migrations', '152_whole_rupee_campaign_discounts.sql'), 'utf8');
+    const checkout = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'pages', 'CheckoutPage.tsx'), 'utf8');
+    const customerHistory = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'pages', 'OrderHistoryPage.tsx'), 'utf8');
+    const customerReceipt = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'utils', 'printReceipt.ts'), 'utf8');
+    const hubOrders = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'pages', 'OrdersPage.tsx'), 'utf8');
+    const hubReceipt = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'utils', 'printReceipt.ts'), 'utf8');
+    const dashboard = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'pages', 'DashboardPage.tsx'), 'utf8');
+    const hubCampaigns = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'pages', 'CampaignsPage.tsx'), 'utf8');
+    const mobileCheckout = readFileSync(join(__dirname, '..', '..', 'mart-mobile', 'app', 'checkout.tsx'), 'utf8');
+    const restore = readFileSync(join(__dirname, '..', 'src', 'services', 'orderRestore.service.ts'), 'utf8');
+    const totals = readFileSync(join(__dirname, '..', 'src', 'database', 'migrations', '154_reconcile_whole_rupee_totals.sql'), 'utf8');
+
+    assert.ok(orderService.includes('campaignDiscountAmount(campaign, campaign.categorySubtotal ?? subtotal)'));
+    assert.ok(migration.includes('campaign_discount = floor(campaign_discount)'));
+    assert.ok(migration.includes('discount_applied = floor(discount_applied)'));
+    assert.ok(migration.includes('CEIL(subtotal + delivery_charge - floor(campaign_discount)'));
+    assert.ok(migration.includes('qualifying_order_value = GREATEST(0, r.qualifying_order_value + c.restored)'));
+    assert.ok(totals.includes('CEIL(subtotal + delivery_charge - campaign_discount'));
+    assert.ok(checkout.includes('function campaignDiscountAmount'));
+    assert.ok(checkout.includes('Math.floor(capped)'));
+    assert.ok(checkout.includes('Math.floor(Math.min(Number(campaign.discount_value) || 0, total))'));
+    assert.ok(customerHistory.includes('Math.floor(Number(order.campaignDiscount) || 0)'));
+    assert.ok(customerReceipt.includes('Math.floor(Number(order.campaignDiscount) || 0)'));
+    assert.ok(hubOrders.includes('Math.floor(Number(order.campaignDiscount) || 0)'));
+    assert.ok(hubReceipt.includes('Math.floor(Number(order.campaignDiscount) || 0)'));
+    assert.ok(dashboard.includes('sum + (Number(o.total) || 0)'));
+    assert.ok(dashboard.includes('wholeRupees(rawOrderValue)'));
+    assert.ok(hubCampaigns.includes('Flat discount must be a whole rupee amount'));
+    assert.ok(hubCampaigns.includes("step={form.discountType === 'flat' ? '1' : 'any'}"));
+    assert.ok(mobileCheckout.includes('Math.floor(Math.max(0, disc))'));
+    assert.ok(restore.includes('Math.max(0, Math.floor(roundMoney(campaignUse?.discountApplied ?? 0)))'));
+    assert.ok(restore.includes('Math.max(0, Math.floor(roundMoney(-gap)))'));
+  });
+
   test('welcome category scope is wired through the hub and customer apps', () => {
     const hub = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'pages', 'CampaignsPage.tsx'), 'utf8');
     assert.match(hub, /const canScopeCategories\s*=\s*form\.requiresScheduledDelivery \|\| form\.eligibilityType === 'first_order'/);

@@ -18,7 +18,7 @@ export function printReceipt(order: any) {
 
   const itemSavings = Number(order.itemSavings) || 0;
   const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
-  const campaignDiscount = Number(order.campaignDiscount) || 0;
+  const campaignDiscount = Math.floor(Number(order.campaignDiscount) || 0);
   const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount;
   const itemTotalStrike = itemSavings > 0
     ? `<span style="text-decoration:line-through;color:#999;font-weight:500;margin-right:6px;">₹${(Number(order.subtotal) + itemSavings).toFixed(0)}</span>`
@@ -81,7 +81,7 @@ export function printReceipt(order: any) {
         ${campaignDiscount > 0 ? `
         <tr>
           <td style="font-size:13px;padding:4px 0;color:#087f23;font-weight:600;">${order.couponCodeUsed ? `Coupon: ${order.couponCodeUsed}` : 'Offer discount'}</td>
-          <td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${order.campaignDiscount}</td>
+          <td style="font-size:13px;text-align:right;color:#087f23;font-weight:600;">-₹${campaignDiscount}</td>
         </tr>` : ''}
         <tr>
           <td style="font-size:17px;font-weight:800;color:#111;padding-top:10px;border-top:1px solid #e5e7eb;">TOTAL PAID</td>

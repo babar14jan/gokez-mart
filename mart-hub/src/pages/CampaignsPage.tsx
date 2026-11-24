@@ -33,6 +33,8 @@ const fmtAmount = (v: unknown): string => {
   return Number.isFinite(n) ? String(n) : String(v);
 };
 
+const wholeRupees = (v: unknown): number => Math.max(0, Math.floor(Number(v) || 0));
+
 const STATUS_COLORS: Record<string, string> = {
   active:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   draft:     'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400',
@@ -145,6 +147,12 @@ export default function CampaignsPage() {
     if (!form.title.trim()) return;
     if (form.eligibilityType === 'targeted_customers' && form.targetCustomerIds.length === 0) {
       alert('Select at least one target customer'); return;
+    }
+    if (form.discountType === 'flat' && !Number.isInteger(Number(form.discountValue))) {
+      alert('Flat discount must be a whole rupee amount'); return;
+    }
+    if (form.discountType === 'percent' && form.maxDiscount && !Number.isInteger(Number(form.maxDiscount))) {
+      alert('Maximum discount must be a whole rupee amount'); return;
     }
     setSaving(true);
     try {
@@ -384,10 +392,10 @@ export default function CampaignsPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                       {form.discountType === 'percent' ? 'Percentage %' : 'Amount ₹'} *</label>
-                      <input type="number" value={form.discountValue} onChange={e => setForm(f => ({ ...f, discountValue: e.target.value }))} className={inp} placeholder="50" min="0" /></div>
+                      <input type="number" value={form.discountValue} onChange={e => setForm(f => ({ ...f, discountValue: e.target.value }))} className={inp} placeholder="50" min="0" step={form.discountType === 'flat' ? '1' : 'any'} /></div>
                     {form.discountType === 'percent' && (
                       <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Max Discount ₹</label>
-                        <input type="number" value={form.maxDiscount} onChange={e => setForm(f => ({ ...f, maxDiscount: e.target.value }))} className={inp} placeholder="100" min="0" /></div>
+                        <input type="number" value={form.maxDiscount} onChange={e => setForm(f => ({ ...f, maxDiscount: e.target.value }))} className={inp} placeholder="100" min="0" step="1" /></div>
                     )}
                   </div>
                 )}
@@ -598,7 +606,7 @@ export default function CampaignsPage() {
                     {[
                       { label: 'Total uses',   value: redemptionData.stats?.total_uses ?? 0 },
                       { label: 'Unique users', value: redemptionData.stats?.unique_customers ?? 0 },
-                      { label: 'Discount given', value: '₹' + Math.round(redemptionData.stats?.total_discount ?? 0) },
+                      { label: 'Discount given', value: '₹' + wholeRupees(redemptionData.stats?.total_discount) },
                       { label: 'Reversed',     value: redemptionData.stats?.reversed_uses ?? 0 },
                       { label: 'Last used',    value: redemptionData.stats?.last_used_at ? new Date(redemptionData.stats.last_used_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—' },
                     ].map(s => (
@@ -655,7 +663,7 @@ export default function CampaignsPage() {
                                       {minOrder && minOrder !== '0' ? <span className="block text-[10px] text-gray-400">min ₹{minOrder}</span> : null}
                                       {snap.inferred ? <span className="block text-[10px] text-amber-500">inferred</span> : null}
                                     </td>
-                                    <td className="py-2 pr-3 text-right font-bold text-emerald-600">₹{fmtAmount(r.discount_applied)}</td>
+                                    <td className="py-2 pr-3 text-right font-bold text-emerald-600">₹{wholeRupees(r.discount_applied)}</td>
                                     <td className="py-2">
                                       {r.reversed_at
                                         ? <span className="text-[10px] text-red-500" title={r.reversal_reason || ''}>Reversed</span>

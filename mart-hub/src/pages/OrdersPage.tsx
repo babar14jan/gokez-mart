@@ -1288,7 +1288,7 @@ export default function OrdersPage() {
                       {isMemberView
                         ? `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.viewerSubtotal} (your items)`
                         : `${totalItems} item${totalItems !== 1 ? 's' : ''} · ₹${order.subtotal} + ₹${order.deliveryCharge} delivery`}
-                      {Number(order.campaignDiscount) > 0 ? ` − ₹${order.campaignDiscount} offer` : ''}
+                      {Number(order.campaignDiscount) > 0 ? ` − ₹${Math.floor(Number(order.campaignDiscount))} offer` : ''}
                       {Number(order.referralDiscount) > 0 ? ` − ₹${order.referralDiscount} referral` : ''}
                     </span>
                   </div>
@@ -1336,7 +1336,7 @@ export default function OrdersPage() {
                         }
                         const itemSavings = Number(order.itemSavings) || 0;
                         const freeDeliverySaving = Number(order.freeDeliverySaving) || 0;
-                        const campaignDiscount = Number(order.campaignDiscount) || 0;
+                        const campaignDiscount = Math.floor(Number(order.campaignDiscount) || 0);
                         const referralDiscount = Number(order.referralDiscount) || 0;
                         const hasCampaign = Boolean(order.campaignId || order.couponCodeUsed);
                         const totalSavings = itemSavings + freeDeliverySaving + campaignDiscount + referralDiscount;
@@ -1381,7 +1381,7 @@ export default function OrdersPage() {
                             {hasCampaign && (
                               <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
                                 <span>{order.couponCodeUsed ? `Coupon ${order.couponCodeUsed}` : 'Offer discount'}</span>
-                                {campaignDiscount > 0 && <span>-₹{order.campaignDiscount}</span>}
+                                  {campaignDiscount > 0 && <span>-₹{campaignDiscount}</span>}
                               </div>
                             )}
                             {referralDiscount > 0 && (

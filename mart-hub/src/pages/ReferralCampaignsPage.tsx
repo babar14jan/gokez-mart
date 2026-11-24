@@ -120,6 +120,22 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
       setError('Stage amounts must be greater than zero and add up to the total reward amount');
       return;
     }
+    if (form.redemptionMinOrderAmount !== '' && num(form.redemptionMinOrderAmount) < 0) {
+      setError('Redemption minimum order amount must be zero or more');
+      return;
+    }
+    const cap = num(form.maxReferralsPerReferrer);
+    if (form.maxReferralsPerReferrer === '' || !Number.isInteger(cap) || cap < 1) {
+      setError('Max referrals per referrer must be at least 1');
+      return;
+    }
+    if (form.expiryDays !== '') {
+      const days = num(form.expiryDays);
+      if (!Number.isInteger(days) || days < 1) {
+        setError('Expiry days must be blank or at least 1');
+        return;
+      }
+    }
     setSaving(true);
     setError('');
     try {
@@ -149,7 +165,10 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
 
   const stagesBalanced = stagesMatchTotal(form.stageAmounts, form.totalRewardAmount);
   const unassigned = Math.round((num(form.totalRewardAmount) - stageTotal(form.stageAmounts)) * 100) / 100;
-  const minimumOrderAmount = Number(active?.min_order_amount || 0) || 0;
+  const minimumOrderAmount = active?.redemption_min_order_amount === null
+    || active?.redemption_min_order_amount === undefined || active?.redemption_min_order_amount === ''
+    ? Number(active?.min_order_amount || 0) || 0
+    : Number(active.redemption_min_order_amount) || 0;
 
   if (loading) return <PageSkeleton />;
 
@@ -185,7 +204,7 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
             {[
               ['Total per customer', fmtMoney(active.total_reward_amount)],
               ['Stages', String(Array.isArray(active.reward_stages) ? active.reward_stages.length : 0)],
-              ['Minimum order eligible', fmtMoney(minimumOrderAmount)],
+              ['Redemption minimum', fmtMoney(minimumOrderAmount)],
               ['Referral cap', String(num(active.max_referrals_per_referrer))],
               ['Expiry', active.expiry_days === null ? 'Never' : `${active.expiry_days} days`],
               ['Value basis', String(active.value_basis || '—')],
@@ -340,13 +359,20 @@ export default function ReferralCampaignsPage({ embedded = false }: { embedded?:
               </p>
               <div className="grid sm:grid-cols-3 gap-3">
                 <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Minimum order to redeem (₹)</label>
+                  <input type="number" min="0" step="0.01" className={inputClass}
+                    value={form.redemptionMinOrderAmount}
+                    onChange={e => setField('redemptionMinOrderAmount', e.target.value)} />
+                  <p className="text-[10px] text-gray-400 mt-1">Blank uses the global referral minimum configured in Settings. First order has no referral minimum.</p>
+                </div>
+                <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Expiry days</label>
-                  <input type="number" className={inputClass} value={form.expiryDays} onChange={e => setField('expiryDays', e.target.value)} placeholder="blank = never" />
+                  <input type="number" min="1" className={inputClass} value={form.expiryDays} onChange={e => setField('expiryDays', e.target.value)} placeholder="blank = never" />
                   <p className="text-[10px] text-gray-400 mt-1">Leave blank for credits that never expire.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Max referrals per referrer</label>
-                  <input type="number" className={inputClass} value={form.maxReferralsPerReferrer} onChange={e => setField('maxReferralsPerReferrer', e.target.value)} />
+                  <input type="number" min="1" className={inputClass} value={form.maxReferralsPerReferrer} onChange={e => setField('maxReferralsPerReferrer', e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Budget (₹)</label>

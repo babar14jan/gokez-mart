@@ -5,6 +5,7 @@ import { referralApi, type ReferralCredit, type ReferralMeData, type ReferralRec
 import { requestErrorMessage } from '../utils/networkError';
 import {
   availableReferralBalance,
+  redeemableReferralBalance,
   buildReferralLink,
   buildReferralShareMessage,
   buildWhatsAppReferralLink,
@@ -30,23 +31,33 @@ function remainingCreditFor(referral: ReferralRecord | undefined, credits: Refer
   return credits.find(credit => credit.benefitType === 'reward' && credit.referralId === referral?.id && credit.stageNumber === stage);
 }
 
+function stageOneRewardCreditFor(referral: ReferralRecord | undefined, credits: ReferralCredit[]): ReferralCredit | undefined {
+  return credits.find(credit => credit.benefitType === 'reward' && credit.referralId === referral?.id && credit.stageNumber === 1);
+}
+
 function historyLabel(referral: ReferralRecord, credits: ReferralCredit[]): string {
   if (referral.status === 'capped') return 'Limit reached';
   if (referral.status === 'expired' || referral.status === 'rejected') return statusLabel(referral.status);
   if (referral.role === 'referee') {
     const first = firstOrderCreditFor(referral, credits);
-    if (first?.status === 'redeemed') return referral.status === 'rewarded' ? 'Reward credited' : 'First ₹25 redeemed';
+    const stageOne = stageOneRewardCreditFor(referral, credits);
+    if (first?.status === 'redeemed' || stageOne?.status === 'redeemed') return referral.status === 'rewarded' ? 'Reward credited' : 'First benefit used';
     if (first?.status === 'reserved') return 'First order placed';
-    return 'Pending first order';
+    if (stageOne?.status === 'available' || stageOne?.status === 'reserved') return 'First-order benefit added';
+    return referral.status === 'rewarded' ? 'Reward credited' : 'Waiting for first order delivery';
   }
-  if (referral.status === 'rewarded') return 'Successfully delivered · Reward credited';
-  return 'Pending delivery';
+  if (referral.status === 'rewarded') return 'Delivered · Reward credited';
+  return 'Waiting for delivery';
 }
 
 function rupees(value: number | string | null | undefined): string {
   const n = Number(value);
   const rounded = Number.isFinite(n) ? n : 0;
   return `₹${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2)}`;
+}
+
+function expiryLabel(value: string | null | undefined): string {
+  return value ? `Expires ${dateLabel(value)}` : 'No expiry';
 }
 
 export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -103,8 +114,10 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
   const campaign = data?.campaign;
   const reward = Number(campaign?.totalRewardAmount) || 0;
   const stages = Array.isArray(campaign?.rewardStages) ? campaign.rewardStages : [];
+  const maxStageAmount = Math.max(0, ...stages.map(stage => Number(stage.amount) || 0));
   const stageText = stages.map(stage => `Stage ${stage.stage}: ${rupees(stage.amount)}`).join(' · ');
   const minimumOrderAmount = Number(data?.minimumOrderAmount) || 0;
+  const redemptionMinimum = Number(data?.redemptionMinimum ?? campaign?.redemptionMinOrderAmount ?? data?.minimumOrderAmount) || 0;
   const expiryDays = Number(campaign?.expiryDays) || 0;
   const cap = Number(campaign?.maxReferralsPerReferrer) || 0;
   const stats = data?.stats;
@@ -113,37 +126,48 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
   const credits = data?.credits || [];
   const referrals = data?.referrals || [];
   const available = data ? availableReferralBalance(data.credits) : 0;
-  const firstStageAmount = Number(stages[0]?.amount) || reward;
-  const remainingStageAmount = Math.max(0, Math.round((reward - firstStageAmount) * 100) / 100);
+  const redeemable = data ? redeemableReferralBalance(data.credits) : 0;
+  const firstStageAmount = Math.max(0, Number(stages.find(stage => Number(stage.stage) === 1)?.amount) || 0);
+  const remainingStageAmount = stages
+    .filter(stage => Number(stage.stage) !== 1)
+    .reduce((sum, stage) => sum + Math.max(0, Number(stage.amount) || 0), 0);
   const refereeReferral = referrals.find(referral => referral.role === 'referee');
   const firstOrderCredit = firstOrderCreditFor(refereeReferral, credits);
-  const remainingCredit = remainingCreditFor(refereeReferral, credits, stages[1]?.stage);
-  const firstOrderStatus = firstOrderCredit?.status === 'reserved'
+  const stageOneRewardCredit = stageOneRewardCreditFor(refereeReferral, credits);
+  const orderedStages = [...stages].sort((a, b) => Number(a.stage) - Number(b.stage));
+  const remainingCredit = remainingCreditFor(refereeReferral, credits, orderedStages[1]?.stage);
+  const firstBenefitStatus = firstOrderCredit?.status === 'reserved'
     ? 'Applied to your first order'
     : firstOrderCredit?.status === 'redeemed'
-      ? 'Used on first order'
+      ? 'Used on your first order'
       : firstOrderCredit?.status === 'expired'
-        ? 'Expired'
-        : 'Ready for your first order';
-  const remainingStatus = remainingCredit?.status === 'redeemed'
+        ? 'Expired before use'
+        : stageOneRewardCredit?.status === 'redeemed'
+          ? 'Stage 1 used'
+          : stageOneRewardCredit?.status === 'available'
+            ? 'Stage 1 reward ready'
+            : 'Ready for your first order — no referral minimum';
+  const laterRewardStatus = remainingCredit?.status === 'redeemed'
     ? 'Used on a later order'
     : remainingCredit?.status === 'reserved'
-      ? 'Applied to an order'
+      ? 'Applied to your next order'
       : remainingCredit?.status === 'expired'
-        ? 'Expired'
+        ? 'Expired before use'
         : remainingCredit?.status === 'available'
-          ? 'Unlocked for next order'
-          : 'Pending after first-order delivery';
-  const firstOrderCompleted = firstOrderCredit?.status === 'redeemed' && remainingCredit?.status === 'available';
+          ? 'Ready for your next order'
+          : 'Opens after your first order is delivered';
+  const firstOrderCompleted = (firstOrderCredit?.status === 'redeemed' || stageOneRewardCredit?.status === 'redeemed')
+    && Boolean(remainingCredit && (remainingCredit.status === 'available' || remainingCredit.status === 'redeemed'));
   const wallet = [
-    { label: 'Total referral reward earned', value: rupees(stats?.totalEarned) },
-    { label: 'Available to use', value: rupees(stats?.available ?? available) },
+    { label: 'Total earned so far', value: rupees(stats?.totalEarned) },
+    { label: 'Unlocked total', value: rupees(stats?.available ?? available) },
+    { label: 'Redeemable now', value: rupees(stats?.redeemableNow ?? redeemable) },
     { label: 'Used', value: rupees(stats?.used) },
     { label: 'Expired', value: rupees(stats?.expired) },
     { label: 'Pending', value: rupees(stats?.pending), pending: true },
     { label: 'Reversed', value: rupees(stats?.reversed) },
   ];
-  const shareMessage = buildReferralShareMessage(code, link, reward);
+  const shareMessage = buildReferralShareMessage(code, link, stages);
   const whatsappLink = buildWhatsAppReferralLink(shareMessage);
 
   return createPortal(
@@ -187,9 +211,9 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
               <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-white text-gokez-700 shadow-sm dark:bg-slate-700 dark:text-gokez-300">
                 <Gift className="h-5 w-5" aria-hidden="true" />
               </div>
-              <p className="mt-3 text-xl font-extrabold text-gokez-700 dark:text-gokez-300">Earn {rupees(reward)}</p>
-              <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">Use a code during registration to save {rupees(firstStageAmount)} on your first qualifying order. The rest unlocks after delivery.</p>
-              <p className="mt-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Total referral balance: {rupees(stats?.totalEarned)}</p>
+              <p className="mt-3 text-xl font-extrabold text-gokez-700 dark:text-gokez-300">Both of you can earn {rupees(reward)}</p>
+              <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">A new customer uses your code at signup and gets {rupees(firstStageAmount)} off their first order with no referral minimum. The remaining reward unlocks after delivery.</p>
+              <p className="mt-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Total earned so far: {rupees(stats?.totalEarned)}</p>
               <div className="mt-3 rounded-xl border border-dashed border-gokez-300 bg-white px-3 py-3 dark:border-gokez-700 dark:bg-slate-800">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Your referral code</p>
                 <p className="mt-1 font-mono text-2xl font-extrabold tracking-[0.25em] text-ink dark:text-white">{code || '—'}</p>
@@ -236,23 +260,28 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">How it works</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-xl border border-gokez-100 bg-gokez-50/70 p-3 dark:border-gokez-900/40 dark:bg-gokez-900/15">
-                  <p className="text-xs font-bold text-gokez-700 dark:text-gokez-300">1 · Use code</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">A new customer enters a friend’s code during registration.</p>
+                  <p className="text-xs font-bold text-gokez-700 dark:text-gokez-300">1 · Share your code</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">A friend who enters it at signup gets {rupees(reward)} in referral rewards: {rupees(firstStageAmount)} for their first order (no referral minimum) and {rupees(remainingStageAmount)} on later orders{redemptionMinimum > 0 ? ` with ${rupees(redemptionMinimum)} product subtotal` : ''}.</p>
                 </div>
                 <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-900/15">
                   <p className="text-xs font-bold text-amber-700 dark:text-amber-300">2 · First order</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">Apply the referral benefit at checkout on the first qualifying order. {rupees(firstStageAmount)} is reserved for that order.</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">They can use the first {rupees(firstStageAmount)} on that order — no referral minimum.</p>
                 </div>
                 <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3 sm:col-span-2 dark:border-sky-900/40 dark:bg-sky-900/15">
-                  <p className="text-xs font-bold text-sky-700 dark:text-sky-300">3 · Unlock</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">After successful delivery, the first stage is consumed and {rupees(remainingStageAmount)} becomes available for the next eligible order. One reward per order; no coupon stacking.</p>
+                  <p className="text-xs font-bold text-sky-700 dark:text-sky-300">3 · Rewards unlock after delivery</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">After your friend’s first order is delivered, you get {rupees(reward)} in referral rewards. You can use up to {rupees(maxStageAmount)} in one order{redemptionMinimum > 0 ? ` on a minimum order of ${rupees(redemptionMinimum)}` : ''}.</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3 sm:col-span-2 dark:border-emerald-900/40 dark:bg-emerald-900/15">
+                  <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">4 · Invite freely</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">Invite as many friends as you like — sharing your code has no limit; campaign reward limits still apply.</p>
                 </div>
               </div>
               {(stageText || minimumOrderAmount > 0 || expiryDays > 0) && (
                 <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">
-                  {stageText && `${stageText}${stages.length > 1 ? '. Use earlier stages first.' : '.'} `}
-                  {minimumOrderAmount > 0 && `Eligible orders: ${rupees(minimumOrderAmount)} product subtotal or more. `}
+                  {stageText && `${stageText}. Use earlier stages first. `}
+                  {minimumOrderAmount > 0 && `Store minimum: ${rupees(minimumOrderAmount)}. `}
                   {expiryDays > 0 && `Credits expire ${expiryDays} days after they unlock. `}
+                  {firstStageAmount > 0 && 'If another offer was used on the first order, the first-order value is kept as a normal reward after delivery. '}
                 </p>
               )}
             </section>
@@ -260,14 +289,14 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
             {refereeReferral && (
               <section className="rounded-2xl border border-gokez-100 bg-white p-4 dark:border-gokez-900/40 dark:bg-slate-900/40">
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your referral benefit</p>
-                <p className="text-sm font-extrabold text-ink dark:text-white">Total referral reward: {rupees(reward)}</p>
+                <p className="text-sm font-extrabold text-ink dark:text-white">Total reward: {rupees(reward)}</p>
                 <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-gray-600 dark:text-slate-300">
-                  <p>{rupees(firstStageAmount)} – {firstOrderStatus}</p>
-                  {remainingStageAmount > 0 && <p>{rupees(remainingStageAmount)} – {remainingStatus}</p>}
+                  <p>{rupees(firstStageAmount)} – {firstBenefitStatus}</p>
+                  {remainingStageAmount > 0 && <p>{rupees(remainingStageAmount)} – {laterRewardStatus}</p>}
                 </div>
                 {firstOrderCompleted && remainingStageAmount > 0 && (
                   <p className="mt-3 rounded-xl bg-gokez-50 p-3 text-[11px] font-semibold leading-relaxed text-gokez-700 dark:bg-gokez-900/20 dark:text-gokez-300" role="status">
-                    Congratulations! Your {rupees(firstStageAmount)} first-order referral discount has been used successfully. Another {rupees(remainingStageAmount)} reward is now available for your next eligible order.
+                    Your first order is delivered. Your {rupees(firstStageAmount)} first-order benefit is complete and {rupees(remainingStageAmount)} is ready for a later eligible order.
                   </p>
                 )}
               </section>
@@ -286,7 +315,7 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                 </div>
               </div>
               <p className="mt-2 text-[11px] text-gray-500 dark:text-slate-400">
-                {cap > 0 ? `You can earn from up to ${cap} referred customers.` : 'There is no limit on referrals.'} Pending referrals are still being verified.
+                {cap > 0 ? `You can earn from up to ${cap} referred customers.` : 'There is no limit on referrals.'} Pending means we are waiting for the friend’s first order to be delivered.
               </p>
             </section>
 
@@ -300,13 +329,14 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                   </div>
                 ))}
               </div>
-              <p className="mt-2 text-[11px] font-medium text-amber-700 dark:text-amber-400" role="status">Pending rewards are not spendable until the referral order is successfully delivered.</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-slate-400">Unlocked total counts rewards issued and not used yet. Redeemable now is what you can use at checkout today; pending rewards open after delivery.</p>
+              <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400" role="status">Only one referral reward can be used per order.</p>
             </section>
 
             <section>
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your credits</p>
               {credits.length === 0 ? (
-                <p className="rounded-xl border border-cream-200 bg-white p-3 text-xs text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">No credits yet. Share your code; unlocked rewards appear here and can be used at checkout.</p>
+                <p className="rounded-xl border border-cream-200 bg-white p-3 text-xs text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">No rewards yet. Share your code — your first-order discount and later rewards will appear here.</p>
               ) : (
                 <div className="divide-y divide-cream-200 overflow-hidden rounded-xl border border-cream-200 bg-white dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900/40">
                   {credits.map(credit => (
@@ -314,10 +344,14 @@ export default function ReferEarnSheet({ open, onClose }: { open: boolean; onClo
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-ink dark:text-white">
                           {credit.benefitType === 'first_order'
-                            ? `First order · ${rupees(credit.amount)} discount`
+                            ? `First order · ${rupees(credit.amount)} off · No referral minimum`
                             : `${credit.stageNumber ? `Stage ${credit.stageNumber} · ` : ''}${rupees(credit.amount)} reward`}
                         </p>
-                        <p className="text-[11px] text-gray-500 dark:text-slate-400">Expires {dateLabel(credit.expiresAt)}</p>
+                        <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                          {expiryLabel(credit.expiresAt)}
+                          {credit.status === 'available' && credit.redeemableNow === false ? ' · Unlocks after earlier stages' : ''}
+                          {credit.status === 'available' && credit.redeemableNow === true ? ' · Redeemable now' : ''}
+                        </p>
                       </div>
                       <span className="flex-shrink-0 rounded-full bg-gokez-50 px-2.5 py-1 text-[10px] font-bold text-gokez-700 dark:bg-gokez-900/30 dark:text-gokez-300">{statusLabel(credit.status)}</span>
                     </div>

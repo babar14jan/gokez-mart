@@ -613,9 +613,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
                   </span>
                 </div>
                 <p className="mt-1 truncate text-xs font-medium text-ink dark:text-white sm:text-sm">
-                  Total referral balance:
+                  Redeemable referral balance:
                   <span className="ml-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    {formatReferralRupees((referralData?.stats?.available ?? 0) + (referralData?.stats?.pending ?? 0))}
+                    {formatReferralRupees(referralData?.stats?.redeemableNow ?? referralData?.stats?.available ?? 0)}
                   </span>
                 </p>
               </div>
