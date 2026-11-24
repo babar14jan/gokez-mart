@@ -15,6 +15,8 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.DATABASE_URL
@@ -38,6 +40,10 @@ let couponClash: Row[] = [];
 let existingTargets: Row[] = [];
 /** Rows returned for existing category scope. */
 let existingCategoryIds: Row[] = [];
+/** Rows returned for the category scope loaded during coupon validation. */
+let categoryScopeRows: Row[] = [];
+/** Rows returned for public welcome offer projections. */
+let publicCampaignRows: Row[] = [];
 /** Simulated failure of audit inserts, to prove they are non-fatal. */
 let auditInsertFails = false;
 
@@ -53,13 +59,19 @@ const pg = require('pg');
       if (/FROM mart_campaign_targets WHERE campaign_id/.test(text)) {
         return { rows: existingTargets };
       }
+      if (/FROM mart_campaigns c/.test(text)) {
+        return { rows: publicCampaignRows };
+      }
+      if (/FROM mart_campaign_categories cc/.test(text)) {
+        return { rows: categoryScopeRows };
+      }
       if (/FROM mart_campaign_categories WHERE campaign_id/.test(text)) {
         return { rows: existingCategoryIds };
       }
       if (/SELECT id FROM mart_campaigns WHERE coupon_code/.test(text)) {
         return { rows: couponClash };
       }
-      if (/SELECT \* FROM mart_campaigns WHERE id/.test(text)) {
+      if (/SELECT \* FROM mart_campaigns\s+WHERE (id|coupon_code)/.test(text)) {
         return { rows: campaignRow ? [campaignRow] : [] };
       }
       if (/^UPDATE mart_campaigns SET/.test(text)) {
@@ -124,6 +136,8 @@ beforeEach(() => {
   couponClash = [];
   existingTargets = [];
   existingCategoryIds = [];
+  categoryScopeRows = [];
+  publicCampaignRows = [];
   auditInsertFails = false;
 });
 
@@ -433,5 +447,201 @@ describe('supersede mints a new version without losing the offer', () => {
     });
     await CampaignService.supersede('campaign-1', { couponCode: 'welcome25' }, ADMIN);
     assert.equal(insertedRow().allow_redemption_until_used, true, 'welcome redemption policy carried');
+  });
+
+  test('welcome campaigns persist category scope without scheduled delivery', async () => {
+    campaignRow = liveCampaign({ eligibility_type: 'first_order', requires_scheduled_delivery: false });
+    await CampaignService.create({
+      title: 'Welcome Offer',
+      eligibilityType: 'first_order',
+      discountType: 'flat',
+      discountValue: 50,
+      minOrderAmount: 0,
+      perCustomerLimit: 1,
+      categoryIds: ['category-1', 'category-2'],
+    }, ADMIN);
+    const inserts = calls.filter(c => /INSERT INTO mart_campaign_categories/.test(c.text));
+    assert.deepEqual(inserts.map(i => i.params[1]).sort(), ['category-1', 'category-2']);
+  });
+
+  test('non-scoped campaigns ignore categoryIds on create', async () => {
+    await CampaignService.create({
+      title: 'Open Offer',
+      eligibilityType: 'all',
+      discountType: 'flat',
+      discountValue: 50,
+      minOrderAmount: 0,
+      perCustomerLimit: 1,
+      categoryIds: ['category-1'],
+    }, ADMIN);
+    assert.ok(!ran(/INSERT INTO mart_campaign_categories/), 'no scope is written for an unscoped campaign');
+    assert.equal(insertedRow().requires_scheduled_delivery, false);
+  });
+
+  test('editing a welcome campaign replaces its category scope', async () => {
+    campaignRow = liveCampaign({ eligibility_type: 'first_order', requires_scheduled_delivery: false, exclude_first_hour_after_open: false });
+    await CampaignService.update('campaign-1', { title: 'Welcome Offer', categoryIds: ['category-3'] });
+    assert.ok(ran(/DELETE FROM mart_campaign_categories/), 'old scope is cleared');
+    const inserts = calls.filter(c => /INSERT INTO mart_campaign_categories/.test(c.text));
+    assert.deepEqual(inserts.map(i => i.params[1]), ['category-3']);
+  });
+
+  test('editing away from welcome and scheduled delivery clears stale category scope', async () => {
+    campaignRow = liveCampaign({ eligibility_type: 'all', requires_scheduled_delivery: false, exclude_first_hour_after_open: false });
+    await CampaignService.update('campaign-1', { title: 'Open Offer' });
+    assert.ok(ran(/DELETE FROM mart_campaign_categories/), 'stale scope is cleared');
+    assert.ok(!ran(/INSERT INTO mart_campaign_categories/), 'no new scope is written');
+  });
+
+  test('category-scoped minimum uses only selected-category product value', async () => {
+    publicCampaignRows = [liveCampaign({
+      min_order_amount: 199,
+      requires_scheduled_delivery: false,
+      categoryIds: ['fresh-vegetables'],
+      categoryNames: ['Fresh Vegetables'],
+    })];
+    const cartItems = [
+      { categoryId: 'dairy', price: 100, quantity: 1 },
+      { categoryId: 'fresh-vegetables', price: 60, quantity: 2 },
+    ];
+    const offers = await CampaignService.getPublicWelcomeOffers(220, 'store-1', null, null, cartItems);
+    assert.equal(offers.length, 0, '₹120 of selected-category products does not meet ₹199 even though full cart is ₹220');
+
+    publicCampaignRows = [liveCampaign({
+      min_order_amount: 199,
+      requires_scheduled_delivery: false,
+      categoryIds: ['fresh-vegetables'],
+      categoryNames: ['Fresh Vegetables'],
+    })];
+    const qualifyingItems = [
+      { categoryId: 'dairy', price: 100, quantity: 1 },
+      { categoryId: 'fresh-vegetables', price: 100, quantity: 2 },
+    ];
+    const qualifyingOffers = await CampaignService.getPublicWelcomeOffers(300, 'store-1', null, null, qualifyingItems);
+    assert.equal(qualifyingOffers.length, 1, '₹200 of selected-category products meets ₹199 even though full cart is ₹300');
+  });
+
+  test('welcome teaser is still shown when there is no cart context', async () => {
+    publicCampaignRows = [liveCampaign({
+      min_order_amount: 199,
+      requires_scheduled_delivery: false,
+      categoryIds: ['fresh-vegetables'],
+      categoryNames: ['Fresh Vegetables'],
+    })];
+    const teaser = await CampaignService.getPublicWelcomeOffers(0, '', null, null, []);
+    assert.equal(teaser.length, 1, 'the post-login welcome step has no cart, so it must still advertise the offer');
+  });
+
+  test('validateCode explains why a matched coupon is not eligible', async () => {
+    categoryScopeRows = [{ category_id: 'fresh-vegetables', name: 'Fresh Vegetables' }];
+    campaignRow = liveCampaign({ min_order_amount: 0, store_id: 'store-1' });
+
+    await assert.rejects(
+      CampaignService.validateCode('WEEKEND20', null, 100, 'store-1', null, [{ categoryId: 'dairy', price: 100, quantity: 1 }]),
+      /Add an item from Fresh Vegetables to use this coupon/,
+    );
+
+    campaignRow = liveCampaign({ min_order_amount: 199, store_id: 'store-1' });
+    await assert.rejects(
+      CampaignService.validateCode('WEEKEND20', null, 60, 'store-1', null, [{ categoryId: 'fresh-vegetables', price: 60, quantity: 1 }]),
+      /Add ₹139 more in Fresh Vegetables to use this coupon \(minimum order ₹199 for these categories\)/,
+    );
+  });
+
+  test('getEligible filters on scoped subtotal and keeps legacy no-context callers', async () => {
+    publicCampaignRows = [liveCampaign({
+      coupon_code: null,
+      eligibility_type: 'all',
+      min_order_amount: 100,
+      categoryIds: ['cat-1'],
+      categoryNames: ['Fresh Vegetables'],
+    })];
+
+    const legacy = await CampaignService.getEligible(null, 200, 'store-1', null, null);
+    assert.equal(legacy.length, 1, 'callers without cart items keep the old unfiltered behaviour');
+
+    const wrongCategory = await CampaignService.getEligible(null, 200, 'store-1', null, [
+      { categoryId: 'dairy', price: 200, quantity: 1 },
+    ]);
+    assert.equal(wrongCategory.length, 0, 'value outside the selected categories does not qualify');
+
+    const eligible = await CampaignService.getEligible(null, 200, 'store-1', null, [
+      { categoryId: 'cat-1', price: 100, quantity: 1 },
+    ]);
+    assert.equal(eligible.length, 1, 'value inside the selected categories qualifies');
+  });
+
+  test('welcome offers are sliced after scoped filtering', async () => {
+    publicCampaignRows = Array.from({ length: 5 }, (_, index) => liveCampaign({
+      id: `fail-${index}`,
+      coupon_code: `FAIL${index}`,
+      eligibility_type: 'all',
+      min_order_amount: 100,
+      categoryIds: ['wrong-category'],
+      categoryNames: ['Dairy'],
+      priority: 10 - index,
+    })).concat(liveCampaign({
+      id: 'pass',
+      coupon_code: 'PASS',
+      eligibility_type: 'all',
+      min_order_amount: 100,
+      categoryIds: ['cat-1'],
+      categoryNames: ['Fresh Vegetables'],
+      priority: 0,
+    }));
+
+    const offers = await CampaignService.getPublicWelcomeOffers(200, 'store-1', null, null, [
+      { categoryId: 'cat-1', price: 100, quantity: 1 },
+    ]);
+    assert.deepEqual(offers.map((offer: Row) => offer.coupon_code), ['PASS']);
+
+    const legacy = await CampaignService.getPublicWelcomeOffers(200, 'store-1', null, null, null);
+    assert.equal(legacy.length, 5, 'legacy callers still receive the five highest-priority offers');
+  });
+
+  test('validateCode keeps legacy callers working without cart items', async () => {
+    categoryScopeRows = [{ category_id: 'cat-1', name: 'Fresh Vegetables' }];
+    campaignRow = liveCampaign({ min_order_amount: 100, eligibility_type: 'all' });
+    const campaign = await CampaignService.validateCode('WEEKEND20', null, 200, 'store-1', null, null);
+    assert.equal(campaign.categorySubtotal, 200);
+  });
+
+  test('calculateDiscount caps discounts by the scoped subtotal', () => {
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'flat', discount_value: 50, categorySubtotal: 20,
+    }, 200), 20);
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'percent', discount_value: 50, categorySubtotal: 20,
+    }, 200), 10);
+    assert.equal(CampaignService.calculateDiscount({
+      discount_type: 'percent', discount_value: 50,
+    }, 200), 100, 'unscoped campaigns still use the cart total');
+  });
+
+  test('welcome category scope is wired through the hub and customer apps', () => {
+    const hub = readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', 'pages', 'CampaignsPage.tsx'), 'utf8');
+    assert.match(hub, /const canScopeCategories\s*=\s*form\.requiresScheduledDelivery \|\| form\.eligibilityType === 'first_order'/);
+    assert.ok(hub.includes('categoryIds: canScopeCategories ? form.categoryIds : []'));
+    assert.ok(hub.includes('{canScopeCategories && ('));
+
+    const customer = readFileSync(join(__dirname, '..', '..', 'mart-user', 'src', 'pages', 'CheckoutPage.tsx'), 'utf8');
+    assert.ok(customer.includes('{categoryNames.length > 0 && ('));
+    assert.ok(customer.includes('eligible item'));
+    assert.ok(customer.includes('const campaignMinimumSubtotal = appliedCampaign ? scopedSubtotal(appliedCampaign, sub) : sub;'));
+    assert.ok(customer.includes('offerMinimumShortfall'), 'the unlock notice uses the shortfall reported by the server');
+    assert.match(customer, /\{notice\s*&&\s*!codeError\s*&&\s*\(/,
+      'the unlock notice is shown alongside the coupon code field even when no offers survive the filter');
+    assert.ok(customer.includes('categoryNames?.length ? ` in ${categoryNames.join(\', \')}`'), 'the notice names the eligible categories');
+    assert.ok(customer.includes('useState<string[] | null>(null)'), 'an unknown category scope keeps the server shortfall');
+    assert.ok(customer.includes('offerMinimumSubtotal === null || offerMinimumCategoryIds === null'),
+      'the live shortfall recompute is skipped when the rejected coupon is filtered out of the offer list');
+    assert.ok(customer.includes('const scopedIds = scopedCampaign ? campaignCategoryIds(scopedCampaign) : null;'),
+      'a failed code with no matching campaign does not fall back to the full-cart minimum');
+
+    const campaignService = readFileSync(join(__dirname, '..', '..', 'mart-backend', 'src', 'services', 'campaign.service.ts'), 'utf8');
+    assert.match(campaignService, /campaign\.categorySubtotal = cartItems === null \? cartTotal : scopedCartSubtotal/);
+    const orderService = readFileSync(join(__dirname, '..', '..', 'mart-backend', 'src', 'services', 'order.service.ts'), 'utf8');
+    assert.match(orderService, /const minOrderMet = campaign\.categorySubtotal >= Number\(campaign\.min_order_amount\)/);
+    assert.match(orderService, /more\$\{scope\} to use this coupon/, 'the order recheck names the eligible categories too');
   });
 });

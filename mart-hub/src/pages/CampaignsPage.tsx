@@ -170,7 +170,7 @@ export default function CampaignsPage() {
         requiresScheduledDelivery: form.requiresScheduledDelivery,
         excludeFirstHourAfterOpen: form.excludeFirstHourAfterOpen,
         zoneIds: form.zoneIds,
-        categoryIds: form.requiresScheduledDelivery ? form.categoryIds : [],
+        categoryIds: canScopeCategories ? form.categoryIds : [],
         usageLimit: form.usageLimit ? parseInt(form.usageLimit) : undefined,
         priority: parseInt(form.priority) || 0,
         showInCarousel: form.showInCarousel, carouselGradient: form.carouselGradient,
@@ -232,6 +232,8 @@ export default function CampaignsPage() {
         : [...current.categoryIds, categoryId],
     }));
   };
+
+  const canScopeCategories = form.requiresScheduledDelivery || form.eligibilityType === 'first_order';
 
   const toggleStatus = async (c: any) => {
     const newStatus = c.status === 'active' ? 'draft' : 'active';
@@ -298,6 +300,7 @@ export default function CampaignsPage() {
                       {c.requires_scheduled_delivery && <span className="text-[10px] font-bold bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded-full">Scheduled delivery only</span>}
                       {c.exclude_first_hour_after_open && <span className="text-[10px] font-bold bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 px-2 py-0.5 rounded-full">Excludes first hour</span>}
                       {c.eligibility_type === 'first_order' && <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">{c.allow_redemption_until_used ? 'Welcome offer until used' : 'First order'}</span>}
+                      {(c.categoryIds || []).length > 0 && <span className="text-[10px] font-bold bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 px-2 py-0.5 rounded-full">{c.categoryIds.length} categor{c.categoryIds.length === 1 ? 'y' : 'ies'}</span>}
                       {c.eligibility_type === 'inactive_customers' && <span className="text-[10px] font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-0.5 rounded-full">Inactive {c.inactive_days} days</span>}
                       {c.eligibility_type === 'targeted_customers' && <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">Targeted customers</span>}
                     </div>
@@ -389,7 +392,10 @@ export default function CampaignsPage() {
                   </div>
                 )}
                 <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Min Order Amount ₹</label>
-                  <input type="number" value={form.minOrderAmount} onChange={e => setForm(f => ({ ...f, minOrderAmount: e.target.value }))} className={inp} placeholder="0" min="0" /></div>
+                  <input type="number" value={form.minOrderAmount} onChange={e => setForm(f => ({ ...f, minOrderAmount: e.target.value }))} className={inp} placeholder="0" min="0" />
+                  {canScopeCategories && form.categoryIds.length > 0 && (
+                    <p className="mt-1 text-[10px] text-gray-500 dark:text-slate-400">Applies to selected categories only.</p>
+                  )}</div>
               </div>
 
               {/* Coupon code */}
@@ -399,7 +405,15 @@ export default function CampaignsPage() {
                   <input type="text" value={form.couponCode} onChange={e => setForm(f => ({ ...f, couponCode: e.target.value.toUpperCase() }))} className={inp} placeholder="e.g. POOJA50" /></div>
                 <label className="flex items-start gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2.5 cursor-pointer">
                   <input type="checkbox" checked={form.requiresScheduledDelivery}
-                    onChange={e => setForm(f => ({ ...f, requiresScheduledDelivery: e.target.checked, excludeFirstHourAfterOpen: e.target.checked ? f.excludeFirstHourAfterOpen : false }))}
+                    onChange={e => setForm(f => {
+                      const requiresScheduledDelivery = e.target.checked;
+                      return {
+                        ...f,
+                        requiresScheduledDelivery,
+                        excludeFirstHourAfterOpen: requiresScheduledDelivery ? f.excludeFirstHourAfterOpen : false,
+                        categoryIds: requiresScheduledDelivery || f.eligibilityType === 'first_order' ? f.categoryIds : [],
+                      };
+                    })}
                     className="mt-0.5 h-4 w-4 accent-emerald-500" />
                   <span>
                     <span className="block text-xs font-semibold text-gray-900 dark:text-white">Scheduled delivery only</span>
@@ -415,7 +429,7 @@ export default function CampaignsPage() {
                     <span className="block mt-0.5 text-[11px] leading-tight text-gray-600 dark:text-slate-400">Skip delivery scheduling during the first hour after the store opens. Keeps delivery off during that window.</span>
                   </span>
                 </label>
-                {form.requiresScheduledDelivery && (
+                {canScopeCategories && (
                   <div>
                     <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-slate-300">Eligible product categories <span className="font-normal text-gray-500">Leave clear for all categories</span></p>
                     <div className="flex flex-wrap gap-2">
@@ -446,7 +460,15 @@ export default function CampaignsPage() {
                     <input type="number" value={form.usageLimit} onChange={e => setForm(f => ({ ...f, usageLimit: e.target.value }))} className={inp} placeholder="Unlimited" min="1" /></div>
                 </div>
                 <div><label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5">Eligible Customers</label>
-                  <select value={form.eligibilityType} onChange={e => setForm(f => ({ ...f, eligibilityType: e.target.value, allowRedemptionUntilUsed: e.target.value === 'first_order' ? f.allowRedemptionUntilUsed : false }))} className={inp}>
+                  <select value={form.eligibilityType} onChange={e => setForm(f => {
+                    const eligibilityType = e.target.value;
+                    return {
+                      ...f,
+                      eligibilityType,
+                      allowRedemptionUntilUsed: eligibilityType === 'first_order' ? f.allowRedemptionUntilUsed : false,
+                      categoryIds: f.requiresScheduledDelivery || eligibilityType === 'first_order' ? f.categoryIds : [],
+                    };
+                  })} className={inp}>
                     <option value="all">All customers</option>
                     <option value="first_order">Welcome offer (first order)</option>
                     <option value="inactive_customers">Customers inactive for a period</option>

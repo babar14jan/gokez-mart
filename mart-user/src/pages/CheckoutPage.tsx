@@ -231,7 +231,11 @@ function formatCouponSuccess(message: string) {
    actually set, so an offer with no minimum and no expiry shows neither. */
 function offerDetailBits(c: OfferCampaign): string[] {
   const bits: string[] = [];
-  if (Number(c.min_order_amount) > 0) bits.push(`Min order \u20b9${money(c.min_order_amount)} to avail`);
+  if (Number(c.min_order_amount) > 0) {
+    bits.push((c.categoryNames || []).length > 0
+      ? `Min order \u20b9${money(c.min_order_amount)} in selected categories to avail`
+      : `Min order \u20b9${money(c.min_order_amount)} to avail`);
+  }
   if (c.discount_type === 'percent' && Number(c.max_discount) > 0) bits.push(`up to \u20b9${money(c.max_discount)} off`);
   return bits;
 }
@@ -272,7 +276,7 @@ function OffersPanel(props: OffersPanelProps) {
     schedule, selectedSchedule, draftSlot, scheduledSlot,
     deliveryPreference, scheduleCampaignId, onOpenSchedule, onSelectDraftSlot,
     onSaveSchedule, onClearSchedule, referralSection } = props;
-  const hasMinimumOrderNotice = /^Add ₹[\d.]+ more to unlock (this )?offer/.test(notice);
+  const hasMinimumOrderNotice = /^Add ₹[\d.]+ more(?: in .+)? to unlock (this )?offer/.test(notice);
   const showOffersHeader = campaigns.length > 0 || locked || Boolean(notice) || Boolean(referralSection);
 
   return (
@@ -291,12 +295,6 @@ function OffersPanel(props: OffersPanelProps) {
 
         {campaigns.length > 0 && (
           <div className="mt-2 space-y-1.5">
-            {notice && (
-              <p className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                {notice}
-              </p>
-            )}
-
             {campaigns.map((c) => {
               const isApplied = applied?.id === c.id && !appliedCode;
               const isAppliedByCode = applied?.id === c.id && !!appliedCode;
@@ -330,7 +328,7 @@ function OffersPanel(props: OffersPanelProps) {
                         )}
                         {c.title}
                       </p>
-                      {c.requires_scheduled_delivery && categoryNames.length > 0 && (
+                      {categoryNames.length > 0 && (
                         <p className="text-[10px] font-medium text-gray-500 dark:text-slate-400">Eligible on {categoryNames.join(', ')}</p>
                       )}
                       {bits.length > 0 && (
@@ -437,7 +435,7 @@ function OffersPanel(props: OffersPanelProps) {
 
         {campaigns.length === 0 && (
           <div className={locked || notice ? 'mt-2' : ''}>
-            {notice && (
+            {notice && !locked && (
               <p className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
                 {notice}
               </p>
@@ -460,6 +458,12 @@ function OffersPanel(props: OffersPanelProps) {
           </div>
         )}
 
+        {locked && notice && (
+          <p className="mt-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+            {notice}
+          </p>
+        )}
+
         {/* Signed-in only. /campaigns/validate requires auth, so a guest typing
             here gets a bare "No token provided". Guests apply the campaign code
             with Apply & Save, and the code is printed in the offer details. */}
@@ -478,6 +482,9 @@ function OffersPanel(props: OffersPanelProps) {
           </div>
           {codeSuccess && <p className="mt-1.5 text-xs text-gokez-700 dark:text-gokez-300">{formatCouponSuccess(codeSuccess)}</p>}
           {codeError && <p className="mt-1.5 text-xs text-red-500">{codeError}</p>}
+          {notice && !codeError && (
+            <p className="mt-1.5 text-xs font-medium text-amber-700 dark:text-amber-300" role="status">{notice}</p>
+          )}
         </div>
         )}
       </div>
@@ -499,6 +506,10 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const awaitingAddress = useRef(false);
   const { items, updateQty, removeItem, subtotal, clearCart, itemSavings } = useCartStore();
   const activeItems = useMemo(() => items.filter(i => !i.unavailable), [items]);
+  const campaignCartItems = useMemo(
+    () => activeItems.map(item => ({ categoryId: item.categoryId, price: item.price, quantity: item.quantity })),
+    [activeItems],
+  );
   const unavailableItems = useMemo(() => items.filter(i => i.unavailable), [items]);
   const { phone: savedPhone, name: savedName, addresses, loadAddresses, getDefaultAddress, setDefaultAddress, addAddress, updateAddress } = useCustomerStore();
   const { phone: authPhone, name: authName, address: authAddress, isLoggedIn, updateProfile, setGuestProfile } = useCustomerAuthStore();
@@ -747,12 +758,22 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   const [couponSuccess, setCouponSuccess] = useState('');
   const [offerNotice, setOfferNotice] = useState('');
   const [offerMinimumOrder, setOfferMinimumOrder] = useState<number | null>(null);
+  const [offerMinimumShortfall, setOfferMinimumShortfall] = useState<number | null>(null);
+  const [offerMinimumCategoryIds, setOfferMinimumCategoryIds] = useState<string[] | null>(null);
+  const [offerMinimumCategoryNames, setOfferMinimumCategoryNames] = useState<string[] | null>(null);
   const [referralCredits, setReferralCredits] = useState<ReferralCredit[]>([]);
   const [referralCreditsLoaded, setReferralCreditsLoaded] = useState(false);
   const [referralApplied, setReferralApplied] = useState(() => readCheckoutReferralSelection());
   const [referralError, setReferralError] = useState('');
   const [referralMinimumBlocked, setReferralMinimumBlocked] = useState(false);
   const [referralMinimumOrderAmount, setReferralMinimumOrderAmount] = useState(0);
+
+  const clearOfferShortfall = () => {
+    setOfferMinimumOrder(null);
+    setOfferMinimumShortfall(null);
+    setOfferMinimumCategoryIds(null);
+    setOfferMinimumCategoryNames(null);
+  };
 
   const loadReferralCredits = useCallback(async () => {
     if (!isLoggedIn) {
@@ -810,16 +831,34 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     ? `Add ₹${Math.max(0, referralMinimumOrderAmount - cartSubtotal).toFixed(0)} more to use your referral reward.`
     : '';
 
+  const offerMinimumSubtotal = useMemo(() => {
+    if (offerMinimumCategoryIds === null) return null;
+    if (offerMinimumCategoryIds.length === 0) return cartSubtotal;
+    const scoped = new Set(offerMinimumCategoryIds);
+    return activeItems.reduce((sum, item) =>
+      sum + (item.categoryId && scoped.has(item.categoryId) ? item.price * item.quantity : 0), 0);
+  }, [activeItems, cartSubtotal, offerMinimumCategoryIds]);
+
+  const unlockNotice = (remaining: number, categoryNames: string[] | null) =>
+    `Add ₹${remaining.toFixed(0)} more${categoryNames?.length ? ` in ${categoryNames.join(', ')}` : ''} to unlock offer.`;
+
   useEffect(() => {
-    if (offerMinimumOrder === null || !/^Add ₹[\d.]+ more to unlock (this )?offer/.test(offerNotice)) return;
-    const remaining = Math.max(0, offerMinimumOrder - cartSubtotal);
+    if (offerMinimumOrder === null || offerMinimumShortfall === null ||
+        offerMinimumSubtotal === null || offerMinimumCategoryIds === null ||
+        offerMinimumCategoryNames === null ||
+        !/^Add ₹[\d.]+ more(?: in .+)? to unlock (this )?offer/.test(offerNotice)) return;
+    const shortfallBaseline = offerMinimumOrder - offerMinimumShortfall;
+    const remaining = Math.max(0, offerMinimumShortfall + shortfallBaseline - offerMinimumSubtotal);
     if (remaining === 0) {
       setOfferNotice('');
-      setOfferMinimumOrder(null);
+      setCouponError('');
+      clearOfferShortfall();
       return;
     }
-    setOfferNotice(`Add ₹${remaining.toFixed(0)} more to unlock offer.`);
-  }, [cartSubtotal, offerMinimumOrder, offerNotice]);
+    const message = unlockNotice(remaining, offerMinimumCategoryNames);
+    setOfferNotice(message);
+    setCouponError(message);
+  }, [offerMinimumSubtotal, offerMinimumOrder, offerMinimumShortfall, offerNotice, offerMinimumCategoryIds, offerMinimumCategoryNames]);
 
   useEffect(() => {
     // Offers are explicitly selected for each checkout; never restore an old cart selection.
@@ -836,8 +875,8 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       // offer like FIRST50 can be shown before login. Untargeted automatic
       // offers stay identity-gated behind /campaigns/eligible.
       const [welcomeRes, eligibleRes] = await Promise.allSettled([
-        campaignApi.getWelcome(cartSubtotal, storeId, zoneId),
-        isLoggedIn ? campaignApi.getEligible(cartSubtotal, storeId, zoneId) : Promise.resolve(null),
+        campaignApi.getWelcome(cartSubtotal, storeId, zoneId, campaignCartItems),
+        isLoggedIn ? campaignApi.getEligible(cartSubtotal, storeId, zoneId, campaignCartItems) : Promise.resolve(null),
       ]);
       if (cancelled) return;
 
@@ -861,7 +900,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
         // is re-priced for the new total.
         if (appliedCouponCode) {
           try {
-            const res = await campaignApi.validateCode(appliedCouponCode, cartSubtotal, storeId, zoneId);
+            const res = await campaignApi.validateCode(appliedCouponCode, cartSubtotal, storeId, zoneId, campaignCartItems);
             if (cancelled) return;
             const campaign = res.data.data.campaign;
             const disc = calcDiscount(campaign, cartSubtotal);
@@ -871,6 +910,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
               useCartStore.getState().setAppliedCampaign(campaign, disc);
             }
             setOfferNotice('');
+            clearOfferShortfall();
           } catch (e: any) {
             if (cancelled) return;
             if (isTransportFailure(e)) {
@@ -880,13 +920,26 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
               setOfferNotice('Couldn\u2019t re-check your coupon right now. It stays applied for now.');
               return;
             }
+            const scopedIds = campaignCategoryIds(appliedCampaign);
+            const scopedNames = campaignCategoryNames(appliedCampaign);
             removeCampaign();
             const message = e?.response?.data?.error || 'Your cart changed, so the coupon was removed.';
             const minimumMatch = message.match(/minimum order ₹([\d.]+)/i);
-            setOfferNotice(minimumMatch
-              ? `Add ₹${Math.max(0, Number(minimumMatch[1]) - cartSubtotal).toFixed(0)} more to unlock offer.`
-              : message);
-            setOfferMinimumOrder(minimumMatch ? Number(minimumMatch[1]) : null);
+            const shortfallMatch = message.match(/Add ₹([\d.]+) more/i);
+            if (minimumMatch) {
+              const minimumOrder = Number(minimumMatch[1]);
+              const shortfall = shortfallMatch
+                ? Number(shortfallMatch[1])
+                : Math.max(0, minimumOrder - scopedSubtotal(appliedCampaign, cartSubtotal));
+              setCouponError(message);
+              setOfferNotice(unlockNotice(shortfall, scopedNames));
+              setOfferMinimumOrder(minimumOrder);
+              setOfferMinimumShortfall(shortfall);
+              setOfferMinimumCategoryIds(scopedIds);
+              setOfferMinimumCategoryNames(scopedNames);
+            } else {
+              setOfferNotice(message);
+            }
           }
         } else {
           const disc = calcDiscount(appliedCampaign, cartSubtotal);
@@ -914,7 +967,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
         // endpoint so first-order status and per-customer limits are re-checked
         // against a verified identity before anything is discounted.
         try {
-          const res = await campaignApi.validateCode(target.coupon_code, cartSubtotal, storeId, zoneId);
+          const res = await campaignApi.validateCode(target.coupon_code, cartSubtotal, storeId, zoneId, campaignCartItems);
           if (cancelled) return;
           const campaign = res.data.data.campaign;
           applyCampaign(campaign, target.coupon_code);
@@ -929,13 +982,25 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
 
     load();
     return () => { cancelled = true; };
-  }, [storeId, cartSubtotal, appliedCampaign, appliedCouponCode, isLoggedIn]);
+  }, [storeId, cartSubtotal, appliedCampaign, appliedCouponCode, isLoggedIn, campaignCartItems]);
+
+  const campaignCategoryIds = (campaign: any): string[] =>
+    (Array.isArray(campaign?.categoryIds) ? campaign.categoryIds : [])
+      .filter((id: unknown): id is string => typeof id === 'string' && Boolean(id));
+
+  const campaignCategoryNames = (campaign: any): string[] =>
+    (Array.isArray(campaign?.categoryNames) ? campaign.categoryNames : [])
+      .filter((name: unknown): name is string => typeof name === 'string' && Boolean(name));
+
+  const scopedSubtotal = (campaign: any, cartTotal: number): number => {
+    const categoryIds = new Set(campaignCategoryIds(campaign));
+    if (categoryIds.size === 0) return cartTotal;
+    return activeItems.reduce((sum, item) =>
+      sum + (item.categoryId && categoryIds.has(item.categoryId) ? item.price * item.quantity : 0), 0);
+  };
 
   const calcDiscount = (campaign: any, cartTotal: number): number => {
-    const categoryIds = new Set(campaign.categoryIds || []);
-    const eligibleTotal = categoryIds.size > 0
-      ? activeItems.reduce((sum, item) => sum + (categoryIds.has(item.categoryId) ? item.price * item.quantity : 0), 0)
-      : cartTotal;
+    const eligibleTotal = scopedSubtotal(campaign, cartTotal);
     if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), eligibleTotal);
     if (campaign.discount_type === 'percent') {
       const d = (eligibleTotal * parseFloat(campaign.discount_value)) / 100;
@@ -948,16 +1013,25 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     setReferralError(discountConflictMessage());
   };
 
-  const applyCampaign = (campaign: any, couponCode: string | null = null, opts: { skipSchedulePrompt?: boolean } = {}) => {
+  const applyCampaign = (campaign: any, couponCode: string | null = null, opts: { skipSchedulePrompt?: boolean } = {}): boolean => {
     if (!canApplyCampaignDiscount({ referralApplied: Boolean(referralApplied) })) {
       rejectReferralConflict();
-      return;
+      return false;
+    }
+    const scopedCategoryIds = new Set(campaignCategoryIds(campaign));
+    if (scopedCategoryIds.size > 0 && !activeItems.some(item => item.categoryId && scopedCategoryIds.has(item.categoryId))) {
+      const categoryNames: string[] = campaign.categoryNames?.length
+        ? campaign.categoryNames
+        : eligibleCampaigns.find((c: any) => c.id === campaign.id)?.categoryNames || [];
+      setCouponSuccess('');
+      setCouponError(`This offer is only valid on ${categoryNames.join(', ') || 'the selected categories'}. Add an eligible item to use it.`);
+      return false;
     }
     const disc = calcDiscount(campaign, sub);
     if (campaign.requires_scheduled_delivery && !opts.skipSchedulePrompt && (deliveryPreference !== 'scheduled' || !scheduledSlot)) {
       setEligibleCampaigns(prev => prev.some(c => c.id === campaign.id) ? prev : [campaign, ...prev]);
       openSchedulePanel(campaign);
-      return;
+      return false;
     }
 
     if (!campaign.requires_scheduled_delivery && scheduledSlot) {
@@ -970,7 +1044,10 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     setEligibleCampaigns(prev => prev.some(c => c.id === campaign.id) ? prev : [campaign, ...prev]);
     setReferralError('');
     setCouponError('');
+    setCouponSuccess('');
     setOfferNotice('');
+    clearOfferShortfall();
+    return true;
   };
 
   const removeCampaign = () => {
@@ -983,6 +1060,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     setCouponError('');
     setCouponSuccess('');
     setOfferNotice('');
+    clearOfferShortfall();
     if (wasScheduledOnly) resetScheduleState();
   };
 
@@ -997,11 +1075,11 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     }
     const code = raw.trim().toUpperCase();
     if (!code || !storeId) return;
-    setCouponLoading(true); setReferralError(''); setCouponError(''); setCouponSuccess(''); setOfferNotice(''); setOfferMinimumOrder(null);
+    setCouponLoading(true); setReferralError(''); setCouponError(''); setCouponSuccess(''); setOfferNotice(''); clearOfferShortfall();
     try {
-      const res = await campaignApi.validateCode(code, sub, storeId, zoneId);
+      const res = await campaignApi.validateCode(code, sub, storeId, zoneId, campaignCartItems);
       const { campaign } = res.data.data;
-      applyCampaign(campaign, code, opts);
+      if (!applyCampaign(campaign, code, opts)) return;
       setCouponSuccess(campaign.allow_redemption_until_used
         ? `${campaign.coupon_code || 'Welcome offer'} applied. This is your one welcome-offer redemption.`
         : campaign.requires_scheduled_delivery && opts.skipSchedulePrompt
@@ -1015,8 +1093,19 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
       setCouponSuccess('');
       if (minimumMatch) {
         const minimumOrder = Number(minimumMatch[1]);
-        setOfferNotice(`Add ₹${Math.max(0, minimumOrder - sub).toFixed(0)} more to unlock offer.`);
+        const shortfallMatch = message.match(/Add ₹([\d.]+) more/i);
+        const scopedCampaign = eligibleCampaigns.find((c: any) => String(c.coupon_code || '').toUpperCase() === code);
+        const shortfall = shortfallMatch
+          ? Number(shortfallMatch[1])
+          : Math.max(0, minimumOrder - scopedSubtotal(scopedCampaign, sub));
+        const scopedIds = scopedCampaign ? campaignCategoryIds(scopedCampaign) : null;
+        const scopedNames = scopedCampaign ? campaignCategoryNames(scopedCampaign) : null;
+        setCouponError(message);
+        setOfferNotice(unlockNotice(shortfall, scopedNames));
         setOfferMinimumOrder(minimumOrder);
+        setOfferMinimumShortfall(shortfall);
+        setOfferMinimumCategoryIds(scopedIds);
+        setOfferMinimumCategoryNames(scopedNames);
       } else {
         setCouponError(message);
       }
@@ -1031,6 +1120,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     setReferralError('');
     setCouponError('');
     setOfferNotice('');
+    clearOfferShortfall();
     if (!canApplyReferralDiscount({ campaignApplied: Boolean(appliedCampaign), couponApplied: Boolean(appliedCouponCode) })) {
       rejectReferralConflict();
       return;
@@ -1052,6 +1142,7 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
     setReferralError('');
     setCouponError('');
     setOfferNotice('');
+    clearOfferShortfall();
     setReferralMinimumBlocked(false);
   };
 
@@ -1061,7 +1152,8 @@ export default function CheckoutPage({ settings, zoneId, zoneName, storeId, onBa
   // Derived straight off the live cart items, so the "To pay" figure recomputes
   // on every +/- and every "You may also like" tap — no chance of a stale total.
   const sub = useMemo(() => activeItems.reduce((s2, i) => s2 + i.price * i.quantity, 0), [activeItems]);
-  const campaignMeetsMinimum = !appliedCampaign || Number(appliedCampaign.min_order_amount || 0) <= sub;
+  const campaignMinimumSubtotal = appliedCampaign ? scopedSubtotal(appliedCampaign, sub) : sub;
+  const campaignMeetsMinimum = !appliedCampaign || Number(appliedCampaign.min_order_amount || 0) <= campaignMinimumSubtotal;
   const displayedCampaignDiscount = appliedCampaign && campaignMeetsMinimum
     ? calcDiscount(appliedCampaign, sub)
     : 0;

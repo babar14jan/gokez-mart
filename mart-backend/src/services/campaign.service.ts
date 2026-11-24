@@ -9,6 +9,41 @@ const normalizedCouponCodeOrThrow = (value: unknown) => {
   return code;
 };
 
+const canScopeCampaignCategories = (data: any): boolean =>
+  Boolean(data.requiresScheduledDelivery ?? data.requires_scheduled_delivery ?? false) ||
+  (data.eligibilityType ?? data.eligibility_type ?? 'all') === 'first_order';
+
+type CampaignCartItem = {
+  categoryId?: string | null;
+  category_id?: string | null;
+  price?: number | string | null;
+  quantity?: number | string | null;
+};
+
+const campaignCategoryIds = (campaign: any): string[] =>
+  (Array.isArray(campaign?.categoryIds) ? campaign.categoryIds : [])
+    .filter((id: unknown): id is string => typeof id === 'string' && Boolean(id));
+
+const scopedCartSubtotal = (campaign: any, cartTotal: number, items: CampaignCartItem[] = []): number => {
+  const ids = campaignCategoryIds(campaign);
+  if (ids.length === 0) return cartTotal;
+  const scoped = new Set(ids);
+  return items.reduce((sum, item) => {
+    const categoryId = item.categoryId ?? item.category_id;
+    if (!categoryId || !scoped.has(String(categoryId))) return sum;
+    return sum + (Number(item.price) || 0) * (Number(item.quantity) || 0);
+  }, 0);
+};
+
+const hasScopedCartItem = (campaign: any, items: CampaignCartItem[]): boolean => {
+  const ids = campaignCategoryIds(campaign);
+  if (ids.length === 0) return true;
+  return items.some(item => {
+    const categoryId = item.categoryId ?? item.category_id;
+    return Boolean(categoryId) && ids.includes(String(categoryId));
+  });
+};
+
 const numericValue = (value: unknown, label: string, options: { nullable?: boolean; integer?: boolean } = {}): number | null => {
   if (options.nullable && (value === null || value === undefined || value === '')) return null;
   const number = typeof value === 'number' ? value : Number(value);
@@ -160,7 +195,7 @@ export class CampaignService {
         );
       }
     }
-    if (Boolean(data.requiresScheduledDelivery) && Array.isArray(data.categoryIds)) {
+    if (canScopeCampaignCategories(data) && Array.isArray(data.categoryIds)) {
       for (const categoryId of [...new Set(data.categoryIds)]) {
         await query(
           `INSERT INTO mart_campaign_categories (campaign_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -320,9 +355,10 @@ export class CampaignService {
         );
       }
     }
-    if (campaign && Array.isArray(data.categoryIds)) {
+    const categoryScopeAllowed = campaign ? canScopeCampaignCategories(campaign) : false;
+    if (campaign && (Array.isArray(data.categoryIds) || !categoryScopeAllowed)) {
       await query(`DELETE FROM mart_campaign_categories WHERE campaign_id = $1`, [id]);
-      if (campaign.requires_scheduled_delivery) {
+      if (categoryScopeAllowed && Array.isArray(data.categoryIds)) {
         for (const categoryId of [...new Set(data.categoryIds)]) {
           await query(
             `INSERT INTO mart_campaign_categories (campaign_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
@@ -550,6 +586,7 @@ export class CampaignService {
     storeId: string,
     customerId: string | null = null,
     zoneId: string | null = null,
+    cartItems: CampaignCartItem[] | null = null,
   ): Promise<any[]> {
     const now = new Date().toISOString();
     const result = await query(
@@ -568,14 +605,13 @@ export class CampaignService {
           AND (valid_from IS NULL OR valid_from <= $2)
           AND (valid_until IS NULL OR valid_until >= $2)
           AND (usage_limit IS NULL OR usage_count < usage_limit)
-          AND min_order_amount <= $3
           AND (NOT EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id)
-            OR EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id AND cz.zone_id = $4::uuid))
+            OR EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id AND cz.zone_id = $3::uuid))
           AND COALESCE(eligibility_type, CASE WHEN new_customers_only THEN 'first_order' ELSE 'all' END)
               IN ('first_order', 'all')
         ORDER BY priority DESC, discount_value DESC
-        LIMIT 5`,
-      [this.normalizeStoreId(storeId), now, cartTotal, this.normalizeZoneId(zoneId)]
+        LIMIT 50`,
+      [this.normalizeStoreId(storeId), now, this.normalizeZoneId(zoneId)]
     );
 
     const strip = (c: any) => {
@@ -583,8 +619,18 @@ export class CampaignService {
       return pub;
     };
 
-    // A guest gets the unfiltered teaser so a first-order offer can entice login.
-    if (!customerId) return result.rows.map(strip);
+    // Legacy callers send no cart items, so there is no scoped context to
+    // filter on. Checkout sends items and the offer is filtered by the value of
+    // eligible categories only; the post-login teaser (no items) still shows.
+    const hasContext = cartItems !== null && (cartTotal > 0 || cartItems.length > 0);
+    const meetsCartContext = (c: any) =>
+      !hasContext ||
+      (hasScopedCartItem(c, cartItems!) &&
+        scopedCartSubtotal(c, cartTotal, cartItems!) >= Number(c.min_order_amount));
+
+    if (!customerId) {
+      return result.rows.filter(meetsCartContext).slice(0, 5).map(strip);
+    }
 
     // A signed-in shopper must not be shown an offer they have already used or
     // are not eligible for. The reason is surfaced only when they type the code
@@ -603,6 +649,7 @@ export class CampaignService {
     const offers: any[] = [];
     for (const c of result.rows) {
       const eligibilityType = c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all');
+      if (!meetsCartContext(c)) continue;
       if (eligibilityType === 'first_order' && !c.allow_redemption_until_used && priorOrderCount > 0) continue;
       if (c.per_customer_limit != null) {
         const uses = await query(
@@ -614,12 +661,18 @@ export class CampaignService {
       }
       offers.push(strip(c));
     }
-    return offers;
+    return offers.slice(0, 5);
   }
 
   // ── Public: eligible campaigns for a customer + cart ─────────────────────────
 
-  static async getEligible(customerId: string | null, cartTotal: number, storeId: string, zoneId: string | null = null): Promise<any[]> {
+  static async getEligible(
+    customerId: string | null,
+    cartTotal: number,
+    storeId: string,
+    zoneId: string | null = null,
+    cartItems: CampaignCartItem[] | null = null,
+  ): Promise<any[]> {
     const now = new Date().toISOString();
 
     // Get all active campaigns for this store
@@ -642,11 +695,10 @@ export class CampaignService {
          AND (valid_from IS NULL OR valid_from <= $2)
          AND (valid_until IS NULL OR valid_until >= $2)
           AND (usage_limit IS NULL OR usage_count < usage_limit)
-          AND min_order_amount <= $3
           AND (NOT EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id)
-            OR EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id AND cz.zone_id = $4::uuid))
-       ORDER BY priority DESC, discount_value DESC`,
-      [this.normalizeStoreId(storeId), now, cartTotal, this.normalizeZoneId(zoneId)]
+            OR EXISTS (SELECT 1 FROM mart_campaign_zones cz WHERE cz.campaign_id = c.id AND cz.zone_id = $3::uuid))
+        ORDER BY priority DESC, discount_value DESC`,
+      [this.normalizeStoreId(storeId), now, this.normalizeZoneId(zoneId)]
     );
 
     // Enforcement fields are selected for the checks below but must never reach
@@ -658,12 +710,15 @@ export class CampaignService {
 
     const campaigns = result.rows;
     if (campaigns.length === 0) return campaigns;
+    const items = cartItems;
+    const meetsCartContext = (c: any) => items === null ||
+      (hasScopedCartItem(c, items) && scopedCartSubtotal(c, cartTotal, items) >= Number(c.min_order_amount));
     // Guests can see new_customer_only campaigns (read-only) to entice login,
     // but other eligibility types require verified customer identity.
     if (!customerId) {
       return campaigns.filter(c => {
         const eligibilityType = c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all');
-        return eligibilityType === 'first_order' || eligibilityType === 'all';
+        return (eligibilityType === 'first_order' || eligibilityType === 'all') && meetsCartContext(c);
       }).map(stripInternal);
     }
 
@@ -671,6 +726,7 @@ export class CampaignService {
     const eligible: any[] = [];
     for (const c of campaigns) {
       const eligibilityType = c.eligibility_type || (c.new_customers_only ? 'first_order' : 'all');
+      if (!meetsCartContext(c)) continue;
       if (eligibilityType === 'first_order') {
         const orderCount = await query(
           `SELECT COUNT(*) as cnt FROM mart_orders WHERE customer_id = $1 AND status NOT IN ('cancelled','terminated','failed_delivery')`,
@@ -702,7 +758,14 @@ export class CampaignService {
     return eligible;
   }
 
-  static async validateCode(code: string, customerId: string | null, cartTotal: number, storeId: string, zoneId: string | null = null): Promise<any> {
+  static async validateCode(
+    code: string,
+    customerId: string | null,
+    cartTotal: number,
+    storeId: string,
+    zoneId: string | null = null,
+    cartItems: CampaignCartItem[] | null = null,
+  ): Promise<any> {
     const result = await query(
       `SELECT * FROM mart_campaigns
        WHERE coupon_code = $1
@@ -712,11 +775,16 @@ export class CampaignService {
     );
     if (!result.rows[0]) throw badRequest('That coupon code is not valid');
     const campaign = result.rows[0];
-    const categoryScope = await query<{ category_id: string }>(
-      `SELECT category_id FROM mart_campaign_categories WHERE campaign_id = $1`,
+    const categoryScope = await query<{ category_id: string; name: string | null }>(
+      `SELECT cc.category_id, mc.name
+         FROM mart_campaign_categories cc
+         LEFT JOIN mart_categories mc ON mc.id = cc.category_id
+        WHERE cc.campaign_id = $1
+        ORDER BY mc.name`,
       [campaign.id]
     );
     campaign.categoryIds = categoryScope.rows.map(row => row.category_id);
+    campaign.categoryNames = categoryScope.rows.map(row => row.name).filter(Boolean);
 
     // Check store scope
     if (campaign.store_id && campaign.store_id !== storeId) throw new Error('This coupon is not valid for this store');
@@ -766,19 +834,28 @@ export class CampaignService {
       if (parseInt(uses.rows[0].cnt) >= campaign.per_customer_limit) throw conflict('You have already used this coupon');
     }
 
+    if (cartItems !== null && !hasScopedCartItem(campaign, cartItems)) {
+      throw badRequest(`Add an item from ${campaign.categoryNames.join(', ') || 'an eligible category'} to use this coupon`);
+    }
+
     // Check min order after customer eligibility so an ineligible customer gets
     // the actionable reason instead of being prompted to increase their cart.
-    if (cartTotal < parseFloat(campaign.min_order_amount)) {
-      throw badRequest(`Add ₹${Number(campaign.min_order_amount) - cartTotal} more to use this coupon (minimum order ₹${Number(campaign.min_order_amount)})`);
+    campaign.categorySubtotal = cartItems === null ? cartTotal : scopedCartSubtotal(campaign, cartTotal, cartItems);
+    if (campaign.categorySubtotal < parseFloat(campaign.min_order_amount)) {
+      const categoryNames = campaign.categoryNames.join(', ');
+      const scope = categoryNames ? ` in ${categoryNames}` : '';
+      const minimumScope = categoryNames ? ' for these categories' : '';
+      throw badRequest(`Add ₹${Number(campaign.min_order_amount) - campaign.categorySubtotal} more${scope} to use this coupon (minimum order ₹${Number(campaign.min_order_amount)}${minimumScope})`);
     }
 
     return campaign;
   }
 
   static calculateDiscount(campaign: any, cartTotal: number): number {
-    if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), cartTotal);
+    const eligibleTotal = campaign.categorySubtotal ?? cartTotal;
+    if (campaign.discount_type === 'flat') return Math.min(parseFloat(campaign.discount_value), eligibleTotal);
     if (campaign.discount_type === 'percent') {
-      const disc = (cartTotal * parseFloat(campaign.discount_value)) / 100;
+      const disc = (eligibleTotal * parseFloat(campaign.discount_value)) / 100;
       return campaign.max_discount ? Math.min(disc, parseFloat(campaign.max_discount)) : disc;
     }
     if (campaign.discount_type === 'free_delivery') return 0; // handled separately
