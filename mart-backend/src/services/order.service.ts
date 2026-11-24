@@ -586,14 +586,12 @@ export class OrderService {
         campaign = campaignResult.rows[0];
         const now = new Date();
         if (!campaign) throw badRequest('Campaign is no longer eligible for this order');
-        const minOrderMet = subtotal >= Number(campaign.min_order_amount);
         if (!['active', 'scheduled'].includes(campaign.status) ||
           (campaign.status === 'scheduled' && (!campaign.valid_from || new Date(campaign.valid_from) > now)) ||
             (campaign.store_id && campaign.store_id !== data.storeId) ||
             (campaign.valid_from && new Date(campaign.valid_from) > now) ||
             (campaign.valid_until && new Date(campaign.valid_until) < now) ||
-            (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit) ||
-            !minOrderMet) {
+            (campaign.usage_limit && campaign.usage_count >= campaign.usage_limit)) {
           throw badRequest('Campaign is no longer eligible for this order');
         }
         if (data.campaignId && campaign.coupon_code) {
@@ -611,16 +609,27 @@ export class OrderService {
           throw badRequest('This coupon is only valid with scheduled delivery. Choose a next-day delivery slot to use it.');
         }
         const categoryScope = await client.query(
-          `SELECT category_id FROM mart_campaign_categories WHERE campaign_id = $1`,
+          `SELECT cc.category_id, mc.name
+             FROM mart_campaign_categories cc
+             LEFT JOIN mart_categories mc ON mc.id = cc.category_id
+            WHERE cc.campaign_id = $1
+            ORDER BY mc.name`,
           [campaign.id]
-        ) as { rows: Array<{ category_id: string }> };
+        ) as { rows: Array<{ category_id: string; name: string | null }> };
         const scopedCategoryIds = new Set(categoryScope.rows.map(row => row.category_id));
+        const categoryNames = categoryScope.rows.map(row => row.name).filter(Boolean).join(', ');
         if (scopedCategoryIds.size > 0 && !resolvedItems.some(item => item.categoryId && scopedCategoryIds.has(item.categoryId))) {
-          throw badRequest('Add an item from an eligible category to use this offer');
+          throw badRequest(`Add an item from ${categoryNames || 'an eligible category'} to use this coupon`);
         }
         campaign.categorySubtotal = scopedCategoryIds.size > 0
           ? resolvedItems.reduce((sum, item) => sum + (item.categoryId && scopedCategoryIds.has(item.categoryId) ? item.price * item.quantity : 0), 0)
           : subtotal;
+        const minOrderMet = campaign.categorySubtotal >= Number(campaign.min_order_amount);
+        if (!minOrderMet) {
+          const scope = categoryNames ? ` in ${categoryNames}` : '';
+          const minimumScope = categoryNames ? ' for these categories' : '';
+          throw badRequest(`Add ₹${Number(campaign.min_order_amount) - campaign.categorySubtotal} more${scope} to use this coupon (minimum order ₹${Number(campaign.min_order_amount)}${minimumScope})`);
+        }
 
         const eligibilityType = campaign.eligibility_type || (campaign.new_customers_only ? 'first_order' : 'all');
         if (eligibilityType === 'first_order') {
