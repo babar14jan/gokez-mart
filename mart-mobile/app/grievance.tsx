@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
-import { authApi, type Grievance } from '@/services/api';
+import { api, authApi, type Grievance } from '@/services/api';
+import { newIdempotencyKey } from '@/utils/idempotency';
 import { colors as staticColors, useThemeColors } from '@/constants/theme';
 
 const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
@@ -12,6 +13,7 @@ const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
 
 export default function GrievanceScreen() {
   const colors = useThemeColors();
+  const requestKey = useRef(newIdempotencyKey());
   const [subject,     setSubject]     = useState('');
   const [description, setDescription] = useState('');
   const [submitting,  setSubmitting]  = useState(false);
@@ -26,29 +28,36 @@ export default function GrievanceScreen() {
 
   const handleSubmit = async () => {
     if (!subject.trim() || !description.trim()) return;
-    setSubmitting(true); setError('');
+    setSubmitting(true);
+    setError('');
     try {
-      await authApi.submitGrievance(subject.trim(), description.trim());
-      setSubmitted(true); setSubject(''); setDescription('');
+      await api.post('/compliance/grievances', {
+        subject: subject.trim(),
+        description: description.trim(),
+      }, { headers: { 'Idempotency-Key': requestKey.current } });
+      requestKey.current = newIdempotencyKey();
+      setSubmitted(true);
+      setSubject('');
+      setDescription('');
       await loadGrievances();
     } catch (e: any) {
       setError(e?.response?.data?.error ?? 'Failed to submit. Please try again.');
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, lineHeight: 18, marginBottom: 14 }}>
+          Complaint or concern about your data or service. Under the DPDP Act 2023, we will respond within 30 days.
+        </Text>
 
-        {/* Submit form */}
         <View style={{ backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.gray100, padding: 16, marginBottom: 20 }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, lineHeight: 18, marginBottom: 14 }}>
-            Under the DPDP Act 2023, you have the right to raise a grievance about how your data is handled. We will respond within 30 days.
-          </Text>
-
           {submitted && (
             <View style={{ backgroundColor: colors.primaryLight, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.primaryDark }}>✓ Grievance submitted successfully.</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.primaryDark }}>✓ Grievance submitted successfully. We will respond within 30 days.</Text>
             </View>
           )}
           {error ? (
@@ -78,7 +87,6 @@ export default function GrievanceScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Past grievances */}
         {loading ? (
           <ActivityIndicator color={colors.primary} />
         ) : grievances.length > 0 && (

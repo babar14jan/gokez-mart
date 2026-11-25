@@ -37,6 +37,7 @@ module.exports = {
       'expo-secure-store',
       ['expo-location', { locationWhenInUsePermission: 'Used to find your nearest Gokez Mart store.' }],
       ['expo-notifications', { icon: './assets/notification-icon.png', color: '#10b981' }],
+      ['expo-updates', { runtimeVersion: { policy: 'sdkVersion' }, channel: IS_PROD ? 'production' : 'development' }],
       ['expo-font', {
         fonts: [
           './assets/fonts/Inter-Regular.ttf',

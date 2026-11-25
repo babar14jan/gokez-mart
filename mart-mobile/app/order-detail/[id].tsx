@@ -1,26 +1,34 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { authApi, type Order } from '@/services/api';
+import { authApi, storeApi, type Order, type Product } from '@/services/api';
 import { useCartStore } from '@/store/cartStore';
 import { colors as staticColors, useThemeColors } from '@/constants/theme';
+import { useAuthStore } from '@/store/authStore';
+import { getTokens, saveToken, useGuestTrackingStore } from '@/store/guestTrackingStore';
+import {
+  ALL_CLOSED, ORDER_PROGRESS_LABELS, STATUS_LABELS,
+  formatDateTime, statusProgressIndex,
+} from '@/utils/orderStatus';
+import { calculateOrderSavings, getOrderReferralDiscount } from '@/utils/referral';
+import { downloadReceipt } from '@/utils/receipt';
+import { track } from '@/utils/track';
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Order Placed', confirmed: 'Confirmed', preparing: 'Being Prepared',
-  ready_to_pickup: 'Being Prepared', out_for_delivery: 'Out for Delivery',
-  picked_up: 'On the Way 🛵', delivered: 'Delivered 🎉',
-  cancelled: 'Cancelled', failed_delivery: 'Delivery Failed', terminated: 'Cancelled by Store',
-};
+const MAX_REORDER_ITEMS = 10;
+const GUEST_ORDER_HINT = 'Sign in or open the order link from your confirmation to view this order.';
 
-const STATUS_COLOR: Record<string, string> = {
-  delivered: staticColors.primary, cancelled: staticColors.red500,
-  failed_delivery: staticColors.red500, terminated: staticColors.red500,
-};
+const CANCEL_REASONS: Array<{ value: string; label: string }> = [
+  { value: 'ordered_by_mistake', label: 'Ordered by mistake' },
+  { value: 'changed_my_mind', label: 'Changed my mind' },
+  { value: 'wrong_address', label: 'Wrong address or delivery details' },
+  { value: 'duplicate_order', label: 'Duplicate order' },
+  { value: 'found_better_price', label: 'Found a better price elsewhere' },
+  { value: 'delivery_too_slow', label: 'Delivery is taking too long' },
+  { value: 'other', label: 'Other' },
+];
 
-// Customer-facing explanation for a closed order, mirroring the labels in the
-// orders list and mart-user's TERMINATION_MESSAGES/CANCELLATION_MESSAGES.
 const CANCELLATION_REASON_LABELS: Record<string, string> = {
   customer_request: 'This order was cancelled as requested.',
   ordered_by_mistake: 'This order was cancelled because it looked like it was placed by mistake.',
@@ -38,9 +46,48 @@ const CANCELLATION_REASON_LABELS: Record<string, string> = {
   other: 'This order was cancelled. You will not be charged.',
 };
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
-    + ' · ' + new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+function statusLabel(status: string | null | undefined): string {
+  const key = String(status ?? '');
+  return (STATUS_LABELS[key] ?? key) || 'Order';
+}
+
+function progressStep(status: string): number {
+  const index = statusProgressIndex(status);
+  if (index < 0) return -1;
+  if (index <= 1) return 0;
+  if (index <= 3) return 1;
+  if (index <= 5) return 2;
+  return 3;
+}
+
+function cancelModeFor(status: string): 'direct' | 'request' | null {
+  if (status === 'pending' || status === 'confirmed') return 'direct';
+  if (status === 'preparing' || status === 'ready_to_pickup') return 'request';
+  return null;
+}
+
+function errorText(error: unknown, fallback: string): string {
+  const response = (error as { response?: { data?: { error?: unknown; message?: unknown } } })?.response?.data;
+  const message = response?.error ?? response?.message;
+  return typeof message === 'string' && message.trim() ? message : fallback;
+}
+
+function extractOrders(response: unknown): Order[] {
+  const data = (response as { data?: { data?: unknown } })?.data?.data;
+  return Array.isArray(data) ? data as Order[] : [];
+}
+
+function extractProducts(response: unknown): Product[] {
+  const data = (response as { data?: { data?: unknown } })?.data?.data;
+  return Array.isArray(data) ? data as Product[] : [];
+}
+
+function rememberTokens(orders: Order[]): void {
+  orders.forEach(entry => {
+    if (typeof entry.trackingToken === 'string' && entry.trackingToken.trim()) {
+      saveToken(entry.trackingToken);
+    }
+  });
 }
 
 function Card({ children, style }: { children: React.ReactNode; style?: object }) {
@@ -62,51 +109,184 @@ function CardHeader({ title, icon }: { title: string; icon: string }) {
   );
 }
 
-function BillRow({ label, value, bold, green, strike }: { label: string; value: string; bold?: boolean; green?: boolean; strike?: boolean }) {
+function BillRow({ label, value, bold, green, strike }: {
+  label: string; value: string; bold?: boolean; green?: boolean; strike?: string;
+}) {
   const colors = useThemeColors();
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 5 }}>
-      <Text style={{ fontSize: 13, fontFamily: bold ? 'Inter-Bold' : 'Inter-Regular', color: bold ? colors.gray900 : colors.gray600 }}>{label}</Text>
-      <Text style={{ fontSize: 13, fontFamily: bold ? 'Inter-Bold' : 'Inter-Regular', color: green ? colors.primary : bold ? colors.gray900 : colors.gray900, textDecorationLine: strike ? 'line-through' : 'none' }}>{value}</Text>
+      <Text style={{ fontSize: 13, fontFamily: bold ? 'Inter-Bold' : 'Inter-Regular', color: green ? colors.primary : bold ? colors.gray900 : colors.gray600 }}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {strike ? <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: colors.gray400, textDecorationLine: 'line-through' }}>{strike}</Text> : null}
+        <Text style={{ fontSize: 13, fontFamily: bold ? 'Inter-Bold' : 'Inter-Regular', color: green ? colors.primary : colors.gray900 }}>{value}</Text>
+      </View>
     </View>
   );
 }
 
 export default function OrderDetailScreen() {
-  const colors     = useThemeColors();
-  const { id }      = useLocalSearchParams<{ id: string }>();
+  const colors = useThemeColors();
+  const { id, trackingToken } = useLocalSearchParams<{ id: string; trackingToken?: string }>();
   const { addItem } = useCartStore();
-  const [order,   setOrder]   = useState<Order | null>(null);
+  const { isLoggedIn } = useAuthStore();
+  const tokens = useGuestTrackingStore(state => state.tokens);
+  const tokenKey = tokens.join(',');
+
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    if (!isLoggedIn && typeof trackingToken === 'string' && trackingToken.trim()) {
+      saveToken(trackingToken.trim());
+    }
+  }, [isLoggedIn, trackingToken]);
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoadError('');
     try {
-      const res = await authApi.getOrders();
-      setOrder((res.data.data ?? []).find((o: Order) => o.id === id) ?? null);
-    } catch { /* silent */ }
-    finally { setLoading(false); }
-  }, [id]);
+      let list: Order[] = [];
+      if (isLoggedIn) {
+        list = extractOrders(await authApi.getOrders());
+      } else {
+        const tokenList = getTokens();
+        if (!tokenList.length) {
+          setOrder(null);
+          return [];
+        }
+        list = extractOrders(await storeApi.trackOrdersByTokens(tokenList));
+      }
+      rememberTokens(list);
+      setOrder(list.find(entry => entry.id === id) ?? null);
+      return list;
+    } catch (error) {
+      if (!silent) setLoadError(errorText(error, 'We could not load your order. Please try again.'));
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [id, isLoggedIn, tokenKey]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  const handleOrderAgain = () => {
+  const handleCancel = async () => {
     if (!order) return;
-    let blocked = 0;
-    order.items.forEach(item => {
-      const result = addItem({
-        id: item.productId, name: item.productName, unit: item.unit,
-        price: item.price, photoUrl: item.photoUrl ?? null,
-        availabilityStatus: 'available', isAvailable: true,
-        discountPercent: 0, categoryId: '', categoryName: '',
-        description: null, weightOptions: null, localName: null,
-      });
-      if (result === 'different_unit') blocked += 1;
-    });
-    if (blocked) {
-      Alert.alert('One size per product', 'Remove the other size from your cart before adding this one again.');
+    const mode = cancelModeFor(order.status);
+    if (!mode) return;
+    if (!cancelReason) {
+      setCancelError('Choose a reason before continuing.');
       return;
     }
-    router.back();
+    if (!isLoggedIn && !order.trackingToken) {
+      const message = GUEST_ORDER_HINT;
+      setCancelError(message);
+      Alert.alert('Cannot cancel order', message);
+      return;
+    }
+    setCancelling(true);
+    setCancelError('');
+    try {
+      if (isLoggedIn) {
+        if (mode === 'request') await authApi.requestCancellation(order.id, cancelReason);
+        else await authApi.cancelOrder(order.id, cancelReason);
+      } else {
+        const token = order.trackingToken as string;
+        if (mode === 'request') await storeApi.requestCancellationByToken(order.id, token, cancelReason);
+        else await storeApi.cancelOrderByToken(order.id, token, cancelReason);
+      }
+      track('order_cancelled', {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        reason: cancelReason,
+        method: mode === 'request' ? 'request' : 'direct',
+        guest: !isLoggedIn,
+      });
+      await load(true);
+      if (mode === 'direct') setConfirmCancel(false);
+      Alert.alert(
+        mode === 'request' ? 'Request sent' : 'Order cancelled',
+        mode === 'request'
+          ? 'The store will review your cancellation request before dispatch.'
+          : 'Your order has been cancelled. You will not be charged.',
+      );
+    } catch (error) {
+      const message = errorText(error, mode === 'request'
+        ? 'Could not request cancellation. Please contact the store for help.'
+        : 'Could not cancel this order. Please contact the store for help.');
+      setCancelError(message);
+      Alert.alert(mode === 'request' ? 'Request failed' : 'Cancellation failed', message);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleOrderAgain = async () => {
+    if (!order) return;
+    if (!isLoggedIn) {
+      Alert.alert('Login required', 'Login to add these items to your cart.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Login', onPress: () => router.push('/(auth)/login') },
+      ]);
+      return;
+    }
+    setReordering(true);
+    try {
+      let catalog: Product[] = [];
+      try {
+        catalog = extractProducts(await storeApi.getProducts());
+      } catch {}
+      const byId = new Map(catalog.map(product => [product.id, product]));
+      const cartItems = useCartStore.getState().items.filter(item => !item.unavailable);
+      const distinct = new Set(cartItems.map(item => item.productId));
+      let added = 0;
+      let skippedLimit = 0;
+      let skippedUnit = 0;
+      for (const item of order.items.slice(0, MAX_REORDER_ITEMS)) {
+        if (cartItems.some(cart => cart.productId === item.productId && cart.unit !== item.unit)) {
+          skippedUnit += 1;
+          continue;
+        }
+        if (!distinct.has(item.productId)) {
+          if (distinct.size >= MAX_REORDER_ITEMS) {
+            skippedLimit += 1;
+            continue;
+          }
+          distinct.add(item.productId);
+        }
+        const product = byId.get(item.productId);
+        if (product) {
+          const option = (product.weightOptions ?? []).find(weight => weight.label === item.unit);
+          const unit = product.unit === item.unit || option ? item.unit : product.unit;
+          const price = option?.price ?? (product.unit === item.unit ? product.price : item.price);
+          const listPrice = product.mrp ?? product.price ?? price;
+          addItem(product, unit, price, listPrice);
+        } else {
+          addItem({
+            id: item.productId, name: item.productName, localName: null, description: null,
+            photoUrl: item.photoUrl ?? null, price: item.price, unit: item.unit,
+            weightOptions: null, discountPercent: 0, isAvailable: true,
+            availabilityStatus: 'available', categoryId: '', categoryName: '',
+            mrp: item.price,
+          });
+        }
+        added += 1;
+      }
+      const warnings: string[] = [];
+      if (skippedLimit) warnings.push(`${skippedLimit} skipped — your cart can hold ${MAX_REORDER_ITEMS} distinct items`);
+      if (skippedUnit) warnings.push(`${skippedUnit} skipped — remove the other size from your cart first`);
+      Alert.alert(
+        warnings.length ? 'Cart updated' : 'Added to cart',
+        `${added} item${added === 1 ? '' : 's'} added${warnings.length ? `. ${warnings.join('. ')}.` : '.'}`,
+      );
+      if (!warnings.length) router.back();
+    } finally {
+      setReordering(false);
+    }
   };
 
   if (loading) {
@@ -119,21 +299,39 @@ export default function OrderDetailScreen() {
 
   if (!order) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontSize: 14, color: colors.gray500, fontFamily: 'Inter-Regular' }}>Order not found</Text>
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <Text style={{ fontSize: 14, color: colors.gray500, fontFamily: 'Inter-Regular', textAlign: 'center' }}>
+          {loadError || (!isLoggedIn && !tokens.length ? GUEST_ORDER_HINT : 'Order not found')}
+        </Text>
+        {loadError ? (
+          <TouchableOpacity onPress={() => { void load(); }} style={{ marginTop: 14, backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
+            <Text style={{ color: '#fff', fontFamily: 'Inter-Bold', fontSize: 13 }}>Try Again</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   }
 
+  const step = progressStep(order.status);
   const isDelivered = order.status === 'delivered';
-  const isClosed    = ['delivered', 'cancelled', 'failed_delivery', 'terminated'].includes(order.status);
-  const statusColor = STATUS_COLOR[order.status] ?? colors.primary;
+  const isClosed = ALL_CLOSED.includes(order.status);
+  const statusColor = isClosed ? (isDelivered ? colors.primary : staticColors.red500) : colors.primary;
+  const itemSavings = Math.max(0, Number(order.itemSavings) || 0);
+  const freeDeliverySaving = Math.max(0, Number(order.freeDeliverySaving) || 0);
+  const campaign = Math.max(0, Number(order.campaignDiscount) || 0);
+  const referral = getOrderReferralDiscount(order as unknown as Record<string, unknown>);
+  const savings = calculateOrderSavings(order);
+  const cancelMode = cancelModeFor(order.status);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 16, paddingBottom: 100 }}>
+        {loadError ? (
+          <TouchableOpacity onPress={() => { void load(); }} style={{ backgroundColor: colors.redLight, borderRadius: 10, padding: 10, marginHorizontal: 16, marginBottom: 12 }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter-Medium', color: colors.red500 }}>{loadError} Tap to retry.</Text>
+          </TouchableOpacity>
+        ) : null}
 
-        {/* Status banner */}
         <Card>
           <View style={{ padding: 16, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
             {(order.storeName ?? order.fulfilledBy) ? (
@@ -146,27 +344,48 @@ export default function OrderDetailScreen() {
               </View>
             ) : (
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: statusColor }}>{STATUS_LABELS[order.status]}</Text>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 3 }}>{formatDate(order.createdAt)}</Text>
+                <Text style={{ fontSize: 16, fontFamily: 'Inter-Bold', color: statusColor }}>{statusLabel(order.status)}</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 3 }}>{formatDateTime(order.createdAt)}</Text>
               </View>
             )}
             <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
               <View style={{ backgroundColor: statusColor + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
                 <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', color: statusColor }}>#{order.orderNumber}</Text>
               </View>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 6 }}>{formatDate(order.createdAt)}</Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', color: statusColor, marginTop: 6 }}>{statusLabel(order.status)}</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 2 }}>{formatDateTime(order.createdAt)}</Text>
             </View>
           </View>
+
+          {!isClosed && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                {ORDER_PROGRESS_LABELS.map((label, i) => (
+                  <Text key={label} style={{
+                    fontSize: 9, fontFamily: i <= step ? 'Inter-Bold' : 'Inter-Regular',
+                    color: i <= step ? colors.primary : colors.gray400,
+                    textAlign: 'center', width: '25%',
+                  }}>{label}</Text>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', marginTop: 6, gap: 4 }}>
+                {ORDER_PROGRESS_LABELS.map((label, i) => (
+                  <View key={label} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i <= step ? colors.primary : colors.gray200 }} />
+                ))}
+              </View>
+            </View>
+          )}
+
           {order.status !== 'delivered' && order.cancellationReason && (
             <View style={{ marginHorizontal: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: '#fef2f2', borderRadius: 8, padding: 10 }}>
               <Ionicons name="close-circle-outline" size={14} color={staticColors.red500} style={{ marginTop: 1 }} />
               <Text style={{ flex: 1, fontSize: 12, fontFamily: 'Inter-Regular', color: staticColors.red500, lineHeight: 16 }}>
-                {CANCELLATION_REASON_LABELS[order.cancellationReason] || 'This order was cancelled. You will not be charged.'}
+                {CANCELLATION_REASON_LABELS[order.cancellationReason] ?? 'This order was cancelled. You will not be charged.'}
               </Text>
             </View>
           )}
           {order.placedOutsideHours && (
-            <View style={{ paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fef3c7', borderRadius: 8, marginHorizontal: 14, padding: 10 }}>
+            <View style={{ marginHorizontal: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fef3c7', borderRadius: 8, padding: 10 }}>
               <Ionicons name="time-outline" size={14} color="#f59e0b" />
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: '#92400e' }}>
@@ -182,7 +401,6 @@ export default function OrderDetailScreen() {
           )}
         </Card>
 
-        {/* Items */}
         <Card>
           <CardHeader title="Items Ordered" icon="bag-outline" />
           <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
@@ -199,25 +417,34 @@ export default function OrderDetailScreen() {
                     {item.unit}{item.quantity > 1 ? ` × ${item.quantity}` : ''}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900 }}>₹{item.price * item.quantity}</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900 }}>₹{item.total ?? item.price * item.quantity}</Text>
               </View>
             ))}
           </View>
         </Card>
 
-        {/* Bill */}
         <Card>
           <CardHeader title="Bill Details" icon="receipt-outline" />
           <View style={{ paddingBottom: 14 }}>
-            <BillRow label="Item total" value={`₹${order.subtotal}`} />
-            <BillRow label="Delivery charge" value={order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`} green={order.deliveryCharge === 0} />
-            {(order.campaignDiscount ?? 0) > 0 && (
+            {savings > 0 && (
+              <View style={{ backgroundColor: '#fef3c7', borderRadius: 10, paddingVertical: 8, marginHorizontal: 14, marginBottom: 10 }}>
+                <Text style={{ textAlign: 'center', fontSize: 13, fontFamily: 'Inter-Bold', color: '#92400e' }}>
+                  🎉 You saved ₹{savings.toFixed(0)} on this order
+                </Text>
+              </View>
+            )}
+            <BillRow label="Item total" value={`₹${order.subtotal}`} strike={itemSavings > 0 ? `₹${(Number(order.subtotal) + itemSavings).toFixed(0)}` : undefined} />
+            <BillRow label="Delivery charge" value={order.deliveryCharge === 0 ? 'FREE' : `₹${order.deliveryCharge}`}
+              green={order.deliveryCharge === 0}
+              strike={freeDeliverySaving > 0 ? `₹${freeDeliverySaving.toFixed(0)}` : undefined} />
+            {campaign > 0 && (
               <BillRow
-                label={`🎉 ${order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer discount'}`}
-                value={`-₹${order.campaignDiscount}`}
+                label={order.couponCodeUsed ? `Code: ${order.couponCodeUsed}` : 'Offer applied'}
+                value={`-₹${campaign.toFixed(0)}`}
                 green
               />
             )}
+            {referral > 0 && <BillRow label="Referral Reward" value={`-₹${referral.toFixed(0)}`} green />}
             <View style={{ height: 1, backgroundColor: colors.gray100, marginHorizontal: 14, marginVertical: 6 }} />
             <BillRow label="Total Paid" value={`₹${order.total}`} bold />
             <View style={{ paddingHorizontal: 14, paddingTop: 4 }}>
@@ -228,7 +455,6 @@ export default function OrderDetailScreen() {
           </View>
         </Card>
 
-        {/* Delivery address */}
         <Card>
           <CardHeader title="Delivery Address" icon="location-outline" />
           <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
@@ -251,7 +477,50 @@ export default function OrderDetailScreen() {
           </View>
         </Card>
 
-        {/* Receipt — delivered only */}
+        {cancelMode && (
+          <Card>
+            <CardHeader title="Cancellation" icon="alert-circle-outline" />
+            {confirmCancel ? (
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter-Medium', color: colors.red500, marginBottom: 8 }}>
+                  Why are you {cancelMode === 'request' ? 'requesting cancellation' : 'cancelling this order'}?
+                </Text>
+                <View style={{ gap: 6, marginBottom: 10 }}>
+                  {CANCEL_REASONS.map(reason => {
+                    const selected = cancelReason === reason.value;
+                    return (
+                      <TouchableOpacity key={reason.value}
+                        onPress={() => setCancelReason(reason.value)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, borderWidth: 1, borderColor: selected ? colors.red500 : colors.gray200, paddingHorizontal: 10, paddingVertical: 8 }}>
+                        <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={16} color={selected ? colors.red500 : colors.gray400} />
+                        <Text style={{ flex: 1, fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray700 }}>{reason.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity onPress={() => { void handleCancel(); }} disabled={!cancelReason || cancelling}
+                  style={{ backgroundColor: colors.red500, borderRadius: 10, paddingVertical: 12, alignItems: 'center', opacity: (!cancelReason || cancelling) ? 0.5 : 1 }}>
+                  <Text style={{ color: '#fff', fontSize: 13, fontFamily: 'Inter-Bold' }}>
+                    {cancelling ? 'Please wait...' : cancelMode === 'request' ? 'Request cancellation' : 'Cancel order'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setConfirmCancel(false); setCancelReason(''); setCancelError(''); }} style={{ paddingVertical: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Keep order</Text>
+                </TouchableOpacity>
+                {cancelError ? <Text style={{ fontSize: 11, fontFamily: 'Inter-Medium', color: colors.red500, textAlign: 'center' }}>{cancelError}</Text> : null}
+              </View>
+            ) : (
+              <TouchableOpacity onPress={() => { setCancelError(''); setCancelReason(''); setConfirmCancel(true); }}
+                style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="close-circle-outline" size={16} color={colors.red500} />
+                <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: colors.red500 }}>
+                  {cancelMode === 'request' ? 'Request cancellation' : 'Cancel Order'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Card>
+        )}
+
         {isDelivered && (
           <Card>
             <CardHeader title="Receipt" icon="document-text-outline" />
@@ -259,18 +528,25 @@ export default function OrderDetailScreen() {
               <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, lineHeight: 18 }}>
                 This is a purchase receipt for your order. Not a GST invoice.
               </Text>
+              <TouchableOpacity
+                onPress={() => { void downloadReceipt(order); }}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primaryLight, borderRadius: 14, paddingVertical: 12, marginTop: 12 }}
+              >
+                <Ionicons name="receipt-outline" size={18} color={colors.primary} />
+                <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.primary }}>Download Receipt</Text>
+              </TouchableOpacity>
             </View>
           </Card>
         )}
 
-        {/* Actions */}
         <View style={{ marginHorizontal: 16, gap: 10 }}>
           <TouchableOpacity
-            onPress={handleOrderAgain}
-            style={{ height: 54, borderRadius: 16, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
+            onPress={() => { void handleOrderAgain(); }}
+            disabled={reordering}
+            style={{ height: 54, borderRadius: 16, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, opacity: reordering ? 0.6 : 1 }}
           >
             <Ionicons name="refresh" size={18} color="#fff" />
-            <Text style={{ fontSize: 15, fontFamily: 'Inter-Bold', color: '#fff' }}>Order Again</Text>
+            <Text style={{ fontSize: 15, fontFamily: 'Inter-Bold', color: '#fff' }}>{reordering ? 'Adding...' : 'Order Again'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.back()}

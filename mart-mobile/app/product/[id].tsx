@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, Alert } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import { useLocalSearchParams, useNavigation, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { storeApi, type Product } from '@/services/api';
 import { useCartStore } from '@/store/cartStore';
+import { useZoneStore } from '@/store/zoneStore';
 import { useThemeColors } from '@/constants/theme';
+import { track } from '@/utils/track';
+import StoreClosedStrip from '@/components/StoreClosedStrip';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const IMG_H = Math.round(SCREEN_W * 0.75);
+const IMG_H = Math.round(Dimensions.get('window').width * 0.75);
 
 const sellingPrice = (price: number, discount?: number) => (
   discount && discount > 0 ? Math.round(price * (1 - discount / 100)) : price
@@ -16,21 +19,56 @@ const sellingPrice = (price: number, discount?: number) => (
 
 export default function ProductDetailScreen() {
   const colors = useThemeColors();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const navigation = useNavigation();
+  const { id, unit } = useLocalSearchParams<{ id: string; unit?: string }>();
+  const selectedZone = useZoneStore(state => state.selectedZone);
+  const storeId = selectedZone?.storeId;
+  const zoneId = selectedZone?.id;
   const { items, addItem, updateQty } = useCartStore();
 
-  const [product,  setProduct]  = useState<Product | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [selUnit,  setSelUnit]  = useState('');
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selUnit, setSelUnit] = useState('');
 
   useEffect(() => {
-    storeApi.getProduct(id).then(res => {
-      const found = res.data.data;
-      const inCart = useCartStore.getState().items.find(i =>
-        i.productId === id && (i.unit === found.unit || found.weightOptions?.some(option => option.label === i.unit))
-      );
-      setProduct(found); setSelUnit(inCart?.unit || found.unit);
-    }).catch(() => {}).finally(() => setLoading(false));
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      try {
+        const response = await storeApi.getProduct(id, storeId, zoneId);
+        const found = response.data.data;
+        const units = [found.unit, ...(found.weightOptions ?? []).map(option => option.label)];
+        const cachedUnit = await AsyncStorage.getItem(`mart-product-unit:${id}`).catch(() => null);
+        const inCart = useCartStore.getState().items.find(item => item.productId === id && units.includes(item.unit));
+        const requestedUnit = Array.isArray(unit) ? unit[0] : unit;
+        const nextUnit = requestedUnit && units.includes(requestedUnit)
+          ? requestedUnit
+          : inCart?.unit ?? (cachedUnit && units.includes(cachedUnit) ? cachedUnit : found.unit);
+        if (cancelled) return;
+        setProduct(found);
+        setSelUnit(nextUnit);
+        track('product_viewed', {
+          productId: found.id,
+          categoryId: found.categoryId,
+          localName: found.localName ?? null,
+        });
+      } catch {
+        if (!cancelled) setProduct(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, storeId, zoneId, unit]);
+
+  const localizedName = product?.localName?.trim() || product?.name || '';
+  useEffect(() => {
+    if (localizedName) navigation.setOptions({ title: localizedName });
+  }, [localizedName, navigation]);
+
+  const selectUnit = useCallback((next: string) => {
+    setSelUnit(next);
+    if (id) void AsyncStorage.setItem(`mart-product-unit:${id}`, next).catch(() => undefined);
   }, [id]);
 
   const optionChips = product?.weightOptions?.length
@@ -50,11 +88,10 @@ export default function ProductDetailScreen() {
     ? Math.round(selectedBasePrice - discountedPrice)
     : 0;
 
-  const cartItem = items.find(i => i.productId === id && i.unit === selUnit);
-  const qty      = cartItem?.quantity ?? 0;
-
+  const cartItem = items.find(item => item.productId === id && item.unit === selUnit);
+  const qty = cartItem?.quantity ?? 0;
   const isOutOfStock = product?.availabilityStatus === 'out_of_stock' || !product?.isAvailable;
-  const otherUnitItem = items.find(i => i.productId === id && i.unit !== selUnit);
+  const otherUnitItem = items.find(item => item.productId === id && item.unit !== selUnit);
 
   const handleAdd = () => {
     if (!product) return;
@@ -86,38 +123,42 @@ export default function ProductDetailScreen() {
     );
   }
 
+  const imageUri = product.largeUrl ?? product.photoVariants?.[0]?.largeUrl ?? product.photoUrl;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <StoreClosedStrip />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* Image */}
         <View style={{ marginHorizontal: 16, marginTop: 8, borderRadius: 20, overflow: 'hidden', backgroundColor: colors.gray50, height: IMG_H }}>
-          {product.largeUrl ?? product.photoVariants?.[0]?.largeUrl ?? product.photoUrl ? (
-            <Image source={{ uri: product.largeUrl ?? product.photoVariants?.[0]?.largeUrl ?? product.photoUrl ?? undefined }} style={{ width: '100%', height: IMG_H, opacity: isOutOfStock ? 0.5 : 1 }} contentFit="cover" transition={200} />
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={{ width: '100%', height: '100%', opacity: isOutOfStock ? 0.5 : 1 }} contentFit="cover" transition={200} />
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 64 }}>🥦</Text>
             </View>
           )}
-          {selectedDiscount > 0 && (
+          {selectedDiscount > 0 ? (
             <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: colors.red500, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
               <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'Inter-Bold' }}>{selectedDiscount}% OFF</Text>
             </View>
-          )}
-          {isOutOfStock && (
+          ) : null}
+          {isOutOfStock ? (
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
               <View style={{ backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12 }}>
                 <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Inter-Bold' }}>Out of Stock</Text>
               </View>
             </View>
-          )}
+          ) : null}
         </View>
 
         <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
-          {/* Name */}
           <View>
             <Text style={{ fontSize: 20, fontFamily: 'Inter-Bold', color: colors.gray900, lineHeight: 26 }}>
-              {product.name}{product.localName ? ` (${product.localName})` : ''}
+              {localizedName}
             </Text>
+            {product.localName?.trim() && product.localName.trim() !== product.name?.trim() ? (
+              <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 3 }}>{product.name}</Text>
+            ) : null}
             <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray500, marginTop: 3 }}>{selUnit || product.unit}</Text>
             {product.categoryName ? (
               <View style={{ marginTop: 6, alignSelf: 'flex-start', backgroundColor: colors.primaryLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
@@ -126,37 +167,34 @@ export default function ProductDetailScreen() {
             ) : null}
           </View>
 
-          {/* Price */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
             <Text style={{ fontSize: 28, fontFamily: 'Inter-Bold', color: colors.gray900 }}>₹{discountedPrice}</Text>
-            {savings > 0 && (
+            {savings > 0 ? (
               <>
                 <Text style={{ fontSize: 16, fontFamily: 'Inter-Regular', color: colors.gray400, textDecorationLine: 'line-through' }}>₹{selectedBasePrice}</Text>
                 <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.primary }}>Save ₹{savings}</Text>
               </>
-            )}
+            ) : null}
           </View>
 
-          {/* Weight options */}
-          {product.weightOptions && product.weightOptions.length > 0 && (
+          {product.weightOptions && product.weightOptions.length > 0 ? (
             <View>
               <Text style={{ fontSize: 12, fontFamily: 'Inter-Bold', color: colors.gray500, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Select Weight</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                <TouchableOpacity onPress={() => setSelUnit(product.unit)}
+                <TouchableOpacity onPress={() => selectUnit(product.unit)}
                   style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: selUnit === product.unit ? colors.primary : colors.gray200, backgroundColor: selUnit === product.unit ? colors.primaryLight : colors.surface }}>
                   <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: selUnit === product.unit ? colors.primary : colors.gray700 }}>{product.unit} — ₹{sellingPrice(product.price, primaryDiscount)}</Text>
                 </TouchableOpacity>
-                {optionChips.map((opt, i) => (
-                  <TouchableOpacity key={i} onPress={() => setSelUnit(opt.label)}
-                    style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: selUnit === opt.label ? colors.primary : colors.gray200, backgroundColor: selUnit === opt.label ? colors.primaryLight : colors.surface }}>
-                    <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: selUnit === opt.label ? colors.primary : colors.gray700 }}>{opt.label} — ₹{sellingPrice(opt.price, opt.discountPercent)}</Text>
+                {optionChips.map((option, index) => (
+                  <TouchableOpacity key={`${option.label}-${index}`} onPress={() => selectUnit(option.label)}
+                    style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: selUnit === option.label ? colors.primary : colors.gray200, backgroundColor: selUnit === option.label ? colors.primaryLight : colors.surface }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter-SemiBold', color: selUnit === option.label ? colors.primary : colors.gray700 }}>{option.label} — ₹{sellingPrice(option.price, option.discountPercent)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
-          )}
+          ) : null}
 
-          {/* Description */}
           {product.description ? (
             <View style={{ backgroundColor: colors.gray50, borderRadius: 16, padding: 14 }}>
               <Text style={{ fontSize: 11, fontFamily: 'Inter-Bold', color: colors.gray500, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>About this product</Text>
@@ -166,7 +204,6 @@ export default function ProductDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Sticky CTA */}
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, borderTopWidth: 1, borderTopColor: colors.gray100 }}>
         {isOutOfStock ? (
           <View style={{ height: 56, borderRadius: 16, backgroundColor: colors.gray100, alignItems: 'center', justifyContent: 'center' }}>

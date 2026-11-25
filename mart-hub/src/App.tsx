@@ -5,6 +5,7 @@ import { authApi } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { subscribeAdminToPush } from './services/push';
+import { configureNativeChrome, setNativeStatusBar } from './services/nativeApp';
 import { startOrderStream, stopOrderStream } from './services/realtime';
 import Layout from './components/Layout';
 import PageSkeleton from './components/PageSkeleton';
@@ -163,6 +164,8 @@ export default function App() {
     return () => stopOrderStream();
   }, [isAuthenticated]);
 
+  useEffect(() => { configureNativeChrome().catch(() => {}); }, []);
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     const themeColor = isDark ? '#18191a' : '#FEB503';
@@ -170,9 +173,9 @@ export default function App() {
       const m = meta as HTMLMetaElement;
       m.content = themeColor;
     });
-    // Fallback for single meta tag
     const single = document.querySelector('meta[name="theme-color"]:not([media])');
     if (single) (single as HTMLMetaElement).content = themeColor;
+    setNativeStatusBar(themeColor, !isDark).catch(() => {});
   }, [isDark]);
 
   return (

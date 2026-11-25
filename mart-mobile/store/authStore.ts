@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import { useGuestTrackingStore } from './guestTrackingStore';
+import { useLoginFlowStore } from './loginFlowStore';
+import { useFunnelStore } from './funnelStore';
+import { clearStoredReferralCode } from '@/utils/referral';
+import { clearNativePushToken } from '@/services/push';
 
-interface Customer {
+export interface Customer {
   id: string; phone: string; name: string | null;
   address: string | null; address2: string | null; photoUrl: string | null;
   orderCount?: number; totalSpent?: number;
@@ -25,10 +30,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hydrated:  false,
 
   hydrate: async () => {
-    const token    = await SecureStore.getItemAsync('mart-auth-token');
-    const raw      = await SecureStore.getItemAsync('mart-auth-customer');
-    const customer = raw ? (JSON.parse(raw) as Customer) : null;
-    set({ token, customer, isLoggedIn: !!token, hydrated: true });
+    try {
+      const token    = await SecureStore.getItemAsync('mart-auth-token');
+      const raw      = await SecureStore.getItemAsync('mart-auth-customer');
+      const customer = raw ? (JSON.parse(raw) as Customer) : null;
+      set({ token, customer, isLoggedIn: !!token, hydrated: true });
+    } catch {
+      set({ hydrated: true });
+    }
   },
 
   login: async (token, customer) => {
@@ -42,12 +51,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!current) return;
     const updated = { ...current, ...data };
     set({ customer: updated });
-    SecureStore.setItemAsync('mart-auth-customer', JSON.stringify(updated));
+    void SecureStore.setItemAsync('mart-auth-customer', JSON.stringify(updated)).catch(() => undefined);
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync('mart-auth-token');
-    await SecureStore.deleteItemAsync('mart-auth-customer');
+    await Promise.allSettled([
+      SecureStore.deleteItemAsync('mart-auth-token'),
+      SecureStore.deleteItemAsync('mart-auth-customer'),
+    ]);
+    try {
+      useGuestTrackingStore.getState().clearTokens();
+      useLoginFlowStore.getState().clear();
+      useFunnelStore.getState().resetSession();
+      clearStoredReferralCode();
+    } catch {}
+    void clearNativePushToken().catch(() => undefined);
     set({ token: null, customer: null, isLoggedIn: false });
   },
 }));
