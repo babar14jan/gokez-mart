@@ -8,6 +8,11 @@ import { authApi } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeColors } from '@/constants/theme';
 
+function isValidName(value: string): boolean {
+  const name = value.trim().replace(/\s+/g, ' ');
+  return name.length >= 2 && name.length <= 80 && /\p{L}/u.test(name);
+}
+
 export default function SetupProfileScreen() {
   const colors = useThemeColors();
   const { updateProfile } = useAuthStore();
@@ -16,12 +21,13 @@ export default function SetupProfileScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!name.trim()) { Alert.alert('Please enter your name'); return; }
+    if (!isValidName(name)) { Alert.alert('Enter a valid name using at least 2 characters.'); return; }
     if (!address.trim()) { Alert.alert('Please enter your delivery address'); return; }
+    const normalized = name.trim().replace(/\s+/g, ' ');
     setLoading(true);
     try {
-      await authApi.updateProfile({ name: name.trim(), address: address.trim() });
-      updateProfile({ name: name.trim(), address: address.trim() });
+      await authApi.updateProfile({ name: normalized, address: address.trim() });
+      updateProfile({ name: normalized, address: address.trim() });
       router.replace('/(tabs)');
     } catch {
       Alert.alert('Failed to save profile. Try again.');
@@ -38,20 +44,21 @@ export default function SetupProfileScreen() {
     >
       <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 80, paddingBottom: 40 }}>
         <Text className="text-2xl font-bold mb-1" style={{ fontFamily: 'Inter-Bold', color: colors.gray900 }}>
-          Almost there! 👋
+          Almost there.
         </Text>
         <Text className="text-sm mb-8" style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>
           Tell us your name and where to deliver
         </Text>
 
-        <Text className="text-sm font-medium mb-1" style={{ fontFamily: 'Inter-Medium', color: colors.gray700 }}>Your name</Text>
+        <Text className="text-sm font-medium mb-1" style={{ fontFamily: 'Inter-Medium', color: colors.gray700 }}>Your full name *</Text>
         <TextInput
           className="rounded-xl px-4 h-14 text-base mb-4"
           style={{ fontFamily: 'Inter-Regular', borderWidth: 1, borderColor: colors.gray200, backgroundColor: colors.gray50, color: colors.gray900 }}
-          placeholder="Full name"
+          placeholder="Your full name *"
           placeholderTextColor={colors.gray400}
           value={name}
           onChangeText={setName}
+          autoComplete="name"
           autoFocus
         />
 
@@ -69,9 +76,9 @@ export default function SetupProfileScreen() {
 
         <TouchableOpacity
           className="mt-6 h-14 rounded-xl items-center justify-center"
-          style={{ backgroundColor: colors.primary }}
+          style={{ backgroundColor: isValidName(name) && address.trim() && !loading ? colors.primary : colors.gray200 }}
           onPress={handleSave}
-          disabled={loading}
+          disabled={loading || !isValidName(name) || !address.trim()}
         >
           {loading
             ? <ActivityIndicator color="#fff" />

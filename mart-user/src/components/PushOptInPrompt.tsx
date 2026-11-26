@@ -1,31 +1,69 @@
 import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
 import { authApi } from '../services/api';
-import { isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
+import {
+  isPushOptInDue,
+  isPushSupported,
+  PUSH_OPT_IN_REQUEST_EVENT,
+  recordPushOptInPrompt,
+  requestNotificationPermission,
+  subscribeToPush,
+  type PushOptInReason,
+} from '../services/push';
+import { PERMISSIONS_SEEN_KEY } from '../services/onboardingPermissions';
 import { hasNativePushToken, isNativePush, requestNativePushPermission, syncNativePushAssociation } from '../services/nativePush';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 
-const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
-const PROMPT_KEY = 'mart_push_prompt_at';
+function canShowPushPrompt(): boolean {
+  if (isNativePush()) return !hasNativePushToken();
+  if (!isPushSupported()) return false;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'default') return false;
+  return true;
+}
+
+function hasSeenPermissionsPage(): boolean {
+  try {
+    return localStorage.getItem(PERMISSIONS_SEEN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 export default function PushOptInPrompt() {
   const isLoggedIn = useCustomerAuthStore((s) => s.isLoggedIn);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState<PushOptInReason>('legacy');
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    if (isNativePush()) {
-      if (hasNativePushToken()) return;
-    } else {
-      if (!isPushSupported()) return;
-      if (typeof Notification === 'undefined' || Notification.permission !== 'default') return;
-    }
-    const last = Number(localStorage.getItem(PROMPT_KEY) || 0);
-    if (last && Date.now() - last < COOLDOWN_MS) return;
-    const timer = window.setTimeout(() => setOpen(true), 4000);
+    if (hasSeenPermissionsPage()) return;
+    if (!canShowPushPrompt()) return;
+    if (!isPushOptInDue('legacy')) return;
+    const timer = window.setTimeout(() => {
+      setReason('legacy');
+      setOpen(true);
+    }, 4000);
     return () => window.clearTimeout(timer);
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    const onRequest = (event: Event) => {
+      const requested = (event as CustomEvent<PushOptInReason>).detail;
+      if (requested !== 'permissions-decline' && requested !== 'later-order') return;
+      if (!canShowPushPrompt()) return;
+      if (!isPushOptInDue(requested)) return;
+      setReason(requested);
+      setOpen(true);
+    };
+    window.addEventListener(PUSH_OPT_IN_REQUEST_EVENT, onRequest);
+    return () => window.removeEventListener(PUSH_OPT_IN_REQUEST_EVENT, onRequest);
+  }, []);
+
+  const close = () => {
+    setOpen(false);
+    recordPushOptInPrompt(reason);
+  };
 
   const accept = async () => {
     setBusy(true);
@@ -44,14 +82,8 @@ export default function PushOptInPrompt() {
       }
     } finally {
       setBusy(false);
-      setOpen(false);
-      try { localStorage.setItem(PROMPT_KEY, String(Date.now())); } catch { /* noop */ }
+      close();
     }
-  };
-
-  const decline = () => {
-    setOpen(false);
-    try { localStorage.setItem(PROMPT_KEY, String(Date.now())); } catch { /* noop */ }
   };
 
   if (!open) return null;
@@ -69,12 +101,12 @@ export default function PushOptInPrompt() {
               Enable notifications for order updates and exclusive offers. You can turn them off anytime in Account.
             </p>
           </div>
-          <button type="button" onClick={decline} aria-label="Close" className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700">
+          <button type="button" onClick={close} aria-label="Close" className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700">
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="mt-4 flex gap-2">
-          <button type="button" onClick={decline} className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 dark:border-slate-600 dark:text-slate-200">
+          <button type="button" onClick={close} className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 dark:border-slate-600 dark:text-slate-200">
             Not now
           </button>
           <button type="button" onClick={accept} disabled={busy} className="flex-1 rounded-xl bg-gokez-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">

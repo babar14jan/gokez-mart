@@ -6,12 +6,19 @@
   "scripts": {
     "dev": "vite --port 5178",
     "build": "tsc && vite build && node scripts/write-version.mjs",
+    "cap:build": "npm run build && cap sync android",
+    "cap:open": "cap open android",
+    "cap:run": "cap run android",
+    "apk:debug": "npm run cap:build && cd android && ./gradlew assembleDebug",
     "gen:ios-splash": "node scripts/gen-ios-splash.mjs",
     "gen:app-icons": "node scripts/gen-app-icons.mjs",
     "gen:brand-assets": "node scripts/gen-brand-assets.mjs",
     "preview": "vite preview --port 5178"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/core": "^7.6.10",
+    "@capacitor/status-bar": "^7.0.6",
     "axios": "^1.6.2",
     "lucide-react": "^0.292.0",
     "react": "^18.2.0",
@@ -22,6 +29,7 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.10",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@vitejs/plugin-react": "^4.2.0",

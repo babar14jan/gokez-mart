@@ -25,6 +25,18 @@ export interface StoreClosedCopy {
   message: string;
 }
 
+export interface ClosedNoticeVisibility {
+  view: string;
+  isEmbed: boolean;
+  onboardingActive: boolean;
+  loginActive: boolean;
+  checkoutActive: boolean;
+}
+
+export function shouldShowClosedNotice(input: ClosedNoticeVisibility): boolean {
+  return input.view === 'home' && !input.isEmbed && !input.onboardingActive && !input.loginActive && !input.checkoutActive;
+}
+
 /** Remember the store's wording, so it is available during an outage. */
 export function rememberClosedCopy(greeting: string | undefined | null, message: string | undefined | null): void {
   try {

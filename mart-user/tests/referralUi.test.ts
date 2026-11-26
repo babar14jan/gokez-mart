@@ -202,7 +202,8 @@ describe('referral integration points', () => {
       'REFERRAL_LINK_CODE_KEY',
       "window.history.replaceState({}, '', '/login')",
       "if (referralLinkCode) return 'login';",
-      "if (path === '/login') return 'login';",
+      "if (path === '/login') {",
+      "if (!welcomeSeen) { window.history.replaceState({}, '', '/welcome'); return 'welcome'; }",
       'useAccountLoginStore.getState().openLogin()',
     ]);
     assert.ok(app.indexOf('referralCodeFromSearch(window.location.search)') < app.indexOf("window.history.replaceState({}, '', VIEW_PATH[storedView])"));
@@ -267,13 +268,12 @@ describe('referral integration points', () => {
     assertIncludes('src/pages/AccountPage.tsx', ['aria-label="Refer and Earn - log in"']);
     assertIncludes('src/components/BottomNav.tsx', [
       "import GokezMarkIcon from './GokezMarkIcon'",
-      '<GokezMarkIcon className="h-6 w-6" filled={isActive} />',
+      '<GokezMarkIcon className="h-6 w-6" />',
     ]);
     assertIncludes('src/components/GokezMarkIcon.tsx', [
-      "'/icons/gokez_mart_nav.webp'",
-      "'/icons/gokez_mart_nav.png'",
-      "filled ? 'opacity-100' : 'opacity-75'",
-      'return <Home className={iconClass} />',
+      'viewBox="0 0 127 128"',
+      'fillRule="evenodd"',
+      'fill="#fff"',
     ]);
     assertIncludes('src/components/Navbar.tsx', [
       "'/icons/gokez_mart_nav.webp'",

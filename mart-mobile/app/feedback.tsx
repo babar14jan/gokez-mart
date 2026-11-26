@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { feedbackApi } from '@/services/api';
+import { useZoneStore } from '@/store/zoneStore';
+import { newIdempotencyKey } from '@/utils/idempotency';
 import { useThemeColors } from '@/constants/theme';
 
 const CATEGORIES = [
@@ -17,8 +19,15 @@ const CATEGORIES = [
 
 const STAR_LABELS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
 
+function paramValue(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export default function FeedbackScreen() {
   const colors = useThemeColors();
+  const params = useLocalSearchParams<{ orderId?: string | string[]; storeId?: string | string[] }>();
+  const selectedZone = useZoneStore(s => s.selectedZone);
+  const requestKey = useRef(newIdempotencyKey());
   const [rating,     setRating]     = useState(0);
   const [category,   setCategory]   = useState('');
   const [message,    setMessage]    = useState('');
@@ -26,15 +35,29 @@ export default function FeedbackScreen() {
   const [done,       setDone]       = useState(false);
   const [error,      setError]      = useState('');
 
+  const orderId = paramValue(params.orderId);
+  const storeId = paramValue(params.storeId) ?? selectedZone?.storeId;
+  const zoneLabel = selectedZone?.name ? ` · ${selectedZone.name}` : '';
+
   const handleSubmit = async () => {
     if (!rating || !category) return;
-    setSubmitting(true); setError('');
+    setSubmitting(true);
+    setError('');
     try {
-      await feedbackApi.submit({ rating, category, message: message.trim() || undefined });
+      await feedbackApi.submit({
+        rating,
+        category,
+        message: message.trim() || undefined,
+        storeId,
+        orderId,
+      }, requestKey.current);
+      requestKey.current = newIdempotencyKey();
       setDone(true);
     } catch (e: any) {
       setError(e?.response?.data?.error ?? 'Failed to submit. Please try again.');
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (done) {
@@ -56,8 +79,14 @@ export default function FeedbackScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        {storeId || orderId ? (
+          <View style={{ backgroundColor: colors.primaryLight, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 14 }}>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.primaryDark }}>
+              {orderId ? `Order ${orderId}${zoneLabel}` : `Your store${zoneLabel}`}
+            </Text>
+          </View>
+        ) : null}
 
-        {/* Star rating */}
         <View style={{ backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.gray100, padding: 20, alignItems: 'center', marginBottom: 14 }}>
           <Text style={{ fontSize: 15, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 2 }}>How was your experience?</Text>
           <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, marginBottom: 14 }}>Tap a star to rate</Text>
@@ -71,7 +100,6 @@ export default function FeedbackScreen() {
           {rating > 0 && <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: '#f59e0b' }}>{STAR_LABELS[rating]}</Text>}
         </View>
 
-        {/* Category */}
         <View style={{ backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.gray100, padding: 16, marginBottom: 14 }}>
           <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 10 }}>What's your feedback about?</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -92,7 +120,6 @@ export default function FeedbackScreen() {
           </View>
         </View>
 
-        {/* Message */}
         <View style={{ backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.gray100, padding: 16, marginBottom: 16 }}>
           <Text style={{ fontSize: 14, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 8 }}>
             Tell us more <Text style={{ fontFamily: 'Inter-Regular', color: colors.gray500, fontSize: 12 }}>(optional)</Text>

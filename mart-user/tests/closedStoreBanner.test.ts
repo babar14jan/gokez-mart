@@ -14,11 +14,13 @@
  */
 
 import { test, describe } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import StoreStatusStrip from '../src/components/StoreStatusStrip';
+import { shouldShowClosedNotice } from '../src/utils/storeClosed';
 
 const CLOSED = {
   isOpen: false,
@@ -133,5 +135,23 @@ describe('closed store banner', () => {
     });
     assert.ok(!html.includes('{until}'), 'the placeholder must never reach the customer');
     assert.match(html, /We will be back later\./);
+  });
+
+  test('the strip and arrival card mount only on an uncovered Home view', () => {
+    const base = { view: 'home', isEmbed: false, onboardingActive: false, loginActive: false, checkoutActive: false };
+    assert.equal(shouldShowClosedNotice(base), true);
+    assert.equal(shouldShowClosedNotice({ ...base, view: 'login' }), false);
+    assert.equal(shouldShowClosedNotice({ ...base, view: 'welcome' }), false);
+    assert.equal(shouldShowClosedNotice({ ...base, view: 'permissions' }), false);
+    assert.equal(shouldShowClosedNotice({ ...base, loginActive: true }), false);
+    assert.equal(shouldShowClosedNotice({ ...base, checkoutActive: true }), false);
+    assert.equal(shouldShowClosedNotice({ ...base, isEmbed: true }), false);
+  });
+
+  test('the standalone Got it card is gone; only checkout can open the dialog', () => {
+    const source = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /closedCard/);
+    assert.doesNotMatch(source, /primaryLabel="Got it"/);
+    assert.match(source, /primaryLabel="Place order"/);
   });
 });

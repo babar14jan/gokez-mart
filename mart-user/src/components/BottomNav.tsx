@@ -1,6 +1,8 @@
 import { Fragment } from 'react';
-import { LayoutGrid, Package, User } from 'lucide-react';
+import { User } from 'lucide-react';
+import CategoryGridIcon from './CategoryGridIcon';
 import GokezMarkIcon from './GokezMarkIcon';
+import OrderPackageIcon from './OrderPackageIcon';
 
 type NavView = 'home' | 'categories' | 'orders' | 'account';
 
@@ -17,8 +19,8 @@ interface BottomNavProps {
 
 const tabs = [
   { id: 'home',       label: 'Home' },
-  { id: 'categories', label: 'Categories', Icon: LayoutGrid },
-  { id: 'orders',     label: 'Orders',     Icon: Package },
+  { id: 'categories', label: 'Categories' },
+  { id: 'orders',     label: 'Orders' },
   { id: 'account',    label: 'Account',    Icon: User },
 ] as const;
 
@@ -52,10 +54,14 @@ export default function BottomNav({ active, onChange, onOpenSearch, freshActive 
                   isActive ? 'text-gokez-700 dark:text-gokez-300' : 'text-gray-500 hover:text-gokez-700 dark:text-slate-400 dark:hover:text-gokez-300'
                 }`}
               >
-                {Icon ? (
+                {id === 'categories' ? (
+                  <CategoryGridIcon className="h-6 w-6" filled={isActive} />
+                ) : id === 'orders' ? (
+                  <OrderPackageIcon className="h-6 w-6" filled={isActive} />
+                ) : Icon ? (
                   <Icon className="h-6 w-6" fill={id === 'account' && isActive ? 'currentColor' : 'none'} strokeWidth={isActive ? 2.4 : 2} />
                 ) : (
-                  <GokezMarkIcon className="h-6 w-6" filled={isActive} />
+                  <GokezMarkIcon className="h-6 w-6" />
                 )}
                 <span className={`whitespace-nowrap text-[12px] font-semibold ${isActive ? 'font-bold' : ''}`}>
                   {label}

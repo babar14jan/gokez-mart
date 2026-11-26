@@ -1,9 +1,10 @@
-import { View, StyleSheet, Platform } from 'react-native';
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCartStore } from '@/store/cartStore';
 import { useThemeColors } from '@/constants/theme';
+import StoreClosedStrip from '@/components/StoreClosedStrip';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -22,6 +23,7 @@ export default function TabsLayout() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <StoreClosedStrip />
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -60,7 +62,8 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="categories"
           options={{
-            title: 'Vegetables',
+            title: 'Categories',
+            tabBarBadge: totalItems() > 0 ? String(totalItems()) : undefined,
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? TAB_ICONS.categories.active : TAB_ICONS.categories.inactive}
@@ -86,7 +89,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="profile"
           options={{
-            title: 'Profile',
+            title: 'Account',
             tabBarIcon: ({ color, focused }) => (
               <Ionicons
                 name={focused ? TAB_ICONS.profile.active : TAB_ICONS.profile.inactive}
