@@ -427,7 +427,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             // button and no guest exit). It renders above whatever hosted the
             // flow, so the account page and the checkout overlay behave the same.
             <div className="login-brand-bg fixed inset-0 z-[60] flex flex-col dark:bg-slate-900">
-              <div className="relative shrink-0 bg-[#ADFBBD] pt-[env(safe-area-inset-top)] dark:bg-[#18191a]">
+              <div className="relative shrink-0 bg-[#e5fde5] pt-[env(safe-area-inset-top)] dark:bg-[#18191a]">
                 <div className="h-14" />
               </div>
 

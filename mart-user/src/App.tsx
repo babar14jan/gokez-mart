@@ -51,7 +51,9 @@ import { REFERRAL_LINK_CODE_KEY, referralCodeFromSearch } from './utils/referral
 import { configureNativeChrome, hasNativeLocationPermission, isNativeAndroid, setNativeStatusBar, watchNativeBackButton } from './services/nativeApp';
 import { clearNativePushAssociation, consumePendingPushRoute, isNativePush, startNativePush, syncNativePushAssociation } from './services/nativePush';
 
-type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'referral' | 'fresh';
+const WELCOME_SEEN_KEY = 'gokez_mart_welcome_seen_v1';
+
+type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'referral' | 'fresh' | 'welcome';
 
 // Canonical URL for each view. Used to give every tab its own history entry so a
 // sub-page opened from it can return there with the back button.
@@ -64,6 +66,7 @@ const VIEW_PATH: Record<View, string> = {
   orders: '/orders',
   account: '/account',
   login: '/login',
+  welcome: '/welcome',
   privacy: '/privacy',
   terms: '/terms',
   grievance: '/grievance',
@@ -172,6 +175,8 @@ export default function App() {
   })();
   const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
   const [view, setView] = useState<View>(() => {
+    const welcomeSeen = typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) === 'true';
+    const loggedIn = useCustomerAuthStore.getState().isLoggedIn;
     if (referralLinkCode) return 'login';
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
     // The public, crawlable pages keep their own view so direct links and the
@@ -187,6 +192,11 @@ export default function App() {
     if (path === '/referrals') return 'referral';
     if (path === '/account') return 'account';
     if (path === '/login') return 'login';
+    if (path === '/welcome') {
+      if (loggedIn) { window.history.replaceState({}, '', '/'); return 'home'; }
+      if (welcomeSeen) { window.history.replaceState({}, '', '/login'); return 'login'; }
+      return 'welcome';
+    }
     // The tab paths are real views, not just history markers: a reload on
     // /categories, /orders or /deals has to come back to that tab instead of
     // being normalised to Home (the popstate handler already resolved them).
@@ -194,6 +204,22 @@ export default function App() {
     if (path === '/categories' || path.startsWith('/categories')) return 'categories';
     if (path === '/deals') return 'deals';
     if (path === '/') {
+      if (loggedIn) {
+        if (!isEmbed) {
+          let stored: string | null = null;
+          try { stored = sessionStorage.getItem(LAST_VIEW_KEY); } catch {}
+          const storedView = (Object.keys(VIEW_PATH) as View[]).find(v => VIEW_PATH[v] === stored);
+          if (storedView) {
+            window.history.replaceState({}, '', VIEW_PATH[storedView]);
+            return storedView;
+          }
+        }
+        return 'home';
+      }
+      if (!welcomeSeen) {
+        window.history.replaceState({}, '', '/welcome');
+        return 'welcome';
+      }
       // A refresh keeps whatever tab the shopper was on. The last view is
       // mirrored into sessionStorage on every change and wins over the
       // default below, which is only the first-visit destination.
@@ -209,7 +235,7 @@ export default function App() {
       // A first visit for a signed-out shopper lands on the login page, unless
       // the link carries tracking/referral parameters (e.g. a QR code), in which
       // case it lands on Home so the campaign is not blocked by a login wall.
-      if (!useCustomerAuthStore.getState().isLoggedIn && !window.location.search) return 'login';
+      if (!window.location.search) return 'login';
       return 'home';
     }
     // Unrecognized/private routes boot to Home and are normalized so the address
@@ -276,12 +302,14 @@ export default function App() {
   const accountLoginOpen = useAccountLoginStore((s) => s.open);
   useEffect(() => {
     if (isLoggedIn) return;
+    if (view === 'welcome') return;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) !== 'true') return;
     if (window.location.search) return;
     if (sessionStorage.getItem('mart-boot-login-done')) return;
     sessionStorage.setItem('mart-boot-login-done', '1');
     useLoginFlowStore.getState().setGuestReturnPath('/');
     useAccountLoginStore.getState().openLogin();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, view]);
   useEffect(() => {
     if (view !== 'account' && view !== 'login') useAccountLoginStore.getState().closeLogin();
   }, [view]);
@@ -583,6 +611,7 @@ export default function App() {
   const showingSuccess = Boolean(successData);
   const loginPageActive = view === 'login' || (view === 'account' && accountLoginOpen && !isLoggedIn);
   const loginActive = showLoginModal || loginPageActive;
+  const welcomeActive = view === 'welcome';
   const scrollRef = useRef<HTMLDivElement>(null);
   // Categories scrolls inside its product pane, not .app-scroll. Held in state
   // (callback ref) so useScrollChrome re-attaches when the pane mounts.
@@ -598,7 +627,7 @@ export default function App() {
   // end of a page only: the nav (an overlay) returns there, the delivery row
   // (in-flow) does not. Enabled everywhere the chrome renders, except while an
   // overlay owns the screen (checkout) or the login flow replaces the header.
-  const chromeAutoHide = !checkoutActive && !accountSubPage && view !== 'account';
+  const chromeAutoHide = !welcomeActive && !checkoutActive && !accountSubPage && view !== 'account';
   const { hidden: chromeHidden, navHidden } = useScrollChrome(scrollRef, chromeAutoHide, categoriesPaneEl);
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const pullDistance = useRef(0);
@@ -607,7 +636,7 @@ export default function App() {
 
   const handlePullTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
     if (event.touches.length !== 1 || scrollRef.current?.scrollTop !== 0) return;
-    if (checkoutActive || showLoginModal || catalogSearchOpen || comboSheet || dealsSheet) return;
+    if (welcomeActive || checkoutActive || showLoginModal || catalogSearchOpen || comboSheet || dealsSheet) return;
     const target = event.target as HTMLElement;
     if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
     const touch = event.touches[0];
@@ -675,6 +704,7 @@ export default function App() {
   // refresh, PWA resume). Checkout deliberately stays out: it is an overlay, and
   // the pending-checkout flow (not the view) is what restores it after a reload.
   useEffect(() => {
+    if (view === 'welcome') return;
     try { sessionStorage.setItem(LAST_VIEW_KEY, VIEW_PATH[view]); } catch {}
   }, [view]);
 
@@ -684,9 +714,9 @@ export default function App() {
     const meta = document.querySelector('meta[name="theme-color"]');
     const mobile = detectPlatform() === 'ios' || detectPlatform() === 'android';
     const themeColor = loginPageActive
-      ? '#ADFBBD'
+      ? '#e5fde5'
       : loginActive
-        ? '#ADFBBD'
+        ? '#e5fde5'
         : effectiveDark
           ? '#18191a'
           : mobile
@@ -722,6 +752,13 @@ export default function App() {
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
       else if (path === '/login') setView('login');
+      else if (path === '/welcome') {
+        const loggedIn = useCustomerAuthStore.getState().isLoggedIn;
+        const welcomeSeen = typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) === 'true';
+        if (loggedIn) { window.history.replaceState({}, '', '/'); setView('home'); }
+        else if (welcomeSeen) { window.history.replaceState({}, '', '/login'); setView('login'); }
+        else setView('welcome');
+      }
       // Needed because the login redirect lands here: AccountPage navigates to
       // postLoginPath, which is '/orders' for the guest "Track My Orders" CTA.
       // Without this branch the pushState fell through to setView('home'), so a
@@ -999,6 +1036,12 @@ export default function App() {
     const nextPath = VIEW_PATH[v];
     const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
     if (currentPath !== nextPath) window.history.pushState({}, '', nextPath);
+  };
+
+  const handleWelcomeGetStarted = () => {
+    try { localStorage.setItem(WELCOME_SEEN_KEY, 'true'); } catch {}
+    setView('login');
+    window.history.pushState({}, '', '/login');
   };
 
 
@@ -1403,7 +1446,7 @@ export default function App() {
 
   return (
     <AppShell
-      className={loginPageActive ? 'login-active bg-[#e8f6ec]' : view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'}
+      className={welcomeActive ? 'welcome-active bg-[#e5fde5]' : loginPageActive ? 'login-active bg-[#e5fde5]' : view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'}
       scrollRef={scrollRef}
       onTouchStart={handlePullTouchStart}
       onTouchMove={handlePullTouchMove}
@@ -1451,7 +1494,7 @@ export default function App() {
 
       {/* In-place refresh spinner. Absolutely positioned so the gesture never
           shifts the page or the navbar — it just rotates where it is. */}
-      {(refreshing || pullDistanceVisible > 0) && (
+      {!welcomeActive && (refreshing || pullDistanceVisible > 0) && (
         <div
           className="pointer-events-none absolute left-1/2 z-[80] -translate-x-1/2"
           style={{
@@ -1475,7 +1518,7 @@ export default function App() {
          never scrolls away and page content pins beneath it at top-0. */
       header={
         <>
-      {!isEmbed && !accountSubPage && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
+      {!isEmbed && !accountSubPage && !welcomeActive && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
         <Navbar
           onUseMyLocation={useMyLocation}
           activeView={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'}
@@ -1491,7 +1534,7 @@ export default function App() {
       {/* Closed-store notice: below the header, on every page, never blocking.
           The store's own greeting and message come from the hub's Hours tab;
           without them the notice falls back to the default wording. */}
-      {!isEmbed && !accountSubPage && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
+      {!isEmbed && !accountSubPage && !welcomeActive && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
         <StoreStatusStrip
           openState={openState}
           closedGreeting={settings.store_closed_greeting}
@@ -1500,9 +1543,9 @@ export default function App() {
       )}
         </>
       }
-      floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage} />}
+      floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage || welcomeActive} />}
       bottomNavHidden={navHidden}
-      bottomNav={!checkoutActive && view !== 'login' ? (
+      bottomNav={!checkoutActive && view !== 'login' && !welcomeActive ? (
         <div className="sm:hidden">
           <BottomNav active={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'} onChange={handleNavChange} onOpenSearch={openFreshPage} freshActive={view === 'fresh'} />
         </div>
@@ -1632,7 +1675,26 @@ export default function App() {
       )}
 
       {/* Pages */}
-      {view === 'about' ? (
+      {view === 'welcome' ? (
+        <div className="absolute inset-0 touch-none overflow-hidden bg-[#018330]">
+          <img
+            src="/get_started.webp"
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full select-none object-fill"
+            draggable={false}
+          />
+          <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
+            <button
+              type="button"
+              onClick={handleWelcomeGetStarted}
+              className="min-h-[52px] w-full max-w-sm rounded-2xl bg-white px-6 py-3 text-base font-extrabold text-gokez-800 shadow-lg ring-1 ring-black/5 transition-colors hover:bg-white/95 active:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+            >
+              Get Started
+            </button>
+          </div>
+        </div>
+      ) : view === 'about' ? (
         <DeferredPage><AboutPage /></DeferredPage>
       ) : view === 'what-is-gokez-mart' ? (
         <DeferredPage><WhatIsGokezMartPage /></DeferredPage>
