@@ -89,6 +89,11 @@ export default function AddressesScreen() {
                   )}
                 </View>
                 <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: colors.gray700, lineHeight: 18 }}>{item.addressLine}</Text>
+                {item.latitude != null && item.longitude != null && (
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: colors.gray400, marginTop: 4 }}>
+                    📍 {item.latitude}, {item.longitude}
+                  </Text>
+                )}
               </View>
             </View>
             {isSelecting && (
@@ -109,7 +114,7 @@ export default function AddressesScreen() {
                   <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.gray600 }}>Set Default</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={() => router.push({ pathname: '/address-form', params: { id: item.id, label: item.label, addressLine: item.addressLine } })}
+              <TouchableOpacity onPress={() => router.push({ pathname: '/address-form', params: { id: item.id, label: item.label, addressLine: item.addressLine, latitude: item.latitude != null ? String(item.latitude) : '', longitude: item.longitude != null ? String(item.longitude) : '' } })}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.gray200 }}>
                 <Ionicons name="pencil-outline" size={13} color={colors.gray600} />
                 <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.gray600 }}>Edit</Text>

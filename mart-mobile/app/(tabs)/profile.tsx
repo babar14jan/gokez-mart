@@ -8,14 +8,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Constants from 'expo-constants';
-import { authApi, addressApi, type Address } from '@/services/api';
+import { authApi, addressApi, storeApi, type Address, type PublicSettings } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { useZoneStore } from '@/store/zoneStore';
 import { useThemeColors } from '@/constants/theme';
+import { APP_CONFIG } from '@/constants/config';
 import LoginPrompt from '@/components/features/LoginPrompt';
+
+function isValidName(value: string): boolean {
+  const name = value.trim().replace(/\s+/g, ' ');
+  return name.length >= 2 && name.length <= 80 && /\p{L}/u.test(name);
+}
 
 export default function ProfileScreen() {
   const colors = useThemeColors();
   const { customer, updateProfile, logout, isLoggedIn } = useAuthStore();
+  const selectedZone = useZoneStore(s => s.selectedZone);
 
   const [editingName,      setEditingName]      = useState(false);
   const [nameVal,          setNameVal]          = useState(customer?.name ?? '');
@@ -24,22 +32,35 @@ export default function ProfileScreen() {
   const [defaultAddress,   setDefaultAddress]   = useState<Address | null>(null);
   const [exportLoading,    setExportLoading]    = useState(false);
   const [exportDone,       setExportDone]       = useState(false);
+  const [settings,         setSettings]         = useState<PublicSettings | null>(null);
 
   const initial = customer?.name
     ? customer.name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
     : (customer?.phone ?? '?')[0].toUpperCase();
+
+  const whatsappNumber = (settings?.whatsapp_number || APP_CONFIG.whatsapp).replace(/\D/g, '') || APP_CONFIG.whatsapp;
+  const supportName = settings?.support_name?.trim() || APP_CONFIG.name;
+  const supportPhone = settings?.support_phone?.trim() || '';
 
   useEffect(() => {
     if (!isLoggedIn) return;
     addressApi.list().then(r => setDefaultAddress(r.data.data?.find(a => a.isDefault) ?? r.data.data?.[0] ?? null)).catch(() => {});
   }, [isLoggedIn]);
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    storeApi.getSettings(selectedZone?.storeId, selectedZone?.id)
+      .then(r => setSettings(r.data.data ?? null))
+      .catch(() => undefined);
+  }, [isLoggedIn, selectedZone?.id, selectedZone?.storeId]);
+
   const saveName = async () => {
-    if (!nameVal.trim()) return;
+    if (!isValidName(nameVal)) { Alert.alert('Enter a valid name using at least 2 characters.'); return; }
+    const normalized = nameVal.trim().replace(/\s+/g, ' ');
     setSavingName(true);
     try {
-      await authApi.updateProfile({ name: nameVal.trim() });
-      updateProfile({ name: nameVal.trim() });
+      await authApi.updateProfile({ name: normalized });
+      updateProfile({ name: normalized });
       setEditingName(false);
     } catch { Alert.alert('Error', 'Failed to save name. Try again.'); }
     finally { setSavingName(false); }
@@ -68,25 +89,6 @@ export default function ProfileScreen() {
     finally { setExportLoading(false); }
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all data. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: async () => {
-            try {
-              await authApi.requestDeletion('user_request');
-              Alert.alert('Request Submitted', 'Your account deletion request has been submitted. We\'ll process it within 7 days.');
-            } catch { Alert.alert('Error', 'Failed to submit request. Try again.'); }
-          },
-        },
-      ]
-    );
-  };
-
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -110,9 +112,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
 
-        {/* ── Profile header ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginHorizontal: 16, marginTop: 20, paddingBottom: 20 }}>
-          {/* Large avatar */}
           <TouchableOpacity onPress={handlePickPhoto} disabled={uploadingPhoto}
             style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
             {uploadingPhoto ? (
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
                 <TextInput
                   style={{ flex: 1, borderWidth: 1.5, borderColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 16, fontFamily: 'Inter-Regular', color: colors.gray900, backgroundColor: colors.gray50 }}
                   value={nameVal} onChangeText={setNameVal}
-                  placeholder="Your full name" placeholderTextColor={colors.gray400}
+                  placeholder="Your full name *" placeholderTextColor={colors.gray400}
                   autoFocus returnKeyType="done" onSubmitEditing={saveName}
                 />
                 <TouchableOpacity onPress={saveName} disabled={savingName}
@@ -163,7 +163,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── Delivery Address ── */}
         <SectionLabel label="Delivery Address" />
         <Card>
           <TouchableOpacity onPress={() => router.push('/addresses')}
@@ -187,24 +186,46 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </Card>
 
-        {/* ── Settings ── */}
+        <SectionLabel label="Rewards" />
+        <Card>
+          <LinkRow icon="gift-outline" iconColor="#10b981"
+            label="Refer & Earn" sub="Invite friends and earn rewards" onPress={() => router.push('/referral' as any)} />
+          <Divider />
+          <LinkRow icon="bulb-outline" iconColor="#eab308"
+            label="Suggest a product" sub="Tell us what you'd like us to stock" onPress={() => router.push('/suggest-product' as any)} />
+        </Card>
+
         <SectionLabel label="Settings" />
         <Card>
           <LinkRow icon="notifications-outline" iconColor="#8b5cf6"
             label="Notifications" sub="Order updates & promotional alerts" onPress={() => router.push('/notification-settings')} />
         </Card>
 
-        {/* ── Contact ── */}
         <SectionLabel label="Contact Gokez" />
         <Card>
-          <LinkRow icon="mail-outline" iconColor="#3b82f6" label="Email Support" sub="support@gokez.com"
-            onPress={() => Linking.openURL('mailto:support@gokez.com')} />
+          <LinkRow icon="mail-outline" iconColor="#3b82f6" label="Email Support" sub={APP_CONFIG.supportEmail}
+            onPress={() => Linking.openURL(`mailto:${APP_CONFIG.supportEmail}`)} />
+          {supportPhone ? (
+            <>
+              <Divider />
+              <LinkRow icon="call-outline" iconColor="#10b981" label={`${supportName} Support`} sub={supportPhone}
+                onPress={() => Linking.openURL(`tel:${supportPhone.replace(/\D/g, '')}`)} />
+            </>
+          ) : null}
           <Divider />
-          <LinkRow icon="logo-whatsapp" iconColor="#22c55e" label="WhatsApp Support" sub="Chat with us on WhatsApp"
-            onPress={() => Linking.openURL('https://wa.me/918777376280?text=Hi%2C%20I%20need%20help%20with%20Gokez%20Mart.')} />
+          <LinkRow icon="logo-whatsapp" iconColor="#22c55e" label="WhatsApp Support" sub={`Chat with ${supportName} on WhatsApp`}
+            onPress={() => Linking.openURL(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent('Hi, I need help with Gokez Mart.')}`)} />
         </Card>
 
-        {/* ── Feedback ── */}
+        <SectionLabel label="About" />
+        <Card>
+          <LinkRow icon="information-circle-outline" iconColor="#3b82f6"
+            label="About Gokez Mart" sub="Our story and what we stand for" onPress={() => router.push('/about' as any)} />
+          <Divider />
+          <LinkRow icon="help-circle-outline" iconColor="#3b82f6"
+            label="What is Gokez Mart?" sub="How ordering from local stores works" onPress={() => router.push('/what-is-gokez-mart' as any)} />
+        </Card>
+
         <TouchableOpacity
           style={{ marginHorizontal: 16, marginTop: 8, backgroundColor: colors.surface, borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.gray100 }}
           onPress={() => router.push('/feedback')}
@@ -219,9 +240,11 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.gray300} />
         </TouchableOpacity>
 
-        {/* ── Data & Privacy ── */}
         <SectionLabel label="Data & Privacy" />
         <Card>
+          <LinkRow icon="shield-outline" iconColor="#6366f1"
+            label="Data & Privacy" sub="Your data, your choices" onPress={() => router.push('/data-privacy' as any)} />
+          <Divider />
           <LinkRow icon="chatbubble-ellipses-outline" iconColor="#8b5cf6"
             label="Submit a Grievance" sub="Complaint about your data or service" onPress={() => router.push('/grievance')} />
           <Divider />
@@ -236,17 +259,15 @@ export default function ProfileScreen() {
           <LinkRow icon="reader-outline" iconColor={colors.gray500} label="Terms of Service" sub="" onPress={() => router.push('/terms')} />
         </Card>
 
-        {/* ── Sign out + Delete ── */}
         <View style={{ alignItems: 'center', marginTop: 16, gap: 8 }}>
           <TouchableOpacity onPress={handleLogout} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
             <Text style={{ fontSize: 14, fontFamily: 'Inter-Medium', color: colors.red500 }}>Sign Out</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleDeleteAccount} style={{ alignItems: 'center', paddingVertical: 8 }}>
+          <TouchableOpacity onPress={() => router.push('/delete-account' as any)} style={{ alignItems: 'center', paddingVertical: 8 }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray400 }}>Delete my account</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Footer */}
         <View style={{ alignItems: 'center', marginTop: 16, gap: 4 }}>
           <Text style={{ fontSize: 11, fontFamily: 'Inter-Regular', color: colors.gray400 }}>
             A product of{' '}
@@ -264,8 +285,6 @@ export default function ProfileScreen() {
     </SafeAreaView>
   );
 }
-
-// ── Sub-components ────────────────────────────────────────────────────────────
 
 function SectionLabel({ label }: { label: string }) {
   const colors = useThemeColors();
@@ -288,35 +307,6 @@ function Card({ children }: { children: React.ReactNode }) {
 function Divider() {
   const colors = useThemeColors();
   return <View style={{ height: 1, backgroundColor: colors.gray100, marginLeft: 58 }} />;
-}
-
-function AddressRow({ label, value, isDefault = false, onEdit }: { label: string; value?: string | null; isDefault?: boolean; onEdit: () => void }) {
-  const colors = useThemeColors();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 14, gap: 10 }}>
-      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isDefault ? colors.primaryLight : colors.gray50, alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 }}>
-        <Ionicons name="location-outline" size={16} color={isDefault ? colors.primary : colors.gray500} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.gray700 }}>{label}</Text>
-          {isDefault && (
-            <View style={{ backgroundColor: colors.primaryLight, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 20 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Inter-Bold', color: colors.primary }}>Default</Text>
-            </View>
-          )}
-        </View>
-        <Text style={{ fontSize: 13, fontFamily: 'Inter-Regular', color: value ? colors.gray700 : colors.gray400, fontStyle: value ? 'normal' : 'italic', lineHeight: 18 }}>
-          {value ?? 'Tap Edit to add'}
-        </Text>
-      </View>
-      <TouchableOpacity onPress={onEdit}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.gray200, flexShrink: 0 }}>
-        <Ionicons name="pencil" size={11} color={colors.gray500} />
-        <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Edit</Text>
-      </TouchableOpacity>
-    </View>
-  );
 }
 
 function LinkRow({ icon, iconColor, label, sub, onPress, loading = false }: { icon: any; iconColor: string; label: string; sub: string; onPress: () => void; loading?: boolean }) {

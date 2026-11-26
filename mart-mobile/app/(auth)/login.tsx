@@ -1,20 +1,41 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ActivityIndicator,
-  ScrollView, Linking,
+  ScrollView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/services/api';
+import { syncGuestMarketingConsent } from '@/services/push';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { useThemeColors } from '@/constants/theme';
-import { APP_CONFIG } from '@/constants/config';
+import { useLoginFlowStore } from '@/store/loginFlowStore';
+import { useFunnelStore } from '@/store/funnelStore';
+import { clearTokens, getGuestMarketingConsent, getTokens } from '@/store/guestTrackingStore';
+import { useCartStore } from '@/store/cartStore';
+import {
+  clearStoredReferralCode, normalizeReferralCode, parseReferralCode, readStoredReferralCode, writeStoredReferralCode,
+} from '@/utils/referral';
+import { track, trackOnce } from '@/utils/track';
 
 type Step = 'welcome' | 'phone' | 'otp' | 'profile';
+
+const RESEND_MS = 30_000;
+
+function cooldownSeconds(sentAt: number | null): number {
+  if (!sentAt) return 0;
+  return Math.max(0, Math.ceil((sentAt + RESEND_MS - Date.now()) / 1000));
+}
+
+function isValidName(value: string): boolean {
+  const name = value.trim().replace(/\s+/g, ' ');
+  return name.length >= 2 && name.length <= 80 && /\p{L}/u.test(name);
+}
 
 function HeroVisual() {
   const colors = useThemeColors();
@@ -62,27 +83,64 @@ export default function LoginScreen() {
   const colors = useThemeColors();
   const isDark = useThemeStore(s => s.isDark);
   const { login, updateProfile } = useAuthStore();
+  const params = useLocalSearchParams();
+  const cartItems = useCartStore(s => s.items);
 
-  const [step, setStep] = useState<Step>('welcome');
-  const [phone, setPhone] = useState('');
+  const flowRef = useRef(useLoginFlowStore.getState());
+  const restored = flowRef.current;
+  const restoredOtp = restored.step === 'otp' && !!restored.phone && !!restored.otpSentAt;
+  const initialCode = normalizeReferralCode(restored.referralCode || readStoredReferralCode() || String(params.ref ?? ''));
+
+  const [step, setStep] = useState<Step>(restoredOtp ? 'otp' : 'phone');
+  const [phone, setPhone] = useState(restoredOtp ? restored.phone ?? '' : '');
   const [otp, setOtp] = useState('');
+  const [referralCode, setReferralCode] = useState(initialCode);
+  const [referralOpen, setReferralOpen] = useState(Boolean(initialCode));
   const [newName, setNewName] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [resendTimer, setResendTimer] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [resendTimer, setResendTimer] = useState(() => cooldownSeconds(restored.otpSentAt));
   const otpRefs = useRef<Array<any>>([]);
 
-  const startResendTimer = () => {
-    setResendTimer(30);
-    timerRef.current = setInterval(() => {
-      setResendTimer(s => {
-        if (s <= 1) { clearInterval(timerRef.current!); return 0; }
-        return s - 1;
-      });
-    }, 1000);
+  const pendingCheckout = String(params.pendingCheckout ?? '') === '1'
+    || String(params.from ?? '').toLowerCase() === 'checkout'
+    || cartItems.some(item => !item.unavailable);
+
+  const finish = () => {
+    if (pendingCheckout) {
+      router.push('/checkout');
+      return;
+    }
+    if (typeof router.canGoBack === 'function' && router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
   };
+
+  useEffect(() => {
+    try { trackOnce('login_viewed'); } catch {}
+    const applyUrl = (url: string | null | undefined) => {
+      const code = parseReferralCode(url);
+      if (!code) return;
+      setReferralCode(previous => previous || code);
+      setReferralOpen(true);
+      useLoginFlowStore.getState().setReferralCode(code);
+      writeStoredReferralCode(code);
+    };
+    const fromParams = normalizeReferralCode(String(params.ref ?? ''));
+    if (fromParams) applyUrl(fromParams);
+    void Linking.getInitialURL().then(applyUrl).catch(() => undefined);
+    const subscription = Linking.addEventListener('url', ({ url }) => applyUrl(url));
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (step !== 'otp') return;
+    try { track('otp_viewed'); } catch {}
+    const update = () => setResendTimer(cooldownSeconds(useLoginFlowStore.getState().otpSentAt));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [step]);
 
   const handleSendOtp = async () => {
     const cleaned = phone.replace(/\D/g, '');
@@ -90,8 +148,10 @@ export default function LoginScreen() {
     setLoading(true); setError('');
     try {
       await authApi.sendOtp(cleaned);
+      try { track('otp_requested', { otpChannel: 'phone_call' }); } catch {}
+      useLoginFlowStore.getState().beginOtp(cleaned);
+      setPhone(cleaned);
       setStep('otp');
-      startResendTimer();
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to send OTP. Try again.');
     } finally { setLoading(false); }
@@ -102,14 +162,21 @@ export default function LoginScreen() {
     if (otp.length !== 6) { setError('Enter the 6-digit OTP'); return; }
     setLoading(true); setError('');
     try {
-      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp);
+      const codeForSignup = normalizeReferralCode(referralCode) || undefined;
+      const res = await authApi.verifyOtp(phone.replace(/\D/g, ''), otp, {
+        referralCode: codeForSignup,
+        funnelSessionId: useFunnelStore.getState().getSessionId(),
+        trackingTokens: getTokens(),
+      });
+      try { track('login_verified'); } catch {}
+      clearStoredReferralCode();
+      if (getGuestMarketingConsent()) syncGuestMarketingConsent(true);
+      clearTokens();
+      useLoginFlowStore.getState().clear();
       const { token, customer } = res.data.data;
       await login(token, customer);
-      if (!customer.name) {
-        setStep('profile');
-      } else {
-        router.back();
-      }
+      if (!customer.name) setStep('profile');
+      else finish();
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Invalid OTP. Try again.');
       setOtp('');
@@ -117,11 +184,11 @@ export default function LoginScreen() {
   };
 
   const handleResend = async () => {
-    if (resendTimer > 0) return;
+    if (resendTimer > 0 || loading) return;
     setLoading(true); setError(''); setOtp('');
     try {
       await authApi.sendOtp(phone.replace(/\D/g, ''));
-      startResendTimer();
+      useLoginFlowStore.getState().markOtpSent();
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to resend OTP.');
     } finally { setLoading(false); }
@@ -153,15 +220,40 @@ export default function LoginScreen() {
   };
 
   const handleSaveProfile = async () => {
-    if (!newName.trim()) { setError('Please enter your name'); return; }
+    if (!isValidName(newName)) { setError('Enter a valid name using at least 2 characters.'); return; }
+    const normalized = newName.trim().replace(/\s+/g, ' ');
     setSaving(true); setError('');
     try {
-      await authApi.updateProfile({ name: newName.trim() });
-      updateProfile({ name: newName.trim() });
-      router.back();
+      await authApi.updateProfile({ name: normalized });
+      updateProfile({ name: normalized });
+      finish();
     } catch {
       setError('Failed to save. Please try again.');
     } finally { setSaving(false); }
+  };
+
+  const handleClose = () => {
+    if (step === 'phone' || step === 'otp') {
+      try { track('login_abandoned', { step, reason: 'dismissed' }); } catch {}
+      useLoginFlowStore.getState().clearPending();
+    }
+    if (step === 'welcome') router.back();
+    else setStep('welcome');
+  };
+
+  const handleReferralChange = (value: string) => {
+    const next = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
+    setReferralCode(next);
+    useLoginFlowStore.getState().setReferralCode(next || null);
+    if (next) writeStoredReferralCode(next);
+    else clearStoredReferralCode();
+  };
+
+  const clearReferral = () => {
+    setReferralCode('');
+    setReferralOpen(false);
+    useLoginFlowStore.getState().setReferralCode(null);
+    clearStoredReferralCode();
   };
 
   const version = '1.0.0';
@@ -196,7 +288,7 @@ export default function LoginScreen() {
               height: 44,
               backgroundColor: colors.gray100,
             }}
-            onPress={() => step === 'welcome' ? router.back() : setStep('welcome')}
+            onPress={handleClose}
           >
             <Ionicons name="close" size={18} color={colors.gray500} />
           </TouchableOpacity>
@@ -264,10 +356,10 @@ export default function LoginScreen() {
         {step === 'phone' && (
           <>
             <Text style={{ fontSize: 24, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 6 }}>
-              Enter your number
+              Log in or sign up
             </Text>
             <Text style={{ fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray500, marginBottom: 24 }}>
-              We'll send you a verification code
+              Enter your mobile number to continue
             </Text>
 
             {error !== '' && (
@@ -283,7 +375,7 @@ export default function LoginScreen() {
               <TextInput
                 className="flex-1 text-sm"
                 style={{ fontFamily: 'Inter-Regular', color: colors.gray900 }}
-                placeholder="10-digit mobile number"
+                placeholder="Enter mobile number"
                 placeholderTextColor={colors.gray400}
                 keyboardType="phone-pad"
                 maxLength={10}
@@ -293,6 +385,30 @@ export default function LoginScreen() {
               />
             </View>
 
+            {referralOpen && (
+              <View style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter-Medium', color: colors.gray700 }}>
+                    Referral code <Text style={{ fontFamily: 'Inter-Regular', color: colors.gray500 }}>(optional)</Text>
+                  </Text>
+                  <TouchableOpacity onPress={clearReferral}>
+                    <Text style={{ fontSize: 11, fontFamily: 'Inter-SemiBold', color: colors.gray500 }}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  className="rounded-xl px-3 h-11 text-xs"
+                  style={{ fontFamily: 'Inter-SemiBold', letterSpacing: 2, textTransform: 'uppercase', borderWidth: 1, borderColor: colors.gray200, backgroundColor: colors.gray50, color: colors.gray900 }}
+                  placeholder="Enter Referral code"
+                  placeholderTextColor={colors.gray400}
+                  value={referralCode}
+                  maxLength={6}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  onChangeText={handleReferralChange}
+                />
+              </View>
+            )}
+
             <TouchableOpacity
               className="h-14 rounded-2xl items-center justify-center"
               style={{ backgroundColor: phone.length === 10 && !loading ? colors.primary : colors.gray200 }}
@@ -301,9 +417,22 @@ export default function LoginScreen() {
             >
               {loading
                 ? <ActivityIndicator color="#fff" />
-                : <Text className="text-white text-base font-bold" style={{ fontFamily: 'Inter-Bold' }}>Send OTP</Text>
+                : <Text className="text-white text-base font-bold" style={{ fontFamily: 'Inter-Bold' }}>Continue with OTP</Text>
               }
             </TouchableOpacity>
+
+            <Text style={{ fontSize: 12, fontFamily: 'Inter-Regular', color: colors.gray500, textAlign: 'center', lineHeight: 18, marginTop: 12 }}>
+              By continuing, you agree to our{' '}
+              <Text style={{ color: colors.primary }} onPress={() => router.push('/terms')}>Terms</Text>
+              {' '}and{' '}
+              <Text style={{ color: colors.primary }} onPress={() => router.push('/privacy')}>Privacy Policy</Text>.
+            </Text>
+
+            {!referralOpen && (
+              <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 12 }} onPress={() => setReferralOpen(true)}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter-SemiBold', color: colors.primary }}>Have Referral Code?</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
 
@@ -363,7 +492,7 @@ export default function LoginScreen() {
               disabled={resendTimer > 0 || loading}
             >
               <Text className="text-sm" style={{ fontFamily: 'Inter-Regular', color: resendTimer > 0 ? colors.gray400 : colors.primary }}>
-                {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend OTP'}
+                Didn&apos;t receive OTP? {resendTimer > 0 ? `(Resend in ${resendTimer}s)` : 'Resend'}
               </Text>
             </TouchableOpacity>
           </>
@@ -375,9 +504,9 @@ export default function LoginScreen() {
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                 <Ionicons name="person-outline" size={28} color={colors.primary} />
               </View>
-              <Text style={{ fontSize: 20, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 4 }}>Almost there!</Text>
+              <Text style={{ fontSize: 20, fontFamily: 'Inter-Bold', color: colors.gray900, marginBottom: 4 }}>Almost there.</Text>
               <Text style={{ fontSize: 14, fontFamily: 'Inter-Regular', color: colors.gray500, textAlign: 'center' }}>
-                Tell us your name so we can personalise your experience
+                Tell us your name so we know who to hand the order to
               </Text>
             </View>
 
@@ -390,22 +519,23 @@ export default function LoginScreen() {
             <TextInput
               className="rounded-2xl px-4 h-14 text-sm mb-4"
               style={{ fontFamily: 'Inter-Regular', borderWidth: 1, borderColor: colors.gray200, backgroundColor: colors.gray50, color: colors.gray900 }}
-              placeholder="Your full name"
+              placeholder="Your full name *"
               placeholderTextColor={colors.gray400}
               value={newName}
               onChangeText={setNewName}
+              autoComplete="name"
               autoFocus
             />
 
             <TouchableOpacity
               className="h-14 rounded-2xl items-center justify-center"
-              style={{ backgroundColor: newName.trim() && !saving ? colors.primary : colors.gray200 }}
+              style={{ backgroundColor: isValidName(newName) && !saving ? colors.primary : colors.gray200 }}
               onPress={handleSaveProfile}
-              disabled={saving || !newName.trim()}
+              disabled={saving || !isValidName(newName)}
             >
               {saving
                 ? <ActivityIndicator color="#fff" />
-                : <Text className="text-white text-base font-bold" style={{ fontFamily: 'Inter-Bold' }}>Continue to Shop</Text>
+                : <Text className="text-white text-base font-bold" style={{ fontFamily: 'Inter-Bold' }}>{pendingCheckout ? 'Continue to Checkout' : 'Continue'}</Text>
               }
             </TouchableOpacity>
           </>

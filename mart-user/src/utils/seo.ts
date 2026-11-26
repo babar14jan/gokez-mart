@@ -21,7 +21,7 @@ const SITE_ORIGIN = 'https://mart.gokez.com';
 // transactional surface.
 export type SeoView =
   | 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'grievance' | 'feedback' | 'privacy' | 'terms'
-  | 'notification-settings' | 'delete-account' | 'account' | 'login' | 'orders' | 'checkout' | 'fresh' | 'referral';
+  | 'notification-settings' | 'delete-account' | 'account' | 'login' | 'orders' | 'checkout' | 'fresh' | 'referral' | 'welcome' | 'permissions';
 
 interface RouteMeta {
   title: string;
@@ -115,6 +115,18 @@ const ROUTES: Record<SeoView, RouteMeta> = {
   login: {
     title: `Log In | ${BRAND}`,
     description: `Log in or sign up to order from ${BRAND}.`,
+    path: null,
+    indexable: false,
+  },
+  welcome: {
+    title: `Welcome | ${BRAND}`,
+    description: `Get started with ${BRAND}.`,
+    path: null,
+    indexable: false,
+  },
+  permissions: {
+    title: `Get Started | ${BRAND}`,
+    description: `Set up delivery location and order notifications for ${BRAND}.`,
     path: null,
     indexable: false,
   },

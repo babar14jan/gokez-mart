@@ -7,13 +7,4 @@ export const APP_CONFIG = {
   webUrl:      'https://mart.gokez.com',
 } as const;
 
-export const ORDER_STATUS_LABELS: Record<string, string> = {
-  pending:          'Order Placed',
-  confirmed:        'Confirmed',
-  preparing:        'Being Prepared',
-  ready_to_pickup:  'Being Prepared',
-  out_for_delivery: 'Being Prepared',
-  picked_up:        'On the Way 🛵',
-  delivered:        'Delivered 🎉',
-  cancelled:        'Cancelled',
-};
+export { ORDER_STATUS_LABELS } from '@/utils/orderStatus';

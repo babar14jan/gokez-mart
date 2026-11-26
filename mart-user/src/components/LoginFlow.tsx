@@ -556,7 +556,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 )}
 
                 <button type="submit" disabled={loading || !phoneValid} className={primaryBtn(phoneValid)}>
-                  {loading ? <Spinner /> : <>Continue with OTP</>}
+                  {loading ? <Spinner /> : <>Continue</>}
                 </button>
               </form>
 

@@ -197,10 +197,8 @@
         || navigator.standalone === true;
       if (standaloneLaunch) document.documentElement.classList.add('installed-pwa');
       // The status bar colour during the cold start. App.tsx takes over on the
-      // first render and sets the colour for the active route. Set it here
-      // before first paint so every launch starts on the same brand-green
-      // splash, regardless of the saved light or dark app preference.
-      // Desktop keeps the white bar the app uses there.
+      // first render. Onboarding and login share the home header green, so the
+      // mobile theme colour is the same before first paint on every route.
       var mobileUA = /android/i.test(navigator.userAgent)
         || /iphone|ipad|ipod/i.test(navigator.userAgent)
         || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);

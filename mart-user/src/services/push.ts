@@ -10,6 +10,38 @@ const SW_URL = '/sw.js';
 const SUBSCRIBE_TIMEOUT_MS = 20000;
 const PERMISSION_TIMEOUT_MS = 30000;
 
+export type PushOptInReason = 'legacy' | 'permissions-decline' | 'later-order';
+export const PUSH_OPT_IN_REQUEST_EVENT = 'gokez:push-opt-in-request';
+export const PUSH_PROMPT_KEY = 'mart_push_prompt_at';
+export const PERMISSIONS_DECLINE_PUSH_PROMPT_KEY = 'mart_permissions_decline_push_prompt_at';
+export const LATER_ORDER_PUSH_PROMPT_KEY = 'mart_later_order_push_prompt_at';
+const PUSH_PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function pushOptInPromptKey(reason: PushOptInReason): string {
+  if (reason === 'later-order') return LATER_ORDER_PUSH_PROMPT_KEY;
+  if (reason === 'permissions-decline') return PERMISSIONS_DECLINE_PUSH_PROMPT_KEY;
+  return PUSH_PROMPT_KEY;
+}
+
+export function isPushOptInDue(reason: PushOptInReason): boolean {
+  try {
+    const last = Number(localStorage.getItem(pushOptInPromptKey(reason)) || 0);
+    return !last || Date.now() - last >= PUSH_PROMPT_COOLDOWN_MS;
+  } catch {
+    return true;
+  }
+}
+
+export function recordPushOptInPrompt(reason: PushOptInReason): void {
+  try {
+    localStorage.setItem(pushOptInPromptKey(reason), String(Date.now()));
+  } catch {}
+}
+
+export function requestPushOptInPrompt(reason: Exclude<PushOptInReason, 'legacy'>): void {
+  window.dispatchEvent(new CustomEvent<PushOptInReason>(PUSH_OPT_IN_REQUEST_EVENT, { detail: reason }));
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), ms);

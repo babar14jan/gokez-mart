@@ -12,6 +12,16 @@ const ALLOWED_PATHS = new Set([
 ]);
 
 let started = false;
+const TOKEN_WAIT_MS = 5000;
+
+async function waitForNativeToken(): Promise<boolean> {
+  const deadline = Date.now() + TOKEN_WAIT_MS;
+  while (Date.now() < deadline) {
+    if (readToken()) return true;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return Boolean(readToken());
+}
 
 export function isNativePush(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -122,6 +132,7 @@ export async function requestNativePushPermission(): Promise<boolean> {
     }
     if (permission.receive !== 'granted') return false;
     await PushNotifications.register();
+    if (!(await waitForNativeToken())) return false;
     await syncNativePushAssociation();
     return true;
   } catch (error) {
