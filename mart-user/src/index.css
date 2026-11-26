@@ -165,30 +165,125 @@ html, body { overscroll-behavior-y: none; }
 
   /* The login view is measured against the app scroller, not 100vh. vh changes
      with the mobile browser toolbar, which is what stretched the branded base
-     and shifted the logo / Skip / banner between iPhone and Android. */
-  .login-page-view {
-    min-height: 100%;
-  }
+     and shifted the logo / Skip between iPhone and Android. */
+   .login-page-view {
+     height: 100%;
+     min-height: 100%;
+     --login-button-offset: 96px;
+      --login-header-height: calc(203px + env(safe-area-inset-top, 0px));
+   }
 
-  /* Safe area belongs to the hero, not to a margin on the logo row: the row
-     itself stays exactly 96px on every device, so the logo and Skip button land
-     in the same place relative to the notch / status bar. */
-  .login-brand-hero {
-    padding-top: calc(35px + env(safe-area-inset-top, 0px));
-  }
+   .login-form-spacer {
+     flex: 0 0 max(0px, calc(50vh - var(--kb, 0px) - var(--login-header-height) - var(--login-button-offset, 96px)));
+     flex: 0 0 max(0px, calc(50dvh - var(--kb, 0px) - var(--login-header-height) - var(--login-button-offset, 96px)));
+   }
 
-  /* Short landscape phones: keep the hero compact without moving its children. */
-  @media (max-height: 520px) and (orientation: landscape) {
-    .login-page-view .login-brand-hero { padding-top: 0.5rem; }
-    .login-page-view .login-brand-banner-wrap { height: 40px; margin-top: 4px; }
-    .login-page-view .login-brand-banner { max-height: 40px; }
-  }
+
+   .login-page-view .login-brand-hero {
+     padding-top: calc(35px + env(safe-area-inset-top, 0px));
+     padding-top: clamp(12px, calc(4.4vh + env(safe-area-inset-top, 0px)), calc(36px + env(safe-area-inset-top, 0px)));
+   }
+
+    .login-page-view .login-brand-header {
+      height: 167px;
+      height: clamp(157px, 21vh, 167px);
+    }
+
+    .login-brand-logo {
+      width: 36px;
+      height: 36px;
+    }
+
+   .login-brand-fallback {
+     font-size: 22px;
+   }
+
+    .login-brand-image {
+      position: relative;
+      top: 12px;
+     width: auto;
+     max-width: 45%;
+     height: 68px;
+     object-fit: contain;
+   }
+
+      .login-brand-tagline {
+        margin-top: 2px;
+        margin-left: 0;
+        max-width: 166px;
+        font-size: 10px;
+      }
+
+      .login-punchline {
+        margin-top: 35px;
+        font-size: 20px;
+      }
+
+    @media (max-height: 700px) {
+      .login-page-view .login-brand-header {
+        height: clamp(142px, 19vh, 150px);
+      }
+       .login-page-view .login-brand-logo {
+         width: 32px;
+         height: 32px;
+       }
+      .login-page-view .login-brand-fallback {
+        font-size: 19px;
+      }
+       .login-page-view .login-brand-image {
+         top: 10px;
+         height: 56px;
+       }
+       .login-page-view .login-brand-tagline {
+         margin-left: 0;
+         max-width: 139px;
+         font-size: 10px;
+       }
+       .login-page-view .login-punchline {
+         margin-top: 35px;
+         font-size: 16px;
+       }
+     }
+
+   @media (max-height: 520px) {
+      .login-page-view .login-brand-logo {
+        width: 28px;
+        height: 28px;
+      }
+     .login-page-view .login-brand-fallback {
+       font-size: 17px;
+     }
+      .login-page-view .login-brand-header {
+        height: clamp(72px, 11.8vh, 96px);
+      }
+      .login-page-view .login-brand-image {
+        top: 8px;
+        height: 44px;
+        max-width: 40%;
+      }
+      .login-page-view .login-brand-tagline,
+      .login-page-view .login-punchline {
+        display: none;
+      }
+     .login-page-view .login-form-area form > * + * {
+       margin-top: 0.375rem;
+     }
+     .login-page-view .login-form-area form button[type="submit"] {
+       padding-top: 0.5rem;
+       padding-bottom: 0.5rem;
+     }
+     .login-page-view #login-phone {
+       padding-top: 0.375rem;
+       padding-bottom: 0.375rem;
+     }
+   }
+
 
   /* Branded login background: soft organic gradient waves (lightweight SVG) on
      a light brand-green base rather than white, full-viewport and readable. */
   .login-brand-bg {
-    background-color: #e5fde5;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3CradialGradient id='t' cx='28%25' cy='10%25' r='45%25'%3E%3Cstop offset='0%25' stop-color='%23e5fde5' stop-opacity='0'/%3E%3Cstop offset='45%25' stop-color='%23018330' stop-opacity='.10'/%3E%3Cstop offset='100%25' stop-color='%23018330' stop-opacity='.45'/%3E%3C/radialGradient%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23018330' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23018330' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%23028434' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23e5fde5'/%3E%3Cpath d='M-20 150C80 40 170 190 250 110C320 40 365 70 400 40V-20H-20Z' fill='url(%23t)'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23018330' fill-opacity='1'/%3E%3C/svg%3E");
+    background-color: #ADFBBD;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3CradialGradient id='t' cx='28%25' cy='10%25' r='45%25'%3E%3Cstop offset='0%25' stop-color='%23ADFBBD' stop-opacity='0'/%3E%3Cstop offset='45%25' stop-color='%23018330' stop-opacity='.10'/%3E%3Cstop offset='100%25' stop-color='%23018330' stop-opacity='.45'/%3E%3C/radialGradient%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23018330' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23018330' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%23028434' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23ADFBBD'/%3E%3Cpath d='M-20 150C80 40 170 190 250 110C320 40 365 70 400 40V-20H-20Z' fill='url(%23t)'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23018330' fill-opacity='1'/%3E%3C/svg%3E");
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
@@ -208,7 +303,13 @@ html, body { overscroll-behavior-y: none; }
     /* Login page keeps only the bottom sweep. The shared .login-brand-bg also
        has a top wave for the modal/profile surfaces; on taller Android Chrome
        viewports `cover` let that top wave peek in, which iOS cropped away. */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23018330' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23018330' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%23028434' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23e5fde5'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23018330' fill-opacity='1'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23018330' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23018330' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%23028434' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23ADFBBD'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23018330' fill-opacity='1'/%3E%3C/svg%3E");
+  }
+
+  @media (min-width: 640px) {
+    .login-page-view.login-brand-bg {
+      background-size: 100% 100%;
+    }
   }
 
   /* App shell: a frame pinned to the viewport box.
@@ -363,12 +464,7 @@ html, body { overscroll-behavior-y: none; }
 
   .app-shell.login-active .app-tint-top,
   .app-shell.login-active .app-tint-bottom {
-    background-color: #e5fde5;
-  }
-
-  .dark .app-shell.login-active .app-tint-top,
-  .dark .app-shell.login-active .app-tint-bottom {
-    background-color: #18191a;
+    background-color: #ADFBBD;
   }
 
   .kb-open .app-tint-top {
@@ -378,20 +474,151 @@ html, body { overscroll-behavior-y: none; }
   /* No bottom nav on the login page: let the branded surface own the whole
      scroller so its gradient reaches the screen edge instead of stopping above
      the reserved nav strip. */
-  .app-shell.login-active .app-scroll {
-    padding-bottom: 0;
+   .app-shell.login-active .app-scroll {
+     padding-bottom: 0;
+     overflow: hidden;
+     scrollbar-gutter: auto;
+   }
+
+
+  .onboarding-action-bar {
+    position: absolute;
+    z-index: 20;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(0.75rem, 2.2vh, 1.25rem));
+    left: 0;
+    width: 100%;
+    max-width: 28rem;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  .onboarding-action-bar > * {
+    width: 100%;
+  }
+
+  .onboarding-scroll {
+    padding-bottom: calc(var(--onboarding-action-height, 9rem) + 2.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .onboarding-action-bar {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (max-height: 520px) {
+    .onboarding-action-bar {
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+    }
+    .onboarding-scroll {
+      padding-top: 0.5rem;
+    }
   }
 
   .app-shell.welcome-active .app-scroll {
     overflow: hidden;
     scrollbar-gutter: auto;
     touch-action: none;
-    padding-bottom: 0;
+    overscroll-behavior: none;
+    padding: 0;
+  }
+
+  .welcome-screen {
+    height: 100%;
+    max-height: 100%;
+    overscroll-behavior: none;
+  }
+
+  .welcome-art {
+    max-height: 100%;
+    object-position: center 38%;
+  }
+
+  .welcome-screen .onboarding-action-bar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 3.5vh, 2rem) + 30px);
+  }
+
+  .welcome-screen .onboarding-action-bar button {
+    min-height: 52px;
+    font-size: 15px;
+  }
+
+  @media (max-width: 639px) {
+    .welcome-art {
+      object-fit: cover;
+      object-position: center 38%;
+    }
+  }
+
+  @media (max-width: 639px) and (max-aspect-ratio: 9/16) {
+    .welcome-art {
+      object-position: center center;
+    }
+  }
+
+  @media (max-width: 639px) and (min-aspect-ratio: 3/4) {
+    .welcome-art {
+      object-position: center 48%;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .welcome-art {
+      bottom: auto;
+      height: calc(100% - 6rem);
+      object-fit: contain;
+      object-position: center top;
+    }
+    .welcome-screen .onboarding-action-bar button {
+      min-height: 56px;
+      font-size: 16px;
+    }
+  }
+
+  @media (max-width: 639px) and (max-height: 520px) {
+    .welcome-art {
+      object-position: center 55%;
+    }
+    .welcome-fallback-heading {
+      margin-top: 0.5rem;
+      font-size: 18px;
+    }
+    .welcome-fallback-subtitle {
+      margin-top: 0.35rem;
+      font-size: 12px;
+    }
+    .welcome-fallback-quote {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .welcome-screen .onboarding-action-bar {
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem + 30px);
+    }
+    .welcome-screen .onboarding-action-bar button {
+      min-height: 46px;
+      padding-top: 0.625rem;
+      padding-bottom: 0.625rem;
+      font-size: 14px;
+    }
   }
 
   .app-shell.welcome-active .app-tint-top,
   .app-shell.welcome-active .app-tint-bottom {
-    display: none;
+    background-color: #ADFBBD;
+  }
+
+  .app-shell.permissions-active .app-scroll {
+    overflow: hidden;
+    scrollbar-gutter: auto;
+    padding-bottom: 0;
+  }
+
+  .app-shell.permissions-active .app-tint-top,
+  .app-shell.permissions-active .app-tint-bottom {
+    background-color: #ADFBBD;
   }
 
   .app-scroll {

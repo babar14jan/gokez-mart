@@ -1,12 +1,21 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject, type TouchEvent as ReactTouchEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, CheckCircle, BellRing, RefreshCw, CalendarClock, X } from 'lucide-react';
+import { Search, CheckCircle, BellRing, RefreshCw, CalendarClock, X, ChevronRight } from 'lucide-react';
 import { API_URL, isApiConfigured, storeApi } from './services/api';
 import type { Category, Product, PublicSettings, HomeSection } from './services/api';
 import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
 import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore';
-import { getNotificationPermission, requestNotificationPermission, subscribeToPush, isPushSupported } from './services/push';
+import {
+  getLocationPermission,
+  getNotificationPermission,
+  isPushOptInDue,
+  requestNotificationPermission,
+  requestPushOptInPrompt,
+  subscribeToPush,
+  isPushSupported,
+} from './services/push';
+import { PERMISSIONS_SEEN_KEY, requestOnboardingPermissions } from './services/onboardingPermissions';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
 import StoreClosedCard from './components/StoreClosedCard';
@@ -21,7 +30,9 @@ import ComboSheet from './components/ComboSheet';
 import DealsSheet from './components/DealsSheet';
 import CatalogSearchSheet from './components/CatalogSearchSheet';
 import SmartImage from './components/SmartImage';
+import WelcomeVisual from './components/WelcomeVisual';
 import LoginModal from './components/LoginModal';
+import PermissionsOnboarding from './components/PermissionsOnboarding';
 
 import CheckoutPage from './pages/CheckoutPage';
 import DealsPage from './pages/DealsPage';
@@ -30,7 +41,7 @@ import { useAppUpdate } from './hooks/useAppUpdate';
 import { useRotatingSearchPrompt } from './hooks/useRotatingSearchPrompt';
 import { useUpdateStore } from './store/updateStore';
 import { hideSplash, MIN_SPLASH_MS } from './utils/splash';
-import { rememberClosedCopy } from './utils/storeClosed';
+import { rememberClosedCopy, shouldShowClosedNotice } from './utils/storeClosed';
 import { useCartStore } from './store/cartStore';
 import { useInstallGuide, dismissInstallGuide } from './utils/install';
 import { trackInstall } from './utils/track';
@@ -49,11 +60,12 @@ import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/bran
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 import { REFERRAL_LINK_CODE_KEY, referralCodeFromSearch } from './utils/referral';
 import { configureNativeChrome, hasNativeLocationPermission, isNativeAndroid, setNativeStatusBar, watchNativeBackButton } from './services/nativeApp';
-import { clearNativePushAssociation, consumePendingPushRoute, isNativePush, startNativePush, syncNativePushAssociation } from './services/nativePush';
+import { clearNativePushAssociation, consumePendingPushRoute, isNativePush, requestNativePushPermission, startNativePush, syncNativePushAssociation } from './services/nativePush';
 
 const WELCOME_SEEN_KEY = 'gokez_mart_welcome_seen_v1';
+const FIRST_ORDER_KEY = 'mart_first_order_completed_at';
 
-type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'referral' | 'fresh' | 'welcome';
+type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'referral' | 'fresh' | 'welcome' | 'permissions';
 
 // Canonical URL for each view. Used to give every tab its own history entry so a
 // sub-page opened from it can return there with the back button.
@@ -67,6 +79,7 @@ const VIEW_PATH: Record<View, string> = {
   account: '/account',
   login: '/login',
   welcome: '/welcome',
+  permissions: '/permissions',
   privacy: '/privacy',
   terms: '/terms',
   grievance: '/grievance',
@@ -86,6 +99,49 @@ const PULL_REFRESH_THRESHOLD = 76;
 // '/' is deliberately sent to Account, which made every refresh dump shoppers
 // on the login page no matter which tab they were on.
 const LAST_VIEW_KEY = 'mart-last-view';
+const PENDING_PERMISSIONS_KEY = 'mart_pending_permissions';
+const PENDING_PERMISSIONS_TARGET_KEY = 'mart_pending_permissions_target';
+
+function hasPendingPermissions(): boolean {
+  try {
+    return localStorage.getItem(PENDING_PERMISSIONS_KEY) === '1' || sessionStorage.getItem(PENDING_PERMISSIONS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberPendingPermissions(): void {
+  try {
+    localStorage.setItem(PENDING_PERMISSIONS_KEY, '1');
+    sessionStorage.setItem(PENDING_PERMISSIONS_KEY, '1');
+    localStorage.removeItem(PENDING_PERMISSIONS_TARGET_KEY);
+    sessionStorage.removeItem(PENDING_PERMISSIONS_TARGET_KEY);
+  } catch {}
+}
+
+function rememberPendingPermissionsTarget(path: string): void {
+  try {
+    localStorage.setItem(PENDING_PERMISSIONS_TARGET_KEY, path);
+    sessionStorage.setItem(PENDING_PERMISSIONS_TARGET_KEY, path);
+  } catch {}
+}
+
+function readPendingPermissionsTarget(): string {
+  try {
+    return sessionStorage.getItem(PENDING_PERMISSIONS_TARGET_KEY) || localStorage.getItem(PENDING_PERMISSIONS_TARGET_KEY) || '/';
+  } catch {
+    return '/';
+  }
+}
+
+function clearPendingPermissions(): void {
+  try {
+    localStorage.removeItem(PENDING_PERMISSIONS_KEY);
+    localStorage.removeItem(PENDING_PERMISSIONS_TARGET_KEY);
+    sessionStorage.removeItem(PENDING_PERMISSIONS_KEY);
+    sessionStorage.removeItem(PENDING_PERMISSIONS_TARGET_KEY);
+  } catch {}
+}
 
 function isPermissionPromptDue(storageKey: string): boolean {
   const lastPromptedAt = Number(localStorage.getItem(storageKey) || 0);
@@ -176,9 +232,17 @@ export default function App() {
   const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
   const [view, setView] = useState<View>(() => {
     const welcomeSeen = typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) === 'true';
+    const permissionsSeen = typeof localStorage !== 'undefined' && localStorage.getItem(PERMISSIONS_SEEN_KEY) === 'true';
     const loggedIn = useCustomerAuthStore.getState().isLoggedIn;
     if (referralLinkCode) return 'login';
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    const pendingPermissions = hasPendingPermissions();
+    const permissionsTarget = path === '/' || path === '/account' || path === '/orders' || path === '/checkout';
+    if (pendingPermissions && welcomeSeen && !permissionsSeen && !loggedIn && permissionsTarget) {
+      rememberPendingPermissionsTarget(path);
+      window.history.replaceState({}, '', '/permissions');
+      return 'permissions';
+    }
     // The public, crawlable pages keep their own view so direct links and the
     // prerendered SEO documents still resolve. /delete-account is kept because it
     // is a standalone account-deletion link.
@@ -191,7 +255,17 @@ export default function App() {
     if (path === '/delete-account') return 'delete-account';
     if (path === '/referrals') return 'referral';
     if (path === '/account') return 'account';
-    if (path === '/login') return 'login';
+    if (path === '/login') {
+      if (loggedIn) { window.history.replaceState({}, '', '/'); return 'home'; }
+      if (!welcomeSeen) { window.history.replaceState({}, '', '/welcome'); return 'welcome'; }
+      return 'login';
+    }
+    if (path === '/permissions') {
+      if (loggedIn) { window.history.replaceState({}, '', '/'); return 'home'; }
+      if (!welcomeSeen) { window.history.replaceState({}, '', '/welcome'); return 'welcome'; }
+      if (permissionsSeen) { window.history.replaceState({}, '', '/login'); return 'login'; }
+      return 'permissions';
+    }
     if (path === '/welcome') {
       if (loggedIn) { window.history.replaceState({}, '', '/'); return 'home'; }
       if (welcomeSeen) { window.history.replaceState({}, '', '/login'); return 'login'; }
@@ -282,6 +356,21 @@ export default function App() {
   }, []);
 
   const [pendingCheckout, setPendingCheckout] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()?.pendingCheckout));
+  const [welcomeImageStatus, setWelcomeImageStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const welcomeImageRef = useRef<HTMLImageElement | null>(null);
+  useEffect(() => {
+    if (view === 'welcome') setWelcomeImageStatus('loading');
+  }, [view]);
+  useEffect(() => {
+    if (view !== 'welcome' || welcomeImageStatus !== 'loading') return;
+    const image = welcomeImageRef.current;
+    if (image?.complete) {
+      setWelcomeImageStatus(image.naturalWidth > 0 ? 'loaded' : 'failed');
+      return;
+    }
+    const timer = window.setTimeout(() => setWelcomeImageStatus('failed'), 8000);
+    return () => window.clearTimeout(timer);
+  }, [view, welcomeImageStatus]);
 
   const { isLoggedIn } = useCustomerAuthStore();
   const wasLoggedInRef = useRef(isLoggedIn);
@@ -302,8 +391,9 @@ export default function App() {
   const accountLoginOpen = useAccountLoginStore((s) => s.open);
   useEffect(() => {
     if (isLoggedIn) return;
-    if (view === 'welcome') return;
+    if (view === 'welcome' || view === 'permissions') return;
     if (typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) !== 'true') return;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(PERMISSIONS_SEEN_KEY) !== 'true') return;
     if (window.location.search) return;
     if (sessionStorage.getItem('mart-boot-login-done')) return;
     sessionStorage.setItem('mart-boot-login-done', '1');
@@ -379,9 +469,6 @@ export default function App() {
   // a ref-backed closure rather than a boolean so the promise settles exactly
   // once, whether the customer confirms, cancels, or the dialog unmounts.
   const [closedPrompt, setClosedPrompt] = useState<{ resolve: (ok: boolean) => void } | null>(null);
-  // The closed-store card, shown on its own when the customer first arrives
-  // at a closed store. It has nothing pending, so it only has to be closed.
-  const [closedCard, setClosedCard] = useState(false);
   const openState = settings.openState;
   // When the store reopens. A scheduled closure says exactly when it lifts; a
   // store that is simply past its opening hours says so through the weekly
@@ -473,17 +560,6 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [catalogError]);
-
-  // The card, on arrival at a closed store. It opens every time the app is
-  // opened or refreshed, and every time the PWA is reopened, because that is
-  // when the customer has no idea why the store is shut. Once they have read
-  // it, the strip under the header keeps it in view without blocking
-  // anything.
-  useEffect(() => {
-    // The card must follow the live open state: a store that is open now must
-    // not keep showing a stale "closed" card from an earlier fallback load.
-    setClosedCard(openState?.isOpen === false);
-  }, [openState?.isOpen, openState?.closedReason, openState?.closedUntilLabel]);
 
   // The ONE fetch path for the home catalogue (categories, products, settings and
   // sections). Shared by the silent resume/poll refresh and the pull gesture, so a
@@ -612,6 +688,9 @@ export default function App() {
   const loginPageActive = view === 'login' || (view === 'account' && accountLoginOpen && !isLoggedIn);
   const loginActive = showLoginModal || loginPageActive;
   const welcomeActive = view === 'welcome';
+  const permissionsActive = view === 'permissions';
+  const onboardingActive = welcomeActive || permissionsActive;
+  const closedNoticeVisible = shouldShowClosedNotice({ view, isEmbed, onboardingActive, loginActive, checkoutActive });
   const scrollRef = useRef<HTMLDivElement>(null);
   // Categories scrolls inside its product pane, not .app-scroll. Held in state
   // (callback ref) so useScrollChrome re-attaches when the pane mounts.
@@ -627,7 +706,7 @@ export default function App() {
   // end of a page only: the nav (an overlay) returns there, the delivery row
   // (in-flow) does not. Enabled everywhere the chrome renders, except while an
   // overlay owns the screen (checkout) or the login flow replaces the header.
-  const chromeAutoHide = !welcomeActive && !checkoutActive && !accountSubPage && view !== 'account';
+  const chromeAutoHide = !onboardingActive && !checkoutActive && !accountSubPage && view !== 'account';
   const { hidden: chromeHidden, navHidden } = useScrollChrome(scrollRef, chromeAutoHide, categoriesPaneEl);
   const pullStart = useRef<{ x: number; y: number } | null>(null);
   const pullDistance = useRef(0);
@@ -636,7 +715,7 @@ export default function App() {
 
   const handlePullTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
     if (event.touches.length !== 1 || scrollRef.current?.scrollTop !== 0) return;
-    if (welcomeActive || checkoutActive || showLoginModal || catalogSearchOpen || comboSheet || dealsSheet) return;
+    if (onboardingActive || checkoutActive || showLoginModal || catalogSearchOpen || comboSheet || dealsSheet) return;
     const target = event.target as HTMLElement;
     if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
     const touch = event.touches[0];
@@ -704,29 +783,27 @@ export default function App() {
   // refresh, PWA resume). Checkout deliberately stays out: it is an overlay, and
   // the pending-checkout flow (not the view) is what restores it after a reload.
   useEffect(() => {
-    if (view === 'welcome') return;
+    if (view === 'welcome' || view === 'permissions') return;
     try { sessionStorage.setItem(LAST_VIEW_KEY, VIEW_PATH[view]); } catch {}
   }, [view]);
 
   useEffect(() => {
-    const effectiveDark = isDark && !loginActive;
+    const effectiveDark = isDark && !loginActive && !permissionsActive && !welcomeActive;
     document.documentElement.classList.toggle('dark', effectiveDark);
     const meta = document.querySelector('meta[name="theme-color"]');
     const mobile = detectPlatform() === 'ios' || detectPlatform() === 'android';
-    const themeColor = loginPageActive
-      ? '#e5fde5'
-      : loginActive
-        ? '#e5fde5'
-        : effectiveDark
-          ? '#18191a'
-          : mobile
-            ? '#ADFBBD'
-            : '#ffffff';
+    const themeColor = welcomeActive || loginPageActive || loginActive || permissionsActive
+      ? '#ADFBBD'
+      : effectiveDark
+        ? '#18191a'
+        : mobile
+          ? '#ADFBBD'
+          : '#ffffff';
     // Set this on every run: the splash is removed outside React, so waiting for
     // it here left Android Chrome stuck on the darker launch colour after boot.
     if (meta) meta.setAttribute('content', themeColor);
     setNativeStatusBar(themeColor, effectiveDark).catch(() => {});
-  }, [isDark, loginActive, loginPageActive]);
+  }, [isDark, loginActive, loginPageActive, permissionsActive, welcomeActive]);
 
   // Per-route <head> metadata. index.html ships the homepage defaults; this keeps
   // title, description, canonical and robots correct as the view changes, and
@@ -739,6 +816,17 @@ export default function App() {
   useEffect(() => {
     const handlePop = () => {
       const path = window.location.pathname.replace(/\/+$/, '') || '/';
+      const loggedIn = useCustomerAuthStore.getState().isLoggedIn;
+      const welcomeSeen = typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) === 'true';
+      const permissionsSeen = typeof localStorage !== 'undefined' && localStorage.getItem(PERMISSIONS_SEEN_KEY) === 'true';
+      const pendingPermissions = hasPendingPermissions();
+      const permissionsTarget = path === '/' || path === '/account' || path === '/orders' || path === '/checkout';
+      if (pendingPermissions && welcomeSeen && !permissionsSeen && permissionsTarget) {
+        rememberPendingPermissionsTarget(path);
+        window.history.replaceState({}, '', '/permissions');
+        setView('permissions');
+        return;
+      }
       if (path === '/about') setView('about');
       else if (path === '/what-is-gokez-mart') setView('what-is-gokez-mart');
       else if (path === '/privacy') setView('privacy');
@@ -751,10 +839,18 @@ export default function App() {
       }
       else if (path === '/delete-account') setView('delete-account');
       else if (path === '/account') setView('account');
-      else if (path === '/login') setView('login');
+      else if (path === '/login') {
+        if (loggedIn) { window.history.replaceState({}, '', '/'); setView('home'); }
+        else if (!welcomeSeen && !referralLinkCode) { window.history.replaceState({}, '', '/welcome'); setView('welcome'); }
+        else setView('login');
+      }
+      else if (path === '/permissions') {
+        if (loggedIn) { window.history.replaceState({}, '', '/'); setView('home'); }
+        else if (!welcomeSeen) { window.history.replaceState({}, '', '/welcome'); setView('welcome'); }
+        else if (permissionsSeen) { window.history.replaceState({}, '', '/login'); setView('login'); }
+        else setView('permissions');
+      }
       else if (path === '/welcome') {
-        const loggedIn = useCustomerAuthStore.getState().isLoggedIn;
-        const welcomeSeen = typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) === 'true';
         if (loggedIn) { window.history.replaceState({}, '', '/'); setView('home'); }
         else if (welcomeSeen) { window.history.replaceState({}, '', '/login'); setView('login'); }
         else setView('welcome');
@@ -1038,10 +1134,73 @@ export default function App() {
     if (currentPath !== nextPath) window.history.pushState({}, '', nextPath);
   };
 
+  const permissionsBusyRef = useRef(false);
+  const checkoutOpenedRef = useRef(false);
+  const declinePromptTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (declinePromptTimerRef.current !== null) window.clearTimeout(declinePromptTimerRef.current);
+  }, []);
+
   const handleWelcomeGetStarted = () => {
-    try { localStorage.setItem(WELCOME_SEEN_KEY, 'true'); } catch {}
+    try {
+      localStorage.setItem(WELCOME_SEEN_KEY, 'true');
+      rememberPendingPermissions();
+    } catch {}
     setView('login');
     window.history.pushState({}, '', '/login');
+  };
+
+  const finishPermissionsOnboarding = (declined = false) => {
+    let target = '/';
+    try {
+      localStorage.setItem(WELCOME_SEEN_KEY, 'true');
+      localStorage.setItem(PERMISSIONS_SEEN_KEY, 'true');
+      target = readPendingPermissionsTarget();
+      clearPendingPermissions();
+    } catch {}
+    if (target === '/checkout') {
+      setView('home');
+      setCheckoutActive(true);
+    } else if (target === '/account') setView('account');
+    else if (target === '/orders') setView('orders');
+    else {
+      setView('home');
+      setPendingCategorySlug(null);
+    }
+    window.history.replaceState({}, '', target === '/checkout' ? '/' : target);
+    if (declined) {
+      if (declinePromptTimerRef.current !== null) window.clearTimeout(declinePromptTimerRef.current);
+      declinePromptTimerRef.current = window.setTimeout(() => {
+        declinePromptTimerRef.current = null;
+        requestPushOptInPrompt('permissions-decline');
+      }, 500);
+    }
+  };
+
+  const handlePermissionsAllow = async () => {
+    try {
+      if (localStorage.getItem(PERMISSIONS_SEEN_KEY) === 'true') {
+        finishPermissionsOnboarding();
+        return;
+      }
+    } catch {}
+    if (permissionsBusyRef.current) return;
+    permissionsBusyRef.current = true;
+    try {
+      await requestOnboardingPermissions({
+        getLocationPermission,
+        detectDeliveryLocation: () => useZoneStore.getState().detectAndApply(),
+        isNativePush,
+        requestNativePushPermission,
+        isPushSupported,
+        getNotificationPermission,
+        requestNotificationPermission,
+        subscribeToPush,
+      });
+    } catch {} finally {
+      permissionsBusyRef.current = false;
+      finishPermissionsOnboarding();
+    }
   };
 
 
@@ -1111,8 +1270,27 @@ export default function App() {
 
   useEffect(() => {
     if (!successData) return;
+    try {
+      if (!localStorage.getItem(FIRST_ORDER_KEY)) localStorage.setItem(FIRST_ORDER_KEY, String(Date.now()));
+    } catch {}
     window.dispatchEvent(new Event('gokez:first-order-completed'));
   }, [successData]);
+
+  useEffect(() => {
+    if (!checkoutActive) {
+      checkoutOpenedRef.current = false;
+      return;
+    }
+    if (checkoutOpenedRef.current) return;
+    checkoutOpenedRef.current = true;
+    try {
+      if (!localStorage.getItem(FIRST_ORDER_KEY)) return;
+      if (localStorage.getItem(PERMISSIONS_SEEN_KEY) !== 'true') return;
+    } catch { return; }
+    if (getNotificationPermission() !== 'default') return;
+    if (!isPushOptInDue('later-order')) return;
+    requestPushOptInPrompt('later-order');
+  }, [checkoutActive]);
 
   useEffect(() => {
     // Offer order updates after a successful order, to guests as well as
@@ -1446,7 +1624,7 @@ export default function App() {
 
   return (
     <AppShell
-      className={welcomeActive ? 'welcome-active bg-[#e5fde5]' : loginPageActive ? 'login-active bg-[#e5fde5]' : view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'}
+      className={welcomeActive ? 'welcome-active bg-[#ADFBBD]' : permissionsActive ? 'permissions-active bg-[#ADFBBD]' : loginPageActive ? 'login-active bg-[#ADFBBD]' : view === 'deals' ? 'bg-[#f0fdf4]' : 'bg-white'}
       scrollRef={scrollRef}
       onTouchStart={handlePullTouchStart}
       onTouchMove={handlePullTouchMove}
@@ -1494,7 +1672,7 @@ export default function App() {
 
       {/* In-place refresh spinner. Absolutely positioned so the gesture never
           shifts the page or the navbar — it just rotates where it is. */}
-      {!welcomeActive && (refreshing || pullDistanceVisible > 0) && (
+      {!onboardingActive && (refreshing || pullDistanceVisible > 0) && (
         <div
           className="pointer-events-none absolute left-1/2 z-[80] -translate-x-1/2"
           style={{
@@ -1518,7 +1696,7 @@ export default function App() {
          never scrolls away and page content pins beneath it at top-0. */
       header={
         <>
-      {!isEmbed && !accountSubPage && !welcomeActive && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
+      {!isEmbed && !accountSubPage && !onboardingActive && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
         <Navbar
           onUseMyLocation={useMyLocation}
           activeView={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'}
@@ -1531,10 +1709,10 @@ export default function App() {
         />
       )}
 
-      {/* Closed-store notice: below the header, on every page, never blocking.
+      {/* Closed-store notice: below the header on Home only, never blocking.
           The store's own greeting and message come from the hub's Hours tab;
           without them the notice falls back to the default wording. */}
-      {!isEmbed && !accountSubPage && !welcomeActive && !(view === 'login' || (view === 'account' && accountLoginOpen)) && (
+      {closedNoticeVisible && (
         <StoreStatusStrip
           openState={openState}
           closedGreeting={settings.store_closed_greeting}
@@ -1543,9 +1721,9 @@ export default function App() {
       )}
         </>
       }
-      floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage || welcomeActive} />}
+      floatingCart={<FloatingCart onOpen={handleCheckout} hidden={checkoutActive || !productPage || onboardingActive} />}
       bottomNavHidden={navHidden}
-      bottomNav={!checkoutActive && view !== 'login' && !welcomeActive ? (
+      bottomNav={!checkoutActive && view !== 'login' && !onboardingActive ? (
         <div className="sm:hidden">
           <BottomNav active={(view === 'fresh' ? 'fresh' : view) as 'home' | 'categories' | 'orders' | 'account' | 'fresh'} onChange={handleNavChange} onOpenSearch={openFreshPage} freshActive={view === 'fresh'} />
         </div>
@@ -1570,22 +1748,6 @@ export default function App() {
           // The cross backs out of the order, the button goes ahead with it.
           onClose={() => settlePrompt(false)}
           onConfirm={() => { settlePrompt(true); }}
-        />,
-        document.body,
-      )}
-
-      {/* The same card, on its own, the first time the customer arrives at a
-          closed store. It has nothing pending, so either button just closes
-          it and the banner carries the message from then on. */}
-      {closedCard && !closedPrompt && createPortal(
-        <StoreClosedCard
-          open
-          greeting={settings.store_closed_greeting}
-          message={settings.store_closed_message}
-          resumeLabel={storeResumeLabel}
-          primaryLabel="Got it"
-          onClose={() => { setClosedCard(false); }}
-          onConfirm={() => { setClosedCard(false); }}
         />,
         document.body,
       )}
@@ -1676,24 +1838,25 @@ export default function App() {
 
       {/* Pages */}
       {view === 'welcome' ? (
-        <div className="absolute inset-0 touch-none overflow-hidden bg-[#018330]">
-          <img
-            src="/get_started.webp"
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 h-full w-full select-none object-fill"
-            draggable={false}
+        <div className="welcome-screen absolute inset-0 touch-none overflow-hidden bg-[#ADFBBD]">
+          <WelcomeVisual
+            status={welcomeImageStatus}
+            imageRef={welcomeImageRef}
+            onImageLoad={() => setWelcomeImageStatus('loaded')}
+            onImageError={() => setWelcomeImageStatus('failed')}
           />
-          <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))]">
+          <div className="onboarding-action-bar">
             <button
               type="button"
               onClick={handleWelcomeGetStarted}
-              className="min-h-[52px] w-full max-w-sm rounded-2xl bg-white px-6 py-3 text-base font-extrabold text-gokez-800 shadow-lg ring-1 ring-black/5 transition-colors hover:bg-white/95 active:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gokez-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+              className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-[#087A43] px-6 py-3 text-base font-extrabold text-white shadow-lg shadow-[#087A43]/20 ring-1 ring-[#087A43]/15 transition-colors hover:bg-[#076a39] active:bg-[#065d32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
             >
-              Get Started
+              Get Started <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
+      ) : view === 'permissions' ? (
+        <PermissionsOnboarding onAllow={handlePermissionsAllow} onMaybeLater={() => finishPermissionsOnboarding(true)} />
       ) : view === 'about' ? (
         <DeferredPage><AboutPage /></DeferredPage>
       ) : view === 'what-is-gokez-mart' ? (

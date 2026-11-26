@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share, Moon, Sun, X, Sparkles, Info, Gift, Home } from 'lucide-react';
 import { authApi, referralApi, suggestionApi, type ReferralMeData } from '../services/api';
@@ -385,7 +385,37 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const [loginBackSignal, setLoginBackSignal] = useState(0);
   const [brandImgError, setBrandImgError] = useState(false);
   const [logoImgError, setLogoImgError] = useState(false);
-  const [bannerImgError, setBannerImgError] = useState(false);
+  const loginHeaderRef = useRef<HTMLDivElement>(null);
+  const formAreaRef = useRef<HTMLDivElement>(null);
+  const formContentRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (isLoggedIn || !accountLoginOpen) return;
+    const area = formAreaRef.current;
+    const content = formContentRef.current;
+    if (!area || !content) return;
+    const measure = () => {
+      const headerHeight = loginHeaderRef.current?.getBoundingClientRect().height ?? 0;
+      area.style.setProperty('--login-header-height', `${Math.max(0, Math.round(headerHeight))}px`);
+      const button = area.querySelector<HTMLElement>('form button[type="submit"]');
+      if (!button) return;
+      const buttonRect = button.getBoundingClientRect();
+      const offset = buttonRect.top + buttonRect.height / 2 - content.getBoundingClientRect().top;
+      area.style.setProperty('--login-button-offset', `${Math.max(0, Math.round(offset))}px`);
+    };
+    measure();
+    const observer = new MutationObserver(measure);
+    observer.observe(area, { childList: true, subtree: true, characterData: true });
+    const header = loginHeaderRef.current;
+    const headerObserver = header && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (header) headerObserver?.observe(header);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      headerObserver?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [isLoggedIn, accountLoginOpen, loginStepView]);
 
   const leaveAsGuest = () => {
     // The guest escape is keyboard-only now, but it still has to report the
@@ -437,79 +467,72 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     const showBrandHeader = loginStepView === 'phone';
     const showOtpHeader = loginStepView === 'otp';
     return (
-      <div className="page-shell login-page-view login-brand-bg relative flex flex-col overflow-x-hidden font-sans dark:bg-slate-900">
+      <div className="page-shell login-page-view login-brand-bg relative flex h-full flex-col overflow-hidden font-sans dark:bg-slate-900">
         {showOtpHeader && (
-          <PageHeader
-            onBack={() => setLoginBackSignal((n) => n + 1)}
-            backLabel="Back to mobile number"
-            position="static"
-            gradient="r"
-            darkTo="#18191a"
-          />
+          <div ref={loginHeaderRef} className="shrink-0">
+            <PageHeader
+              onBack={() => setLoginBackSignal((n) => n + 1)}
+              backLabel="Back to mobile number"
+              position="static"
+              gradient="r"
+              darkTo="#18191a"
+            />
+          </div>
         )}
         {showBrandHeader && (
-          <div className="login-brand-hero relative z-10 w-full shrink-0 text-center">
-            <div className="login-brand-header relative flex h-[96px] items-center justify-center px-3 sm:px-5">
-              <div className="flex min-w-0 flex-col items-center">
-                <div className="flex items-end justify-center gap-0">
-                  {logoImgError ? (
-                    <Home className="h-[38px] w-[38px] flex-shrink-0 text-[#087A43] dark:text-green-400" aria-hidden="true" />
-                  ) : (
-                    <img
-                      src="/gokez_mart_logo-header.png"
-                      alt=""
-                      className="h-[38px] w-[38px] flex-shrink-0 object-contain"
-                      onError={() => setLogoImgError(true)}
-                    />
-                  )}
-                  {brandImgError ? (
-                    <span className="text-[22px] font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
-                  ) : (
-                    <img
-                      src="/mart_brand_new.webp"
-                      alt="Gokez Mart"
-                      className="relative top-[9px] h-[68px] w-auto max-w-[45%] object-contain"
-                      onError={() => setBrandImgError(true)}
-                    />
-                  )}
+          <div ref={loginHeaderRef} className="login-brand-hero relative z-10 w-full shrink-0 text-left">
+            <div className="login-brand-header relative flex items-center justify-start">
+              <div className="mx-auto w-full max-w-sm px-4 sm:px-6">
+                <div className="flex min-w-0 -translate-y-5 flex-col items-start">
+                  <div className="flex items-end justify-start gap-0">
+                    {logoImgError ? (
+                      <Home className="login-brand-logo flex-shrink-0 text-[#087A43] dark:text-green-400" aria-hidden="true" />
+                    ) : (
+                      <img
+                        src="/gokez_mart_logo-header.png"
+                        alt=""
+                        className="login-brand-logo flex-shrink-0 object-contain"
+                        onError={() => setLogoImgError(true)}
+                      />
+                    )}
+                    {brandImgError ? (
+                      <span className="login-brand-fallback font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
+                    ) : (
+                      <img
+                        src="/mart_brand_new.webp"
+                        alt="Gokez Mart"
+                        className="login-brand-image"
+                        onError={() => setBrandImgError(true)}
+                      />
+                    )}
+                  </div>
+                  <p className="login-brand-tagline text-left font-bold leading-none tracking-tight text-black">Shop Local. Support Local.</p>
+                  <p className="login-punchline w-full text-left font-black leading-tight tracking-tight text-black">
+                    Your local shops,<br />
+                    now delivered in minutes.
+                  </p>
                 </div>
-                <p className="mt-[2px] w-full truncate text-center text-[10px] font-bold leading-none tracking-tight text-black">Shop Local. Support Local.</p>
               </div>
               <button
                 type="button"
                 onClick={leaveAsGuest}
-                className="absolute -top-2 right-3 inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-bold text-gray-900 shadow-md ring-1 ring-gray-200 transition-colors hover:bg-gray-50 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600 sm:-top-1 sm:right-5 sm:min-h-10 sm:px-4 sm:text-sm"
+                className="absolute -top-2 right-[calc(env(safe-area-inset-right,0px)+1rem)] inline-flex min-h-9 items-center gap-0.5 rounded-full bg-[#9AEFAF] px-3 text-xs font-bold text-[#087A43] shadow-sm ring-1 ring-[#087A43]/20 transition-colors hover:bg-[#8CE6A3] active:bg-[#7EDD96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 dark:bg-[#9AEFAF] dark:text-[#087A43] dark:ring-[#087A43]/20 sm:-top-1 sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)] sm:min-h-10 sm:px-4 sm:text-sm"
               >
-                Skip <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                Skip<ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
-            </div>
-            <div className="login-brand-banner-wrap mt-1 flex h-[88px] w-full items-center justify-center overflow-hidden px-3 sm:h-[110px]">
-              {bannerImgError ? (
-                <div className="flex h-full w-full items-center justify-center text-3xl" role="img" aria-label="Fresh vegetables">
-                  <span>🥦🥕🍅</span>
-                </div>
-              ) : (
-                <img
-                  src="/login_banner.webp"
-                  alt="Gokez Mart - Shop Local. Support Local."
-                  width={960}
-                  height={541}
-                  decoding="async"
-                  className="login-brand-banner h-full w-auto max-w-full object-contain"
-                  onError={() => setBannerImgError(true)}
-                />
-              )}
             </div>
           </div>
         )}
-        <div className="login-form-area relative min-h-0 w-full flex-1 overflow-y-auto">
-          <div className={`mx-auto w-full max-w-sm px-4 sm:px-6 ${
-            showBrandHeader
-              ? 'pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-3'
-              : showOtpHeader
-                ? 'space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6'
-                : 'space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2'
-          }`}>
+        <div ref={formAreaRef} className="login-form-area relative min-h-0 w-full flex-1 overflow-y-auto">
+          <div className="flex min-h-full flex-col">
+            <div className="login-form-spacer" aria-hidden="true" />
+            <div ref={formContentRef} className={`mx-auto w-full max-w-sm px-4 sm:px-6 ${
+              showBrandHeader
+                ? 'pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-3'
+                : showOtpHeader
+                  ? 'space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6'
+                  : 'space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2'
+            }`}>
             {showBrandHeader && <h1 className="mb-0 text-center text-[18px] font-black text-gray-900 dark:text-white">Log in or Sign up</h1>}
             <div className={showBrandHeader ? "-mt-2" : undefined}>
 <LoginFlow
@@ -542,6 +565,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               }}
               onClose={closeLogin}
             />
+            </div>
             </div>
           </div>
         </div>
