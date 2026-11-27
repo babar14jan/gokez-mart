@@ -71,6 +71,12 @@ describe('permissions onboarding screen', () => {
     assert.match(push, /requestPermission\(\(value: NotificationPermission\) => finish\(value\)\)/);
     assert.match(push, /export async function enablePromotionalNotifications\(\): Promise<boolean> \{/);
   });
+
+  test('finishing permissions consumes the deferred guest login prompt', () => {
+    const app = readSource('src/App.tsx');
+    assert.match(app, /sessionStorage\.setItem\(BOOT_LOGIN_DONE_KEY, '1'\)/);
+    assert.match(app, /if \(sessionStorage\.getItem\(BOOT_LOGIN_DONE_KEY\)\) return;/);
+  });
 });
 
 describe('opt-in prompt after permissions onboarding', () => {
@@ -82,6 +88,11 @@ describe('opt-in prompt after permissions onboarding', () => {
     assert.match(prompt, /Stay updated/);
     assert.match(prompt, /Not now/);
     assert.match(prompt, /Enable/);
+  });
+
+  test('the legacy popup is cancelled once the permissions page is seen', () => {
+    const prompt = readSource('src/components/PushOptInPrompt.tsx');
+    assert.match(prompt, /window\.setTimeout\(\(\) => \{[\s\S]*?if \(hasSeenPermissionsPage\(\)\) return;[\s\S]*?if \(!canShowPushPrompt\(\)\) return;[\s\S]*?if \(!isPushOptInDue\('legacy'\)\) return;/);
   });
 
   test('only Maybe Later asks the popup immediately', () => {

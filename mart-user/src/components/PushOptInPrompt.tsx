@@ -41,6 +41,9 @@ export default function PushOptInPrompt() {
     if (!canShowPushPrompt()) return;
     if (!isPushOptInDue('legacy')) return;
     const timer = window.setTimeout(() => {
+      if (hasSeenPermissionsPage()) return;
+      if (!canShowPushPrompt()) return;
+      if (!isPushOptInDue('legacy')) return;
       setReason('legacy');
       setOpen(true);
     }, 4000);

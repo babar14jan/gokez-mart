@@ -54,7 +54,7 @@ import { useScrollChrome } from './utils/useScrollChrome';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { applySeo } from './utils/seo';
 import { useLoginFlowStore } from './store/loginFlowStore';
-import { useAccountLoginStore } from './store/accountLoginStore';
+import { BOOT_LOGIN_DONE_KEY, useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
 import { detectPlatform } from './utils/install';
@@ -397,8 +397,8 @@ export default function App() {
     if (typeof localStorage !== 'undefined' && localStorage.getItem(WELCOME_SEEN_KEY) !== 'true') return;
     if (typeof localStorage !== 'undefined' && localStorage.getItem(PERMISSIONS_SEEN_KEY) !== 'true') return;
     if (window.location.search) return;
-    if (sessionStorage.getItem('mart-boot-login-done')) return;
-    sessionStorage.setItem('mart-boot-login-done', '1');
+    if (sessionStorage.getItem(BOOT_LOGIN_DONE_KEY)) return;
+    sessionStorage.setItem(BOOT_LOGIN_DONE_KEY, '1');
     useLoginFlowStore.getState().setGuestReturnPath('/');
     useAccountLoginStore.getState().openLogin();
   }, [isLoggedIn, view]);
@@ -1157,6 +1157,7 @@ export default function App() {
     try {
       localStorage.setItem(WELCOME_SEEN_KEY, 'true');
       localStorage.setItem(PERMISSIONS_SEEN_KEY, 'true');
+      sessionStorage.setItem(BOOT_LOGIN_DONE_KEY, '1');
       target = readPendingPermissionsTarget();
       clearPendingPermissions();
     } catch {}
