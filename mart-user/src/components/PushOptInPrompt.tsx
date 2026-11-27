@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
-import { authApi } from '../services/api';
 import {
+  enablePromotionalNotifications,
   isPushOptInDue,
   isPushSupported,
   PUSH_OPT_IN_REQUEST_EVENT,
@@ -41,6 +41,9 @@ export default function PushOptInPrompt() {
     if (!canShowPushPrompt()) return;
     if (!isPushOptInDue('legacy')) return;
     const timer = window.setTimeout(() => {
+      if (hasSeenPermissionsPage()) return;
+      if (!canShowPushPrompt()) return;
+      if (!isPushOptInDue('legacy')) return;
       setReason('legacy');
       setOpen(true);
     }, 4000);
@@ -78,7 +81,7 @@ export default function PushOptInPrompt() {
         if (granted) await subscribeToPush();
       }
       if (granted) {
-        try { await authApi.updateMarketingConsent(true); } catch { /* best effort */ }
+        await enablePromotionalNotifications();
       }
     } finally {
       setBusy(false);

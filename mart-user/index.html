@@ -189,7 +189,7 @@
       if (skipLaunchSplash || pullRefresh) {
         document.documentElement.classList.add('skip-launch-splash');
       } else {
-        // The page canvas is painted white while the splash is up.
+        // The page canvas is painted brand green while the splash is up.
         document.documentElement.classList.add('splash-active');
       }
 
@@ -234,8 +234,8 @@
          canvas and the splash looked like it was cut off. The class is removed
          as soon as the splash is, so the loaded page keeps its own colours
          (white in light mode, near-black in dark) exactly as before. */
-      html.splash-active { background-color: #ffffff; }
-      html.dark.splash-active { background-color: #ffffff; }
+      html.splash-active { background-color: #ADFBBD; }
+      html.dark.splash-active { background-color: #ADFBBD; }
       /* Styling for the no-JavaScript SEO block only. Nothing here affects the
          React app, which renders its own layout into #root. */
       .seo-static { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; }
@@ -269,7 +269,7 @@
         /* One fixed, centred size on every device: the overlay still covers the
            whole screen so nothing behind it can show through, but the artwork
            never scales up to fill a tall phone. */
-        background: #ffffff url('/spalsh_1.GIF') center / auto min(60vh, 320px) no-repeat;
+        background: #ADFBBD url('/spalsh_1.GIF') center / auto min(60vh, 320px) no-repeat;
       }
       .js #app-splash { display: block; }
       .skip-launch-splash #app-splash { display: none !important; }
