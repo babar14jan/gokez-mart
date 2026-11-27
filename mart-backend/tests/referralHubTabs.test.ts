@@ -349,6 +349,12 @@ describe('Referral people view', () => {
     }
     assert.ok(service.includes('filters.referrerId'), 'records can be filtered by referrer');
     assert.ok(service.includes('c.name, c.phone'), 'the top-customers report includes human-readable identity');
+
+    const records = readHub('pages/ReferralRecordsPage.tsx');
+    for (const field of ['row.referrerName', 'row.referredName', 'row.referrerPhone', 'row.referredPhone']) {
+      assert.ok(records.includes(field), `${field} is shown on the records row`);
+    }
+    assert.ok(records.includes('Code / Names &amp; Phones'), 'the records column names both identity fields');
   });
 
   test('the hub turns a referrer into a searchable, drillable profile', () => {

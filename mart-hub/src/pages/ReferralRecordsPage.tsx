@@ -104,7 +104,7 @@ export default function ReferralRecordsPage({ embedded = false }: { embedded?: b
 
       <div className="page-card">
         <div className="hidden lg:grid grid-cols-[1.2fr_1fr_1fr_1fr_0.8fr_auto] gap-3 px-4 py-2 bg-gray-50 dark:bg-slate-700/50 border-b border-gray-100 dark:border-slate-700 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-          <div>Code / Phones</div><div>Status</div><div>Campaign</div><div>Attributed</div><div className="text-right">Order value</div><div />
+          <div>Code / Names &amp; Phones</div><div>Status</div><div>Campaign</div><div>Attributed</div><div className="text-right">Order value</div><div />
         </div>
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-emerald-500" /></div>
@@ -115,6 +115,7 @@ export default function ReferralRecordsPage({ embedded = false }: { embedded?: b
             className="w-full grid grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1fr_0.8fr_auto] gap-3 items-center px-4 py-3 border-b border-gray-50 dark:border-slate-700 last:border-0 hover:bg-gray-50 dark:hover:bg-slate-700/40 text-left">
             <div className="col-span-2 lg:col-span-1 min-w-0">
               <p className="text-xs font-bold text-gray-900 dark:text-white font-mono">{row.code || '—'}</p>
+              <p className="text-[11px] text-gray-700 dark:text-slate-200 truncate">{row.referrerName || 'Referrer'} → {row.referredName || 'Customer'}</p>
               <p className="text-[10px] text-gray-500 truncate">{row.referrerPhone || '—'} → {row.referredPhone || '—'}</p>
             </div>
             <StatusBadge status={row.status} />
