@@ -232,8 +232,11 @@ export function buildOrderWindow(
   from?: string,
   to?: string,
   storeId?: string | string[] | null,
-  opts?: { column?: string; startIndex?: number; dateBasis?: 'created' | 'browse' },
+  opts?: { column?: string; startIndex?: number; dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean },
 ): { where: string; clause: string; params: unknown[] } {
+  if (range === 'custom' && (!from || !to)) {
+    throw badRequest('Choose a valid custom date range');
+  }
   const column = opts?.dateBasis === 'browse'
     ? ORDER_BROWSE_DATE_SQL
     : (opts?.column || 'o.created_at');
@@ -257,14 +260,140 @@ export function buildOrderWindow(
   }
   const storeIds = normalizeAnalyticsStoreIds(storeId);
   if (storeIds.length) {
-    clauses.push(`o.store_id = ANY(${at()}::uuid[])`);
+    if (opts?.includeFulfilmentStores) {
+      const storeParam = at();
+      clauses.push(`(o.store_id = ANY(${storeParam}::uuid[]) OR EXISTS (
+        SELECT 1 FROM mart_order_store_fulfilments f
+        WHERE f.order_id = o.id AND f.store_id = ANY(${storeParam}::uuid[])
+      ))`);
+    } else {
+      clauses.push(`o.store_id = ANY(${at()}::uuid[])`);
+    }
     params.push(storeIds);
   }
   const clause = clauses.join(' AND ');
   return { where: clause ? `WHERE ${clause}` : '', clause, params };
 }
 
+export interface OrderListFilters {
+  storeId?: string | string[];
+  status?: string;
+  deliveryPreference?: string;
+  phone?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+  viewerStoreId?: string | null;
+  restrictItems?: boolean;
+  range?: string;
+  from?: string;
+  to?: string;
+  dateBasis?: 'created' | 'browse';
+  activeScheduled?: boolean;
+  includeFulfilmentStores?: boolean;
+}
+
+export interface OrderListCounts {
+  total: number;
+  filteredTotal: number;
+  statusCounts: Record<string, number>;
+  scheduledCount: number;
+}
+
+interface OrderListWhereOptions {
+  includeStatus?: boolean;
+  includeDate?: boolean;
+  includeDeliveryPreference?: boolean;
+  includeSearch?: boolean;
+  activeScheduledOnly?: boolean;
+}
+
 export class OrderService {
+  private static buildOrderListWhere(
+    filters?: OrderListFilters,
+    options: OrderListWhereOptions = {},
+  ): { where: string; params: unknown[]; nextIndex: number } {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let i = 1;
+
+    const storeIds = normalizeAnalyticsStoreIds(filters?.storeId);
+    if (storeIds.length) {
+      const storeParam = `$${i++}`;
+      if (filters?.includeFulfilmentStores) {
+        conditions.push(`(o.store_id = ANY(${storeParam}::uuid[]) OR EXISTS (
+          SELECT 1 FROM mart_order_store_fulfilments f
+          WHERE f.order_id = o.id AND f.store_id = ANY(${storeParam}::uuid[])
+        ))`);
+      } else {
+        conditions.push(`o.store_id = ANY(${storeParam}::uuid[])`);
+      }
+      params.push(storeIds);
+    }
+    if (filters?.phone) { conditions.push(`o.guest_phone = $${i++}`); params.push(filters.phone); }
+
+    if (filters?.activeScheduled && options.activeScheduledOnly !== false) {
+      conditions.push(`o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated')`);
+    } else if (options.includeDeliveryPreference !== false && filters?.deliveryPreference) {
+      conditions.push(`o.delivery_preference = $${i++}`);
+      params.push(filters.deliveryPreference);
+    }
+
+    if (options.includeStatus !== false && filters?.status) {
+      conditions.push(`o.status = $${i++}`);
+      params.push(filters.status);
+    }
+
+    if (options.includeSearch !== false && filters?.search?.trim()) {
+      // Staff correcting a delivery know either the order number or the mobile
+      // number, so one box covers both. The phone match strips punctuation and
+      // a leading 91 so "+91 98765 43210" still finds the stored 10-digit value.
+      const term = filters.search.trim();
+      let digits = term.replace(/\D/g, '');
+      if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(-10);
+
+      const pattern = `%${term}%`;
+      const clauses = [
+        `o.order_number ILIKE $${i}`,
+        `o.id::text ILIKE $${i + 1}`,
+        `o.guest_name ILIKE $${i}`,
+        `o.guest_address ILIKE $${i}`,
+      ];
+      params.push(pattern, pattern);
+      i += 2;
+      if (digits) {
+        clauses.push(`regexp_replace(o.guest_phone, '\\D', '', 'g') LIKE $${i}`);
+        params.push(`%${digits}%`);
+        i += 1;
+      }
+      conditions.push(`(${clauses.join(' OR ')})`);
+    }
+
+    if (options.includeDate !== false && filters?.range && filters.range !== 'all') {
+      const window = buildOrderWindow(
+        filters.range,
+        filters.from,
+        filters.to,
+        null,
+        { dateBasis: filters.dateBasis ?? 'browse', startIndex: i },
+      );
+      if (window.clause) {
+        conditions.push(window.clause);
+        params.push(...window.params);
+        i += window.params.length;
+      }
+      if (filters.range === 'today') {
+        conditions.push(`NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`);
+      }
+    }
+
+    return {
+      where: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+      params,
+      nextIndex: i,
+    };
+  }
+
   // Generate sequential order number MART-001, MART-002 etc
   private static generateOrderNumber(): string {
     const now = new Date();
@@ -1035,38 +1164,61 @@ export class OrderService {
   // Every money/count figure is derived live from the order rows in the window —
   // nothing is read from materialised counters (mart_customers.order_count /
   // total_spent) that could drift when an order is cancelled or backfilled.
-    static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, opts?: { dateBasis?: 'created' | 'browse' }) {
-     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId, { dateBasis: opts?.dateBasis });
+    static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, opts?: { dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean }) {
+     const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId, {
+       dateBasis: opts?.dateBasis,
+       includeFulfilmentStores: opts?.includeFulfilmentStores,
+     });
+     // A delivered order always has a payment bucket, even when the stored
+     // method is null, blank or a legacy value the hub no longer renders.
+     const paymentMethod = `CASE LOWER(TRIM(COALESCE(o.payment_method, '')))
+       WHEN 'cod' THEN 'cod'
+       WHEN 'upi' THEN 'upi'
+       WHEN 'phonepay' THEN 'phonepay'
+       ELSE 'unknown'
+     END`;
      // Today's snapshot must not be polluted by scheduled orders that belong
      // to a future delivery slot — they are handled in the scheduled queue.
      const where = range === 'today'
        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
        : baseWhere;
-     const result = await query<{
-      placed: number; pending: number; confirmed: number; delivered: number; cancelled: number;
-      preparing: number; ready_to_pickup: number; out_for_delivery: number; picked_up: number;
-      revenue: string | number; delivered_revenue: string | number;
-      delivery_collected: string | number;
-      free_deliveries: number; coupon_orders: number; coupon_amount: string | number;
-    }>(
-      `SELECT COUNT(*)::int AS placed,
-         COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
-         COUNT(*) FILTER (WHERE o.status = 'confirmed')::int AS confirmed,
-         COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
-         COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
-         COUNT(*) FILTER (WHERE o.status = 'preparing')::int AS preparing,
-         COUNT(*) FILTER (WHERE o.status = 'ready_to_pickup')::int AS ready_to_pickup,
-         COUNT(*) FILTER (WHERE o.status = 'out_for_delivery')::int AS out_for_delivery,
-         COUNT(*) FILTER (WHERE o.status = 'picked_up')::int AS picked_up,
-          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue,
-         COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivered_revenue,
-         COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_collected,
-         COUNT(*) FILTER (WHERE o.status = 'delivered' AND o.delivery_charge = 0)::int AS free_deliveries,
-         COUNT(*) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated') AND (o.coupon_code_used IS NOT NULL OR o.campaign_id IS NOT NULL))::int AS coupon_orders,
-         COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated')), 0)::float AS coupon_amount
-       FROM mart_orders o ${where}`,
-      params
-    );
+      const result = await query<{
+       placed: number; pending: number; confirmed: number; delivered: number; cancelled: number;
+       preparing: number; ready_to_pickup: number; out_for_delivery: number; picked_up: number;
+       revenue: string | number; delivered_revenue: string | number;
+       delivery_collected: string | number;
+       free_deliveries: number; coupon_orders: number; coupon_amount: string | number;
+       cod_count: number; cod_revenue: string | number;
+       upi_count: number; upi_revenue: string | number;
+       phonepay_count: number; phonepay_revenue: string | number;
+       unknown_count: number; unknown_revenue: string | number;
+     }>(
+       `SELECT COUNT(*)::int AS placed,
+          COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
+          COUNT(*) FILTER (WHERE o.status = 'confirmed')::int AS confirmed,
+          COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
+          COUNT(*) FILTER (WHERE o.status IN ('cancelled','failed_delivery','terminated'))::int AS cancelled,
+          COUNT(*) FILTER (WHERE o.status = 'preparing')::int AS preparing,
+          COUNT(*) FILTER (WHERE o.status = 'ready_to_pickup')::int AS ready_to_pickup,
+          COUNT(*) FILTER (WHERE o.status = 'out_for_delivery')::int AS out_for_delivery,
+          COUNT(*) FILTER (WHERE o.status = 'picked_up')::int AS picked_up,
+           COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS revenue,
+          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivered_revenue,
+          COALESCE(SUM(o.delivery_charge) FILTER (WHERE o.status = 'delivered'), 0)::float AS delivery_collected,
+          COUNT(*) FILTER (WHERE o.status = 'delivered' AND o.delivery_charge = 0)::int AS free_deliveries,
+          COUNT(*) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated') AND (o.coupon_code_used IS NOT NULL OR o.campaign_id IS NOT NULL))::int AS coupon_orders,
+          COALESCE(SUM(o.campaign_discount) FILTER (WHERE o.status NOT IN ('cancelled','failed_delivery','terminated')), 0)::float AS coupon_amount,
+          COUNT(*) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'cod')::int AS cod_count,
+          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'cod'), 0)::float AS cod_revenue,
+          COUNT(*) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'upi')::int AS upi_count,
+          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'upi'), 0)::float AS upi_revenue,
+          COUNT(*) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'phonepay')::int AS phonepay_count,
+          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'phonepay'), 0)::float AS phonepay_revenue,
+          COUNT(*) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'unknown')::int AS unknown_count,
+          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'unknown'), 0)::float AS unknown_revenue
+        FROM mart_orders o ${where}`,
+       params
+     );
     const row = result.rows[0];
     // Revenue = value of everything delivered in the window, net of offers
     // (o.total is already subtotal + delivery − campaign_discount). The window
@@ -1091,6 +1243,12 @@ export class OrderService {
       freeDeliveries: row?.free_deliveries ?? 0,
       couponOrders: row?.coupon_orders ?? 0,
       couponAmount: Number(row?.coupon_amount ?? 0),
+      paymentBreakdown: [
+        { method: 'cod', count: row?.cod_count ?? 0, revenue: Number(row?.cod_revenue ?? 0) },
+        { method: 'upi', count: row?.upi_count ?? 0, revenue: Number(row?.upi_revenue ?? 0) },
+        { method: 'phonepay', count: row?.phonepay_count ?? 0, revenue: Number(row?.phonepay_revenue ?? 0) },
+        { method: 'unknown', count: row?.unknown_count ?? 0, revenue: Number(row?.unknown_revenue ?? 0) },
+      ],
     };
   }
 
@@ -1102,8 +1260,12 @@ export class OrderService {
     limit: number,
     offset: number,
     anchor: string,
+    opts?: { includeFulfilmentStores?: boolean },
   ) {
-    const { where, params } = buildOrderWindow(range, from, to, storeId, { dateBasis: 'browse' });
+    const { where, params } = buildOrderWindow(range, from, to, storeId, {
+      dateBasis: 'browse',
+      includeFulfilmentStores: opts?.includeFulfilmentStores,
+    });
     const calendar = calendarWindow(range, from, to, anchor);
     const calendarParams = calendar ? [calendar.start, calendar.end] : [];
     const dateStart = params.length + 1;
@@ -1154,13 +1316,22 @@ export class OrderService {
     const weeklyStoreIds = normalizeAnalyticsStoreIds(storeId);
     const weeklyParams: unknown[] = [anchor];
     if (weeklyStoreIds.length) weeklyParams.push(weeklyStoreIds);
+    const weeklyStoreParam = `$${weeklyParams.length}`;
+    const weeklyStoreClause = weeklyStoreIds.length
+      ? opts?.includeFulfilmentStores
+        ? `AND (o.store_id = ANY(${weeklyStoreParam}::uuid[]) OR EXISTS (
+            SELECT 1 FROM mart_order_store_fulfilments f
+            WHERE f.order_id = o.id AND f.store_id = ANY(${weeklyStoreParam}::uuid[])
+          ))`
+        : `AND o.store_id = ANY($${weeklyParams.length}::uuid[])`
+      : '';
     const weeklyRows = await query<{ weeksAgo: number; value: number }>(
       `SELECT FLOOR(((($1::date) - ((${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date))) / 7.0)::int AS "weeksAgo",
               COUNT(*)::int AS value
        FROM mart_orders o
        WHERE (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date > (($1::date) - 56)
          AND (${ORDER_BROWSE_DATE_SQL} AT TIME ZONE 'Asia/Kolkata')::date <= ($1::date)
-         ${weeklyStoreIds.length ? `AND o.store_id = ANY($${weeklyParams.length}::uuid[])` : ''}
+         ${weeklyStoreClause}
        GROUP BY 1`,
       weeklyParams
     );
@@ -1205,14 +1376,25 @@ export class OrderService {
   // Customer card figures for the Analytics Customers tab. Spend remains based
   // on delivered orders, while a customer becomes returning as soon as they
   // place a later non-terminal order after a delivery under the same mobile.
-    static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, topCount = 10, opts?: { dateBasis?: 'created' | 'browse' }) {
+    static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, topCount = 10, opts?: { dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean }) {
       const storeIds = normalizeAnalyticsStoreIds(storeId);
-      const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeIds, { dateBasis: opts?.dateBasis });
+      const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeIds, {
+        dateBasis: opts?.dateBasis,
+        includeFulfilmentStores: opts?.includeFulfilmentStores,
+      });
      const where = range === 'today'
        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
        : baseWhere;
     const phoneIdentity = `NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '')`;
-    const storeScope = storeIds.length ? `AND o.store_id = ANY($${params.length + 1}::uuid[])` : '';
+    const storeScopeParam = `$${params.length + 1}`;
+    const storeScope = storeIds.length
+      ? opts?.includeFulfilmentStores
+        ? `AND (o.store_id = ANY(${storeScopeParam}::uuid[]) OR EXISTS (
+            SELECT 1 FROM mart_order_store_fulfilments f
+            WHERE f.order_id = o.id AND f.store_id = ANY(${storeScopeParam}::uuid[])
+          ))`
+        : `AND o.store_id = ANY($${params.length + 1}::uuid[])`
+      : '';
     const lifecycleParams = storeIds.length ? [...params, storeIds] : params;
     const aggSql = `SELECT
          ${phoneIdentity} AS ckey,
@@ -1280,46 +1462,8 @@ export class OrderService {
     };
   }
 
-  static async findAll(filters?: {
-    storeId?: string; status?: string; deliveryPreference?: string; phone?: string; search?: string; limit?: number; offset?: number;
-    viewerStoreId?: string | null; restrictItems?: boolean;
-  }) {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    let i = 1;
-
-    if (filters?.storeId) { conditions.push(`o.store_id = $${i++}`); params.push(filters.storeId); }
-    if (filters?.status)  { conditions.push(`o.status = $${i++}`);   params.push(filters.status); }
-    if (filters?.deliveryPreference) { conditions.push(`o.delivery_preference = $${i++}`); params.push(filters.deliveryPreference); }
-    if (filters?.phone)   { conditions.push(`o.guest_phone = $${i++}`); params.push(filters.phone); }
-    if (filters?.search?.trim()) {
-      // Staff correcting a delivery know either the order number or the mobile
-      // number, so one box covers both. The phone match strips punctuation and
-      // a leading 91 so "+91 98765 43210" still finds the stored 10-digit value.
-      const term = filters.search.trim();
-      let digits = term.replace(/\D/g, '');
-      if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(-10);
-
-      const clauses = [`o.order_number ILIKE $${i}`, `o.id::text = $${i + 1}`, `o.guest_name ILIKE $${i}`];
-      params.push(`%${term}%`, term);
-      i += 2;
-      if (digits) {
-        clauses.push(`regexp_replace(o.guest_phone, '\\D', '', 'g') LIKE $${i}`);
-        params.push(`%${digits}%`);
-        i += 1;
-      }
-      conditions.push(`(${clauses.join(' OR ')})`);
-    }
-    if (filters?.viewerStoreId) {
-      conditions.push(`(o.store_id = $${i} OR EXISTS (
-        SELECT 1 FROM mart_order_store_fulfilments f
-        WHERE f.order_id = o.id AND f.store_id = $${i}
-      ))`);
-      params.push(filters.viewerStoreId);
-      i++;
-    }
-
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  static async findAll(filters?: OrderListFilters) {
+    const { where, params, nextIndex } = this.buildOrderListWhere(filters);
     const limit = filters?.limit || 50;
     const offset = filters?.offset || 0;
 
@@ -1331,7 +1475,7 @@ export class OrderService {
        ${where}
        GROUP BY o.id
        ORDER BY o.created_at DESC
-       LIMIT $${i} OFFSET $${i + 1}`,
+       LIMIT $${nextIndex} OFFSET $${nextIndex + 1}`,
       [...params, limit, offset]
     );
     // Labelled here rather than in the hub so every order timestamp is rendered
@@ -1354,6 +1498,66 @@ export class OrderService {
         cancellationPolicy: getCancellationPolicy(row),
       };
     });
+  }
+
+  static async getOrderCounts(filters?: OrderListFilters): Promise<OrderListCounts> {
+    const base = this.buildOrderListWhere(filters, { includeStatus: false });
+    const filtered = this.buildOrderListWhere(filters);
+    const scheduled = this.buildOrderListWhere(
+      { ...filters, activeScheduled: true },
+      { includeStatus: false, includeDate: false, includeDeliveryPreference: false, includeSearch: false },
+    );
+
+    const [statusResult, filteredResult, scheduledResult] = await Promise.all([
+      query<{
+        all: number; pending: number; confirmed: number; preparing: number;
+        ready_to_pickup: number; out_for_delivery: number; picked_up: number;
+        delivered: number; cancelled: number; failed_delivery: number; terminated: number;
+      }>(
+        `SELECT COUNT(*)::int AS "all",
+                COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
+                COUNT(*) FILTER (WHERE o.status = 'confirmed')::int AS confirmed,
+                COUNT(*) FILTER (WHERE o.status = 'preparing')::int AS preparing,
+                COUNT(*) FILTER (WHERE o.status = 'ready_to_pickup')::int AS ready_to_pickup,
+                COUNT(*) FILTER (WHERE o.status = 'out_for_delivery')::int AS out_for_delivery,
+                COUNT(*) FILTER (WHERE o.status = 'picked_up')::int AS picked_up,
+                COUNT(*) FILTER (WHERE o.status = 'delivered')::int AS delivered,
+                COUNT(*) FILTER (WHERE o.status = 'cancelled')::int AS cancelled,
+                COUNT(*) FILTER (WHERE o.status = 'failed_delivery')::int AS failed_delivery,
+                COUNT(*) FILTER (WHERE o.status = 'terminated')::int AS terminated
+         FROM mart_orders o ${base.where}`,
+        base.params
+      ),
+      query<{ total: number }>(
+        `SELECT COUNT(*)::int AS total FROM mart_orders o ${filtered.where}`,
+        filtered.params
+      ),
+      query<{ total: number }>(
+        `SELECT COUNT(*)::int AS total FROM mart_orders o ${scheduled.where}`,
+        scheduled.params
+      ),
+    ]);
+
+    const row = statusResult.rows[0];
+    const statusCounts: Record<string, number> = {
+      all: Number(row?.all ?? 0),
+      pending: Number(row?.pending ?? 0),
+      confirmed: Number(row?.confirmed ?? 0),
+      preparing: Number(row?.preparing ?? 0),
+      ready_to_pickup: Number(row?.ready_to_pickup ?? 0),
+      out_for_delivery: Number(row?.out_for_delivery ?? 0),
+      picked_up: Number(row?.picked_up ?? 0),
+      delivered: Number(row?.delivered ?? 0),
+      cancelled: Number(row?.cancelled ?? 0),
+      failed_delivery: Number(row?.failed_delivery ?? 0),
+      terminated: Number(row?.terminated ?? 0),
+    };
+    return {
+      total: statusCounts.all,
+      filteredTotal: Number(filteredResult.rows[0]?.total ?? 0),
+      statusCounts,
+      scheduledCount: Number(scheduledResult.rows[0]?.total ?? 0),
+    };
   }
 
   static async updateStoreFulfilment(
@@ -2503,14 +2707,20 @@ export class OrderService {
     storeIds?: string[] | null,
     from?: string,
     to?: string,
-    opts?: { category?: string; limit?: number; offset?: number; sortBy?: 'units' | 'orders' },
+    opts?: { category?: string; limit?: number; offset?: number; sortBy?: 'units' | 'orders'; includeFulfilmentStores?: boolean },
   ) {
     const dateWindow = buildOrderWindow(range, from, to, null, { dateBasis: 'browse' });
     const baseParams: unknown[] = [...dateWindow.params];
     const baseConditions: string[] = [`o.status = 'delivered'`];
     if (dateWindow.clause) baseConditions.push(dateWindow.clause);
     if (storeIds && storeIds.length) {
-      baseConditions.push(`o.store_id = ANY($${baseParams.length + 1}::uuid[])`);
+      const storeParam = `$${baseParams.length + 1}`;
+      baseConditions.push(opts?.includeFulfilmentStores
+        ? `(o.store_id = ANY(${storeParam}::uuid[]) OR EXISTS (
+            SELECT 1 FROM mart_order_store_fulfilments f
+            WHERE f.order_id = o.id AND f.store_id = ANY(${storeParam}::uuid[])
+          ))`
+        : `o.store_id = ANY($${baseParams.length + 1}::uuid[])`);
       baseParams.push(storeIds);
     }
 
@@ -2537,12 +2747,22 @@ export class OrderService {
     const offsetClause = opts?.limit && opts?.offset ? ` OFFSET $${productParams.length + 1}` : '';
     if (opts?.limit && opts?.offset) productParams.push(opts.offset);
 
-    const [categoryRows, countRows, result] = await Promise.all([
+    const [categoryRows, categoryTotalsRows, countRows, result] = await Promise.all([
       query<{ categoryName: string }>(
         `SELECT DISTINCT COALESCE(c.name, 'Uncategorised') AS "categoryName"
          ${source}
          WHERE ${unfiltered.where}
          ORDER BY 1`,
+        unfiltered.params
+      ),
+      query<{ categoryName: string; quantitySold: number; orderCount: number }>(
+        `SELECT COALESCE(c.name, 'Uncategorised') AS "categoryName",
+                COALESCE(SUM(oi.quantity), 0)::int AS "quantitySold",
+                COUNT(DISTINCT o.id)::int AS "orderCount"
+         ${source}
+         WHERE ${unfiltered.where}
+         GROUP BY 1
+         ORDER BY "quantitySold" DESC, "categoryName" ASC`,
         unfiltered.params
       ),
       query<{ total: number }>(
@@ -2577,6 +2797,11 @@ export class OrderService {
     const offset = opts?.offset || 0;
     return {
       categories: categoryRows.rows.map(r => r.categoryName || 'Uncategorised'),
+      categoryTotals: categoryTotalsRows.rows.map(r => ({
+        categoryName: r.categoryName || 'Uncategorised',
+        quantitySold: Number(r.quantitySold || 0),
+        orderCount: Number(r.orderCount || 0),
+      })),
       products: result.rows.map(r => ({
         id: r.id,
         name: r.name,
