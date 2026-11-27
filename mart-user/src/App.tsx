@@ -7,15 +7,17 @@ import { useThemeStore } from './store/themeStore';
 import { useCustomerStore } from './store/customerStore';
 import { useZoneStore, SHAPOORJI_ZONE, type ZoneAction } from './store/zoneStore';
 import {
+  enablePromotionalNotifications,
   getLocationPermission,
   getNotificationPermission,
+  isNotificationSupported,
   isPushOptInDue,
   requestNotificationPermission,
   requestPushOptInPrompt,
   subscribeToPush,
   isPushSupported,
 } from './services/push';
-import { PERMISSIONS_SEEN_KEY, requestOnboardingPermissions } from './services/onboardingPermissions';
+import { PERMISSIONS_SEEN_KEY, startOnboardingPermissions } from './services/onboardingPermissions';
 import Navbar from './components/Navbar';
 import StoreStatusStrip from './components/StoreStatusStrip';
 import StoreClosedCard from './components/StoreClosedCard';
@@ -1177,7 +1179,7 @@ export default function App() {
     }
   };
 
-  const handlePermissionsAllow = async () => {
+  const handlePermissionsAllow = () => {
     try {
       if (localStorage.getItem(PERMISSIONS_SEEN_KEY) === 'true') {
         finishPermissionsOnboarding();
@@ -1186,21 +1188,20 @@ export default function App() {
     } catch {}
     if (permissionsBusyRef.current) return;
     permissionsBusyRef.current = true;
-    try {
-      await requestOnboardingPermissions({
-        getLocationPermission,
-        detectDeliveryLocation: () => useZoneStore.getState().detectAndApply(),
-        isNativePush,
-        requestNativePushPermission,
-        isPushSupported,
-        getNotificationPermission,
-        requestNotificationPermission,
-        subscribeToPush,
-      });
-    } catch {} finally {
-      permissionsBusyRef.current = false;
-      finishPermissionsOnboarding();
-    }
+    startOnboardingPermissions({
+      getLocationPermission,
+      detectDeliveryLocation: () => useZoneStore.getState().detectAndApply(),
+      isNativePush,
+      requestNativePushPermission,
+      isNotificationSupported,
+      isPushSupported,
+      getNotificationPermission,
+      requestNotificationPermission,
+      subscribeToPush,
+      enablePromotionalNotifications,
+    });
+    finishPermissionsOnboarding();
+    permissionsBusyRef.current = false;
   };
 
 

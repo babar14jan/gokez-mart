@@ -532,11 +532,11 @@ html, body { overscroll-behavior-y: none; }
 
   .welcome-art {
     max-height: 100%;
-    object-position: center 38%;
+    object-position: center center;
   }
 
   .welcome-screen .onboarding-action-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 3.5vh, 2rem) + 30px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(2.75rem, 5.5vh, 3.5rem) + 30px);
   }
 
   .welcome-screen .onboarding-action-bar button {
@@ -546,20 +546,11 @@ html, body { overscroll-behavior-y: none; }
 
   @media (max-width: 639px) {
     .welcome-art {
-      object-fit: cover;
-      object-position: center 38%;
-    }
-  }
-
-  @media (max-width: 639px) and (max-aspect-ratio: 9/16) {
-    .welcome-art {
+      height: 100%;
+      max-height: 100%;
+      width: 100%;
+      object-fit: contain;
       object-position: center center;
-    }
-  }
-
-  @media (max-width: 639px) and (min-aspect-ratio: 3/4) {
-    .welcome-art {
-      object-position: center 48%;
     }
   }
 
@@ -577,9 +568,6 @@ html, body { overscroll-behavior-y: none; }
   }
 
   @media (max-width: 639px) and (max-height: 520px) {
-    .welcome-art {
-      object-position: center 55%;
-    }
     .welcome-fallback-heading {
       margin-top: 0.5rem;
       font-size: 18px;
@@ -595,7 +583,7 @@ html, body { overscroll-behavior-y: none; }
       line-height: 1.35;
     }
     .welcome-screen .onboarding-action-bar {
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem + 30px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem + 30px);
     }
     .welcome-screen .onboarding-action-bar button {
       min-height: 46px;

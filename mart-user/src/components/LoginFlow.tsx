@@ -7,7 +7,7 @@ import { useCustomerStore } from '../store/customerStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
 import { getFunnelSessionId, track, trackCampaignTouch, trackOnce } from '../utils/track';
 import { readTrackingTokens } from '../utils/guestTracking';
-import { isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
+import { enablePromotionalNotifications, isPushSupported, requestNotificationPermission, subscribeToPush } from '../services/push';
 import { getDeviceInfo } from '../utils/install';
 import { clearLinkReferralCode, normalizeReferralCode, readLinkReferralCode } from '../utils/referral';
 
@@ -206,7 +206,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
             // notifications too; the customer can still turn this off later in
             // Account → Settings.
             if (wasDefault) {
-              try { await authApi.updateMarketingConsent(true); } catch { /* best effort */ }
+              try { await enablePromotionalNotifications(); } catch { /* best effort */ }
             }
           }
         } catch { /* noop */ }
