@@ -211,6 +211,20 @@ export interface OrderSummary {
   freeDeliveries: number;
   couponOrders: number;
   couponAmount: number;
+  paymentBreakdown: Array<{ method: 'cod' | 'upi' | 'phonepay' | 'unknown'; count: number; revenue: number }>;
+}
+
+export interface OrderCounts {
+  total: number;
+  filteredTotal: number;
+  statusCounts: Record<string, number>;
+  scheduledCount: number;
+}
+
+export interface CategoryTotal {
+  categoryName: string;
+  quantitySold: number;
+  orderCount: number;
 }
 
 export interface FetchOpts { fresh?: boolean }
@@ -245,8 +259,12 @@ export interface ProductLeader {
 }
 
 export const ordersApi = {
-  getAll: (params?: { storeId?: string; status?: string; deliveryPreference?: string; phone?: string; q?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
-    api.get('/admin/orders', { params, fresh: opts?.fresh }),
+  getAll: (params?: {
+    storeId?: string; status?: string; deliveryPreference?: string; phone?: string; q?: string;
+    limit?: number; offset?: number; range?: SummaryRange; from?: string; to?: string;
+    dateBasis?: 'created' | 'browse'; activeScheduled?: boolean;
+  }, opts?: FetchOpts) =>
+    api.get<{ success: boolean; data: any[]; counts?: OrderCounts }>('/admin/orders', { params, fresh: opts?.fresh }),
   getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; dateBasis?: 'created' | 'browse' }, opts?: FetchOpts) =>
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
   getInsights: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>

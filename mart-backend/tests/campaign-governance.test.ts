@@ -675,11 +675,13 @@ describe('supersede mints a new version without losing the offer', () => {
     assert.ok(customerReceipt.includes('Math.floor(Number(order.campaignDiscount) || 0)'));
     assert.ok(hubOrders.includes('Math.floor(Number(order.campaignDiscount) || 0)'));
     assert.ok(hubReceipt.includes('Math.floor(Number(order.campaignDiscount) || 0)'));
-    assert.ok(dashboard.includes('sum + (Number(o.total) || 0)'));
+    assert.ok(dashboard.includes('wholeRupees(scheduledView ? scheduledValue : kpis.revenue)'));
     assert.ok(dashboard.includes('wholeRupees(rawOrderValue)'));
+    assert.ok(!dashboard.includes('sum + (Number(o.total) || 0)'));
     assert.ok(hubCampaigns.includes('Flat discount must be a whole rupee amount'));
     assert.ok(hubCampaigns.includes("step={form.discountType === 'flat' ? '1' : 'any'}"));
-    assert.ok(mobileCheckout.includes('Math.floor(Math.max(0, disc))'));
+    assert.ok(mobileCheckout.includes('Math.floor(Math.max(0, capped))'));
+    assert.ok(mobileCheckout.includes('Math.floor(Math.max(0, Number(res.data.data.discount) || 0))'));
     assert.ok(restore.includes('Math.max(0, Math.floor(roundMoney(campaignUse?.discountApplied ?? 0)))'));
     assert.ok(restore.includes('Math.max(0, Math.floor(roundMoney(-gap)))'));
   });

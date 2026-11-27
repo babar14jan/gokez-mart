@@ -219,6 +219,33 @@
         }, 8000);
       }
     </script>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var path = window.location.pathname.replace(/\/+$/, '') || '/';
+        var light = path === '/welcome' || path === '/permissions' || path === '/login';
+        if (path === '/') {
+          var loggedIn = false;
+          var welcomeSeen = false;
+          try {
+            var auth = JSON.parse(localStorage.getItem('mart-customer-auth') || 'null');
+            loggedIn = !!(auth && auth.state && (auth.state.isLoggedIn === true || auth.state.token));
+            welcomeSeen = localStorage.getItem('gokez_mart_welcome_seen_v1') === 'true';
+          } catch (e) {}
+          light = !loggedIn && (!welcomeSeen || !window.location.search);
+        }
+        var isDark = false;
+        if (!light) {
+          try {
+            var stored = JSON.parse(localStorage.getItem('mart-theme') || 'null');
+            isDark = !!(stored && stored.state && stored.state.isDark === true);
+          } catch (e) {}
+        }
+        if (isDark) root.classList.add('dark'); else root.classList.remove('dark');
+        var themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute('content', isDark ? '#18191a' : '#ADFBBD');
+      })();
+    </script>
     <style>
       /* Paint the app background before CSS/JS arrive. An update swap reloads
          through the service worker, but the window between unload and first

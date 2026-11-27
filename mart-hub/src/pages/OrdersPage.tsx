@@ -1,13 +1,13 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   ClipboardList, CalendarClock, ChevronDown, Phone, MapPin,
   Navigation, Package, XCircle, CheckSquare, Square,
   Truck, Clock, IndianRupee, Search, X,
 } from 'lucide-react';
-import { ordersApi, teamApi } from '../services/api';
+import { ordersApi, teamApi, type OrderCounts } from '../services/api';
 import { printReceipt } from '../utils/printReceipt';
 import { orderDisplayName } from '../utils/orderName';
-import { orderBrowseDate } from '../utils/orderDate';
+import { hasCompleteCustomRange, orderListDateParams } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { useAuthStore } from '../store/authStore';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
@@ -16,13 +16,12 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import ManageOrderDialog from '../components/ManageOrderDialog';
 import SmartImage from '../components/SmartImage';
 import PageSkeleton from '../components/PageSkeleton';
-import { CustomDateInputs, DateRangeChips, ScheduledFilterButton, type DateRangeId } from '../components/DateRangeFilter';
+import { CustomDateInputs, DateRangeChips, ScheduledFilterButton, istDay, type DateRangeId } from '../components/DateRangeFilter';
 
 type DateRange = 'today' | 'yesterday' | 'custom' | 'all';
 type StatusFilter = '' | 'pending' | 'confirmed' | 'preparing' | 'ready_to_pickup' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'failed_delivery' | 'terminated';
 
-const toDateStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const EMPTY_COUNTS: OrderCounts = { total: 0, filteredTotal: 0, statusCounts: {}, scheduledCount: 0 };
 
 const toStoreDateTimeLocal = (value?: string | null) => {
   if (!value) return '';
@@ -253,6 +252,7 @@ function OrderProgress({ status }: { status: string }) {
 
 export default function OrdersPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [orderCounts, setOrderCounts] = useState<OrderCounts>(EMPTY_COUNTS);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [fulfilmentUpdating, setFulfilmentUpdating] = useState<string | null>(null);
@@ -269,8 +269,10 @@ export default function OrdersPage() {
   const [deliveryPreferenceFilter, setDeliveryPreferenceFilter] = useState<'all' | 'scheduled'>('all');
   const [statusOpen, setStatusOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [dateRange, setDateRange] = useState<DateRange | null>('today');
   const prevDateRangeRef = useRef<DateRange>('today');
+  const listReqId = useRef(0);
   const handleDateRangeSelect = (id: DateRangeId) => {
     setDeliveryPreferenceFilter('all');
     if (id !== 'custom') { setDateRange(id); return; }
@@ -278,8 +280,12 @@ export default function OrdersPage() {
     prevDateRangeRef.current = dateRange || 'today';
     setDateRange('custom');
   };
-  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
-  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
+  const [customFrom, setCustomFrom] = useState(istDay());
+  const [customTo, setCustomTo] = useState(istDay());
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [deliveryHandlers, setDeliveryHandlers] = useState<any[]>([]);
   const [assigningOrder, setAssigningOrder] = useState<string | null>(null);
@@ -300,16 +306,36 @@ export default function OrdersPage() {
   const canDispatch = false;
   const canAssignDelivery = ['super_admin', 'store_owner', 'store_manager'].includes(role || '');
 
-  const load = (fresh = false) =>
-    ordersApi.getAll({
-      limit: 500,
-      storeId: getActiveStoreId(),
-      deliveryPreference: deliveryPreferenceFilter === 'scheduled' ? 'scheduled' : undefined,
-    }, { fresh })
-      .then(r => setAllOrders(r.data.data || []))
-      .finally(() => setLoading(false));
+  const buildOrderParams = useCallback(() => {
+    const base = { limit: 500, storeId: getActiveStoreId() };
+    if (deliveryPreferenceFilter === 'scheduled') {
+      return { ...base, deliveryPreference: 'scheduled', activeScheduled: true, ...(statusFilter ? { status: statusFilter } : {}) };
+    }
+    if (debouncedSearch) {
+      return { ...base, q: debouncedSearch, ...(statusFilter ? { status: statusFilter } : {}) };
+    }
+    return { ...base, ...orderListDateParams(dateRange, customFrom, customTo), ...(statusFilter ? { status: statusFilter } : {}) };
+  }, [deliveryPreferenceFilter, statusFilter, debouncedSearch, dateRange, customFrom, customTo]);
 
-  useEffect(() => { load(); }, [deliveryPreferenceFilter]);
+  const load = useCallback((fresh = false) => {
+    const id = ++listReqId.current;
+    if (!hasCompleteCustomRange(dateRange, customFrom, customTo)) {
+      setAllOrders([]);
+      setOrderCounts(EMPTY_COUNTS);
+      setLoading(false);
+      return Promise.resolve();
+    }
+    return ordersApi.getAll(buildOrderParams(), { fresh })
+      .then(r => {
+        if (id !== listReqId.current) return;
+        setAllOrders(r.data.data || []);
+        setOrderCounts(r.data.counts || EMPTY_COUNTS);
+      })
+      .catch(() => {})
+      .finally(() => { if (id === listReqId.current) setLoading(false); });
+  }, [buildOrderParams, dateRange, customFrom, customTo]);
+
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     teamApi.getStoreTeam(getActiveStoreId())
       .then(r => setDeliveryHandlers((r.data.data || []).filter((member: any) => member.isActive && member.assignmentActive && ['store_owner', 'store_manager', 'staff', 'delivery_staff'].includes(member.role))))
@@ -319,7 +345,7 @@ export default function OrdersPage() {
     const onVisible = () => { if (document.visibilityState === 'visible') load(true); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, []);
+  }, [load]);
   // Live refresh: instant via SSE events (weak-network friendly), plus a quiet
   // polling fallback so a missed/lost event can never hide an order for long.
   // Live paths pass fresh=true: they must hit the server, not the nav cache.
@@ -335,7 +361,7 @@ export default function OrdersPage() {
     const offConnect = onOrderStreamConnect(() => load(true));
     const poll = setInterval(() => load(true), 30000);
     return () => { offEvent(); offConnect(); clearInterval(poll); };
-  }, []);
+  }, [load]);
 
   const getStaleMinutes = (order: any): number | null => {
     // After-hours orders legitimately sit from placement until the store next
@@ -479,12 +505,11 @@ export default function OrdersPage() {
       // instead of trusting the error, so a real status change isn't shown as
       // an error popup.
       try {
-        const r = await ordersApi.getAll({ limit: 500, storeId: getActiveStoreId() } as any);
+        const r = await ordersApi.getAll(buildOrderParams());
         const rows = r.data.data || [];
         const isDone = rows.some((o: any) => o.id === id && o.status === status);
         if (isDone) {
-          setAllOrders(rows);
-          setLoading(false);
+          await load(true);
           return true;
         }
       } catch { /* fall through to the error popup */ }
@@ -531,76 +556,16 @@ export default function OrdersPage() {
     }
   };
 
-  const dateBounds = useMemo(() => {
-    const now = new Date();
-    const start =
-      dateRange === 'today'  ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) :
-      dateRange === 'yesterday' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1) :
-      dateRange === 'custom' && customFrom ? new Date(`${customFrom}T00:00:00`) : null;
-    // Custom end is the whole local day, so a single-day pick isn't cut off at
-    // 00:00 and a range ending "today" includes today's orders.
-    const end =
-      dateRange === 'yesterday' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999) :
-      dateRange === 'custom' && customTo ? new Date(`${customTo}T23:59:59.999`) : null;
-    return { start, end };
-  }, [dateRange, customFrom, customTo]);
+  const filteredOrders = allOrders;
 
-  const filteredOrders = useMemo(() => {
-    const { start, end } = dateBounds;
-    const query = search.trim();
-    return allOrders.filter(o => {
-      const browseDate = orderBrowseDate(o);
-      const isScheduledQueue = deliveryPreferenceFilter === 'scheduled';
-      // A search is an explicit "find this order" action, so it must reach
-      // older orders too — the date tab stays a browsing filter only.
-      if (!query && !isScheduledQueue) {
-        if (start && browseDate < start) return false;
-        if (end   && browseDate > end)   return false;
-      }
-      if (isScheduledQueue) {
-        if (o.deliveryPreference !== 'scheduled' || TERMINAL.includes(o.status)) return false;
-      } else if (dateRange === 'today' && o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status) && new Date(o.scheduledFor) >= new Date(new Date().setHours(0,0,0,0) + 86400000)) {
-        return false;
-      }
-      if (!isScheduledQueue && statusFilter && o.status !== statusFilter) return false;
-      if (query) {
-        const q = query.toLowerCase();
-        // Match what the row actually shows (real name, or the phone fallback for
-        // placeholder names), plus the phone, order identifiers, and any part of
-        // the delivery address.
-        const matchesName    = orderDisplayName(o).toLowerCase().includes(q);
-        const matchesPhone   = String(o.guestPhone || '').toLowerCase().includes(q);
-        const matchesOrder   = String(o.orderNumber || '').toLowerCase().includes(q) || String(o.id || '').toLowerCase().includes(q);
-        const matchesAddress = String(o.guestAddress || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesPhone && !matchesOrder && !matchesAddress) return false;
-      }
-      return true;
-    });
-  }, [allOrders, dateBounds, dateRange, statusFilter, deliveryPreferenceFilter, search]);
-
-  const statusCounts = useMemo(() => {
-    const isScheduledQueue = deliveryPreferenceFilter === 'scheduled';
-    const { start, end } = dateBounds;
-    const base = allOrders.filter(o => {
-      if (isScheduledQueue) {
-        if (o.deliveryPreference !== 'scheduled' || TERMINAL.includes(o.status)) return false;
-      } else {
-        if (o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status) && new Date(o.scheduledFor) >= new Date(new Date().setHours(0,0,0,0) + 86400000)) return false;
-        const d = orderBrowseDate(o);
-        if (start && d < start) return false;
-        if (end && d > end) return false;
-      }
-      return true;
-    });
-    return Object.fromEntries(
-      STATUS_TABS.map(t => [t.id, t.id === '' ? base.length : base.filter(o => o.status === t.id).length])
-    );
-  }, [allOrders, dateBounds, deliveryPreferenceFilter]);
-
-  const scheduledCount = useMemo(
-    () => allOrders.filter(o => o.deliveryPreference === 'scheduled' && !TERMINAL.includes(o.status)).length,
-    [allOrders],
+  const statusCounts = useMemo(
+    () => Object.fromEntries(STATUS_TABS.map(tab => [
+      tab.id,
+      tab.id === '' ? orderCounts.statusCounts.all || 0 : orderCounts.statusCounts[tab.id] || 0,
+    ])),
+    [orderCounts],
   );
+  const scheduledCount = orderCounts.scheduledCount;
 
   if (loading) return <PageSkeleton />;
 
@@ -696,6 +661,12 @@ export default function OrdersPage() {
           </button>
         )}
       </div>
+
+      {orderCounts.filteredTotal > allOrders.length && (
+        <p className="px-1 text-[11px] font-medium text-gray-500 dark:text-slate-400">
+          Showing {allOrders.length} of {orderCounts.filteredTotal} orders. Narrow the date or status filter to see more.
+        </p>
+      )}
 
       {/* Order cards */}
       {filteredOrders.length === 0 ? (

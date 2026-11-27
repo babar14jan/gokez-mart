@@ -3,6 +3,22 @@ import { readTrackingTokens } from '../utils/guestTracking';
 
 const SW_URL = '/sw.js';
 export const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
+export const GUEST_SUBSCRIBED_TOKEN_KEY = 'mart_guest_subscribed_token';
+
+export function getSubscribedGuestToken(): string {
+  try {
+    const token = localStorage.getItem(GUEST_SUBSCRIBED_TOKEN_KEY) || '';
+    return token && readTrackingTokens().includes(token) ? token : '';
+  } catch { return ''; }
+}
+
+function rememberSubscribedGuestToken(token: string): void {
+  try { localStorage.setItem(GUEST_SUBSCRIBED_TOKEN_KEY, token); } catch {}
+}
+
+function forgetSubscribedGuestToken(): void {
+  try { localStorage.removeItem(GUEST_SUBSCRIBED_TOKEN_KEY); } catch {}
+}
 
 // Some browsers (notably in-app webviews and PWAs whose worker failed to
 // activate) never resolve `serviceWorker.ready`, and iOS can leave the native
@@ -177,11 +193,10 @@ export async function requestNotificationPermission(): Promise<'granted' | 'deni
 
 // Subscribe to push after permission granted.
 //
-// A signed-in customer registers once against their account. A guest has no
-// account, so the device is registered against each order tracking token it
-// holds; the backend then pushes to that device for those orders. Registering
-// the guest tokens only happens when the device already holds them (i.e. it has
-// placed or tracked an order), so permission alone never creates a row.
+// A signed-in customer registers once against their account. A guest registers
+// the browser subscription first, even before an order exists, so onboarding can
+// enable order updates. The backend endpoint is called when the device holds an
+// order tracking token, which is what actually makes it eligible for delivery.
 export function subscribeToPush(): Promise<boolean> {
   if (inFlightSubscription) return inFlightSubscription;
   const pending = doSubscribeToPush();
@@ -199,7 +214,6 @@ async function doSubscribeToPush(): Promise<boolean> {
 
     const authed = isCustomerAuthed();
     const tokens = authed ? [] : readTrackingTokens();
-    if (!authed && tokens.length === 0) return false;
 
     const keyRes = await api.get('/push/vapid-public-key');
     const publicKey = keyRes.data.data.publicKey;
@@ -226,17 +240,26 @@ async function doSubscribeToPush(): Promise<boolean> {
       await api.post('/push/subscribe/customer', sub.toJSON());
       return true;
     }
+    forgetSubscribedGuestToken();
+    if (tokens.length === 0) return true;
 
     // Guest: register the same endpoint once per held tracking token. The first
-    // call creates the row (UNIQUE endpoint), the rest re-point it, so the final
-    // owner is the most recent token — the device's newest order, which is the
-    // one most likely to still be live. Any failure is non-fatal.
+    // call creates the row (UNIQUE endpoint), the rest re-point it, so the row is
+    // owned by the last token the server actually accepted. Any failure is
+    // non-fatal; a rejected token must never become the consent owner.
     let registered = false;
     for (const trackingToken of tokens) {
       try {
         await api.post('/push/subscribe/guest', { ...sub.toJSON(), trackingToken });
         registered = true;
+        rememberSubscribedGuestToken(trackingToken);
       } catch { /* skip tokens the server rejects (e.g. old/unknown) */ }
+    }
+    let marketingConsent = false;
+    try { marketingConsent = localStorage.getItem(GUEST_MARKETING_CONSENT_KEY) === 'true'; } catch {}
+    const consentToken = getSubscribedGuestToken();
+    if (consentToken && marketingConsent) {
+      await authApi.updateGuestMarketingConsent(consentToken, true).catch(() => {});
     }
     return registered;
   } catch (e) {
@@ -261,8 +284,7 @@ export async function enablePromotionalNotifications(): Promise<boolean> {
       await authApi.updateMarketingConsent(true);
       return true;
     }
-    const tokens = readTrackingTokens();
-    const trackingToken = tokens[tokens.length - 1];
+    const trackingToken = getSubscribedGuestToken();
     if (trackingToken) await authApi.updateGuestMarketingConsent(trackingToken, true);
     try { localStorage.setItem(GUEST_MARKETING_CONSENT_KEY, 'true'); } catch {}
     return true;

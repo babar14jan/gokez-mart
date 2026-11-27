@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Geolocation } from '@capacitor/geolocation';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { APP_CHROME_DARK, APP_CHROME_LIGHT, isEffectiveAlwaysLightRoute } from '../constants/brand';
 
 export function isNativeAndroid(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
@@ -9,9 +10,9 @@ export function isNativeAndroid(): boolean {
 
 export async function configureNativeChrome(): Promise<void> {
   if (!isNativeAndroid()) return;
-  const dark = document.documentElement.classList.contains('dark');
+  const dark = !isEffectiveAlwaysLightRoute() && document.documentElement.classList.contains('dark');
   try { await StatusBar.setOverlaysWebView({ overlay: false }); } catch {}
-  try { await StatusBar.setBackgroundColor({ color: dark ? '#18191a' : '#ADFBBD' }); } catch {}
+  try { await StatusBar.setBackgroundColor({ color: dark ? APP_CHROME_DARK : APP_CHROME_LIGHT }); } catch {}
   try { await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }); } catch {}
 }
 

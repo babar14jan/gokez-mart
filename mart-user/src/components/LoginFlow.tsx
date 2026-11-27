@@ -584,7 +584,7 @@ export default function LoginFlow({ onClose, onSuccess, pendingCheckout, onGuest
                 </h2>
               </div>
 
-              <form onSubmit={handleVerifyOtp} className="mt-3 space-y-2">
+              <form onSubmit={handleVerifyOtp} className="mt-6 space-y-2">
                 <ErrorNote id="login-error" />
                 <label htmlFor="login-otp" className="sr-only">6-digit verification code</label>
                 <div className="mx-auto flex w-full max-w-[21rem] items-center justify-center gap-1.5 sm:max-w-[24rem] sm:gap-3">

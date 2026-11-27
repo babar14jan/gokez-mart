@@ -1,11 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share, Moon, Sun, X, Sparkles, Info, Gift, Home } from 'lucide-react';
+import { Phone, MessageCircle, Bell, Navigation, ShieldCheck, FileText, ChevronRight, Headphones, MessageSquare, Share, Moon, Sun, X, Sparkles, Info, Gift } from 'lucide-react';
 import { authApi, referralApi, suggestionApi, type ReferralMeData } from '../services/api';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
-import { GUEST_MARKETING_CONSENT_KEY, getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription, isPushSupported } from '../services/push';
+import { GUEST_MARKETING_CONSENT_KEY, getLocationPermission, getNotificationPermission, getSubscribedGuestToken, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription, isPushSupported } from '../services/push';
 import { clearNativePushAssociation, hasNativePushToken, isNativePush, requestNativePushPermission } from '../services/nativePush';
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -16,7 +16,6 @@ import { GOKEZ_SUPPORT } from '../constants/gokezSupport';
 import { buildReferralLink, normalizeReferralCode } from '../utils/referral';
 import { openReferralLogin } from '../utils/referralLogin';
 import { buildWhatsAppLink } from '../utils/whatsapp';
-import { readTrackingTokens } from '../utils/guestTracking';
 
 interface AccountPageProps {
   storeName?: string;
@@ -63,6 +62,8 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   const [notificationsBusy, setNotificationsBusy] = useState(false);
   const [notificationNotice, setNotificationNotice] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [brandImgError, setBrandImgError] = useState(false);
+  const [storePicError, setStorePicError] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
   const [referralData, setReferralData] = useState<ReferralMeData | null>(null);
   // Offered on phones until the app is actually installed to the home screen.
@@ -358,8 +359,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
     const next = !marketingConsent;
     setMarketingConsent(next);
     if (!isLoggedIn) {
-      const tokens = readTrackingTokens();
-      const trackingToken = tokens[tokens.length - 1];
+      const trackingToken = getSubscribedGuestToken();
       try {
         if (trackingToken) await authApi.updateGuestMarketingConsent(trackingToken, next);
         localStorage.setItem(GUEST_MARKETING_CONSENT_KEY, String(next));
@@ -381,8 +381,6 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
   // Bumped by the OTP app bar's back chevron to ask LoginFlow to return to the
   // phone step (the bar is page chrome, so it cannot reach the flow's step state).
   const [loginBackSignal, setLoginBackSignal] = useState(0);
-  const [brandImgError, setBrandImgError] = useState(false);
-  const [logoImgError, setLogoImgError] = useState(false);
   const loginHeaderRef = useRef<HTMLDivElement>(null);
   const formAreaRef = useRef<HTMLDivElement>(null);
   const formContentRef = useRef<HTMLDivElement>(null);
@@ -479,33 +477,18 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
         )}
         {showBrandHeader && (
           <div ref={loginHeaderRef} className="login-brand-hero relative z-10 w-full shrink-0 text-left">
-            <div className="login-brand-header relative flex items-center justify-start">
+            <div className="login-brand-header relative flex items-start justify-start">
               <div className="mx-auto w-full max-w-sm px-4 sm:px-6">
-                <div className="flex min-w-0 -translate-y-5 flex-col items-start">
-                  <div className="flex items-end justify-start gap-0">
-                    {logoImgError ? (
-                      <Home className="login-brand-logo flex-shrink-0 text-[#087A43] dark:text-green-400" aria-hidden="true" />
-                    ) : (
-                      <img
-                        src="/gokez_mart_logo-header.png"
-                        alt=""
-                        className="login-brand-logo flex-shrink-0 object-contain"
-                        onError={() => setLogoImgError(true)}
-                      />
-                    )}
-                    {brandImgError ? (
-                      <span className="login-brand-fallback font-extrabold leading-none tracking-tight text-[#087A43] dark:text-green-400">Gokez Mart</span>
-                    ) : (
-                      <img
-                        src="/mart_brand_new.webp"
-                        alt="Gokez Mart"
-                        className="login-brand-image"
-                        onError={() => setBrandImgError(true)}
-                      />
-                    )}
-                  </div>
-                  <p className="login-brand-tagline text-left font-bold leading-none tracking-tight text-black">Shop Local. Support Local.</p>
-                  <p className="login-punchline w-full text-left font-black leading-tight tracking-tight text-black">
+                <div className="flex min-w-0 flex-col items-start">
+                  <img
+                    src="/logo_and_brand_white_g.webp"
+                    alt="Gokez Mart — Shop Local. Support Local."
+                    className={`login-brand-unit block h-auto max-w-full select-none object-contain${brandImgError ? ' hidden' : ''}`}
+                    draggable={false}
+                    onError={() => setBrandImgError(true)}
+                  />
+                  {brandImgError && <span className="login-brand-fallback font-extrabold leading-tight tracking-tight text-[#5A4100] dark:text-[#F4C400]" role="img" aria-label="Gokez Mart — Shop Local. Support Local.">Gokez Mart</span>}
+                  <p className="login-punchline w-full text-left font-black leading-tight tracking-tight text-[#5A4100] dark:text-[#F4C400]">
                     Your local shops,<br />
                     now delivered in minutes.
                   </p>
@@ -688,8 +671,9 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
             <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.05em] text-gray-500 dark:text-slate-400">Your local store</p>
             <div className="rounded-[18px] border border-cream-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.03)] dark:border-slate-700 dark:bg-slate-800">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
-                  <img src="/store_pic.webp" alt={storeName || 'Store'} className="h-full w-full object-cover" />
+                <div className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl bg-gokez-50 dark:bg-gokez-900/30">
+                  <img src="/store_pic.webp" alt={storeName || 'Store'} className={`h-full w-full object-cover${storePicError ? ' hidden' : ''}`} onError={() => setStorePicError(true)} />
+                  {storePicError && <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-gokez-700 dark:text-gokez-300">{(storeName || 'Store').charAt(0).toUpperCase()}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[15px] font-semibold text-ink dark:text-white">{storeName || 'Your delivery store'}</p>

@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { TrendingUp, ShoppingBag, CreditCard, Wallet, Smartphone, CheckCircle, XCircle, Package, Tag, Calendar } from 'lucide-react';
-import { ordersApi, productsApi, topSellingApi, type OrderInsights, type OrderSummary, type ProductLeader, type SummaryRange } from '../services/api';
-import { orderBrowseDate } from '../utils/orderDate';
+import { ordersApi, productsApi, topSellingApi, type CategoryTotal, type OrderInsights, type OrderSummary, type ProductLeader, type SummaryRange } from '../services/api';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
@@ -20,8 +19,8 @@ function getYesterdayStr() {
 const reportParams = (range: DateRange, customFrom: string, customTo: string) => ({
   storeId: getActiveStoreId(),
   range: mapDateRange(range),
-  from: range === 'yesterday' ? getYesterdayStr() : (customFrom || undefined),
-  to: range === 'yesterday' ? getYesterdayStr() : (customTo || undefined),
+  from: range === 'yesterday' ? getYesterdayStr() : range === 'custom' ? (customFrom || undefined) : undefined,
+  to: range === 'yesterday' ? getYesterdayStr() : range === 'custom' ? (customTo || undefined) : undefined,
 });
 
 const hasValidCustomRange = (range: DateRange, customFrom: string, customTo: string) =>
@@ -29,7 +28,7 @@ const hasValidCustomRange = (range: DateRange, customFrom: string, customTo: str
 
 const PAGE_SIZE = 50;
 
-const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 };
+const EMPTY_SUMMARY: OrderSummary = { placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0, paymentBreakdown: [] };
 
 // Live refresh for tab cards: instant on order events (weak-network friendly)
 // plus a quiet 30s poll so a lost event can never leave stale figures up.
@@ -50,21 +49,15 @@ function useLivePoll(refresh: (fresh?: boolean) => void) {
   }, [refresh]);
 }
 
-// Race-safe async fetch for a params set: only the latest request may write.
-function useLatestParams(range: DateRange, customFrom: string, customTo: string) {
-  const ref = useRef({ range, customFrom, customTo });
-  ref.current = { range, customFrom, customTo };
-  return ref;
-}
-
-const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
+const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe', unknown: 'Unknown' };
 const PAYMENT_COLORS: Record<string, string> = {
-  cod: 'bg-emerald-500', upi: 'bg-blue-500', phonepay: 'bg-violet-500',
+  cod: 'bg-emerald-500', upi: 'bg-blue-500', phonepay: 'bg-violet-500', unknown: 'bg-slate-500',
 };
 const PAYMENT_ICONS: Record<string, React.ReactNode> = {
   cod: <Wallet className="w-3.5 h-3.5" />,
   upi: <Smartphone className="w-3.5 h-3.5" />,
   phonepay: <CreditCard className="w-3.5 h-3.5" />,
+  unknown: <Package className="w-3.5 h-3.5" />,
 };
 
 function SummaryCard({ label, value, sub, icon, gradient }: { label: string; value: string | number; sub?: string; icon: React.ReactNode; gradient: string }) {
@@ -121,110 +114,75 @@ function DateSelector({ range, setRange, customFrom, setCustomFrom, customTo, se
   );
 }
 
-function getDateBounds(range: DateRange, customFrom: string, customTo: string): { start: Date | null; end: Date | null } {
-  const now = new Date();
-  if (range === 'today') {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const end = new Date(start.getTime() + 86400000 - 1);
-    return { start, end };
-  }
-  if (range === 'yesterday') {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    const end = new Date(start.getTime() + 86400000 - 1);
-    return { start, end };
-  }
-  if (range === 'custom' && customFrom && customTo) {
-    return { start: new Date(`${customFrom}T00:00:00`), end: new Date(`${customTo}T23:59:59.999`) };
-  }
-  return { start: null, end: null };
-}
-
-function filterByDate(orders: any[], range: DateRange, customFrom: string, customTo: string) {
-  const { start, end } = getDateBounds(range, customFrom, customTo);
-  return orders.filter(o => {
-    const d = orderBrowseDate(o);
-    if (start && d < start) return false;
-    if (end && d > end) return false;
-    return true;
-  });
-}
-
-function getDays(range: DateRange, customFrom: string, customTo: string): Date[] {
-  const { start, end } = getDateBounds(range, customFrom, customTo);
-  const now = new Date();
-  const s = start || new Date(now.getTime() - 30 * 86400000);
-  const e = end || now;
-  const days: Date[] = [];
-  const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-  while (cur <= e) { days.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
-  return days;
-}
-
 
 // ── Revenue Tab ───────────────────────────────────────────────────────────────
-function RevenueTab({ orders, range, customFrom, customTo }: { orders: any[]; range: DateRange; customFrom: string; customTo: string }) {
+function RevenueTab({ range, customFrom, customTo }: { range: DateRange; customFrom: string; customTo: string }) {
   const [summary, setSummary] = useState<OrderSummary>(EMPTY_SUMMARY);
-  const paramsRef = useLatestParams(range, customFrom, customTo);
+  const [insights, setInsights] = useState<OrderInsights>({ daily: [], weekly: [] });
+  const [insightsRefresh, setInsightsRefresh] = useState(0);
+  const summaryReqId = useRef(0);
+  const refreshInsights = useCallback(() => setInsightsRefresh(value => value + 1), []);
 
   const loadSummary = useCallback((fresh = false) => {
-    const p = paramsRef.current;
-    const yesterday = getYesterdayStr();
-    if (!hasValidCustomRange(p.range, p.customFrom, p.customTo)) {
+    const id = ++summaryReqId.current;
+    if (!hasValidCustomRange(range, customFrom, customTo)) {
       setSummary(EMPTY_SUMMARY);
       return;
     }
-    ordersApi.getSummary({
-      storeId: getActiveStoreId(),
-      range: mapDateRange(p.range),
-      from: p.range === 'yesterday' ? yesterday : (p.customFrom || undefined),
-      to: p.range === 'yesterday' ? yesterday : (p.customTo || undefined),
-      dateBasis: 'browse',
-    }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
+    ordersApi.getSummary({ ...reportParams(range, customFrom, customTo), dateBasis: 'browse' }, { fresh })
+      .then(r => { if (id === summaryReqId.current) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
-  }, [paramsRef]);
+  }, [range, customFrom, customTo]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
   useLivePoll(loadSummary);
 
-  const filtered = useMemo(() => filterByDate(orders, range, customFrom, customTo), [orders, range, customFrom, customTo]);
-  const delivered = filtered.filter(o => o.status === 'delivered');
-  const totalRevenue = delivered.reduce((s, o) => s + o.total, 0);
+  useEffect(() => { setInsights({ daily: [], weekly: [] }); }, [range, customFrom, customTo]);
 
-  const days = useMemo(() => getDays(range, customFrom, customTo), [range, customFrom, customTo]);
-  const showLabel = (i: number) => days.length <= 7 || i % Math.ceil(days.length / 7) === 0;
+  useEffect(() => {
+    let cancelled = false;
+    if (!hasValidCustomRange(range, customFrom, customTo)) {
+      setInsights({ daily: [], weekly: [] });
+      return () => { cancelled = true; };
+    }
+    ordersApi.getInsights({ ...reportParams(range, customFrom, customTo), limit: 1000 }, { fresh: true })
+      .then(r => { if (!cancelled) setInsights(r.data.data || { daily: [], weekly: [] }); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [range, customFrom, customTo, insightsRefresh]);
+  useLivePoll(refreshInsights);
 
-  const dailyRevenue = days.map(d => ({
-    label: showLabel(days.indexOf(d)) ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '',
-    fullLabel: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
-    value: Math.round(delivered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString()).reduce((s, o) => s + o.total, 0)),
+  const chartRows = useMemo(() => [...insights.daily].reverse(), [insights.daily]);
+  const showLabel = (i: number) => chartRows.length <= 7 || i % Math.ceil(chartRows.length / 7) === 0;
+  const dayLabel = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+
+  const dailyRevenue = chartRows.map((row, i) => ({
+    label: showLabel(i) ? dayLabel(row.date) : '',
+    fullLabel: dayLabel(row.date),
+    value: Math.round(row.revenue),
   }));
 
-  const paymentBreakdown = ['cod', 'upi', 'phonepay'].map(m => ({
-    method: m,
-    count: delivered.filter(o => o.paymentMethod === m).length,
-    revenue: delivered.filter(o => o.paymentMethod === m).reduce((s, o) => s + o.total, 0),
-  })).filter(p => p.count > 0);
-
-  const onlineRevenue = paymentBreakdown.filter(p => p.method !== 'cod').reduce((s, p) => s + p.revenue, 0);
+  const totalRevenue = summary.revenue;
+  const paymentBreakdown = (summary.paymentBreakdown || []).filter(p => p.count > 0);
+  const onlineRevenue = paymentBreakdown.filter(p => p.method === 'upi' || p.method === 'phonepay').reduce((s, p) => s + p.revenue, 0);
   const codRevenue = paymentBreakdown.filter(p => p.method === 'cod').reduce((s, p) => s + p.revenue, 0);
   const onlinePct = totalRevenue > 0 ? Math.round((onlineRevenue / totalRevenue) * 100) : 0;
-  const peakDay = dailyRevenue.reduce((a, b) => (b.value > a.value ? b : a), dailyRevenue[0]);
+  const peakDay = dailyRevenue.reduce(
+    (best, row) => (row.value > best.value ? row : best),
+    { label: '', fullLabel: '', value: 0 },
+  );
 
-  const dailyTable = days.map(d => {
-    const dayOrders = filtered.filter(o => orderBrowseDate(o).toDateString() === d.toDateString());
-    const dayDelivered = dayOrders.filter(o => o.status === 'delivered');
-    return {
-      date: d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }),
-      orders: dayDelivered.length,
-      revenue: dayDelivered.reduce((s, o) => s + o.total, 0),
-      avg: dayDelivered.length ? Math.round(dayDelivered.reduce((s, o) => s + o.total, 0) / dayDelivered.length) : 0,
-    };
-  }).filter(r => r.orders > 0).reverse();
+  const dailyTable = chartRows.map(row => ({
+    date: new Date(`${row.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' }),
+    orders: row.delivered,
+    revenue: row.revenue,
+    avg: row.delivered ? Math.round(row.revenue / row.delivered) : 0,
+  })).filter(row => row.orders > 0);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <SummaryCard label="Delivered Revenue" value={`₹${Math.round(totalRevenue).toLocaleString('en-IN')}`} sub={`${delivered.length} delivered orders`} icon={<Wallet className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
+        <SummaryCard label="Delivered Revenue" value={`₹${Math.round(totalRevenue).toLocaleString('en-IN')}`} sub={`${summary.delivered} delivered orders`} icon={<Wallet className="w-4 h-4" />} gradient="from-emerald-500 to-emerald-600" />
         <SummaryCard label="Avg Order Value" value={`₹${summary.avgOrderValue.toFixed(0)}`} sub="per delivered order" icon={<TrendingUp className="w-4 h-4" />} gradient="from-blue-500 to-blue-600" />
         <SummaryCard label="Online Payment Share" value={`${onlinePct}%`} sub={`App (Cash) ₹${Math.round(codRevenue).toLocaleString('en-IN')} · Online ₹${Math.round(onlineRevenue).toLocaleString('en-IN')}`} icon={<Smartphone className="w-4 h-4" />} gradient="from-violet-500 to-violet-600" />
         <SummaryCard label="Peak Revenue Day" value={`₹${peakDay.value.toLocaleString('en-IN')}`} sub={peakDay.fullLabel} icon={<Calendar className="w-4 h-4" />} gradient="from-amber-500 to-amber-600" />
@@ -291,18 +249,23 @@ function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFr
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState('');
   const [insightsRefresh, setInsightsRefresh] = useState(0);
-  const paramsRef = useLatestParams(range, customFrom, customTo);
+  const summaryReqId = useRef(0);
   const refreshInsights = useCallback(() => setInsightsRefresh(value => value + 1), []);
 
   useEffect(() => { setPage(0); }, [range, customFrom, customTo]);
 
   useEffect(() => {
+    setInsights({ daily: [], weekly: [] });
+    setPagination({ total: 0, hasMore: false });
+  }, [range, customFrom, customTo, page]);
+
+  useEffect(() => {
     let cancelled = false;
     setInsightsLoading(true);
     setInsightsError('');
-    setInsights({ daily: [], weekly: [] });
-    setPagination({ total: 0, hasMore: false });
     if (!hasValidCustomRange(range, customFrom, customTo)) {
+      setInsights({ daily: [], weekly: [] });
+      setPagination({ total: 0, hasMore: false });
       setInsightsError('Choose a valid custom date range.');
       setInsightsLoading(false);
       return () => { cancelled = true; };
@@ -315,8 +278,6 @@ function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFr
       })
       .catch(() => {
         if (cancelled) return;
-        setInsights({ daily: [], weekly: [] });
-        setPagination({ total: 0, hasMore: false });
         setInsightsError('Could not load daily orders.');
       })
       .finally(() => { if (!cancelled) setInsightsLoading(false); });
@@ -324,21 +285,15 @@ function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFr
   }, [range, customFrom, customTo, page, insightsRefresh]);
 
   const loadSummary = useCallback((fresh = false) => {
-    const p = paramsRef.current;
-    const yesterday = getYesterdayStr();
-    if (!hasValidCustomRange(p.range, p.customFrom, p.customTo)) {
+    const id = ++summaryReqId.current;
+    if (!hasValidCustomRange(range, customFrom, customTo)) {
       setSummary(EMPTY_SUMMARY);
       return;
     }
-    ordersApi.getSummary({
-      storeId: getActiveStoreId(),
-      range: mapDateRange(p.range),
-      from: p.range === 'yesterday' ? yesterday : (p.customFrom || undefined),
-      to: p.range === 'yesterday' ? yesterday : (p.customTo || undefined),
-      dateBasis: 'browse',
-    }, { fresh }).then(r => { if (paramsRef.current === p) setSummary(r.data.data || EMPTY_SUMMARY); })
+    ordersApi.getSummary({ ...reportParams(range, customFrom, customTo), dateBasis: 'browse' }, { fresh })
+      .then(r => { if (id === summaryReqId.current) setSummary(r.data.data || EMPTY_SUMMARY); })
       .catch(() => {});
-  }, [paramsRef]);
+  }, [range, customFrom, customTo]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
   useLivePoll(loadSummary);
@@ -442,9 +397,10 @@ function OrdersTab({ range, customFrom, customTo }: { range: DateRange; customFr
 
 
 // ── Products Tab ──────────────────────────────────────────────────────────────
-function ProductsTab({ orders, products, range, customFrom, customTo }: { orders: any[]; products: any[]; range: DateRange; customFrom: string; customTo: string }) {
+function ProductsTab({ products, range, customFrom, customTo }: { products: any[]; range: DateRange; customFrom: string; customTo: string }) {
   const [category, setCategory] = useState('');
   const [leaders, setLeaders] = useState<ProductLeader[]>([]);
+  const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
   const [leadersLoading, setLeadersLoading] = useState(false);
   const [leadersError, setLeadersError] = useState('');
   const [leadersRefresh, setLeadersRefresh] = useState(0);
@@ -456,20 +412,31 @@ function ProductsTab({ orders, products, range, customFrom, customTo }: { orders
   );
 
   useEffect(() => {
+    setLeaders([]);
+    setCategoryTotals([]);
+  }, [range, customFrom, customTo, category]);
+
+  useEffect(() => {
     let cancelled = false;
     setLeadersLoading(true);
     setLeadersError('');
-    setLeaders([]);
     if (!hasValidCustomRange(range, customFrom, customTo)) {
+      setLeaders([]);
+      setCategoryTotals([]);
       setLeadersError('Choose a valid custom date range.');
       setLeadersLoading(false);
       return () => { cancelled = true; };
     }
     topSellingApi.getLeaders({ ...reportParams(range, customFrom, customTo), category: category || undefined, limit: 20 }, { fresh: true })
-      .then(r => { if (!cancelled) setLeaders((r.data.data?.products || []) as ProductLeader[]); })
+      .then(r => {
+        if (cancelled) return;
+        setLeaders((r.data.data?.products || []) as ProductLeader[]);
+        setCategoryTotals((r.data.data?.categoryTotals || []) as CategoryTotal[]);
+      })
       .catch(() => {
         if (cancelled) return;
         setLeaders([]);
+        setCategoryTotals([]);
         setLeadersError('Could not load top products.');
       })
       .finally(() => { if (!cancelled) setLeadersLoading(false); });
@@ -478,22 +445,7 @@ function ProductsTab({ orders, products, range, customFrom, customTo }: { orders
 
   useLivePoll(refreshLeaders);
 
-  // Units and revenue count only successfully delivered orders, so the figures
-  // reflect products actually sold rather than baskets cancelled after checkout.
-  const scoped = useMemo(
-    () => filterByDate(orders, range, customFrom, customTo).filter(o => o.status === 'delivered'),
-    [orders, range, customFrom, customTo],
-  );
-
-  const catCount: Record<string, number> = {};
-  for (const order of scoped) {
-    for (const item of (order.items || [])) {
-      const prod = products.find((p: any) => p.name === item.productName);
-      const cat = prod?.categoryName || 'Others';
-      catCount[cat] = (catCount[cat] || 0) + item.quantity;
-    }
-  }
-  const topCats = Object.entries(catCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topCats = categoryTotals.slice(0, 5).map(c => [c.categoryName, c.quantitySold] as [string, number]);
   const maxCat = Math.max(...topCats.map(c => c[1]), 1);
 
   return (
@@ -557,19 +509,16 @@ function ProductsTab({ orders, products, range, customFrom, customTo }: { orders
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('revenue');
-  const [data, setData] = useState({ orders: [], products: [] });
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<DateRange>('today');
   const [customFrom, setCustomFrom] = useState(istDay());
   const [customTo, setCustomTo] = useState(istDay());
 
   useEffect(() => {
-    Promise.all([
-      ordersApi.getAll({ limit: 500 } as any),
-      productsApi.getAll(),
-    ]).then(([o, p]) => {
-      setData({ orders: o.data.data || [], products: p.data.data || [] });
-    }).finally(() => setLoading(false));
+    productsApi.getAll()
+      .then(r => setProducts(r.data.data || []))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <PageSkeleton />;
@@ -604,9 +553,9 @@ export default function AnalyticsPage() {
         customTo={customTo} setCustomTo={setCustomTo}
       />
 
-      {tab === 'revenue'   && <RevenueTab   orders={data.orders} range={range} customFrom={customFrom} customTo={customTo} />}
+      {tab === 'revenue'   && <RevenueTab   range={range} customFrom={customFrom} customTo={customTo} />}
       {tab === 'orders'    && <OrdersTab    range={range} customFrom={customFrom} customTo={customTo} />}
-      {tab === 'products'  && <ProductsTab  orders={data.orders} products={data.products} range={range} customFrom={customFrom} customTo={customTo} />}
+      {tab === 'products'  && <ProductsTab  products={products} range={range} customFrom={customFrom} customTo={customTo} />}
     </div>
   );
 }

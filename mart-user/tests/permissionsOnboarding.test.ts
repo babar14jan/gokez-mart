@@ -24,9 +24,10 @@ describe('permissions onboarding screen', () => {
     assert.ok(!html.includes('Illustration of'));
   });
 
-  test('shows the bold freshness headline', () => {
+  test('shows the bold freshness headline with the yellow accent below it', () => {
     const html = render();
     assert.match(html, /Daily Freshness From Neighbourhoods Local Shops/);
+    assert.match(html, /Daily Freshness From Neighbourhoods Local Shops<\/h1>[\s\S]*?bg-\[#F4C400\]/);
     assert.doesNotMatch(html, /Let&#x27;s get you started!/);
   });
 
@@ -46,10 +47,11 @@ describe('permissions onboarding screen', () => {
     assert.match(html, /You can turn off any permission anytime from Account → Settings\./);
   });
 
-  test('both actions are real buttons with accessible touch targets', () => {
+  test('both actions are real buttons with the login Skip button style for Maybe Later', () => {
     const html = render();
     assert.match(html, /<button[^>]*type="button"[^>]*min-h-\[52px\][^>]*>.*Allow &amp; Continue/s);
-    assert.match(html, /<button[^>]*type="button"[^>]*min-h-\[48px\][^>]*>Maybe Later<\/button>/);
+    assert.match(html, /<button[^>]*type="button"[^>]*permissions-later-button[^>]*min-h-9[^>]*bg-\[#9AEFAF\][^>]*>.*Maybe Later/s);
+    assert.doesNotMatch(html, /min-h-\[48px\]/);
   });
 
   test('Allow starts the work without waiting for a permission result', () => {
@@ -90,9 +92,26 @@ describe('opt-in prompt after permissions onboarding', () => {
     assert.match(prompt, /Enable/);
   });
 
-  test('the legacy popup is cancelled once the permissions page is seen', () => {
+  test('the legacy popup is cancelled on onboarding routes and once the permissions page is seen', () => {
     const prompt = readSource('src/components/PushOptInPrompt.tsx');
-    assert.match(prompt, /window\.setTimeout\(\(\) => \{[\s\S]*?if \(hasSeenPermissionsPage\(\)\) return;[\s\S]*?if \(!canShowPushPrompt\(\)\) return;[\s\S]*?if \(!isPushOptInDue\('legacy'\)\) return;/);
+    assert.match(prompt, /if \(isAlwaysLightRoute\(\)\) return;/);
+    assert.match(prompt, /window\.setTimeout\(\(\) => \{[\s\S]*?if \(isAlwaysLightRoute\(\)\) return;[\s\S]*?if \(hasSeenPermissionsPage\(\)\) return;[\s\S]*?if \(!canShowPushPrompt\(\)\) return;[\s\S]*?if \(!isPushOptInDue\('legacy'\)\) return;/);
+    assert.match(prompt, /\}, \[isLoggedIn, routeTick\]\);/);
+  });
+
+  test('route changes re-arm the legacy popup instead of leaving the light login route stuck', () => {
+    const prompt = readSource('src/components/PushOptInPrompt.tsx');
+    assert.match(prompt, /const \[routeTick, setRouteTick\] = useState\(0\)/);
+    assert.match(prompt, /const onPop = \(\) => setRouteTick\(tick => tick \+ 1\)/);
+    assert.match(prompt, /window\.addEventListener\('popstate', onPop\)/);
+    assert.match(prompt, /return \(\) => window\.removeEventListener\('popstate', onPop\)/);
+  });
+
+  test('login success normalises history and replays the route for every listener', () => {
+    const app = readSource('src/App.tsx');
+    assert.match(app, /if \(pendingCheckout \|\| redirect === '\/checkout'\) \{/);
+    assert.match(app, /path = '\/checkout';[\s\S]*?path = '\/orders';[\s\S]*?window\.history\.replaceState\(\{\}, '', path\);/);
+    assert.match(app, /window\.dispatchEvent\(new PopStateEvent\('popstate'\)\);/);
   });
 
   test('only Maybe Later asks the popup immediately', () => {
@@ -117,5 +136,22 @@ describe('opt-in prompt after permissions onboarding', () => {
     assert.match(push, /LATER_ORDER_PUSH_PROMPT_KEY = 'mart_later_order_push_prompt_at'/);
     assert.match(push, /PERMISSIONS_DECLINE_PUSH_PROMPT_KEY = 'mart_permissions_decline_push_prompt_at'/);
     assert.match(push, /if \(reason === 'permissions-decline'\) return PERMISSIONS_DECLINE_PUSH_PROMPT_KEY/);
+  });
+
+  test('a guest can subscribe before the first order and syncs consent after it', () => {
+    const push = readSource('src/services/push.ts');
+    assert.doesNotMatch(push, /if \(!authed && tokens\.length === 0\) return false;/);
+    assert.match(push, /if \(tokens\.length === 0\) return true;/);
+    assert.match(push, /GUEST_SUBSCRIBED_TOKEN_KEY = 'mart_guest_subscribed_token'/);
+    assert.match(push, /localStorage\.removeItem\(GUEST_SUBSCRIBED_TOKEN_KEY\)/);
+    assert.match(push, /forgetSubscribedGuestToken\(\);\s*if \(tokens\.length === 0\) return true;/);
+    assert.match(push, /rememberSubscribedGuestToken\(trackingToken\)/);
+    assert.match(push, /const consentToken = getSubscribedGuestToken\(\);/);
+    assert.match(push, /if \(consentToken && marketingConsent\) \{[\s\S]*?updateGuestMarketingConsent\(consentToken, true\)/);
+    assert.match(push, /if \(trackingToken\) await authApi\.updateGuestMarketingConsent\(trackingToken, true\)/);
+    assert.doesNotMatch(push, /updateGuestMarketingConsent\(tokens\[tokens\.length - 1\]/);
+    const account = readSource('src/pages/AccountPage.tsx');
+    assert.match(account, /getSubscribedGuestToken\(\)/);
+    assert.doesNotMatch(account, /readTrackingTokens/);
   });
 });

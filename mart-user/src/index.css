@@ -166,124 +166,103 @@ html, body { overscroll-behavior-y: none; }
   /* The login view is measured against the app scroller, not 100vh. vh changes
      with the mobile browser toolbar, which is what stretched the branded base
      and shifted the logo / Skip between iPhone and Android. */
-   .login-page-view {
-     height: 100%;
-     min-height: 100%;
-     --login-button-offset: 96px;
-      --login-header-height: calc(203px + env(safe-area-inset-top, 0px));
-   }
-
-   .login-form-spacer {
-     flex: 0 0 max(0px, calc(50vh - var(--kb, 0px) - var(--login-header-height) - var(--login-button-offset, 96px)));
-     flex: 0 0 max(0px, calc(50dvh - var(--kb, 0px) - var(--login-header-height) - var(--login-button-offset, 96px)));
-   }
-
-
-   .login-page-view .login-brand-hero {
-     padding-top: calc(35px + env(safe-area-inset-top, 0px));
-     padding-top: clamp(12px, calc(4.4vh + env(safe-area-inset-top, 0px)), calc(36px + env(safe-area-inset-top, 0px)));
-   }
-
-    .login-page-view .login-brand-header {
-      height: 167px;
-      height: clamp(157px, 21vh, 167px);
+    .login-page-view {
+      height: 100%;
+      min-height: 100%;
+       --login-button-offset: 96px;
+        --login-header-height: calc(188px + env(safe-area-inset-top, 0px));
     }
 
-    .login-brand-logo {
-      width: 36px;
-      height: 36px;
+    .login-form-spacer {
+      flex: 0 0 max(0px, calc(50vh - var(--kb, 0px) - var(--login-header-height) - var(--login-button-offset, 96px)));
+      flex: 0 0 max(0px, calc(50dvh - var(--kb, 0px) - var(--login-header-height) - var(--login-button-offset, 96px)));
     }
 
-   .login-brand-fallback {
-     font-size: 22px;
-   }
 
-    .login-brand-image {
-      position: relative;
-      top: 12px;
-     width: auto;
-     max-width: 45%;
-     height: 68px;
-     object-fit: contain;
-   }
+    .login-page-view .login-brand-hero {
+      padding-top: calc(35px + env(safe-area-inset-top, 0px));
+      padding-top: clamp(12px, calc(4.4vh + env(safe-area-inset-top, 0px)), calc(36px + env(safe-area-inset-top, 0px)));
+    }
 
-      .login-brand-tagline {
-        margin-top: 2px;
-        margin-left: 0;
-        max-width: 166px;
-        font-size: 10px;
+     .login-page-view .login-brand-header {
+       height: 152px;
+       height: clamp(144px, 19vh, 156px);
+     }
+
+      .login-brand-unit {
+        position: relative;
+        top: 10px;
+        width: clamp(64px, 26vw, 88px);
+        max-width: 30vw;
       }
 
       .login-punchline {
-        margin-top: 35px;
+        margin-top: 40px;
+        max-width: 260px;
+        max-width: min(260px, calc(100vw - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
         font-size: 20px;
+        white-space: normal;
+        overflow-wrap: anywhere;
       }
 
-    @media (max-height: 700px) {
-      .login-page-view .login-brand-header {
-        height: clamp(142px, 19vh, 150px);
+     @media (max-height: 700px) {
+       .login-page-view .login-brand-header {
+         height: clamp(120px, 17vh, 132px);
+       }
+       .login-brand-unit {
+         top: 8px;
+         width: clamp(56px, 22vw, 75px);
+         max-width: 28vw;
+       }
+        .login-punchline {
+          margin-top: 33px;
+          max-width: 230px;
+          max-width: min(230px, calc(100vw - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+          font-size: 17px;
+        }
       }
-       .login-page-view .login-brand-logo {
-         width: 32px;
-         height: 32px;
-       }
-      .login-page-view .login-brand-fallback {
-        font-size: 19px;
-      }
-       .login-page-view .login-brand-image {
-         top: 10px;
-         height: 56px;
-       }
-       .login-page-view .login-brand-tagline {
-         margin-left: 0;
-         max-width: 139px;
-         font-size: 10px;
-       }
-       .login-page-view .login-punchline {
-         margin-top: 35px;
-         font-size: 16px;
-       }
-     }
 
-   @media (max-height: 520px) {
-      .login-page-view .login-brand-logo {
-        width: 28px;
-        height: 28px;
-      }
-     .login-page-view .login-brand-fallback {
-       font-size: 17px;
-     }
-      .login-page-view .login-brand-header {
-        height: clamp(72px, 11.8vh, 96px);
-      }
-      .login-page-view .login-brand-image {
-        top: 8px;
-        height: 44px;
-        max-width: 40%;
-      }
-      .login-page-view .login-brand-tagline,
-      .login-page-view .login-punchline {
-        display: none;
-      }
-     .login-page-view .login-form-area form > * + * {
-       margin-top: 0.375rem;
-     }
-     .login-page-view .login-form-area form button[type="submit"] {
-       padding-top: 0.5rem;
-       padding-bottom: 0.5rem;
-     }
-     .login-page-view #login-phone {
-       padding-top: 0.375rem;
-       padding-bottom: 0.375rem;
-     }
-   }
+      @media (max-height: 520px) {
+         .login-page-view .login-brand-header {
+           height: clamp(92px, 13vh, 104px);
+         }
+         .login-brand-unit {
+           top: 6px;
+           width: clamp(48px, 19vw, 60px);
+           max-width: 23vw;
+         }
+          .login-punchline {
+            margin-top: 19px;
+            max-width: 200px;
+            max-width: min(200px, calc(100vw - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+            font-size: 14px;
+          }
 
+       .login-page-view .login-form-area form > * + * {
+        margin-top: 0.375rem;
+      }
+      .login-page-view .login-form-area form button[type="submit"] {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+      }
+      .login-page-view #login-phone {
+        padding-top: 0.375rem;
+        padding-bottom: 0.375rem;
+      }
+    }
+
+    @media (max-width: 360px) and (min-height: 521px) {
+      .login-punchline {
+        font-size: 18px;
+      }
+    }
 
   /* Branded login background: soft organic gradient waves (lightweight SVG) on
      a light brand-green base rather than white, full-viewport and readable. */
   .login-brand-bg {
+    --login-brand-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3CradialGradient id='t' cx='28%25' cy='10%25' r='45%25'%3E%3Cstop offset='0%25' stop-color='%23ADFBBD' stop-opacity='0'/%3E%3Cstop offset='45%25' stop-color='%23018330' stop-opacity='.10'/%3E%3Cstop offset='100%25' stop-color='%23018330' stop-opacity='.45'/%3E%3C/radialGradient%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23018330' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23018330' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%23028434' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23ADFBBD'/%3E%3Cpath d='M-20 150C80 40 170 190 250 110C320 40 365 70 400 40V-20H-20Z' fill='url(%23t)'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23018330' fill-opacity='1'/%3E%3C/svg%3E");
     background-color: #ADFBBD;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3CradialGradient id='t' cx='28%25' cy='10%25' r='45%25'%3E%3Cstop offset='0%25' stop-color='%23ADFBBD' stop-opacity='0'/%3E%3Cstop offset='45%25' stop-color='%23018330' stop-opacity='.10'/%3E%3Cstop offset='100%25' stop-color='%23018330' stop-opacity='.45'/%3E%3C/radialGradient%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23018330' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23018330' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%23028434' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23ADFBBD'/%3E%3Cpath d='M-20 150C80 40 170 190 250 110C320 40 365 70 400 40V-20H-20Z' fill='url(%23t)'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23018330' fill-opacity='1'/%3E%3C/svg%3E");
+    background-image: var(--login-brand-pattern);
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
@@ -292,6 +271,11 @@ html, body { overscroll-behavior-y: none; }
   .dark .login-brand-bg,
   .dark .login-page-view.login-brand-bg {
     background-color: #18191a;
+    background-image: none;
+  }
+
+  .welcome-screen .login-brand-bg {
+    background-color: #ADFBBD;
     background-image: none;
   }
 
@@ -396,9 +380,10 @@ html, body { overscroll-behavior-y: none; }
       Navbar/PageHeader, whose splash-coloured background paints through its safe-area
      padding at top:0 — so Safari samples the header itself and the bar matches
      with no seam. The BOTTOM edge has no in-flow header to sample from, so a
-     decorative strip pins it to the nav colour (neutral canvas / dark) instead of the
+      decorative strip pins it to the nav colour (neutral canvas / dark) instead of the
       launched light-green splash. `display:none` except on iOS, so Android, which
-     already paints its bars from theme-color, and desktop never render it.
+      already paints its bars from theme-color, and desktop never render it.
+
       pointer-events:none keeps it from eating taps yet Safari still samples it;
       aria-hidden in the markup.
       Do NOT hide it with opacity/visibility: Safari rejects those and falls back
@@ -497,6 +482,17 @@ html, body { overscroll-behavior-y: none; }
     width: 100%;
   }
 
+  .permissions-later-button {
+    top: clamp(4px, calc(4.4vh + env(safe-area-inset-top, 0px) - 8px), calc(28px + env(safe-area-inset-top, 0px)));
+    right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  }
+
+  @media (min-width: 640px) {
+    .permissions-later-button {
+      right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
+    }
+  }
+
   .onboarding-scroll {
     padding-bottom: calc(var(--onboarding-action-height, 9rem) + 2.25rem + env(safe-area-inset-bottom, 0px));
   }
@@ -519,24 +515,36 @@ html, body { overscroll-behavior-y: none; }
   .app-shell.welcome-active .app-scroll {
     overflow: hidden;
     scrollbar-gutter: auto;
-    touch-action: none;
     overscroll-behavior: none;
     padding: 0;
   }
 
   .welcome-screen {
+    --onboarding-action-height: 52px;
     height: 100%;
     max-height: 100%;
     overscroll-behavior: none;
   }
 
-  .welcome-art {
-    max-height: 100%;
-    object-position: center center;
+  .welcome-screen .onboarding-scroll {
+    padding-top: clamp(12px, calc(4.4vh + env(safe-area-inset-top, 0px)), calc(36px + env(safe-area-inset-top, 0px)));
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .welcome-screen .login-brand-unit {
+    align-self: flex-start;
   }
 
   .welcome-screen .onboarding-action-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(2.75rem, 5.5vh, 3.5rem) + 30px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(0.75rem, 2.2vh, 1.25rem) + 10px);
+    padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+  }
+
+  .welcome-image {
+    width: min(62vw, 220px);
+    max-height: 34vh;
   }
 
   .welcome-screen .onboarding-action-bar button {
@@ -544,22 +552,13 @@ html, body { overscroll-behavior-y: none; }
     font-size: 15px;
   }
 
-  @media (max-width: 639px) {
-    .welcome-art {
-      height: 100%;
-      max-height: 100%;
-      width: 100%;
-      object-fit: contain;
-      object-position: center center;
-    }
-  }
-
   @media (min-width: 640px) {
-    .welcome-art {
-      bottom: auto;
-      height: calc(100% - 6rem);
-      object-fit: contain;
-      object-position: center top;
+    .welcome-image {
+      width: 220px;
+    }
+    .welcome-screen .onboarding-action-bar {
+      padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+      padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
     }
     .welcome-screen .onboarding-action-bar button {
       min-height: 56px;
@@ -567,7 +566,32 @@ html, body { overscroll-behavior-y: none; }
     }
   }
 
-  @media (max-width: 639px) and (max-height: 520px) {
+  @media (max-height: 700px) {
+    .welcome-image {
+      width: min(52vw, 180px);
+      max-height: 28vh;
+    }
+    .welcome-fallback-heading {
+      font-size: 20px;
+    }
+    .welcome-fallback-quote {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      font-size: 14px;
+    }
+  }
+
+  @media (max-height: 520px) {
+    .welcome-screen {
+      --onboarding-action-height: 46px;
+    }
+    .welcome-screen .onboarding-action-bar {
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem + 10px);
+    }
+    .welcome-image {
+      width: 96px;
+      max-height: 22vh;
+    }
     .welcome-fallback-heading {
       margin-top: 0.5rem;
       font-size: 18px;
@@ -579,11 +603,8 @@ html, body { overscroll-behavior-y: none; }
     .welcome-fallback-quote {
       margin-top: 0.5rem;
       padding-top: 0.5rem;
-      font-size: 11px;
+      font-size: 13px;
       line-height: 1.35;
-    }
-    .welcome-screen .onboarding-action-bar {
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem + 30px);
     }
     .welcome-screen .onboarding-action-bar button {
       min-height: 46px;
