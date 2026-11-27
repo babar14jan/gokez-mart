@@ -1,7 +1,8 @@
-import { api } from './api';
+import { api, authApi } from './api';
 import { readTrackingTokens } from '../utils/guestTracking';
 
 const SW_URL = '/sw.js';
+export const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
 
 // Some browsers (notably in-app webviews and PWAs whose worker failed to
 // activate) never resolve `serviceWorker.ready`, and iOS can leave the native
@@ -110,6 +111,10 @@ export function isPushSupported(): boolean {
     && 'PushManager' in window;
 }
 
+export function isNotificationSupported(): boolean {
+  return typeof window !== 'undefined' && 'Notification' in window;
+}
+
 // A subscribe cycle briefly unsubscribes the old endpoint before creating the
 // new one. If the success screen checks for a subscription during that window it
 // sees none and wrongly offers the "keep track of this order" prompt to a device
@@ -149,9 +154,22 @@ export async function getLocationPermission(): Promise<'granted' | 'denied' | 'p
 
 // Request notification permission and subscribe
 export async function requestNotificationPermission(): Promise<'granted' | 'denied' | 'default'> {
-  if (!('Notification' in window)) return 'denied';
+  if (!isNotificationSupported()) return 'denied';
   return withTimeout(
-    Notification.requestPermission(),
+    new Promise<'granted' | 'denied' | 'default'>((resolve, reject) => {
+      let settled = false;
+      const finish = (value: NotificationPermission) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      try {
+        const result = (Notification as any).requestPermission((value: NotificationPermission) => finish(value));
+        if (result && typeof result.then === 'function') result.then(finish, reject);
+      } catch (error) {
+        reject(error);
+      }
+    }),
     PERMISSION_TIMEOUT_MS,
     'Notification permission request timed out',
   );
@@ -235,6 +253,22 @@ function isCustomerAuthed(): boolean {
     if (!stored) return false;
     return !!JSON.parse(stored)?.state?.token;
   } catch { return false; }
+}
+
+export async function enablePromotionalNotifications(): Promise<boolean> {
+  try {
+    if (isCustomerAuthed()) {
+      await authApi.updateMarketingConsent(true);
+      return true;
+    }
+    const tokens = readTrackingTokens();
+    const trackingToken = tokens[tokens.length - 1];
+    if (trackingToken) await authApi.updateGuestMarketingConsent(trackingToken, true);
+    try { localStorage.setItem(GUEST_MARKETING_CONSENT_KEY, 'true'); } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Unsubscribe from push

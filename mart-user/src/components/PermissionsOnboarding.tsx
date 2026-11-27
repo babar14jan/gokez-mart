@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Bell, Loader2, MapPin, type LucideIcon } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Bell, MapPin, type LucideIcon } from 'lucide-react';
 
 interface PermissionsOnboardingProps {
   onAllow: () => Promise<void> | void;
@@ -27,8 +27,7 @@ function PermissionCard({ icon: Icon, title, description }: PermissionCardProps)
 }
 
 export default function PermissionsOnboarding({ onAllow, onMaybeLater }: PermissionsOnboardingProps) {
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const allowRef = useRef(false);
   const sectionRef = useRef<HTMLElement>(null);
   const actionRef = useRef<HTMLDivElement>(null);
 
@@ -45,19 +44,12 @@ export default function PermissionsOnboarding({ onAllow, onMaybeLater }: Permiss
       observer?.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [message]);
+  }, []);
 
-  const handleAllow = async () => {
-    if (busy) return;
-    setBusy(true);
-    setMessage('Setting up your experience…');
-    try {
-      await onAllow();
-    } catch {
-      setMessage('You can continue — permissions can be changed later in settings.');
-    } finally {
-      setBusy(false);
-    }
+  const handleAllow = () => {
+    if (allowRef.current) return;
+    allowRef.current = true;
+    void Promise.resolve(onAllow()).catch(() => {});
   };
 
   return (
@@ -84,34 +76,28 @@ export default function PermissionsOnboarding({ onAllow, onMaybeLater }: Permiss
             />
             <PermissionCard
               icon={Bell}
-              title="Get instant updates on orders, price drops, and flash sales"
-              description="Turn on notifications"
+              title="Order updates, price drops, flash sales, deals and new arrivals"
+              description="Turn on notifications and offers"
             />
           </div>
+          <p className="mt-3 px-1 text-center text-[11px] font-medium leading-snug text-[#087A43]/75">
+            You can turn off any permission anytime from Account → Settings.
+          </p>
         </div>
       </div>
 
       <div ref={actionRef} className="onboarding-action-bar">
-        {message && (
-          <p role="status" aria-live="polite" className="mb-2 text-center text-[11px] font-medium text-slate-600">
-            {message}
-          </p>
-        )}
         <button
           type="button"
           onClick={handleAllow}
-          disabled={busy}
-          aria-busy={busy}
-          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#087A43] px-5 py-3 text-[15px] font-extrabold text-white shadow-lg shadow-[#087A43]/20 transition-colors hover:bg-[#076a39] active:bg-[#065d32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-80"
+          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#087A43] px-5 py-3 text-[15px] font-extrabold text-white shadow-lg shadow-[#087A43]/20 transition-colors hover:bg-[#076a39] active:bg-[#065d32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2"
         >
-          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
           Allow &amp; Continue
         </button>
         <button
           type="button"
           onClick={onMaybeLater}
-          disabled={busy}
-          className="mt-2.5 min-h-[48px] w-full rounded-2xl bg-white px-5 py-3 text-[14px] font-bold text-[#087A43] shadow-sm ring-1 ring-[#087A43]/15 transition-colors hover:bg-[#F0FAF1] active:bg-[#e6f5e9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 disabled:opacity-60"
+          className="mt-2.5 min-h-[48px] w-full rounded-2xl bg-white px-5 py-3 text-[14px] font-bold text-[#087A43] shadow-sm ring-1 ring-[#087A43]/15 transition-colors hover:bg-[#F0FAF1] active:bg-[#e6f5e9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2"
         >
           Maybe Later
         </button>

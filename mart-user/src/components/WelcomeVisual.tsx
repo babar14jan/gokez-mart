@@ -35,7 +35,7 @@ export default function WelcomeVisual({ status, imageRef, onImageLoad, onImageEr
       src="/get_started.webp"
       alt=""
       aria-hidden="true"
-      className="welcome-art absolute inset-0 h-full w-full select-none object-cover object-center"
+      className="welcome-art absolute inset-0 h-full max-h-full w-full select-none"
       draggable={false}
       onLoad={onImageLoad}
       onError={onImageError}

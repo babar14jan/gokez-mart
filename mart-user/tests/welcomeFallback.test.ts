@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import WelcomeVisual from '../src/components/WelcomeVisual';
@@ -29,5 +30,16 @@ describe('welcome visual', () => {
     assert.match(html, /bg-white/);
     assert.match(html, /text-\[#087A43\]/);
     assert.match(html, /bg-\[#F4C400\]/);
+  });
+
+  test('mobile artwork is contained and centered instead of horizontally cropped', () => {
+    const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+    const start = css.indexOf('.app-shell.welcome-active .app-scroll');
+    const end = css.indexOf('.app-shell.permissions-active .app-scroll');
+    assert.ok(start >= 0 && end > start);
+
+    const welcomeCss = css.slice(start, end);
+    assert.match(welcomeCss, /@media \(max-width: 639px\) \{[\s\S]*?\.welcome-art \{[\s\S]*?object-fit: contain;/);
+    assert.doesNotMatch(welcomeCss, /\.welcome-art \{[\s\S]*?object-fit: cover/);
   });
 });

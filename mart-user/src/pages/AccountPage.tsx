@@ -5,7 +5,7 @@ import { authApi, referralApi, suggestionApi, type ReferralMeData } from '../ser
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 import { useThemeStore } from '../store/themeStore';
 import { useZoneStore } from '../store/zoneStore';
-import { getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription, isPushSupported } from '../services/push';
+import { GUEST_MARKETING_CONSENT_KEY, getLocationPermission, getNotificationPermission, requestNotificationPermission, subscribeToPush, unsubscribeFromPush, hasActivePushSubscription, isPushSupported } from '../services/push';
 import { clearNativePushAssociation, hasNativePushToken, isNativePush, requestNativePushPermission } from '../services/nativePush';
 import { useAccountLoginStore } from '../store/accountLoginStore';
 import { useLoginFlowStore } from '../store/loginFlowStore';
@@ -17,8 +17,6 @@ import { buildReferralLink, normalizeReferralCode } from '../utils/referral';
 import { openReferralLogin } from '../utils/referralLogin';
 import { buildWhatsAppLink } from '../utils/whatsapp';
 import { readTrackingTokens } from '../utils/guestTracking';
-
-const GUEST_MARKETING_CONSENT_KEY = 'mart_guest_marketing_consent';
 
 interface AccountPageProps {
   storeName?: string;

@@ -4,4 +4,5 @@
     <color name="colorPrimaryDark">#087A43</color>
     <color name="colorAccent">#4AC78D</color>
     <color name="gokez_green">#087A43</color>
+    <color name="splash_background">#ADFBBD</color>
 </resources>
