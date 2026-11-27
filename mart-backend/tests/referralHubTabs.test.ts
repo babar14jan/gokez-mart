@@ -8,6 +8,7 @@ import {
 } from '../../mart-hub/src/services/referralAdminApi';
 
 const readHub = (rel: string) => readFileSync(join(__dirname, '..', '..', 'mart-hub', 'src', rel), 'utf8');
+const readBackend = (rel: string) => readFileSync(join(__dirname, '..', 'src', rel), 'utf8');
 
 const OLD_PATHS = [
   '/referral-overview',
@@ -131,10 +132,29 @@ describe('Referral hub consolidation', () => {
       assert.ok(!source.includes('Scheduled orders not delivered'));
     }
     const dashboard = readHub('pages/DashboardPage.tsx');
-    assert.ok(dashboard.includes('const localStatusCounts'));
-    assert.ok(dashboard.includes('localStatusCounts.pending + localStatusCounts.confirmed'));
+    assert.ok(dashboard.includes('r.data.counts'));
+    assert.ok(dashboard.includes('orderCounts.filteredTotal'));
+    assert.ok(dashboard.includes('statusCount(...b.keys)'));
     assert.ok(dashboard.includes('newCustomers} new · ${displayCustomerAgg.repeatCustomers} repeat'));
     assert.ok(!dashboard.includes('in range'));
+  });
+
+  test('hub totals use server aggregates instead of the 500-row list', () => {
+    const ordersPage = readHub('pages/OrdersPage.tsx');
+    assert.ok(ordersPage.includes('r.data.counts'));
+    assert.ok(ordersPage.includes('orderCounts.statusCounts[tab.id]'));
+    assert.ok(ordersPage.includes('orderCounts.scheduledCount'));
+
+    const analytics = readHub('pages/AnalyticsPage.tsx');
+    assert.ok(!analytics.includes('ordersApi.getAll'));
+    assert.ok(analytics.includes('summary.paymentBreakdown'));
+    assert.ok(analytics.includes('limit: 1000'));
+    assert.ok(analytics.includes('categoryTotals'));
+
+    const service = readBackend('services/order.service.ts');
+    assert.ok(service.includes('static async getOrderCounts'));
+    assert.ok(service.includes('COUNT(*)::int AS "all"'));
+    assert.ok(service.includes('categoryTotals'));
   });
 
   test('overview keeps only outcome and financial KPIs', () => {

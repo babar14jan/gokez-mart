@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { isEffectiveAlwaysLightRoute } from '../constants/brand';
 
 interface ThemeState {
   isDark: boolean;
@@ -19,10 +20,12 @@ export const useThemeStore = create<ThemeState>()(
   )
 );
 
-// Apply the persisted class before React renders. The system bar is deliberately
-// left on the shared splash green until the splash is dismissed.
+// Apply the persisted class before React renders, except on the always-light
+// onboarding/login routes. The system bar stays on the shared splash green there.
 const stored = localStorage.getItem('mart-theme');
-if (stored) {
+if (isEffectiveAlwaysLightRoute()) {
+  document.documentElement.classList.remove('dark');
+} else if (stored) {
   try {
     const { state } = JSON.parse(stored);
     const isDark = state?.isDark === true;

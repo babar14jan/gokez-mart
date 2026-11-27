@@ -1,14 +1,14 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ClipboardList, TrendingUp, Clock, XCircle, Users } from 'lucide-react';
-import { ordersApi, customersApi, type OrderSummary, type CustomerAggregates } from '../services/api';
+import { ordersApi, customersApi, type OrderCounts, type OrderSummary, type CustomerAggregates } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { orderDisplayName } from '../utils/orderName';
-import { orderBrowseDate } from '../utils/orderDate';
+import { hasCompleteCustomRange, orderListDateParams } from '../utils/orderDate';
 import { getActiveStoreId } from '../utils/store';
 import { onOrderEvent, onOrderStreamConnect } from '../services/realtime';
 import PageSkeleton from '../components/PageSkeleton';
-import { DATE_RANGE_OPTIONS, CustomDateInputs, DateRangeChips, ScheduledFilterButton, type DateRangeId } from '../components/DateRangeFilter';
+import { DATE_RANGE_OPTIONS, CustomDateInputs, DateRangeChips, ScheduledFilterButton, istDay, type DateRangeId } from '../components/DateRangeFilter';
 
 type Range = 'today' | 'yesterday' | 'custom' | 'all';
 
@@ -41,23 +41,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 const PAYMENT_LABELS: Record<string, string> = { cod: 'Cash', upi: 'UPI', phonepay: 'PhonePe' };
 
-const toDateStr = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-/* Local-time day bounds for a range. Custom dates are read as local calendar
-   days (via `T00:00:00`), not UTC, so a single-day pick includes the whole
-   local day instead of losing the early hours to a timezone shift. */
-function rangeBounds(r: Range, from: string, to: string): { start: Date | null; end: Date | null } {
-  const now = new Date();
-  if (r === 'today')     return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate()), end: null };
-  if (r === 'yesterday') return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1), end: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999) };
-  if (r === 'custom') return {
-    start: from ? new Date(`${from}T00:00:00`) : null,
-    end:   to   ? new Date(`${to}T23:59:59.999`) : null,
-  };
-  return { start: null, end: null };
-}
-
 export default function DashboardPage() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,20 +54,39 @@ export default function DashboardPage() {
     prevRangeRef.current = range;
     setRange('custom');
   };
-  const [customFrom, setCustomFrom] = useState(toDateStr(new Date()));
-  const [customTo, setCustomTo] = useState(toDateStr(new Date()));
-  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0 });
+  const [customFrom, setCustomFrom] = useState(istDay());
+  const [customTo, setCustomTo] = useState(istDay());
+  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0, paymentBreakdown: [] });
   const [customerAgg, setCustomerAgg] = useState<CustomerAggregates>({ totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
   const { name, role } = useAuthStore();
   const canSeeCustomers = !!role && ['super_admin', 'store_owner', 'store_manager'].includes(role);
 
   const reqId = useRef(0);
+  const listReqId = useRef(0);
   const EMPTY_AGG = { totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] };
+  const EMPTY_COUNTS: OrderCounts = { total: 0, filteredTotal: 0, statusCounts: {}, scheduledCount: 0 };
+  const [orderCounts, setOrderCounts] = useState<OrderCounts>(EMPTY_COUNTS);
 
-  const loadAllOrders = useCallback((fresh = false) =>
-    ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500 } as any, { fresh })
-      .then(o => setAllOrders(o.data.data || []))
-      .catch(() => {}), []);
+  const loadAllOrders = useCallback((fresh = false) => {
+    const id = ++listReqId.current;
+    if (!hasCompleteCustomRange(range, customFrom, customTo)) {
+      setAllOrders([]);
+      setOrderCounts(EMPTY_COUNTS);
+      setLoading(false);
+      return Promise.resolve();
+    }
+    const window = scheduledView
+      ? { deliveryPreference: 'scheduled', activeScheduled: true }
+      : orderListDateParams(range, customFrom, customTo);
+    return ordersApi.getAll({ storeId: getActiveStoreId(), limit: 500, ...window } as any, { fresh })
+      .then(r => {
+        if (id !== listReqId.current) return;
+        setAllOrders(r.data.data || []);
+        setOrderCounts(r.data.counts || EMPTY_COUNTS);
+      })
+      .catch(() => {})
+      .finally(() => { if (id === listReqId.current) setLoading(false); });
+  }, [scheduledView, range, customFrom, customTo]);
 
   // One loader for both the initial paint and every live refresh. A request id
   // guards against out-of-order responses: switching range/date fires a new
@@ -92,16 +94,11 @@ export default function DashboardPage() {
   // instead of overwriting the newer figures (which looked like "data not
   // refreshing").
   const loadSummary = useCallback((fresh = false) => {
-    const custom = range === 'custom';
-    if (custom && (!customFrom || !customTo)) return;
     const id = ++reqId.current;
-    const yesterday = toDateStr(new Date(new Date().setDate(new Date().getDate() - 1)));
+    if (!hasCompleteCustomRange(range, customFrom, customTo)) return;
     const params = {
       storeId: getActiveStoreId(),
-      range: (range === 'yesterday' ? 'custom' : range) as import('../services/api').SummaryRange,
-      from: range === 'yesterday' ? yesterday : (custom ? customFrom : undefined),
-      to: range === 'yesterday' ? yesterday : (custom ? customTo : undefined),
-      dateBasis: 'browse' as const,
+      ...orderListDateParams(range, customFrom, customTo),
     };
     ordersApi.getSummary(params, { fresh })
       .then(r => { if (id === reqId.current) setSummary(r.data.data); })
@@ -113,7 +110,7 @@ export default function DashboardPage() {
     }
   }, [range, customFrom, customTo, canSeeCustomers]);
 
-  useEffect(() => { loadAllOrders().finally(() => setLoading(false)); }, [loadAllOrders]);
+  useEffect(() => { loadAllOrders(); }, [loadAllOrders]);
   useEffect(() => { loadSummary(); }, [loadSummary]);
 
   // Live refresh hits the server (fresh=true); the initial paint may use cache.
@@ -135,72 +132,27 @@ export default function DashboardPage() {
     return () => { offEvent(); offConnect(); clearInterval(poll); };
   }, [refreshLive]);
 
-  const filtered = useMemo(() => {
-    if (scheduledView) {
-      return allOrders.filter(o => o.deliveryPreference === 'scheduled' && !['delivered','cancelled','failed_delivery','terminated'].includes(o.status));
-    }
-    const { start, end } = rangeBounds(range, customFrom, customTo);
-    return allOrders.filter(o => {
-      const d = orderBrowseDate(o);
-      if (start && d < start) return false;
-      if (end && d > end) return false;
-      if (range === 'today' && o.deliveryPreference === 'scheduled' && !['delivered','cancelled','failed_delivery','terminated'].includes(o.status) && new Date(o.scheduledFor) >= new Date(new Date().setHours(0,0,0,0) + 86400000)) return false;
-      return true;
-    });
-  }, [allOrders, range, customFrom, customTo, scheduledView]);
-
-  const scheduledCount = useMemo(
-    () => allOrders.filter(o =>
-      o.deliveryPreference === 'scheduled' && !['delivered', 'cancelled', 'failed_delivery', 'terminated'].includes(o.status),
-    ).length,
-    [allOrders],
-  );
-
-  const localStatusCounts = useMemo(() => ({
-    pending: filtered.filter(o => o.status === 'pending').length,
-    confirmed: filtered.filter(o => o.status === 'confirmed').length,
-    delivered: filtered.filter(o => o.status === 'delivered').length,
-    cancelled: filtered.filter(o => ['cancelled', 'failed_delivery', 'terminated'].includes(o.status)).length,
-    preparing: filtered.filter(o => o.status === 'preparing').length,
-    readyToPickup: filtered.filter(o => o.status === 'ready_to_pickup').length,
-    outForDelivery: filtered.filter(o => o.status === 'out_for_delivery').length,
-    pickedUp: filtered.filter(o => o.status === 'picked_up').length,
-  }), [filtered]);
-
-  const localRevenue = useMemo(
-    () => filtered.filter(o => o.status === 'delivered').reduce((sum, o) => sum + (Number(o.total) || 0), 0),
-    [filtered],
-  );
-
-  const localCouponAmount = useMemo(
-    () => filtered.filter(o => !['cancelled', 'failed_delivery', 'terminated'].includes(o.status))
-      .reduce((sum, o) => sum + (Number(o.campaignDiscount) || 0), 0),
-    [filtered],
-  );
-
-  const localOrderValue = useMemo(
-    () => filtered.filter(o => !['cancelled', 'failed_delivery', 'terminated'].includes(o.status))
-      .reduce((sum, o) => sum + (Number(o.total) || 0), 0),
-    [filtered],
-  );
+  const filtered = useMemo(() => allOrders, [allOrders]);
+  const scheduledCount = orderCounts.scheduledCount;
+  const statusCount = (...keys: string[]) =>
+    keys.reduce((sum, key) => sum + (orderCounts.statusCounts[key] || 0), 0);
 
   const kpis = useMemo(() => {
-    const inProgress = localStatusCounts.pending + localStatusCounts.confirmed + localStatusCounts.preparing
-      + localStatusCounts.readyToPickup + localStatusCounts.outForDelivery + localStatusCounts.pickedUp;
-    const local = {
-      total: filtered.length,
-      pending: localStatusCounts.pending,
-      confirmed: localStatusCounts.confirmed,
-      delivered: localStatusCounts.delivered,
-      cancelled: localStatusCounts.cancelled,
-      preparing: localStatusCounts.preparing,
-      readyToPickup: localStatusCounts.readyToPickup,
-      outForDelivery: localStatusCounts.outForDelivery,
-      pickedUp: localStatusCounts.pickedUp,
-      inProgress,
-      revenue: scheduledView ? 0 : localRevenue,
-    };
-    if (scheduledView || filtered.length > 0) return local;
+    if (scheduledView) {
+      return {
+        total: orderCounts.filteredTotal,
+        pending: statusCount('pending'),
+        confirmed: statusCount('confirmed'),
+        delivered: 0,
+        cancelled: 0,
+        preparing: statusCount('preparing'),
+        readyToPickup: statusCount('ready_to_pickup'),
+        outForDelivery: statusCount('out_for_delivery'),
+        pickedUp: statusCount('picked_up'),
+        inProgress: statusCount('pending', 'confirmed', 'preparing', 'ready_to_pickup', 'out_for_delivery', 'picked_up'),
+        revenue: 0,
+      };
+    }
     return {
       total: summary.placed,
       pending: summary.pending,
@@ -214,14 +166,9 @@ export default function DashboardPage() {
       inProgress: summary.pending + summary.confirmed + summary.preparing + summary.readyToPickup + summary.outForDelivery + summary.pickedUp,
       revenue: summary.revenue,
     };
-  }, [scheduledView, filtered, localStatusCounts, localRevenue, summary]);
+  }, [scheduledView, orderCounts, summary]);
 
-  const displayCustomerAgg = useMemo(() => {
-    const phones = new Set(filtered.map((o) => o.guestPhone).filter(Boolean));
-    const hasBackendAgg = customerAgg.totalCustomers > 0 || customerAgg.newCustomers > 0 || customerAgg.repeatCustomers > 0;
-    const base = hasBackendAgg ? customerAgg : { totalCustomers: phones.size, newCustomers: phones.size, repeatCustomers: 0, avgOrders: 0, top: [] };
-    return { ...base, totalCustomers: scheduledView || filtered.length > 0 ? phones.size : base.totalCustomers };
-  }, [scheduledView, filtered, customerAgg]);
+  const displayCustomerAgg = useMemo(() => customerAgg, [customerAgg]);
 
   const rangeLabel = range === 'custom'
     ? `${customFrom || '…'} – ${customTo || '…'}`
@@ -236,14 +183,12 @@ export default function DashboardPage() {
   ].filter(Boolean).join(' · ') || 'No active orders';
   const scheduledValue = filtered.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
   const scheduledCoupon = filtered.reduce((sum, order) => sum + (Number(order.campaignDiscount) || 0), 0);
-  const couponValue = scheduledView ? scheduledCoupon
-    : filtered.length > 0 ? localCouponAmount : summary.couponAmount;
-  const rawOrderValue = scheduledView ? scheduledValue
-    : filtered.length > 0 ? localOrderValue : kpis.revenue + couponValue;
+  const couponValue = scheduledView ? scheduledCoupon : summary.couponAmount;
+  const rawOrderValue = scheduledView ? scheduledValue : summary.revenue + couponValue;
   const displayRevenue = wholeRupees(scheduledView ? scheduledValue : kpis.revenue);
   const displayCouponAmount = wholeRupees(couponValue);
   const displayOrderValue = wholeRupees(rawOrderValue);
-  const revenueSub = scheduledView && filtered.length === 0
+  const revenueSub = scheduledView && orderCounts.filteredTotal === 0
     ? 'No scheduled orders'
     : `₹${displayOrderValue.toFixed(0)} order value − ₹${displayCouponAmount.toFixed(0)} coupons`;
   const navigate = useNavigate();
@@ -318,7 +263,7 @@ export default function DashboardPage() {
             </div>
             <Link to="/orders" className="text-xs font-medium text-emerald-600 hover:text-emerald-700">View all →</Link>
           </div>
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && orderCounts.filteredTotal === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-slate-400">
               <ShoppingBag className="w-8 h-8 mb-2 opacity-30" />
               <p className="text-sm">No orders for this period</p>
@@ -365,10 +310,10 @@ export default function DashboardPage() {
                   <div className="hidden sm:block col-span-1 text-right text-sm font-bold text-gray-900 dark:text-white">₹{order.total}</div>
                 </div>
               ))}
-              {filtered.length > 8 && (
+              {orderCounts.filteredTotal > 8 && (
                 <div className="px-4 py-3 text-center border-t border-gray-50 dark:border-slate-700">
                   <Link to="/orders" className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
-                    +{filtered.length - 8} more orders → View all
+                    +{orderCounts.filteredTotal - 8} more orders → View all
                   </Link>
                 </div>
               )}
@@ -386,7 +331,7 @@ export default function DashboardPage() {
             <span className="text-[10px] text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{rangeLabel}</span>
           </div>
           <div className="p-4">
-            {filtered.length === 0 ? (
+            {orderCounts.filteredTotal === 0 ? (
               <div className="flex flex-col items-center py-6 text-gray-500 dark:text-slate-400">
                 <XCircle className="w-6 h-6 mb-1 opacity-30" />
                 <p className="text-xs">No orders for this period</p>
@@ -409,7 +354,7 @@ export default function DashboardPage() {
 
               const counts = bars.map(b => ({
                 ...b,
-                count: filtered.filter(o => b.keys.includes(o.status)).length,
+                count: statusCount(...b.keys),
               }));
               const maxCount = Math.max(...counts.map(b => b.count), 1);
               return (

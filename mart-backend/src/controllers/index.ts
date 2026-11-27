@@ -1324,28 +1324,40 @@ export const adminDeleteCategory = asyncHandler(async (req: AdminRequest, res: R
 // ── Admin order controllers ───────────────────────────────────────────────────
 
 export const adminGetOrders = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { status, deliveryPreference, phone, q, limit, offset } = req.query;
+  const { status, deliveryPreference, phone, q, limit, offset, activeScheduled } = req.query;
   const isSuperAdmin = req.admin!.role === 'super_admin';
   const isHeadStoreViewer = !isSuperAdmin && await isHeadStore(req.admin!.storeId);
   const canManageMaster = isSuperAdmin || isHeadStoreViewer;
-  const storeId = isSuperAdmin ? resolveStoreId(req) : undefined;
-  const orders = await OrderService.findAll({
-    storeId,
+  const { range: windowRange, from: windowFrom, to: windowTo, dateBasis: windowDateBasis } = reportWindowParams(req);
+  const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
+  const filters = {
+    storeId: storeIds,
     status: status as string,
     deliveryPreference: deliveryPreference as string,
     phone: phone as string,
     search: typeof q === 'string' ? q : undefined,
     limit: limit ? parseInt(limit as string) : 50,
     offset: offset ? parseInt(offset as string) : 0,
+    range: windowRange,
+    from: windowFrom,
+    to: windowTo,
+    dateBasis: windowDateBasis,
+    activeScheduled: activeScheduled === 'true' || activeScheduled === '1',
+    includeFulfilmentStores: true,
     // Non-super admins see the whole order only when their store is the head
     // store. Member stores get just the lines they fulfil plus their own
     // fulfilment status.
     viewerStoreId: isSuperAdmin ? null : req.admin!.storeId,
     restrictItems: !canManageMaster,
-  });
+  };
+  const [orders, counts] = await Promise.all([
+    OrderService.findAll(filters),
+    OrderService.getOrderCounts(filters),
+  ]);
   res.json({
     success: true,
     data: orders.map(order => ({ ...order, canManageMaster })),
+    counts,
   });
 });
 
@@ -1427,23 +1439,15 @@ export const adminRestoreOrder = asyncHandler(async (req: AdminRequest, res: Res
 // orders table (never from stored customer counters), scoped to a range and,
 // for non-super admins, to the caller's store.
 export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to, dateBasis } = req.query;
-  const allowed = range === 'today' || range === '7d' || range === '30d' || range === 'last_month' || range === 'custom' || range === 'all';
-  if (range === 'custom' && (typeof from !== 'string' || typeof to !== 'string')) {
-    res.status(400).json({ success: false, error: 'Custom range requires from and to dates' });
-    return;
-  }
+  const { range, from, to, dateBasis } = reportWindowParams(req);
   // resolveStoreId keeps this scoped like every other admin route: non-super
   // admins are pinned to their own store regardless of the query param, and
   // super admins may target a store explicitly (defaulting to Shapoorji).
   const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
-  const summary = await OrderService.getSummary(
-    allowed ? (range as string) : 'all',
-    typeof from === 'string' ? from : undefined,
-    typeof to === 'string' ? to : undefined,
-    storeIds,
-    { dateBasis: dateBasis === 'browse' ? 'browse' : 'created' }
-  );
+  const summary = await OrderService.getSummary(range, from, to, storeIds, {
+    dateBasis,
+    includeFulfilmentStores: true,
+  });
   res.json({ success: true, data: summary });
 });
 
@@ -1451,20 +1455,16 @@ export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, r
 // spend) — computed live from delivered orders, so stored counters that never
 // get reversed on cancellation can't mislead the cards.
 export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to, top, dateBasis } = req.query;
-  const allowed = range === 'today' || range === '7d' || range === '30d' || range === 'last_month' || range === 'custom' || range === 'all';
-  if (range === 'custom' && (typeof from !== 'string' || typeof to !== 'string')) {
-    res.status(400).json({ success: false, error: 'Custom range requires from and to dates' });
-    return;
-  }
+  const { range, from, to, dateBasis } = reportWindowParams(req);
+  const { top } = req.query;
   const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
   const data = await OrderService.getCustomerAggregates(
-    allowed ? (range as string) : 'all',
-    typeof from === 'string' ? from : undefined,
-    typeof to === 'string' ? to : undefined,
+    range,
+    from,
+    to,
     storeIds,
     top && !Number.isNaN(parseInt(top as string)) ? Math.min(parseInt(top as string), 100) : 10,
-    { dateBasis: dateBasis === 'browse' ? 'browse' : 'created' }
+    { dateBasis, includeFulfilmentStores: true }
   );
   res.json({ success: true, data });
 });
@@ -1486,13 +1486,7 @@ async function getAnalyticsStoreIds(storeId: string): Promise<string[]> {
 }
 
 export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const rangeRaw = typeof req.query.range === 'string' ? req.query.range : '30d';
-  const range = ['5d', '10d', '30d', 'all', 'custom'].includes(rangeRaw) ? rangeRaw : '30d';
-  const from = typeof req.query.from === 'string' ? req.query.from : undefined;
-  const to = typeof req.query.to === 'string' ? req.query.to : undefined;
-  if (range === 'custom' && !isValidReportDateRange(from, to)) {
-    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
-  }
+  const { range, from, to } = reportWindowParams(req, '30d');
   const storeId = resolveStoreId(req);
   if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
     throw forbidden('Top selling stats are available to head store managers and owners only');
@@ -1506,6 +1500,7 @@ export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest,
     limit,
     offset,
     sortBy: 'orders',
+    includeFulfilmentStores: true,
   });
   res.json({ success: true, data });
 });
@@ -1513,34 +1508,42 @@ export const adminGetTopSellingProducts = asyncHandler(async (req: AdminRequest,
 const istDayKey = (offsetDays = 0) =>
   new Date(Date.now() + offsetDays * 86400000 + 5.5 * 3600000).toISOString().slice(0, 10);
 
-const REPORT_RANGES = new Set(['today', 'yesterday', '7d', '30d', 'last_month', 'all', 'custom']);
+const REPORT_RANGES = new Set(['today', 'yesterday', '5d', '7d', '10d', '30d', 'last_month', 'all', 'custom']);
 
-function analyticsWindowParams(req: AdminRequest) {
-  const rawRange = typeof req.query.range === 'string' ? req.query.range : 'all';
-  let range = REPORT_RANGES.has(rawRange) ? rawRange : 'all';
+// Every hub report and the order list share this window normalisation. In
+// particular, an incomplete custom range is a 400 rather than a silent fall
+// back to all time, and "yesterday" is a single previous IST day as custom.
+function reportWindowParams(req: AdminRequest, defaultRange = 'all') {
+  const rawRange = typeof req.query.range === 'string' ? req.query.range : defaultRange;
+  let range = REPORT_RANGES.has(rawRange) ? rawRange : defaultRange;
   let from = typeof req.query.from === 'string' ? req.query.from : undefined;
   let to = typeof req.query.to === 'string' ? req.query.to : undefined;
   if (range === 'yesterday') { from = istDayKey(-1); to = from; range = 'custom'; }
-  return { range, from, to, anchor: range === 'custom' && to ? to : istDayKey() };
+  if (range === 'custom' && !isValidReportDateRange(from, to)) {
+    throw badRequest('Choose a valid custom date range');
+  }
+  return {
+    range,
+    from,
+    to,
+    anchor: range === 'custom' && to ? to : istDayKey(),
+    dateBasis: req.query.dateBasis === 'created' ? 'created' as const : 'browse' as const,
+  };
 }
 
 export const adminGetOrderInsights = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to, anchor } = analyticsWindowParams(req);
-  if (range === 'custom' && !isValidReportDateRange(from, to)) {
-    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
-  }
-  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 50, 1), 100);
+  const { range, from, to, anchor } = reportWindowParams(req);
+  const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 50, 1), 1000);
   const offset = Math.max(Number.parseInt(String(req.query.offset), 10) || 0, 0);
   const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
-  const result = await OrderService.getOrderInsights(range, from, to, storeIds, limit, offset, anchor);
+  const result = await OrderService.getOrderInsights(range, from, to, storeIds, limit, offset, anchor, {
+    includeFulfilmentStores: true,
+  });
   res.json({ success: true, ...result });
 });
 
 export const adminGetProductLeaders = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to } = analyticsWindowParams(req);
-  if (range === 'custom' && !isValidReportDateRange(from, to)) {
-    res.status(400).json({ success: false, error: 'Choose a valid custom date range' }); return;
-  }
+  const { range, from, to } = reportWindowParams(req);
   const storeId = resolveStoreId(req);
   if (req.admin?.role !== 'super_admin' && !(await isHeadStore(storeId))) {
     throw forbidden('Product leader stats are available to head store managers and owners only');
@@ -1550,7 +1553,7 @@ export const adminGetProductLeaders = asyncHandler(async (req: AdminRequest, res
   const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit), 10) || 20, 1), 100);
   const data = await OrderService.getTopSellingProducts(
     range, storeIds, from, to,
-    { category: categoryParam || undefined, limit, sortBy: 'units' }
+    { category: categoryParam || undefined, limit, sortBy: 'units', includeFulfilmentStores: true }
   );
   res.json({ success: true, data });
 });

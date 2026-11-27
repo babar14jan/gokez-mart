@@ -108,7 +108,7 @@ export default function AppShell({
       {/* iOS 26 Safari derives the bottom browser-bar tint from the
           background-color of a fixed element that touches that edge — the
           theme-color meta is ignored. The bottom strip pins that edge to the
-          nav colour (white / dark) instead of the launched green splash. The
+          shared nav colour (brand green / dark), matching the top bar. The
           TOP edge needs no strip: the header band (Navbar) already sits at the
           top of the frame with a green background that covers the safe-area
           inset, so Safari samples the header itself and the status bar matches

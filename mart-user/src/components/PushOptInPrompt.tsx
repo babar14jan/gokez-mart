@@ -11,6 +11,7 @@ import {
   type PushOptInReason,
 } from '../services/push';
 import { PERMISSIONS_SEEN_KEY } from '../services/onboardingPermissions';
+import { isAlwaysLightRoute } from '../constants/brand';
 import { hasNativePushToken, isNativePush, requestNativePushPermission, syncNativePushAssociation } from '../services/nativePush';
 import { useCustomerAuthStore } from '../store/customerAuthStore';
 
@@ -34,13 +35,22 @@ export default function PushOptInPrompt() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState<PushOptInReason>('legacy');
+  const [routeTick, setRouteTick] = useState(0);
+
+  useEffect(() => {
+    const onPop = () => setRouteTick(tick => tick + 1);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   useEffect(() => {
     if (!isLoggedIn) return;
+    if (isAlwaysLightRoute()) return;
     if (hasSeenPermissionsPage()) return;
     if (!canShowPushPrompt()) return;
     if (!isPushOptInDue('legacy')) return;
     const timer = window.setTimeout(() => {
+      if (isAlwaysLightRoute()) return;
       if (hasSeenPermissionsPage()) return;
       if (!canShowPushPrompt()) return;
       if (!isPushOptInDue('legacy')) return;
@@ -48,7 +58,7 @@ export default function PushOptInPrompt() {
       setOpen(true);
     }, 4000);
     return () => window.clearTimeout(timer);
-  }, [isLoggedIn]);
+  }, [isLoggedIn, routeTick]);
 
   useEffect(() => {
     const onRequest = (event: Event) => {

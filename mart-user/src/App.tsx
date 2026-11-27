@@ -57,14 +57,12 @@ import { useLoginFlowStore } from './store/loginFlowStore';
 import { BOOT_LOGIN_DONE_KEY, useAccountLoginStore } from './store/accountLoginStore';
 import { track, getFunnelChannel } from './utils/track';
 import { saveTrackingToken } from './utils/guestTracking';
-import { detectPlatform } from './utils/install';
-import { BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL } from './constants/brand';
+import { APP_CHROME_DARK, APP_CHROME_LIGHT, BRAND_NAME, PARENT_COMPANY, PARENT_COMPANY_URL, WELCOME_SEEN_KEY } from './constants/brand';
 import { ORDER_PROGRESS_LABELS, STATUS_LABELS } from './utils/orderStatus';
 import { REFERRAL_LINK_CODE_KEY, referralCodeFromSearch } from './utils/referral';
 import { configureNativeChrome, hasNativeLocationPermission, isNativeAndroid, setNativeStatusBar, watchNativeBackButton } from './services/nativeApp';
 import { clearNativePushAssociation, consumePendingPushRoute, isNativePush, requestNativePushPermission, startNativePush, syncNativePushAssociation } from './services/nativePush';
 
-const WELCOME_SEEN_KEY = 'gokez_mart_welcome_seen_v1';
 const FIRST_ORDER_KEY = 'mart_first_order_completed_at';
 
 type View = 'home' | 'about' | 'what-is-gokez-mart' | 'categories' | 'deals' | 'orders' | 'account' | 'login' | 'privacy' | 'terms' | 'grievance' | 'delete-account' | 'feedback' | 'referral' | 'fresh' | 'welcome' | 'permissions';
@@ -296,9 +294,14 @@ export default function App() {
         window.history.replaceState({}, '', '/welcome');
         return 'welcome';
       }
-      // A refresh keeps whatever tab the shopper was on. The last view is
-      // mirrored into sessionStorage on every change and wins over the
-      // default below, which is only the first-visit destination.
+      // A signed-out visit to the bare root is a login entry, not a restored tab.
+      if (!window.location.search) {
+        window.history.replaceState({}, '', '/login');
+        return 'login';
+      }
+      // A refresh with campaign parameters keeps whatever tab the shopper was on.
+      // The last view is mirrored into sessionStorage on every change and wins
+      // over the Home fallback, which is only the first-visit destination.
       if (!isEmbed) {
         let stored: string | null = null;
         try { stored = sessionStorage.getItem(LAST_VIEW_KEY); } catch {}
@@ -308,10 +311,6 @@ export default function App() {
           return storedView;
         }
       }
-      // A first visit for a signed-out shopper lands on the login page, unless
-      // the link carries tracking/referral parameters (e.g. a QR code), in which
-      // case it lands on Home so the campaign is not blocked by a login wall.
-      if (!window.location.search) return 'login';
       return 'home';
     }
     // Unrecognized/private routes boot to Home and are normalized so the address
@@ -358,21 +357,6 @@ export default function App() {
   }, []);
 
   const [pendingCheckout, setPendingCheckout] = useState(() => Boolean(useLoginFlowStore.getState().getActiveOtpFlow()?.pendingCheckout));
-  const [welcomeImageStatus, setWelcomeImageStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
-  const welcomeImageRef = useRef<HTMLImageElement | null>(null);
-  useEffect(() => {
-    if (view === 'welcome') setWelcomeImageStatus('loading');
-  }, [view]);
-  useEffect(() => {
-    if (view !== 'welcome' || welcomeImageStatus !== 'loading') return;
-    const image = welcomeImageRef.current;
-    if (image?.complete) {
-      setWelcomeImageStatus(image.naturalWidth > 0 ? 'loaded' : 'failed');
-      return;
-    }
-    const timer = window.setTimeout(() => setWelcomeImageStatus('failed'), 8000);
-    return () => window.clearTimeout(timer);
-  }, [view, welcomeImageStatus]);
 
   const { isLoggedIn } = useCustomerAuthStore();
   const wasLoggedInRef = useRef(isLoggedIn);
@@ -793,14 +777,7 @@ export default function App() {
     const effectiveDark = isDark && !loginActive && !permissionsActive && !welcomeActive;
     document.documentElement.classList.toggle('dark', effectiveDark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    const mobile = detectPlatform() === 'ios' || detectPlatform() === 'android';
-    const themeColor = welcomeActive || loginPageActive || loginActive || permissionsActive
-      ? '#ADFBBD'
-      : effectiveDark
-        ? '#18191a'
-        : mobile
-          ? '#ADFBBD'
-          : '#ffffff';
+    const themeColor = effectiveDark ? APP_CHROME_DARK : APP_CHROME_LIGHT;
     // Set this on every run: the splash is removed outside React, so waiting for
     // it here left Android Chrome stuck on the darker launch colour after boot.
     if (meta) meta.setAttribute('content', themeColor);
@@ -1652,16 +1629,22 @@ export default function App() {
         const redirect = useLoginFlowStore.getState().postLoginPath;
         useLoginFlowStore.getState().setPostLoginPath(null);
         setShowLoginModal(false);
-        if (pendingCheckout) {
+        let path = '/';
+        if (pendingCheckout || redirect === '/checkout') {
           setPendingCheckout(false);
+          setView('home');
           setCheckoutActive(true);
+          path = '/checkout';
         } else if (redirect === '/orders') {
           // Signed in to see order history — that is where they asked to go.
           setView('orders');
+          path = '/orders';
         } else {
           setView('home');
           setPendingCategorySlug(null);
         }
+        window.history.replaceState({}, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
       }} />}
 
       {/* Location / refresh feedback toast — pinned above the bottom nav so it
@@ -1840,13 +1823,8 @@ export default function App() {
 
       {/* Pages */}
       {view === 'welcome' ? (
-        <div className="welcome-screen absolute inset-0 touch-none overflow-hidden bg-[#ADFBBD]">
-          <WelcomeVisual
-            status={welcomeImageStatus}
-            imageRef={welcomeImageRef}
-            onImageLoad={() => setWelcomeImageStatus('loaded')}
-            onImageError={() => setWelcomeImageStatus('failed')}
-          />
+        <div className="welcome-screen absolute inset-0 overflow-hidden">
+          <WelcomeVisual />
           <div className="onboarding-action-bar">
             <button
               type="button"
