@@ -52,8 +52,8 @@ describe('welcome visual', () => {
     const css = readSrc('../src/index.css');
     assert.match(css, /\.welcome-screen \.login-brand-bg \{[\s\S]*?background-image: none/);
     assert.match(css, /\.welcome-screen \.onboarding-scroll \{[\s\S]*?padding-top: clamp\(12px[\s\S]*?-webkit-overflow-scrolling: touch/);
-    assert.ok(css.includes('bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(0.75rem, 2.2vh, 1.25rem) + 10px)'));
-    assert.ok(css.includes('bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem + 10px)'));
+    assert.ok(css.includes('bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(2rem, 3.5vh, 2.5rem))'));
+    assert.ok(css.includes('bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem + 12px)'));
     assert.ok(css.includes('padding-left: calc(1rem + env(safe-area-inset-left, 0px))'));
     assert.doesNotMatch(css, /\.welcome-brand-unit/);
     assert.match(css, /\.welcome-image \{[\s\S]*?width: min\(62vw, 220px\)/);
@@ -85,6 +85,29 @@ describe('welcome visual', () => {
     assert.match(punchline, /overflow-wrap: anywhere/);
     assert.doesNotMatch(punchline, /white-space: nowrap/);
     assert.match(css, /@media \(max-width: 360px\) and \(min-height: 521px\)/);
+  });
+
+  test('the login page Skip button uses the near-white secondary style', () => {
+    const account = readSrc('../src/pages/AccountPage.tsx');
+    const skip = account.slice(account.indexOf('onClick={leaveAsGuest}'), account.indexOf('Skip<ChevronRight'));
+    assert.match(skip, /bg-white\/95/);
+    assert.match(skip, /text-\[#087A43\]/);
+    assert.match(skip, /hover:bg-white active:bg-\[#F4FBF5\]/);
+    assert.doesNotMatch(skip, /bg-\[#9AEFAF\]/);
+  });
+
+  test('the login page uses a single solid background', () => {
+    const css = readSrc('../src/index.css');
+    assert.doesNotMatch(css, /\.login-page-view\.login-brand-bg::before/);
+    assert.ok(css.includes(`.login-page-view.login-brand-bg {
+    background-color: #ADFBBD;
+    background-image: none;
+  }`));
+    assert.ok(css.includes(`.dark .login-brand-bg,
+  .dark .login-page-view.login-brand-bg {
+    background-color: #18191a;
+    background-image: none;
+  }`));
   });
 
   test('app chrome keeps a neutral nav and onboarding routes stay light', () => {

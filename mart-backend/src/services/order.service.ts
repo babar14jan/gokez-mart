@@ -232,7 +232,7 @@ export function buildOrderWindow(
   from?: string,
   to?: string,
   storeId?: string | string[] | null,
-  opts?: { column?: string; startIndex?: number; dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean },
+  opts?: { column?: string; startIndex?: number; dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean; activeScheduled?: boolean; deliveryPreference?: string },
 ): { where: string; clause: string; params: unknown[] } {
   if (range === 'custom' && (!from || !to)) {
     throw badRequest('Choose a valid custom date range');
@@ -257,6 +257,12 @@ export function buildOrderWindow(
   } else if (range === 'last_month') {
     clauses.push(`${column} >= (date_trunc('month', (NOW() AT TIME ZONE 'Asia/Kolkata') - INTERVAL '1 month') AT TIME ZONE 'Asia/Kolkata')`);
     clauses.push(`${column} < (date_trunc('month', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`);
+  }
+  if (opts?.activeScheduled) {
+    clauses.push(`o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated')`);
+  } else if (opts?.deliveryPreference) {
+    clauses.push(`o.delivery_preference = ${at()}`);
+    params.push(opts.deliveryPreference);
   }
   const storeIds = normalizeAnalyticsStoreIds(storeId);
   if (storeIds.length) {
@@ -1164,35 +1170,39 @@ export class OrderService {
   // Every money/count figure is derived live from the order rows in the window —
   // nothing is read from materialised counters (mart_customers.order_count /
   // total_spent) that could drift when an order is cancelled or backfilled.
-    static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, opts?: { dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean }) {
+    static async getSummary(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, opts?: { dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean; activeScheduled?: boolean; deliveryPreference?: string }) {
      const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeId, {
        dateBasis: opts?.dateBasis,
        includeFulfilmentStores: opts?.includeFulfilmentStores,
+       activeScheduled: opts?.activeScheduled,
+       deliveryPreference: opts?.deliveryPreference,
      });
      // A delivered order always has a payment bucket, even when the stored
      // method is null, blank or a legacy value the hub no longer renders.
-     const paymentMethod = `CASE LOWER(TRIM(COALESCE(o.payment_method, '')))
-       WHEN 'cod' THEN 'cod'
-       WHEN 'upi' THEN 'upi'
-       WHEN 'phonepay' THEN 'phonepay'
-       ELSE 'unknown'
-     END`;
-     // Today's snapshot must not be polluted by scheduled orders that belong
-     // to a future delivery slot — they are handled in the scheduled queue.
-     const where = range === 'today'
-       ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
-       : baseWhere;
+      const paymentMethod = `CASE LOWER(TRIM(COALESCE(o.payment_method, '')))
+        WHEN 'cod' THEN 'cod'
+        WHEN 'upi' THEN 'upi'
+        WHEN 'phonepay' THEN 'phonepay'
+        ELSE 'unknown'
+      END`;
+      const activeScheduledSql = `(o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated'))`;
+      // Today's snapshot must not be polluted by scheduled orders that belong
+      // to a future delivery slot — they are handled in the scheduled queue.
+      const where = range === 'today' && !opts?.activeScheduled
+        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
+        : baseWhere;
       const result = await query<{
        placed: number; pending: number; confirmed: number; delivered: number; cancelled: number;
        preparing: number; ready_to_pickup: number; out_for_delivery: number; picked_up: number;
        revenue: string | number; delivered_revenue: string | number;
        delivery_collected: string | number;
        free_deliveries: number; coupon_orders: number; coupon_amount: string | number;
-       cod_count: number; cod_revenue: string | number;
-       upi_count: number; upi_revenue: string | number;
-       phonepay_count: number; phonepay_revenue: string | number;
-       unknown_count: number; unknown_revenue: string | number;
-     }>(
+        cod_count: number; cod_revenue: string | number;
+        upi_count: number; upi_revenue: string | number;
+        phonepay_count: number; phonepay_revenue: string | number;
+        unknown_count: number; unknown_revenue: string | number;
+        scheduled_value: string | number; scheduled_coupon_amount: string | number;
+      }>(
        `SELECT COUNT(*)::int AS placed,
           COUNT(*) FILTER (WHERE o.status = 'pending')::int AS pending,
           COUNT(*) FILTER (WHERE o.status = 'confirmed')::int AS confirmed,
@@ -1214,9 +1224,11 @@ export class OrderService {
           COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'upi'), 0)::float AS upi_revenue,
           COUNT(*) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'phonepay')::int AS phonepay_count,
           COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'phonepay'), 0)::float AS phonepay_revenue,
-          COUNT(*) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'unknown')::int AS unknown_count,
-          COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'unknown'), 0)::float AS unknown_revenue
-        FROM mart_orders o ${where}`,
+           COUNT(*) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'unknown')::int AS unknown_count,
+           COALESCE(SUM(o.total) FILTER (WHERE o.status = 'delivered' AND ${paymentMethod} = 'unknown'), 0)::float AS unknown_revenue,
+           COALESCE(SUM(o.total) FILTER (WHERE ${activeScheduledSql}), 0)::float AS scheduled_value,
+           COALESCE(SUM(o.campaign_discount) FILTER (WHERE ${activeScheduledSql}), 0)::float AS scheduled_coupon_amount
+         FROM mart_orders o ${where}`,
        params
      );
     const row = result.rows[0];
@@ -1243,6 +1255,8 @@ export class OrderService {
       freeDeliveries: row?.free_deliveries ?? 0,
       couponOrders: row?.coupon_orders ?? 0,
       couponAmount: Number(row?.coupon_amount ?? 0),
+      scheduledValue: Number(row?.scheduled_value ?? 0),
+      scheduledCouponAmount: Number(row?.scheduled_coupon_amount ?? 0),
       paymentBreakdown: [
         { method: 'cod', count: row?.cod_count ?? 0, revenue: Number(row?.cod_revenue ?? 0) },
         { method: 'upi', count: row?.upi_count ?? 0, revenue: Number(row?.upi_revenue ?? 0) },
@@ -1376,16 +1390,19 @@ export class OrderService {
   // Customer card figures for the Analytics Customers tab. Spend remains based
   // on delivered orders, while a customer becomes returning as soon as they
   // place a later non-terminal order after a delivery under the same mobile.
-    static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, topCount = 10, opts?: { dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean }) {
+    static async getCustomerAggregates(range = 'all', from?: string, to?: string, storeId?: string | string[] | null, topCount = 10, opts?: { dateBasis?: 'created' | 'browse'; includeFulfilmentStores?: boolean; activeScheduled?: boolean; deliveryPreference?: string }) {
       const storeIds = normalizeAnalyticsStoreIds(storeId);
       const { where: baseWhere, params } = buildOrderWindow(range, from, to, storeIds, {
         dateBasis: opts?.dateBasis,
         includeFulfilmentStores: opts?.includeFulfilmentStores,
+        activeScheduled: opts?.activeScheduled,
+        deliveryPreference: opts?.deliveryPreference,
       });
-     const where = range === 'today'
+     const where = range === 'today' && !opts?.activeScheduled
        ? `${baseWhere}${baseWhere ? ' AND ' : 'WHERE '}NOT (o.delivery_preference = 'scheduled' AND o.status NOT IN ('delivered','cancelled','failed_delivery','terminated') AND o.scheduled_for >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata') + INTERVAL '1 day')`
        : baseWhere;
-    const phoneIdentity = `NULLIF(regexp_replace(COALESCE(o.guest_phone, cu.phone), '\\D', '', 'g'), '')`;
+    const phoneIdentity = `NULLIF(regexp_replace(COALESCE(NULLIF(o.guest_phone, ''), cu.phone), '\\D', '', 'g'), '')`;
+    const activityDate = opts?.dateBasis === 'created' ? 'o.created_at' : ORDER_BROWSE_DATE_SQL;
     const storeScopeParam = `$${params.length + 1}`;
     const storeScope = storeIds.length
       ? opts?.includeFulfilmentStores
@@ -1399,7 +1416,7 @@ export class OrderService {
     const aggSql = `SELECT
          ${phoneIdentity} AS ckey,
          MAX(COALESCE(cu.name, o.guest_name)) AS name,
-         MAX(COALESCE(cu.phone, o.guest_phone)) AS phone,
+          MAX(COALESCE(NULLIF(cu.phone, ''), NULLIF(o.guest_phone, ''))) AS phone,
          COUNT(*)::int AS order_count,
          SUM(o.total)::float AS total_spent
        FROM mart_orders o
@@ -1408,7 +1425,7 @@ export class OrderService {
          AND ${phoneIdentity} IS NOT NULL${where ? ` AND ${where.replace(/^WHERE\s+/, '')}` : ''}
        GROUP BY 1`;
     const lifecycleSql = `WITH delivered_agg AS (${aggSql}), scoped_orders AS (
-         SELECT ${phoneIdentity} AS phone, o.created_at
+         SELECT ${phoneIdentity} AS phone, ${activityDate} AS activity_at
          FROM mart_orders o
          LEFT JOIN mart_customers cu ON cu.id = o.customer_id
          WHERE o.status NOT IN ('cancelled', 'failed_delivery', 'terminated')
@@ -1421,7 +1438,7 @@ export class OrderService {
            AND ${phoneIdentity} IS NOT NULL ${storeScope}
          GROUP BY 1
        ), active_customers AS (
-          SELECT s.phone, COALESCE(BOOL_OR(s.created_at > f.first_delivered_at), false) AS is_returning
+           SELECT s.phone, COALESCE(BOOL_OR(s.activity_at > f.first_delivered_at), false) AS is_returning
           FROM scoped_orders s
           LEFT JOIN first_deliveries f ON f.phone = s.phone
           GROUP BY s.phone

@@ -62,7 +62,7 @@ export default function PermissionsOnboarding({ onAllow, onMaybeLater }: Permiss
       <button
         type="button"
         onClick={onMaybeLater}
-        className="permissions-later-button absolute z-30 inline-flex min-h-9 items-center gap-0.5 rounded-full bg-[#9AEFAF] px-3 text-xs font-bold text-[#087A43] shadow-sm ring-1 ring-[#087A43]/20 transition-colors hover:bg-[#8CE6A3] active:bg-[#7EDD96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 dark:bg-[#9AEFAF] dark:text-[#087A43] dark:ring-[#087A43]/20 sm:min-h-10 sm:px-4 sm:text-sm"
+        className="permissions-later-button onboarding-skip-button absolute z-30 inline-flex min-h-9 items-center gap-0.5 rounded-full bg-white/95 px-3 text-xs font-bold text-[#087A43] shadow-sm ring-1 ring-[#087A43]/20 transition-colors hover:bg-white active:bg-[#F4FBF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 dark:bg-white/95 dark:text-[#087A43] dark:ring-[#087A43]/20 sm:min-h-10 sm:px-4 sm:text-sm"
       >
         Maybe Later<ChevronRight className="h-4 w-4" aria-hidden="true" />
       </button>

@@ -33,6 +33,7 @@ export interface OnboardingPermissionOutcome {
 const PERMISSION_QUERY_TIMEOUT_MS = 2500;
 const LOCATION_DETECTION_TIMEOUT_MS = 8000;
 const PUSH_WORK_TIMEOUT_MS = 8000;
+const PUSH_RETRY_DELAY_MS = 700;
 
 function withDeadline<T>(work: () => Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -71,6 +72,19 @@ async function safely<T>(work: () => Promise<T>, fallback: T, timeoutMs?: number
   }
 }
 
+async function retryOnce<T>(
+  work: () => Promise<T>,
+  fallback: T,
+  isSuccess: (value: T) => boolean,
+): Promise<T> {
+  let value = await safely(work, fallback, PUSH_WORK_TIMEOUT_MS);
+  if (!isSuccess(value)) {
+    await new Promise(resolve => setTimeout(resolve, PUSH_RETRY_DELAY_MS));
+    value = await safely(work, fallback, PUSH_WORK_TIMEOUT_MS);
+  }
+  return value;
+}
+
 async function requestLocation(deps: OnboardingPermissionDeps): Promise<OnboardingPermissionOutcome['location']> {
   const current = await safely(() => deps.getLocationPermission(), 'prompt', PERMISSION_QUERY_TIMEOUT_MS);
   if (current === 'denied') return { state: 'denied' };
@@ -95,7 +109,7 @@ async function requestLocation(deps: OnboardingPermissionDeps): Promise<Onboardi
 
 async function requestNotifications(deps: OnboardingPermissionDeps): Promise<Omit<OnboardingPermissionOutcome['notifications'], 'promotional'>> {
   if (deps.isNativePush()) {
-    const granted = await safely(() => deps.requestNativePushPermission(), false, PUSH_WORK_TIMEOUT_MS);
+    const granted = await retryOnce(() => deps.requestNativePushPermission(), false, Boolean);
     return { state: granted ? 'granted' : 'denied', subscribed: granted };
   }
 
@@ -113,7 +127,7 @@ async function requestNotifications(deps: OnboardingPermissionDeps): Promise<Omi
 
   if (!deps.isPushSupported()) return { state: 'granted', subscribed: false };
 
-  const subscribed = await safely(() => deps.subscribeToPush(), false, PUSH_WORK_TIMEOUT_MS);
+  const subscribed = await retryOnce(() => deps.subscribeToPush(), false, Boolean);
   return { state: 'granted', subscribed };
 }
 

@@ -1439,7 +1439,7 @@ export const adminRestoreOrder = asyncHandler(async (req: AdminRequest, res: Res
 // orders table (never from stored customer counters), scoped to a range and,
 // for non-super admins, to the caller's store.
 export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to, dateBasis } = reportWindowParams(req);
+  const { range, from, to, dateBasis, activeScheduled, deliveryPreference } = reportWindowParams(req);
   // resolveStoreId keeps this scoped like every other admin route: non-super
   // admins are pinned to their own store regardless of the query param, and
   // super admins may target a store explicitly (defaulting to Shapoorji).
@@ -1447,6 +1447,8 @@ export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, r
   const summary = await OrderService.getSummary(range, from, to, storeIds, {
     dateBasis,
     includeFulfilmentStores: true,
+    activeScheduled,
+    deliveryPreference,
   });
   res.json({ success: true, data: summary });
 });
@@ -1455,7 +1457,7 @@ export const adminGetAnalyticsSummary = asyncHandler(async (req: AdminRequest, r
 // spend) — computed live from delivered orders, so stored counters that never
 // get reversed on cancellation can't mislead the cards.
 export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest, res: Response) => {
-  const { range, from, to, dateBasis } = reportWindowParams(req);
+  const { range, from, to, dateBasis, activeScheduled, deliveryPreference } = reportWindowParams(req);
   const { top } = req.query;
   const storeIds = await getAnalyticsStoreIds(resolveStoreId(req));
   const data = await OrderService.getCustomerAggregates(
@@ -1464,7 +1466,7 @@ export const adminGetCustomerAggregates = asyncHandler(async (req: AdminRequest,
     to,
     storeIds,
     top && !Number.isNaN(parseInt(top as string)) ? Math.min(parseInt(top as string), 100) : 10,
-    { dateBasis, includeFulfilmentStores: true }
+    { dateBasis, includeFulfilmentStores: true, activeScheduled, deliveryPreference }
   );
   res.json({ success: true, data });
 });
@@ -1528,6 +1530,8 @@ function reportWindowParams(req: AdminRequest, defaultRange = 'all') {
     to,
     anchor: range === 'custom' && to ? to : istDayKey(),
     dateBasis: req.query.dateBasis === 'created' ? 'created' as const : 'browse' as const,
+    activeScheduled: req.query.activeScheduled === 'true' || req.query.activeScheduled === '1',
+    deliveryPreference: typeof req.query.deliveryPreference === 'string' ? req.query.deliveryPreference : undefined,
   };
 }
 

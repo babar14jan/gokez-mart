@@ -136,6 +136,9 @@ describe('Referral hub consolidation', () => {
     assert.ok(dashboard.includes('orderCounts.filteredTotal'));
     assert.ok(dashboard.includes('statusCount(...b.keys)'));
     assert.ok(dashboard.includes('newCustomers} new · ${displayCustomerAgg.repeatCustomers} repeat'));
+    assert.ok(dashboard.includes('const scheduledValue = summary.scheduledValue;'));
+    assert.ok(dashboard.includes('const scheduledCoupon = summary.scheduledCouponAmount;'));
+    assert.ok(!dashboard.includes('filtered.reduce'));
     assert.ok(!dashboard.includes('in range'));
   });
 

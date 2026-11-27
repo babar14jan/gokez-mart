@@ -279,21 +279,9 @@ html, body { overscroll-behavior-y: none; }
     background-image: none;
   }
 
-  /* On the login page the green sweep is pinned to the bottom of the scroller
-     instead of being centred in a 100vh box, so it lands in the same place on a
-     short Android and a tall iPhone and never looks stretched. */
   .login-page-view.login-brand-bg {
-    background-position: center bottom;
-    /* Login page keeps only the bottom sweep. The shared .login-brand-bg also
-       has a top wave for the modal/profile surfaces; on taller Android Chrome
-       viewports `cover` let that top wave peek in, which iOS cropped away. */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 375 812' preserveAspectRatio='xMidYMid slice'%3E%3Cdefs%3E%3ClinearGradient id='b' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23018330' stop-opacity='.65'/%3E%3Cstop offset='55%25' stop-color='%23018330' stop-opacity='.45'/%3E%3Cstop offset='100%25' stop-color='%23028434' stop-opacity='.18'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='%23ADFBBD'/%3E%3Cpath d='M-40 840C60 690 170 760 250 680C330 600 365 650 420 610V840Z' fill='url(%23b)'/%3E%3Cpath d='M-20 830C100 745 190 820 300 765C360 735 390 780 420 760V840H-20Z' fill='%23018330' fill-opacity='1'/%3E%3C/svg%3E");
-  }
-
-  @media (min-width: 640px) {
-    .login-page-view.login-brand-bg {
-      background-size: 100% 100%;
-    }
+    background-color: #ADFBBD;
+    background-image: none;
   }
 
   /* App shell: a frame pinned to the viewport box.
@@ -470,7 +458,7 @@ html, body { overscroll-behavior-y: none; }
     position: absolute;
     z-index: 20;
     right: 0;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(0.75rem, 2.2vh, 1.25rem));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(2rem, 3.5vh, 2.5rem));
     left: 0;
     width: 100%;
     max-width: 28rem;
@@ -484,12 +472,16 @@ html, body { overscroll-behavior-y: none; }
 
   .permissions-later-button {
     top: clamp(4px, calc(4.4vh + env(safe-area-inset-top, 0px) - 8px), calc(28px + env(safe-area-inset-top, 0px)));
-    right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  }
+
+  .onboarding-skip-button {
+    --onboarding-skip-gutter: 1rem;
+    right: calc((100% - min(100%, 24rem)) / 2 + var(--onboarding-skip-gutter) + env(safe-area-inset-right, 0px));
   }
 
   @media (min-width: 640px) {
-    .permissions-later-button {
-      right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
+    .onboarding-skip-button {
+      --onboarding-skip-gutter: 1.5rem;
     }
   }
 
@@ -505,7 +497,7 @@ html, body { overscroll-behavior-y: none; }
 
   @media (max-height: 520px) {
     .onboarding-action-bar {
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem + 12px);
     }
     .onboarding-scroll {
       padding-top: 0.5rem;
@@ -537,7 +529,7 @@ html, body { overscroll-behavior-y: none; }
   }
 
   .welcome-screen .onboarding-action-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(0.75rem, 2.2vh, 1.25rem) + 10px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(2rem, 3.5vh, 2.5rem));
     padding-left: calc(1rem + env(safe-area-inset-left, 0px));
     padding-right: calc(1rem + env(safe-area-inset-right, 0px));
   }
@@ -586,7 +578,7 @@ html, body { overscroll-behavior-y: none; }
       --onboarding-action-height: 46px;
     }
     .welcome-screen .onboarding-action-bar {
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem + 10px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem + 12px);
     }
     .welcome-image {
       width: 96px;

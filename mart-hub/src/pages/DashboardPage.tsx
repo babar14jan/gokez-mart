@@ -56,7 +56,7 @@ export default function DashboardPage() {
   };
   const [customFrom, setCustomFrom] = useState(istDay());
   const [customTo, setCustomTo] = useState(istDay());
-  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0, paymentBreakdown: [] });
+  const [summary, setSummary] = useState<OrderSummary>({ placed: 0, pending: 0, confirmed: 0, delivered: 0, cancelled: 0, preparing: 0, readyToPickup: 0, outForDelivery: 0, pickedUp: 0, revenue: 0, avgOrderValue: 0, deliveryCollected: 0, freeDeliveries: 0, couponOrders: 0, couponAmount: 0, scheduledValue: 0, scheduledCouponAmount: 0, paymentBreakdown: [] });
   const [customerAgg, setCustomerAgg] = useState<CustomerAggregates>({ totalCustomers: 0, newCustomers: 0, repeatCustomers: 0, avgOrders: 0, top: [] });
   const { name, role } = useAuthStore();
   const canSeeCustomers = !!role && ['super_admin', 'store_owner', 'store_manager'].includes(role);
@@ -98,7 +98,9 @@ export default function DashboardPage() {
     if (!hasCompleteCustomRange(range, customFrom, customTo)) return;
     const params = {
       storeId: getActiveStoreId(),
-      ...orderListDateParams(range, customFrom, customTo),
+      ...(scheduledView
+        ? { activeScheduled: true }
+        : orderListDateParams(range, customFrom, customTo)),
     };
     ordersApi.getSummary(params, { fresh })
       .then(r => { if (id === reqId.current) setSummary(r.data.data); })
@@ -108,7 +110,7 @@ export default function DashboardPage() {
         .then(r => { if (id === reqId.current) setCustomerAgg(r.data.data || EMPTY_AGG); })
         .catch(() => {});
     }
-  }, [range, customFrom, customTo, canSeeCustomers]);
+  }, [scheduledView, range, customFrom, customTo, canSeeCustomers]);
 
   useEffect(() => { loadAllOrders(); }, [loadAllOrders]);
   useEffect(() => { loadSummary(); }, [loadSummary]);
@@ -181,8 +183,8 @@ export default function DashboardPage() {
     kpis.outForDelivery > 0 ? `${kpis.outForDelivery} out` : '',
     kpis.pickedUp > 0 ? `${kpis.pickedUp} picked up` : '',
   ].filter(Boolean).join(' · ') || 'No active orders';
-  const scheduledValue = filtered.reduce((sum, order) => sum + (Number(order.total) || 0), 0);
-  const scheduledCoupon = filtered.reduce((sum, order) => sum + (Number(order.campaignDiscount) || 0), 0);
+  const scheduledValue = summary.scheduledValue;
+  const scheduledCoupon = summary.scheduledCouponAmount;
   const couponValue = scheduledView ? scheduledCoupon : summary.couponAmount;
   const rawOrderValue = scheduledView ? scheduledValue : summary.revenue + couponValue;
   const displayRevenue = wholeRupees(scheduledView ? scheduledValue : kpis.revenue);

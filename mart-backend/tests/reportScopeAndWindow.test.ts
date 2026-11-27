@@ -19,13 +19,14 @@ const read = (rel: string) => require('fs').readFileSync(require('path').join(__
 interface Call { text: string; params: unknown[] }
 const calls: Call[] = [];
 let summaryRow: Record<string, unknown> = {};
+let rowsFor: ((text: string) => any[]) | null = null;
 
 const pg = require('pg');
 (pg.Pool.prototype as any).connect = async function () {
   return {
     query: async (text: string, params: unknown[] = []) => {
       calls.push({ text, params });
-      return { rows: /FROM mart_orders o/.test(text) ? [summaryRow] : [] };
+      return { rows: rowsFor ? rowsFor(text) : /FROM mart_orders o/.test(text) ? [summaryRow] : [] };
     },
     release: () => undefined,
     end: async () => undefined,
@@ -41,6 +42,7 @@ const fulfilmentPredicate = /mart_order_store_fulfilments f[\s\S]*?f\.store_id =
 beforeEach(() => {
   calls.length = 0;
   summaryRow = {};
+  rowsFor = null;
 });
 
 describe('Canonical store scope and report windows', () => {
@@ -137,5 +139,52 @@ describe('Delivered-order payment breakdown', () => {
       { method: 'phonepay', count: 0, revenue: 0 },
       { method: 'unknown', count: 0, revenue: 0 },
     ]);
+  });
+});
+
+describe('Dashboard KPI aggregates are not capped by the order list', () => {
+  test('scheduled value and coupon totals are server-side sums over every scheduled order', async () => {
+    summaryRow = { scheduled_value: 4567, scheduled_coupon_amount: 123 };
+    const summary = await OrderService.getSummary('all', undefined, undefined, [storeId], {
+      dateBasis: 'browse',
+      includeFulfilmentStores: true,
+      activeScheduled: true,
+    });
+
+    const sql = calls[0].text;
+    assert.ok(sql.includes("o.delivery_preference = 'scheduled'"));
+    assert.ok(sql.includes('AS scheduled_value'));
+    assert.ok(sql.includes('AS scheduled_coupon_amount'));
+    assert.ok(!/LIMIT\s+\$/i.test(sql));
+    assert.ok(!/OFFSET\s+\$/i.test(sql));
+    assert.deepEqual(calls[0].params, [[storeId]]);
+    assert.equal(summary.scheduledValue, 4567);
+    assert.equal(summary.scheduledCouponAmount, 123);
+  });
+
+  test('new and repeat totals count every customer; top-N only limits the top list', async () => {
+    rowsFor = text => text.includes('FROM active_customers')
+      ? [{ total: 120, new_customers: 40, repeat_customers: 80, delivered_orders: 300 }]
+      : [];
+    const agg = await OrderService.getCustomerAggregates('all', undefined, undefined, [storeId], 10, {
+      dateBasis: 'browse',
+      includeFulfilmentStores: true,
+      activeScheduled: true,
+    });
+
+    const totalsSql = calls[0].text;
+    const topSql = calls[1].text;
+    assert.ok(totalsSql.includes("o.delivery_preference = 'scheduled'"));
+    assert.ok(totalsSql.includes('s.activity_at > f.first_delivered_at'));
+    assert.ok(!/LIMIT\s+\$/i.test(totalsSql));
+    assert.ok(!/OFFSET\s+\$/i.test(totalsSql));
+    assert.match(topSql, /LIMIT \$2/);
+    assert.deepEqual(calls[0].params, [[storeId], [storeId]]);
+    assert.deepEqual(calls[1].params, [[storeId], 10]);
+
+    assert.equal(agg.totalCustomers, 120);
+    assert.equal(agg.newCustomers, 40);
+    assert.equal(agg.repeatCustomers, 80);
+    assert.deepEqual(agg.top, []);
   });
 });

@@ -47,11 +47,29 @@ describe('permissions onboarding screen', () => {
     assert.match(html, /You can turn off any permission anytime from Account → Settings\./);
   });
 
-  test('both actions are real buttons with the login Skip button style for Maybe Later', () => {
+  test('both actions are real buttons with the shared near-white skip style for Maybe Later', () => {
     const html = render();
     assert.match(html, /<button[^>]*type="button"[^>]*min-h-\[52px\][^>]*>.*Allow &amp; Continue/s);
-    assert.match(html, /<button[^>]*type="button"[^>]*permissions-later-button[^>]*min-h-9[^>]*bg-\[#9AEFAF\][^>]*>.*Maybe Later/s);
+    assert.match(html, /<button[^>]*type="button"[^>]*permissions-later-button onboarding-skip-button[^>]*min-h-9[^>]*bg-white\/95[^>]*>.*Maybe Later/s);
+    assert.match(html, /hover:bg-white active:bg-\[#F4FBF5\]/);
+    assert.doesNotMatch(html, /bg-\[#9AEFAF\]/);
     assert.doesNotMatch(html, /min-h-\[48px\]/);
+  });
+
+  test('aligns both skip buttons with the centred page content', () => {
+    const css = readSource('src/index.css');
+    assert.match(css, /\.onboarding-skip-button \{[\s\S]*?right: calc\(\(100% - min\(100%, 24rem\)\) \/ 2 \+ var\(--onboarding-skip-gutter\) \+ env\(safe-area-inset-right, 0px\)\);/);
+    assert.match(css, /@media \(min-width: 640px\) \{\s*\.onboarding-skip-button \{\s*--onboarding-skip-gutter: 1\.5rem;/);
+    const account = readSource('src/pages/AccountPage.tsx');
+    const loginSkip = account.slice(account.indexOf('onClick={leaveAsGuest}'), account.indexOf('Skip<ChevronRight'));
+    assert.match(loginSkip, /onboarding-skip-button/);
+    assert.doesNotMatch(loginSkip, /right-\[calc\(/);
+  });
+
+  test('keeps the primary action at the same bottom gap as the welcome button', () => {
+    const css = readSource('src/index.css');
+    assert.match(css, /\.onboarding-action-bar \{[\s\S]*?bottom: calc\(env\(safe-area-inset-bottom, 0px\) \+ clamp\(2rem, 3\.5vh, 2\.5rem\)\);/);
+    assert.match(css, /@media \(max-height: 520px\) \{\s*\.onboarding-action-bar \{\s*bottom: calc\(env\(safe-area-inset-bottom, 0px\) \+ 1rem \+ 12px\);/);
   });
 
   test('Allow starts the work without waiting for a permission result', () => {
@@ -114,21 +132,24 @@ describe('opt-in prompt after permissions onboarding', () => {
     assert.match(app, /window\.dispatchEvent\(new PopStateEvent\('popstate'\)\);/);
   });
 
-  test('only Maybe Later asks the popup immediately', () => {
+  test('Maybe Later does not ask the popup immediately', () => {
     const app = readSource('src/App.tsx');
-    assert.match(app, /onMaybeLater=\{\(\) => finishPermissionsOnboarding\(true\)\}/);
-    assert.match(app, /declinePromptTimerRef\.current = window\.setTimeout\(\(\) => \{[\s\S]*requestPushOptInPrompt\('permissions-decline'\)/);
+    assert.match(app, /onMaybeLater=\{finishPermissionsOnboarding\}/);
+    assert.doesNotMatch(app, /declinePromptTimerRef/);
+    assert.doesNotMatch(app, /requestPushOptInPrompt\('permissions-decline'\)/);
     assert.match(app, /startOnboardingPermissions\(\{/);
     assert.doesNotMatch(app, /await requestOnboardingPermissions/);
     assert.doesNotMatch(app, /onAllow=\{finishPermissionsOnboarding\}/);
   });
 
-  test('a later order-open asks again only after a first order and while notifications are undecided', () => {
+  test('the popup waits for the first successful order while notifications are undecided', () => {
     const app = readSource('src/App.tsx');
-    assert.match(app, /FIRST_ORDER_KEY/);
-    assert.match(app, /localStorage\.getItem\(FIRST_ORDER_KEY\)/);
+    assert.match(app, /firstOrder = !localStorage\.getItem\(FIRST_ORDER_KEY\)/);
+    assert.match(app, /if \(!firstOrder\) return;/);
     assert.match(app, /getNotificationPermission\(\) !== 'default'/);
+    assert.match(app, /recordPermissionPrompt\(ORDER_NOTIFICATION_PROMPT_KEY\)/);
     assert.match(app, /requestPushOptInPrompt\('later-order'\)/);
+    assert.doesNotMatch(app, /checkoutOpenedRef/);
   });
 
   test('later-order and permissions-decline prompts keep separate cooldowns', () => {

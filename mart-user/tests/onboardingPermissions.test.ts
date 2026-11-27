@@ -156,6 +156,21 @@ describe('permissions onboarding requests', () => {
     assert.deepEqual(result.notifications, { state: 'denied', subscribed: false, promotional: true });
   });
 
+  test('a first native push request failure is retried before giving up', async () => {
+    let attempts = 0;
+    const { deps } = makeDeps({
+      isNativePush: () => true,
+      requestNativePushPermission: async () => {
+        attempts += 1;
+        return attempts === 2;
+      },
+    });
+    const result = await requestOnboardingPermissions(deps);
+    assert.equal(result.notifications.state, 'granted');
+    assert.equal(result.notifications.subscribed, true);
+    assert.equal(attempts, 2);
+  });
+
   test('notification denial after the prompt is reported as denied', async () => {
     const { deps } = makeDeps({ requestNotificationPermission: async () => 'denied' });
     const result = await requestOnboardingPermissions(deps);
@@ -166,6 +181,20 @@ describe('permissions onboarding requests', () => {
     const { deps } = makeDeps({ subscribeToPush: async () => false });
     const result = await requestOnboardingPermissions(deps);
     assert.deepEqual(result.notifications, { state: 'granted', subscribed: false, promotional: true });
+  });
+
+  test('a first push subscribe failure is retried before giving up', async () => {
+    let attempts = 0;
+    const { deps } = makeDeps({
+      subscribeToPush: async () => {
+        attempts += 1;
+        return attempts === 2;
+      },
+    });
+    const result = await requestOnboardingPermissions(deps);
+    assert.equal(result.notifications.state, 'granted');
+    assert.equal(result.notifications.subscribed, true);
+    assert.equal(attempts, 2);
   });
 
   test('all location results are reported without blocking notifications', async () => {
@@ -191,5 +220,6 @@ describe('permissions onboarding requests', () => {
     assert.match(source, /PERMISSION_QUERY_TIMEOUT_MS/);
     assert.match(source, /LOCATION_DETECTION_TIMEOUT_MS/);
     assert.match(source, /PUSH_WORK_TIMEOUT_MS/);
+    assert.match(source, /PUSH_RETRY_DELAY_MS/);
   });
 });

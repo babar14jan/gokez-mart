@@ -497,7 +497,7 @@ export default function AccountPage({ storeName, storeAddress, supportPhone, wha
               <button
                 type="button"
                 onClick={leaveAsGuest}
-                className="absolute -top-2 right-[calc(env(safe-area-inset-right,0px)+1rem)] inline-flex min-h-9 items-center gap-0.5 rounded-full bg-[#9AEFAF] px-3 text-xs font-bold text-[#087A43] shadow-sm ring-1 ring-[#087A43]/20 transition-colors hover:bg-[#8CE6A3] active:bg-[#7EDD96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 dark:bg-[#9AEFAF] dark:text-[#087A43] dark:ring-[#087A43]/20 sm:-top-1 sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)] sm:min-h-10 sm:px-4 sm:text-sm"
+                className="onboarding-skip-button absolute -top-2 inline-flex min-h-9 items-center gap-0.5 rounded-full bg-white/95 px-3 text-xs font-bold text-[#087A43] shadow-sm ring-1 ring-[#087A43]/20 transition-colors hover:bg-white active:bg-[#F4FBF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087A43] focus-visible:ring-offset-2 dark:bg-white/95 dark:text-[#087A43] dark:ring-[#087A43]/20 sm:-top-1 sm:min-h-10 sm:px-4 sm:text-sm"
               >
                 Skip<ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>

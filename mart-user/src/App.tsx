@@ -1114,11 +1114,6 @@ export default function App() {
   };
 
   const permissionsBusyRef = useRef(false);
-  const checkoutOpenedRef = useRef(false);
-  const declinePromptTimerRef = useRef<number | null>(null);
-  useEffect(() => () => {
-    if (declinePromptTimerRef.current !== null) window.clearTimeout(declinePromptTimerRef.current);
-  }, []);
 
   const handleWelcomeGetStarted = () => {
     try {
@@ -1129,7 +1124,7 @@ export default function App() {
     window.history.pushState({}, '', '/login');
   };
 
-  const finishPermissionsOnboarding = (declined = false) => {
+  const finishPermissionsOnboarding = () => {
     let target = '/';
     try {
       localStorage.setItem(WELCOME_SEEN_KEY, 'true');
@@ -1148,13 +1143,6 @@ export default function App() {
       setPendingCategorySlug(null);
     }
     window.history.replaceState({}, '', target === '/checkout' ? '/' : target);
-    if (declined) {
-      if (declinePromptTimerRef.current !== null) window.clearTimeout(declinePromptTimerRef.current);
-      declinePromptTimerRef.current = window.setTimeout(() => {
-        declinePromptTimerRef.current = null;
-        requestPushOptInPrompt('permissions-decline');
-      }, 500);
-    }
   };
 
   const handlePermissionsAllow = () => {
@@ -1249,27 +1237,18 @@ export default function App() {
 
   useEffect(() => {
     if (!successData) return;
+    let firstOrder = false;
     try {
-      if (!localStorage.getItem(FIRST_ORDER_KEY)) localStorage.setItem(FIRST_ORDER_KEY, String(Date.now()));
+      firstOrder = !localStorage.getItem(FIRST_ORDER_KEY);
+      if (firstOrder) localStorage.setItem(FIRST_ORDER_KEY, String(Date.now()));
     } catch {}
     window.dispatchEvent(new Event('gokez:first-order-completed'));
-  }, [successData]);
-
-  useEffect(() => {
-    if (!checkoutActive) {
-      checkoutOpenedRef.current = false;
-      return;
-    }
-    if (checkoutOpenedRef.current) return;
-    checkoutOpenedRef.current = true;
-    try {
-      if (!localStorage.getItem(FIRST_ORDER_KEY)) return;
-      if (localStorage.getItem(PERMISSIONS_SEEN_KEY) !== 'true') return;
-    } catch { return; }
+    if (!firstOrder) return;
     if (getNotificationPermission() !== 'default') return;
     if (!isPushOptInDue('later-order')) return;
+    recordPermissionPrompt(ORDER_NOTIFICATION_PROMPT_KEY);
     requestPushOptInPrompt('later-order');
-  }, [checkoutActive]);
+  }, [successData]);
 
   useEffect(() => {
     // Offer order updates after a successful order, to guests as well as
@@ -1836,7 +1815,7 @@ export default function App() {
           </div>
         </div>
       ) : view === 'permissions' ? (
-        <PermissionsOnboarding onAllow={handlePermissionsAllow} onMaybeLater={() => finishPermissionsOnboarding(true)} />
+        <PermissionsOnboarding onAllow={handlePermissionsAllow} onMaybeLater={finishPermissionsOnboarding} />
       ) : view === 'about' ? (
         <DeferredPage><AboutPage /></DeferredPage>
       ) : view === 'what-is-gokez-mart' ? (

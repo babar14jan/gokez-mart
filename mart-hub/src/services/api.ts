@@ -211,6 +211,8 @@ export interface OrderSummary {
   freeDeliveries: number;
   couponOrders: number;
   couponAmount: number;
+  scheduledValue: number;
+  scheduledCouponAmount: number;
   paymentBreakdown: Array<{ method: 'cod' | 'upi' | 'phonepay' | 'unknown'; count: number; revenue: number }>;
 }
 
@@ -265,7 +267,7 @@ export const ordersApi = {
     dateBasis?: 'created' | 'browse'; activeScheduled?: boolean;
   }, opts?: FetchOpts) =>
     api.get<{ success: boolean; data: any[]; counts?: OrderCounts }>('/admin/orders', { params, fresh: opts?.fresh }),
-  getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; dateBasis?: 'created' | 'browse' }, opts?: FetchOpts) =>
+  getSummary: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; dateBasis?: 'created' | 'browse'; activeScheduled?: boolean; deliveryPreference?: string }, opts?: FetchOpts) =>
     api.get('/admin/analytics/summary', { params, fresh: opts?.fresh }),
   getInsights: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; limit?: number; offset?: number }, opts?: FetchOpts) =>
     api.get('/admin/analytics/order-insights', { params, fresh: opts?.fresh }),
@@ -339,7 +341,7 @@ export interface CustomerStats {
 export const customersApi = {
   getAll: (params?: { identity?: 'all' | 'signed_in' | 'guest_checkout'; search?: string; sort?: CustomerSort; limit?: number; offset?: number; range?: SummaryRange; from?: string; to?: string }) =>
     api.get('/admin/customers', { params }),
-  getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number; dateBasis?: 'created' | 'browse' }, opts?: FetchOpts) =>
+  getAggregates: (params?: { storeId?: string; range?: SummaryRange; from?: string; to?: string; top?: number; dateBasis?: 'created' | 'browse'; activeScheduled?: boolean; deliveryPreference?: string }, opts?: FetchOpts) =>
     api.get('/admin/analytics/customers', { params, fresh: opts?.fresh }),
 };
 
